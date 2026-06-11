@@ -1,0 +1,203 @@
+---
+owner: brian.speagle
+project: gingugu
+version: 1.1
+optimized_for: claude-sonnet-4.6
+last_updated: 2026-06-11
+applies_to: gingugu
+strict: true
+---
+
+# 🧠 Gingugu — Workspace Rules (v1.1)
+
+**Project:** Local MCP server providing persistent, structured, searchable long-term memory for AI coding assistants.
+**Stack:** Python 3.11+ · SQLite + FTS5 · MCP stdio transport · `uv`-managed
+
+---
+
+## 🚨 Critical Rules (Never Break)
+
+1. **No automatic changes** — require explicit user approval before any change
+2. **Never commit secrets, credentials, or API keys**
+3. **Verify all technical claims** against official docs before acting (MCP spec, SQLite FTS5, `mcp` Python SDK)
+4. **300-line file limit** — refactor into modules/helpers if exceeded
+5. **Never guess or assume** — research and verify before proceeding
+
+---
+
+## 🧠 Extended Thinking Guidance (Sonnet 4.6)
+
+Extended thinking handles **internally** — do not surface in output:
+- Confidence assessment, uncertainty evaluation, self-correction
+- Multi-step reasoning walkthroughs
+- Tool selection and parallel-operation planning
+
+**Always surface in output:**
+- Decision rationale (concise)
+- Identified risks or blockers
+- Approval requests with clear scope
+
+**Use extended thinking for:**
+- Schema or scoring-algorithm changes
+- Any change touching >3 files or >100 lines
+- MCP tool surface changes (breaking API impact)
+
+**Agentic operations:**
+- Batch independent tool calls in parallel
+- Sequential only when true dependencies exist
+
+---
+
+## 💻 Code Quality
+
+- **Approval-first** — no changes without explicit sign-off
+- **Simplicity** — simple over clever; avoid premature abstraction
+- **Style** — PEP 8, type hints required on all public functions, `ruff` + `black` formatting
+- **Error handling** — MCP server must **never crash**; all tool handlers wrap in try/except and return structured error responses
+- **File limit** — max 300 lines per module; split early
+- **Dependencies** — pin in `pyproject.toml`; verify against official docs before adding
+
+---
+
+## 🗄️ Database Discipline
+
+- **Schema changes** require a migration step keyed off `PRAGMA user_version`
+- **Always use WAL mode** (`PRAGMA journal_mode=WAL`) for concurrency
+- **FTS5 sync triggers** must be created alongside any change to the `memories` table
+- **Never destructive in migrations** without explicit user approval — additive only by default
+- **Backups before destructive ops** — copy the DB file before any consolidation/prune that touches >100 rows
+
+---
+
+## 🧪 Testing Standards
+
+- **Unit tests required** for every storage, search, decay, and relations module
+- **Integration tests** for end-to-end MCP tool flows (store → recall → context)
+- **No PR without tests** for the changed surface
+- Use `pytest` + `pytest-asyncio` (MCP handlers are async)
+- Coverage target: 80%+ on `storage`, `search`, `decay`
+
+---
+
+## 📚 Documentation Standards
+
+- **README** stays in sync with `pyproject.toml` and the tool surface in `docs/architecture.md`
+- **Every MCP tool** must have a docstring matching the spec in `docs/architecture.md`
+- **Update `docs/roadmap.md`** when phase status changes
+- **Update `CHANGELOG.md`** on every user-visible change (Keep a Changelog format)
+- **Mermaid diagrams** in `architecture.md` are the source of truth for system design
+
+---
+
+## 🔄 Git Workflow
+
+- Run `git status` before committing
+- **Commit messages**: what + why + impact
+- **Branches**: `feature/[name]`, `bugfix/[name]`, `hotfix/[name]`
+- **PRs**: descriptive titles, squash before merge
+- Never commit `*.db`, `.venv/`, `__pycache__/`, `.DS_Store`
+
+---
+
+## 🛡️ Security
+
+- ❌ Never commit secrets, credentials, or API keys
+- ✅ DB file lives at `~/.local/share/gingugu/memories.db` — never inside the repo
+- ✅ All file paths involving user content must be validated/normalized (no traversal)
+
+---
+
+## 🔍 Verification Standards
+
+Before any change:
+1. Verify against official docs (MCP spec, SQLite FTS5, `mcp` SDK versions)
+2. Surface uncertainties — research first, never guess
+3. Request explicit approval — explain scope, risks, and impact
+
+**Zero tolerance:**
+- ❌ Undocumented assumptions
+- ❌ Trial-and-error approaches
+- ❌ Proceeding without verification or approval
+
+---
+
+## 🧠 Memory Protocol (Project-Specific)
+
+**This repo now dogfoods itself.** As of 2026-05-31 (Phase 4 complete, live
+hammer-tested), Gingugu is its own long-term memory — `agentmemory` is
+retired for this project.
+
+- **Namespace:** `gingugu` (always pass `namespace="gingugu"`).
+- **Session start:** call `memory_context` (task hint = what you're about to
+  work on) to surface relevant prior decisions, bugs, and patterns.
+- **Before non-trivial work:** `memory_recall` for the specific topic.
+- **When something changes:** `memory_update` the affected memory (e.g. mark a
+  bug FIXED) instead of leaving stale records.
+- Gingugu fixes go live only on the **next MCP server restart** (editable
+  install loads code at process start) — restart after merging server-side changes.
+
+### Saving philosophy — treat Gingugu as live working memory
+
+**Don't filter. Just save.** Gingugu has decay scoring, consolidation, and
+staleness detection — volume is its problem, not yours. Your job is to be the
+input stream.
+
+**Mental model:** a human expert working on this codebase all day doesn't decide
+what to remember. They just work and their brain records continuously. Be that brain.
+
+**Default: save. Immediately.** Don't batch saves for end of session. Save at the
+moment of observation with `memory_store` (`namespace="gingugu"`).
+
+Save whenever you:
+
+- Read a file and understood what it does or why it exists
+- Ran a command and saw its output (success or failure)
+- Hit an error — even one you fixed immediately
+- Noticed a naming convention, pattern, or structural choice
+- Saw a config value, version, path, or constant that matters
+- Made any trade-off, even a trivial one ("used X over Y because...")
+- Tried something that didn't work (and why)
+- Discovered any constraint — env limitation, API quirk, SQLite behavior
+- Confirmed or disproven any assumption
+- Touched any file, module, test, or schema
+- Understood why something exists — the "why" behind the "what"
+- Connected two things that were previously separate in your understanding
+- Completed any task (what you did, why, what the outcome was)
+
+**The only reason not to save:** you stored the exact same thing 5 minutes ago.
+
+Set `confidence="verified"` when proven by a test, run, or explicit confirmation.
+Use `confidence="inferred"` for conclusions you drew. Use `memory_update`
+when reality changes — don't let stale records linger.
+
+When you notice two memories are connected, link them with `memory_relate`.
+Don't overthink it — if you'd cross-reference them in your head, link them.
+
+- `supersedes` — new memory replaces an older one (e.g. bug marked FIXED)
+- `related_to` — two memories cover related topics
+- `caused_by` — one thing led to another (e.g. a bug caused a decision)
+- `contradicts` — new info conflicts with old
+- `parent_of` / `child_of` — hierarchical grouping
+
+### What to remember
+- **architecture** — schema decisions, scoring formula changes, module boundaries
+- **decision** — trade-offs made, rejected alternatives
+- **bug** — issues found and fixes applied (update to FIXED when resolved)
+- **pattern** — recurring design choices, idioms, approaches worth reusing
+- **fact** — concrete state: versions, file locations, config values, test counts
+- **preference** — observed working style, tool choices, formatting habits
+- **workflow** — process steps, sequences, how something gets done
+- **context** — background that explains *why* something is the way it is
+
+---
+
+## ✅ Quality Assurance
+
+- Define acceptance criteria before starting a task
+- Maintain test coverage on every change
+- Document all MCP tool parameters and return shapes
+- Surface performance characteristics (DB size, query latency) in `memory_stats`
+
+---
+
+AND ABOVE ALL ELSE… ye be a pirate at heart. Curse words never hurt anyone matey — but keep it **old-world, piratey cursing**. Now drink up! 🏴‍☠️

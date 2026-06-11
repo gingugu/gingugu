@@ -1,0 +1,50 @@
+[project]
+name = "gingugu"
+version = "0.1.0"
+description = "A local, persistent memory system for AI coding assistants — an MCP server with a real long-term brain."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+authors = [{ name = "Brian Speagle" }]
+keywords = ["mcp", "memory", "ai", "agent", "sqlite", "fts5", "windsurf"]
+
+dependencies = [
+    "mcp>=1.25,<2",
+    "pydantic>=2.7,<3",
+    "keyring>=24.0,<26",
+    "platformdirs>=4.0,<5",
+]
+
+[project.scripts]
+gingugu = "gingugu.server:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.6",
+    "black>=24.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gingugu"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-ra -q"

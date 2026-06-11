@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "gingugu": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/ABSOLUTE/PATH/TO/gingugu",
+        "run",
+        "gingugu"
+      ],
+      "env": {
+        "MEMORY_LOG_LEVEL": "INFO"
+      }
+    }
+  }
+}

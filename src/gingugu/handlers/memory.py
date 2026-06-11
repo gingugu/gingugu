@@ -1,0 +1,262 @@
+"""Memory tool handlers: store, recall, context, update, forget.
+
+All handlers wrap their work in try/except and return structured dict
+responses — the MCP server must never crash the client flow.
+"""
+
+from __future__ import annotations
+
+import logging
+
+from .. import context as context_mod
+from .. import search as search_mod
+from ..models import Confidence, Memory, MemoryType
+from ..relations import RelationManager
+from . import ServerContext
+
+logger = logging.getLogger(__name__)
+
+
+def _err(message: str) -> dict:
+    return {"ok": False, "error": message}
+
+
+def _split_csv(value: str | None) -> list[str]:
+    return [item.strip() for item in value.split(",")] if value else []
+
+
+def _collect_related(ctx: ServerContext, seed_ids: list[str]) -> list[dict]:
+    """Fetch memories directly related to the seeds, excluding the seeds."""
+    relations = RelationManager(ctx.conn)
+    seen = set(seed_ids)
+    extra: list[dict] = []
+    for sid in seed_ids:
+        for other_id in relations.related_ids(sid):
+            if other_id in seen:
+                continue
+            seen.add(other_id)
+            mem = ctx.store.get(other_id, record_access=False)
+            if mem is None:
+                continue
+            summary = _memory_summary(mem)
+            summary["via_relation"] = True
+            extra.append(summary)
+    return extra
+
+
+def _memory_summary(mem: Memory) -> dict:
+    data = {
+        "id": mem.id,
+        "type": mem.type.value,
+        "title": mem.title,
+        "content": mem.content,
+        "confidence": mem.confidence.value,
+        "namespace_id": mem.namespace_id,
+        "created_at": mem.created_at,
+        "last_confirmed": mem.last_confirmed,
+        "access_count": mem.access_count,
+        "tags": mem.tags,
+    }
+    if mem.score is not None:
+        data["score"] = round(mem.score, 4)
+    return data
+
+
+def register(mcp, ctx: ServerContext) -> None:
+    @mcp.tool()
+    def memory_store(
+        content: str,
+        title: str,
+        type: str,
+        namespace: str | None = None,
+        tags: str | None = None,
+        confidence: str = "inferred",
+        source: str | None = None,
+        metadata: str | None = None,
+    ) -> dict:
+        """Store a new memory. ``type`` is one of: fact, decision, pattern, bug,
+        architecture, preference, workflow, context. ``tags`` is comma-separated."""
+        try:
+            try:
+                mem_type = MemoryType(type)
+            except ValueError:
+                return _err(
+                    f"invalid type {type!r}; expected one of " f"{[t.value for t in MemoryType]}"
+                )
+            try:
+                conf = Confidence(confidence)
+            except ValueError:
+                return _err(
+                    f"invalid confidence {confidence!r}; expected one of "
+                    f"{[c.value for c in Confidence]}"
+                )
+
+            ns_name = ctx.namespaces.resolve_name(namespace)
+            ns = ctx.namespaces.get_or_create(ns_name)
+            mem = ctx.store.create(
+                namespace_id=ns.id,
+                type=mem_type,
+                title=title,
+                content=content,
+                confidence=conf,
+                source=source,
+                metadata=metadata,
+                tags=_split_csv(tags),
+            )
+            return {"ok": True, "memory": _memory_summary(mem), "namespace": ns_name}
+        except Exception as exc:  # never crash the MCP loop
+            logger.exception("memory_store failed")
+            return _err(f"memory_store failed: {exc}")
+
+    @mcp.tool()
+    def memory_recall(
+        query: str,
+        namespace: str | None = None,
+        type: str | None = None,
+        confidence: str | None = None,
+        tags: str | None = None,
+        limit: int = 10,
+        include_deprecated: bool = False,
+        include_related: bool = False,
+    ) -> dict:
+        """Search memories by relevance (FTS5/BM25), scoped to a namespace.
+        ``tags`` is comma-separated (all required). ``include_deprecated``
+        also returns deprecated memories (stale ones are always included).
+        ``include_related`` also surfaces memories directly linked to the
+        top hits."""
+        try:
+            if type is not None:
+                try:
+                    MemoryType(type)
+                except ValueError:
+                    return _err(f"invalid type {type!r}")
+            min_conf = None
+            if confidence is not None:
+                try:
+                    min_conf = Confidence(confidence)
+                except ValueError:
+                    return _err(f"invalid confidence {confidence!r}")
+
+            ns_name = ctx.namespaces.resolve_name(namespace)
+            ns = ctx.namespaces.get(ns_name)
+            if ns is None:
+                if namespace is not None:
+                    # Explicit unknown namespace is a caller mistake — don't
+                    # silently create a junk row on a read (matches memory_search).
+                    return _err(f"namespace {namespace!r} not found")
+                # Config-resolved namespace with nothing stored yet: empty result.
+                return {"ok": True, "namespace": ns_name, "count": 0, "memories": []}
+            results = search_mod.search(
+                ctx.conn,
+                query=query,
+                namespace_id=ns.id,
+                type=type,
+                min_confidence=min_conf,
+                include_deprecated=include_deprecated,
+                limit=limit,
+                weights=ctx.config.weights,
+                decay_lambda=ctx.config.decay_lambda,
+                tags=_split_csv(tags) or None,
+            )
+            ctx.store.load_tags(results)
+            summaries = [_memory_summary(m) for m in results]
+            if include_related:
+                summaries.extend(_collect_related(ctx, [m.id for m in results]))
+            return {
+                "ok": True,
+                "namespace": ns_name,
+                "count": len(summaries),
+                "memories": summaries,
+            }
+        except Exception as exc:
+            logger.exception("memory_recall failed")
+            return _err(f"memory_recall failed: {exc}")
+
+    @mcp.tool()
+    def memory_context(
+        namespace: str | None = None,
+        task_hint: str | None = None,
+        limit: int | None = None,
+    ) -> dict:
+        """Auto-surface relevant memories for the current workspace (session start).
+        ``limit`` defaults to MEMORY_AUTO_CONTEXT_LIMIT (10)."""
+        try:
+            ns_name = ctx.namespaces.resolve_name(namespace)
+            # Session start in a fresh workspace is the one read that should
+            # bootstrap its namespace, so get_or_create is intentional here.
+            ns = ctx.namespaces.get_or_create(ns_name)
+            results = context_mod.build_context(
+                ctx.conn,
+                namespace_id=ns.id,
+                task_hint=task_hint,
+                limit=limit if limit is not None else ctx.config.auto_context_limit,
+                weights=ctx.config.weights,
+                decay_lambda=ctx.config.decay_lambda,
+            )
+            ctx.store.load_tags(results)
+            return {
+                "ok": True,
+                "namespace": ns_name,
+                "count": len(results),
+                "memories": [_memory_summary(m) for m in results],
+            }
+        except Exception as exc:
+            logger.exception("memory_context failed")
+            return _err(f"memory_context failed: {exc}")
+
+    @mcp.tool()
+    def memory_update(
+        memory_id: str,
+        title: str | None = None,
+        content: str | None = None,
+        confidence: str | None = None,
+        metadata: str | None = None,
+        tags: str | None = None,
+    ) -> dict:
+        """Update an existing memory's fields. ``tags`` (comma-separated) replaces
+        the full tag set when provided. Pass ``metadata=""`` to clear metadata."""
+        try:
+            conf = None
+            if confidence is not None:
+                try:
+                    conf = Confidence(confidence)
+                except ValueError:
+                    return _err(f"invalid confidence {confidence!r}")
+            mem = ctx.store.update(
+                memory_id,
+                title=title,
+                content=content,
+                confidence=conf,
+                metadata=metadata,
+            )
+            if mem is None:
+                return _err(f"memory {memory_id!r} not found")
+            if tags is not None:
+                ctx.store.set_tags(memory_id, _split_csv(tags))
+            mem.tags = ctx.store.get_tags(memory_id)
+            return {"ok": True, "memory": _memory_summary(mem)}
+        except Exception as exc:
+            logger.exception("memory_update failed")
+            return _err(f"memory_update failed: {exc}")
+
+    @mcp.tool()
+    def memory_forget(
+        memory_id: str,
+        hard_delete: bool = False,
+        reason: str | None = None,
+    ) -> dict:
+        """Forget a memory: deprecate it (default) or permanently delete it."""
+        try:
+            if hard_delete:
+                deleted = ctx.store.delete(memory_id)
+                if not deleted:
+                    return _err(f"memory {memory_id!r} not found")
+                return {"ok": True, "memory_id": memory_id, "action": "hard_deleted"}
+            mem = ctx.store.update(memory_id, confidence=Confidence.DEPRECATED)
+            if mem is None:
+                return _err(f"memory {memory_id!r} not found")
+            logger.info("Deprecated memory %s (reason=%s)", memory_id, reason)
+            return {"ok": True, "memory_id": memory_id, "action": "deprecated"}
+        except Exception as exc:
+            logger.exception("memory_forget failed")
+            return _err(f"memory_forget failed: {exc}")
