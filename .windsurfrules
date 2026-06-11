@@ -129,10 +129,19 @@ retired for this project.
 
 - **Namespace:** `gingugu` (always pass `namespace="gingugu"`).
 - **Session start:** call `memory_context` (task hint = what you're about to
-  work on) to surface relevant prior decisions, bugs, and patterns.
-- **Before non-trivial work:** `memory_recall` for the specific topic.
+  work on) to surface relevant prior decisions, bugs, and patterns. Then call
+  `memory_stats(flag_stale=True)` to flag aged memories and get a health pulse.
+- **Before non-trivial work:** `memory_recall` for the specific topic. Use
+  `memory_search` when you need precision (filter by tags, date range, type,
+  or confidence level).
 - **When something changes:** `memory_update` the affected memory (e.g. mark a
   bug FIXED) instead of leaving stale records.
+- **When something is wrong:** `memory_forget` it. Don't leave lies in the
+  system — deprecate or hard-delete definitively incorrect memories.
+- **Periodically:** run `memory_consolidate` on clusters of related memories
+  (strategy: `merge` for duplicates, `summarize` for sprawl, `deduplicate`
+  for exact repeats). A good time is session-end or when you notice 3+ memories
+  on the same narrow topic.
 - Gingugu fixes go live only on the **next MCP server restart** (editable
   install loads code at process start) — restart after merging server-side changes.
 
@@ -170,14 +179,19 @@ Set `confidence="verified"` when proven by a test, run, or explicit confirmation
 Use `confidence="inferred"` for conclusions you drew. Use `memory_update`
 when reality changes — don't let stale records linger.
 
-When you notice two memories are connected, link them with `memory_relate`.
-Don't overthink it — if you'd cross-reference them in your head, link them.
+**After every `memory_store`, immediately relate it.** Check the last few
+memories surfaced by `memory_context` or `memory_recall` — if any are connected
+to what you just stored, call `memory_relate` right then. Don't defer this.
+The graph only gets useful if you build edges aggressively.
 
 - `supersedes` — new memory replaces an older one (e.g. bug marked FIXED)
-- `related_to` — two memories cover related topics
+- `related_to` — two memories cover related topics (most common — use liberally)
 - `caused_by` — one thing led to another (e.g. a bug caused a decision)
-- `contradicts` — new info conflicts with old
-- `parent_of` / `child_of` — hierarchical grouping
+- `contradicts` — new info conflicts with old (then `memory_forget` the wrong one)
+- `parent_of` / `child_of` — hierarchical grouping (e.g. feature → subtask)
+
+**Rule of thumb:** if you store 3 memories in a session and create 0 relations,
+you're doing it wrong. Most work is connected to prior work.
 
 ### What to remember
 - **architecture** — schema decisions, scoring formula changes, module boundaries
