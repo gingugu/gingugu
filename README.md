@@ -13,7 +13,7 @@ file on your machine.
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 
 <p align="center">
-  <img src="docs/demo.gif" alt="Memory Explorer UI — knowledge graph and dashboard" width="800">
+  <img src="https://raw.githubusercontent.com/gingugu/gingugu/main/docs/demo.gif" alt="Memory Explorer UI — knowledge graph and dashboard" width="800">
 </p>
 
 ---
