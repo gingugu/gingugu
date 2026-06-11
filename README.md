@@ -12,6 +12,10 @@ file on your machine.
 [![SQLite](https://img.shields.io/badge/storage-SQLite-orange.svg)](https://sqlite.org)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 
+<p align="center">
+  <img src="docs/demo.gif" alt="Memory Explorer UI — knowledge graph and dashboard" width="800">
+</p>
+
 ---
 
 ## 📋 Table of Contents
