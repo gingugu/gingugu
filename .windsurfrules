@@ -142,6 +142,18 @@ retired for this project.
   (strategy: `merge` for duplicates, `summarize` for sprawl, `deduplicate`
   for exact repeats). A good time is session-end or when you notice 3+ memories
   on the same narrow topic.
+- **Before destructive ops:** `memory_export` the namespace as a backup.
+  Use `memory_import` to restore or transfer memory between environments.
+- **New project/repo:** `memory_namespaces(action="create", name="project-name")`
+  to set up a dedicated namespace. One namespace per project keeps context clean.
+- **Credentials — ALWAYS check before asking the user:**
+  - `credential_list` — see what's vaulted (check this FIRST when a secret is
+    needed, before asking the user to provide one)
+  - `credential_get` — retrieve a secret for use (e.g. API tokens for deploys)
+  - `credential_store` — vault new secrets immediately, never leave them in
+    files or chat history
+  - `credential_delete` — remove revoked/rotated credentials (then re-store
+    the new one)
 - Gingugu fixes go live only on the **next MCP server restart** (editable
   install loads code at process start) — restart after merging server-side changes.
 
