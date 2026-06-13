@@ -1,4 +1,5 @@
 import { Memory, MemoryNamespace, Relation } from '../types'
+import { TYPE_COLORS } from '../lib/colors'
 import StatsCards from './StatsCards'
 import TypeChart from './TypeChart'
 import NamespaceChart from './NamespaceChart'
@@ -43,14 +44,7 @@ export default function Dashboard({ memories, namespaces, relations }: Props) {
               >
                 <span
                   className="w-2 h-2 rounded-full flex-shrink-0"
-                  style={{
-                    backgroundColor:
-                      {
-                        fact: '#3b82f6', decision: '#a855f7', bug: '#ef4444',
-                        pattern: '#f97316', architecture: '#14b8a6', context: '#6b7280',
-                        preference: '#ec4899', workflow: '#22c55e',
-                      }[m.type] ?? '#6b7280',
-                  }}
+                  style={{ backgroundColor: TYPE_COLORS[m.type] ?? '#6b7280' }}
                 />
                 <span className="text-sm text-gray-300 truncate flex-1">{m.title}</span>
                 <span className="text-[10px] text-gray-600 flex-shrink-0">

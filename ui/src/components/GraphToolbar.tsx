@@ -6,7 +6,7 @@ import { TYPE_COLORS } from '../lib/colors'
 const ALL_TYPES: MemoryType[] = [
   'fact', 'decision', 'pattern', 'bug', 'architecture', 'preference', 'workflow', 'context',
 ]
-const ALL_CONFIDENCES = ['verified', 'inferred', 'stale'] as const
+const ALL_CONFIDENCES = ['verified', 'inferred', 'stale', 'deprecated'] as const
 
 interface Props {
   memories: Memory[]

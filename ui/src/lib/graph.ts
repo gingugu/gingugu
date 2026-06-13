@@ -1,4 +1,4 @@
-import { Memory, MemoryNamespace, Relation, GraphData, GraphNode, GraphLink } from '../types'
+import { Confidence, Memory, MemoryNamespace, Relation, GraphData, GraphNode, GraphLink } from '../types'
 import { TYPE_COLORS, RELATION_COLORS, getNamespaceColor } from './colors'
 
 const MIN_SHARED_TAGS = 2
@@ -121,7 +121,7 @@ export function getNamespaceDistribution(
 }
 
 export function getConfidenceDistribution(memories: Memory[]) {
-  const dist = new Map<string, number>()
+  const dist = new Map<Confidence, number>()
   for (const m of memories) {
     dist.set(m.confidence, (dist.get(m.confidence) ?? 0) + 1)
   }

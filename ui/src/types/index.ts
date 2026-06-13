@@ -13,7 +13,7 @@ export interface Memory {
   type: MemoryType
   title: string
   content: string
-  confidence: 'verified' | 'inferred' | 'stale'
+  confidence: Confidence
   source: string | null
   created_at: string
   updated_at: string
@@ -48,6 +48,11 @@ export type MemoryType =
   | 'preference'
   | 'workflow'
   | 'context'
+
+// Mirrors the backend Confidence enum (src/gingugu/models.py). `stale` is a
+// legacy value (no longer auto-assigned under the never-forget model) but is
+// kept so existing data renders; `deprecated` is set by memory_forget.
+export type Confidence = 'verified' | 'inferred' | 'stale' | 'deprecated'
 
 export type RelationType =
   | 'supersedes'
@@ -87,7 +92,7 @@ export interface GraphFilters {
   text: string
   types: Set<MemoryType>
   namespaces: Set<string>
-  confidences: Set<'verified' | 'inferred' | 'stale'>
+  confidences: Set<Confidence>
 }
 
 export interface GraphLayoutSettings {
