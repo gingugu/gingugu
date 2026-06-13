@@ -1,11 +1,16 @@
-"""Decay scoring and staleness detection.
+"""Scoring and memory-lifecycle signals.
 
 Composite score blends lexical relevance with temporal and trust signals:
 
     score = w_r·relevance + w_f·freshness + w_a·access + w_c·confidence
 
 All components are normalized to [0, 1] and blended **additively** so one weak
-factor can't zero out the score. See docs/architecture.md → Decay Scoring.
+factor can't zero out the score. See docs/architecture.md → Scoring.
+
+Lifecycle philosophy: a robot brain never forgets. Time alone never destroys
+trust or retrievability — it only makes a memory *dormant*, not *stale*.
+Freshness therefore has a floor (it never decays to zero), confidence (trust)
+is the dominant standalone signal, and dormancy is reported, never auto-applied.
 """
 
 from __future__ import annotations
@@ -26,8 +31,15 @@ _CONFIDENCE_WEIGHT: dict[str, float] = {
 # Access saturation: log(count+1)/log(_ACCESS_SATURATION) capped at 1.0.
 _ACCESS_SATURATION = 50
 
-# Staleness thresholds (days).
-STALE_AFTER_DAYS = 90
+# Freshness never decays below this floor: a 5-year-old verified memory is
+# dormant, not worthless. Recency is a gentle tiebreaker, not an eraser.
+FRESHNESS_FLOOR = 0.35
+
+# Dormancy threshold (days). Untouched longer than this = dormant (a *signal*
+# surfaced in stats, never an automatic confidence change). STALE_AFTER_DAYS
+# is kept as a backward-compatible alias.
+DORMANT_AFTER_DAYS = 90
+STALE_AFTER_DAYS = DORMANT_AFTER_DAYS
 DEPRECATE_SUGGEST_AFTER_DAYS = 180
 
 
@@ -60,8 +72,14 @@ def reference_timestamp(
 
 
 def freshness(days_since: float, lambda_: float) -> float:
-    """exp(-λ · days_since_confirmed) in (0, 1]."""
-    return math.exp(-lambda_ * max(0.0, days_since))
+    """Floored exponential recency in [FRESHNESS_FLOOR, 1].
+
+    ``floor + (1 - floor)·exp(-λ · days)``. Fresh memories score ~1.0; ancient
+    ones asymptote to ``FRESHNESS_FLOOR`` instead of zero — dormancy must never
+    push a trusted memory out of reach.
+    """
+    raw = math.exp(-lambda_ * max(0.0, days_since))
+    return FRESHNESS_FLOOR + (1.0 - FRESHNESS_FLOOR) * raw
 
 
 def access_score(access_count: int) -> float:
@@ -116,9 +134,19 @@ def score_memory(
     )
 
 
-def is_stale(last_accessed: str | None, now: datetime | None = None) -> bool:
-    """True if not accessed within STALE_AFTER_DAYS."""
-    return days_between(last_accessed, now) >= STALE_AFTER_DAYS
+def is_dormant(last_accessed: str | None, now: datetime | None = None) -> bool:
+    """True if not accessed within DORMANT_AFTER_DAYS.
+
+    Dormancy is informational only — it never changes a memory's confidence.
+    A dormant memory is resting, not rotting; recall (directly or via spreading
+    activation through related memories) wakes it back up.
+    """
+    return days_between(last_accessed, now) >= DORMANT_AFTER_DAYS
+
+
+# Backward-compatible alias. "Stale" framing is deprecated in favour of
+# "dormant"; the function no longer implies any confidence demotion.
+is_stale = is_dormant
 
 
 def suggests_deprecation(last_confirmed: str | None, now: datetime | None = None) -> bool:

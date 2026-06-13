@@ -61,12 +61,12 @@ Where this goes long-term — federated, org-wide agent memory — lives in
 |---------|-------------|
 | 🏷️ **Namespace Scoping** | Memories auto-scoped to repos/projects with cross-repo pattern sharing |
 | 🔍 **Full-Text Search** | SQLite FTS5 with BM25 ranking — fast, local, no API calls |
-| ⏰ **Temporal Intelligence** | Decay scoring, staleness detection, "last confirmed" tracking |
+| ⏰ **Temporal Intelligence** | Trust-led scoring, dormancy tracking (never forgets), "last confirmed" tracking, spreading activation |
 | 🔗 **Relationships** | Link memories: supersedes, related_to, caused_by, contradicts |
 | 🎯 **Confidence Levels** | verified → inferred → stale → deprecated lifecycle |
 | 🧹 **Consolidation Tools** | Merge duplicates, summarize clusters, deduplicate on demand |
 | 🚀 **Auto-Context** | Surfaces relevant memories on session start — zero manual effort |
-| 📊 **Health Metrics** | Memory stats, staleness reports, namespace overviews |
+| 📊 **Health Metrics** | Memory stats, dormancy reports, namespace overviews |
 | 🔐 **Credential Vault** | Secure service-bundle storage for API keys/tokens via OS Keychain |
 | 🌐 **Memory Explorer UI** | Interactive knowledge graph + dashboard for visualizing memory data |
 
@@ -252,13 +252,13 @@ Gingugu is your long-term brain. Memory is split into **two layers**:
 
 ### Session start (in this order)
 1. `memory_context(namespace="crow", task_hint=…)` — identity foundation
-2. `memory_stats(namespace="crow", flag_stale=True)` — global health
+2. `memory_stats(namespace="crow")` — global health (dormancy is a resting signal, never auto-forgotten)
 3. `memory_context(namespace="<your-project-name>", task_hint=…)` — project context
-4. `memory_stats(namespace="<your-project-name>", flag_stale=True)` — project health
+4. `memory_stats(namespace="<your-project-name>")` — project health
 
 ### During the session
-**Default: save. Immediately.** Gingugu has decay scoring,
-consolidation, and staleness detection — volume is its problem, not yours.
+**Default: save. Immediately.** Gingugu has trust-led scoring,
+consolidation, and dormancy tracking (never forgetting) — volume is its problem, not yours.
 
 Save with `memory_store` (project namespace) whenever you:
 - Make or observe a decision, trade-off, or architectural choice
@@ -334,11 +334,11 @@ Environment variables (all optional):
 | `MEMORY_NAMESPACE` | *(unset)* | Default namespace for this workspace (recommended per-MCP-entry) |
 | `MEMORY_NAMESPACE_PATH` | *(unset)* | Alternative: filesystem path; namespace derived from `basename` |
 | `MEMORY_AUTO_CONTEXT_LIMIT` | `10` | Max memories to surface on auto-context |
-| `MEMORY_DECAY_LAMBDA` | `0.05` | Freshness decay rate in **days⁻¹** (higher = faster forgetting) |
+| `MEMORY_DECAY_LAMBDA` | `0.01` | Freshness decay rate in **days⁻¹** (gentle; freshness is floored, so memories never fully fade) |
 | `MEMORY_W_RELEVANCE` | `0.45` | Composite-score weight for FTS5 relevance |
-| `MEMORY_W_FRESHNESS` | `0.25` | Composite-score weight for freshness |
+| `MEMORY_W_FRESHNESS` | `0.10` | Composite-score weight for freshness (a soft recency tiebreaker) |
 | `MEMORY_W_ACCESS` | `0.10` | Composite-score weight for access frequency |
-| `MEMORY_W_CONFIDENCE` | `0.20` | Composite-score weight for confidence |
+| `MEMORY_W_CONFIDENCE` | `0.35` | Composite-score weight for confidence (trust — the dominant standalone signal) |
 | `MEMORY_LOG_LEVEL` | `INFO` | Logging verbosity (logs go to **stderr** — stdout is the MCP transport) |
 | `MEMORY_DEBUG` | `false` | Convenience switch for `DEBUG` logging (`MEMORY_LOG_LEVEL` wins if also set) |
 
@@ -346,7 +346,7 @@ The four `MEMORY_W_*` weights are **normalized at load** (`w_i / Σw`), so they
 need not sum to 1.0 — only their *ratios* matter. Setting all four to 0 falls
 back to the defaults with a logged warning.
 
-See `docs/architecture.md` → *Decay Scoring Algorithm* for how the weights combine.
+See `docs/architecture.md` → *Scoring & Memory Lifecycle* for how the weights combine.
 
 ### Concurrency
 
@@ -375,7 +375,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_namespaces` | List/create/update/delete namespaces |
 | `memory_export` | Export memories + tags + relations to portable JSON |
 | `memory_import` | Restore a JSON export (skip or replace on conflict) |
-| `memory_stats` | Health overview (staleness, counts, coverage); opt-in stale auto-flagging |
+| `memory_stats` | Health overview (dormancy, counts, coverage) |
 | `memory_search` | Advanced filtered search (type, tags, confidence, dates) |
 | `credential_store` | Store/update a service credential bundle |
 | `credential_get` | Retrieve credentials (secrets from OS Keychain) |

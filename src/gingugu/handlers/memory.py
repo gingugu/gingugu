@@ -44,6 +44,31 @@ def _collect_related(ctx: ServerContext, seed_ids: list[str]) -> list[dict]:
     return extra
 
 
+def _spread_activation(ctx: ServerContext, seed_ids: list[str]) -> int:
+    """Reactivate memories related to the recalled seeds (1 hop).
+
+    Recalling a memory stirs the cluster around it: each seed's relation
+    neighbours have their dormancy clock reset (``last_accessed`` refreshed)
+    without inflating their access counts. This is how a dormant memory wakes
+    when a *different* memory sparks it — the core of the never-forget model.
+    Best-effort: any failure is swallowed so retrieval never breaks.
+    """
+    if not seed_ids:
+        return 0
+    try:
+        relations = RelationManager(ctx.conn)
+        seeds = set(seed_ids)
+        neighbours: list[str] = []
+        for sid in seed_ids:
+            for other_id in relations.related_ids(sid):
+                if other_id not in seeds:
+                    neighbours.append(other_id)
+        return ctx.store.touch_many(neighbours)
+    except Exception:  # never break a read on a best-effort reactivation
+        logger.warning("spreading activation failed", exc_info=True)
+        return 0
+
+
 def _memory_summary(mem: Memory) -> dict:
     data = {
         "id": mem.id,
@@ -162,6 +187,8 @@ def register(mcp, ctx: ServerContext) -> None:
             summaries = [_memory_summary(m) for m in results]
             if include_related:
                 summaries.extend(_collect_related(ctx, [m.id for m in results]))
+            # Spreading activation: recalling these memories wakes their cluster.
+            _spread_activation(ctx, [m.id for m in results])
             return {
                 "ok": True,
                 "namespace": ns_name,
@@ -194,6 +221,8 @@ def register(mcp, ctx: ServerContext) -> None:
                 decay_lambda=ctx.config.decay_lambda,
             )
             ctx.store.load_tags(results)
+            # Spreading activation: surfacing context wakes the related cluster.
+            _spread_activation(ctx, [m.id for m in results])
             return {
                 "ok": True,
                 "namespace": ns_name,

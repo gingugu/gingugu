@@ -72,7 +72,7 @@ def build_context(
     task_hint: str | None = None,
     limit: int = 10,
     weights: dict[str, float],
-    decay_lambda: float = 0.05,
+    decay_lambda: float = 0.01,
 ) -> list[Memory]:
     """Assemble and rank the auto-context memory set."""
     by_id: dict[str, Memory] = {}

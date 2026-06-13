@@ -18,6 +18,15 @@ def test_freshness_decays_with_time() -> None:
     assert 0.0 < older < newer <= 1.0
 
 
+def test_freshness_never_drops_below_floor() -> None:
+    # A robot never forgets: ancient memories asymptote to the floor, not zero.
+    ancient = decay.freshness(100_000, 0.05)
+    assert ancient >= decay.FRESHNESS_FLOOR
+    assert abs(ancient - decay.FRESHNESS_FLOOR) < 1e-6
+    # Floor still leaves room for recency to matter at the top.
+    assert decay.freshness(0, 0.05) == 1.0
+
+
 def test_access_score_saturates() -> None:
     assert decay.access_score(0) == 0.0
     assert decay.access_score(1) > 0.0
@@ -76,8 +85,14 @@ def test_score_memory_fresh_verified_beats_old_inferred() -> None:
     assert fresh > old
 
 
-def test_staleness_thresholds() -> None:
-    assert decay.is_stale(_iso(100)) is True
-    assert decay.is_stale(_iso(10)) is False
+def test_dormancy_thresholds() -> None:
+    assert decay.is_dormant(_iso(100)) is True
+    assert decay.is_dormant(_iso(10)) is False
     assert decay.suggests_deprecation(_iso(200)) is True
     assert decay.suggests_deprecation(_iso(30)) is False
+
+
+def test_is_stale_is_dormant_alias() -> None:
+    # Backward-compat alias — same behaviour, no confidence implication.
+    assert decay.is_stale is decay.is_dormant
+    assert decay.is_stale(_iso(100)) is True

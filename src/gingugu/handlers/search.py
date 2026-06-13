@@ -83,12 +83,17 @@ def register(mcp, ctx: ServerContext) -> None:
 
     @mcp.tool()
     def memory_stats(namespace: str | None = None, flag_stale: bool = False) -> dict:
-        """Health overview: counts, staleness, and per-namespace breakdown.
+        """Health overview: counts, dormancy, and per-namespace breakdown.
 
-        When ``flag_stale`` is true, first demote aged active memories (not
-        accessed within the staleness window) to ``stale`` confidence. This is
-        non-destructive (content preserved, reversible via ``memory_update``)
-        and only lowers their decay weight."""
+        ``stats.dormant_count`` reports memories untouched for 90+ days —
+        a *resting* signal, never a confidence change. Memory is never
+        auto-forgotten; dormant memories wake on recall (directly or via
+        spreading activation through related memories).
+
+        ``flag_stale`` is deprecated and ignored — the old behaviour
+        (auto-demoting aged memories to ``stale``) contradicted the
+        never-forget model and has been removed. The parameter is retained
+        only so existing callers don't error."""
         try:
             ns_id = None
             if namespace is not None:
@@ -96,9 +101,8 @@ def register(mcp, ctx: ServerContext) -> None:
                 if ns is None:
                     return _err(f"namespace {namespace!r} not found")
                 ns_id = ns.id
-            flagged = stats_mod.flag_stale(ctx.conn, namespace_id=ns_id) if flag_stale else 0
             data = stats_mod.compute_stats(ctx.conn, namespace_id=ns_id)
-            return {"ok": True, "flagged_stale": flagged, "stats": data}
+            return {"ok": True, "flagged_stale": 0, "stats": data}
         except Exception as exc:
             logger.exception("memory_stats failed")
             return _err(f"memory_stats failed: {exc}")

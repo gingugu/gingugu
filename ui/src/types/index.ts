@@ -81,4 +81,28 @@ export interface GraphData {
   links: GraphLink[]
 }
 
-export type ViewTab = 'graph' | 'dashboard'
+export type ViewTab = 'graph' | 'dashboard' | 'timeline' | 'heatmap'
+
+export interface GraphFilters {
+  text: string
+  types: Set<MemoryType>
+  namespaces: Set<string>
+  confidences: Set<'verified' | 'inferred' | 'stale'>
+}
+
+export interface GraphLayoutSettings {
+  nodeSizeMultiplier: number
+  linkDistance: number
+  chargeStrength: number
+}
+
+export interface DecayScored {
+  memory: Memory
+  health: number
+  freshness: number
+  access: number
+  confidence: number
+  daysSinceConfirmed: number
+  daysSinceAccessed: number
+  dormant: boolean
+}

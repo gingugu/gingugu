@@ -58,6 +58,11 @@ memories.db*
 node_modules/
 ui/node_modules/
 dist/
+ui/dist/
+*.tsbuildinfo
+# ui/src/lib/ is app source, not a Python build dir — exempt it from the
+# broad `lib/` rule above so its modules (decay.ts, colors.ts, graph.ts) track.
+!ui/src/lib/
 
 # IDE / OS
 .DS_Store

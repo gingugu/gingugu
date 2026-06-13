@@ -76,7 +76,7 @@ def _backdate(db: Database, memory_id: str, days: int) -> None:
     db.conn.commit()
 
 
-def test_flag_stale_demotes_aged_active(
+def test_count_dormant_counts_aged_without_mutating(
     db: Database, store: MemoryStore, namespaces: NamespaceManager
 ) -> None:
     ns_id = namespaces.get_or_create("test-ns").id
@@ -104,15 +104,14 @@ def test_flag_stale_demotes_aged_active(
     _backdate(db, aged_v.id, 200)
     _backdate(db, aged_i.id, 100)
 
-    flagged = stats.flag_stale(db.conn)
-
-    assert flagged == 2
-    assert store.get(aged_v.id, record_access=False).confidence == Confidence.STALE
-    assert store.get(aged_i.id, record_access=False).confidence == Confidence.STALE
+    assert stats.count_dormant(db.conn) == 2
+    # Dormancy is a signal only — confidence is NEVER auto-changed.
+    assert store.get(aged_v.id, record_access=False).confidence == Confidence.VERIFIED
+    assert store.get(aged_i.id, record_access=False).confidence == Confidence.INFERRED
     assert store.get(fresh.id, record_access=False).confidence == Confidence.VERIFIED
 
 
-def test_flag_stale_skips_deprecated_and_stale(
+def test_count_dormant_excludes_deprecated(
     db: Database, store: MemoryStore, namespaces: NamespaceManager
 ) -> None:
     ns_id = namespaces.get_or_create("test-ns").id
@@ -123,21 +122,11 @@ def test_flag_stale_skips_deprecated_and_stale(
         content="x",
         confidence=Confidence.DEPRECATED,
     )
-    already = store.create(
-        namespace_id=ns_id,
-        type=MemoryType.FACT,
-        title="s",
-        content="y",
-        confidence=Confidence.STALE,
-    )
     _backdate(db, dep.id, 300)
-    _backdate(db, already.id, 300)
-
-    assert stats.flag_stale(db.conn) == 0
-    assert store.get(dep.id, record_access=False).confidence == Confidence.DEPRECATED
+    assert stats.count_dormant(db.conn) == 0
 
 
-def test_flag_stale_namespace_scoped(
+def test_count_dormant_namespace_scoped(
     db: Database, store: MemoryStore, namespaces: NamespaceManager
 ) -> None:
     ns_a = namespaces.get_or_create("ns-a").id
@@ -159,24 +148,19 @@ def test_flag_stale_namespace_scoped(
     _backdate(db, a.id, 200)
     _backdate(db, b.id, 200)
 
-    assert stats.flag_stale(db.conn, namespace_id=ns_a) == 1
-    assert store.get(a.id, record_access=False).confidence == Confidence.STALE
+    assert stats.count_dormant(db.conn, namespace_id=ns_a) == 1
+    # Still no mutation, even when counted.
+    assert store.get(a.id, record_access=False).confidence == Confidence.VERIFIED
     assert store.get(b.id, record_access=False).confidence == Confidence.VERIFIED
 
 
-def test_flag_stale_is_reversible(
+def test_stats_reports_dormant_count(
     db: Database, store: MemoryStore, namespaces: NamespaceManager
 ) -> None:
     ns_id = namespaces.get_or_create("test-ns").id
-    mem = store.create(
-        namespace_id=ns_id,
-        type=MemoryType.FACT,
-        title="m",
-        content="x",
-        confidence=Confidence.VERIFIED,
-    )
-    _backdate(db, mem.id, 200)
-    stats.flag_stale(db.conn)
-    restored = store.update(mem.id, confidence=Confidence.VERIFIED)
-    assert restored.confidence == Confidence.VERIFIED
-    assert restored.content == "x"
+    aged = store.create(namespace_id=ns_id, type=MemoryType.FACT, title="a", content="x")
+    _backdate(db, aged.id, 200)
+    result = stats.compute_stats(db.conn)
+    assert result["dormant_count"] == 1
+    # Back-compat alias preserved.
+    assert result["stale_count"] == 1

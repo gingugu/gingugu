@@ -183,10 +183,22 @@ non-destructive to ranking.
 
 ---
 
-## Decay Scoring Algorithm
+## Scoring & Memory Lifecycle
 
 Every memory gets a composite **score** in roughly `[0, 1+]` blending lexical
 relevance with temporal and trust signals.
+
+**Lifecycle philosophy — a robot brain never forgets.** Time alone never
+destroys trust or retrievability. A memory left untouched goes *dormant*
+(resting), not *stale* (rotting). Three rules follow from this:
+
+1. **Freshness has a floor** (`0.35`) — it never decays to zero, so a 5-year-old
+   verified fact stays retrievable.
+2. **Confidence (trust) is the dominant standalone signal** — recency is a
+   gentle tiebreaker, not an eraser.
+3. **Dormancy is reported, never auto-applied** — nothing ever auto-demotes a
+   memory's confidence. Memories are only ever deprecated/deleted by explicit
+   `memory_forget`.
 
 ### Step 1 — Normalize BM25
 
@@ -213,9 +225,13 @@ Default weights (sum to 1.0, tunable via env):
 | Weight | Default | Env var |
 |--------|---------|---------|
 | `w_r` (relevance)   | 0.45 | `MEMORY_W_RELEVANCE` |
-| `w_f` (freshness)   | 0.25 | `MEMORY_W_FRESHNESS` |
+| `w_f` (freshness)   | 0.10 | `MEMORY_W_FRESHNESS` |
 | `w_a` (access)      | 0.10 | `MEMORY_W_ACCESS` |
-| `w_c` (confidence)  | 0.20 | `MEMORY_W_CONFIDENCE` |
+| `w_c` (confidence)  | 0.35 | `MEMORY_W_CONFIDENCE` |
+
+Confidence carries more weight than freshness by design: *what we trust*
+matters more than *what we touched recently*. Dormant-but-verified beats
+fresh-but-unverified.
 
 **Normalization:** weights are user-overridable and not guaranteed to sum to
 1.0. The config loader **normalizes at load** — each effective weight is
@@ -229,9 +245,15 @@ logs a warning.
 | Component | Formula | Range | Notes |
 |-----------|---------|-------|-------|
 | `relevance`  | `1 / (1 + |bm25|)` or `0.5` if no query | `[0, 1]` | See Step 1 |
-| `freshness`  | `exp(-λ × days_since_confirmed)` | `(0, 1]` | λ in **days⁻¹**, default `0.05` |
+| `freshness`  | `floor + (1-floor)·exp(-λ × days_since_confirmed)` | `[0.35, 1]` | floor `0.35`; λ in **days⁻¹**, default `0.01` |
 | `access`     | `min(1.0, log(access_count + 1) / log(50))` | `[0, 1]` | Saturates at ~50 accesses |
 | `confidence` | `verified=1.0, inferred=0.7, stale=0.3, deprecated=0.0` | `[0, 1]` | Hard floor at 0 |
+
+**Freshness floor:** `freshness` asymptotes to `FRESHNESS_FLOOR` (0.35), never
+zero. Dormancy lowers a memory's recency contribution slightly but can never
+push it out of reach — the never-forget guarantee in the scoring math. The
+`stale` confidence value is legacy (no longer auto-assigned); existing `stale`
+memories keep working.
 
 **`days_since_confirmed` source (null-safe):** `last_confirmed` is nullable —
 a freshly stored memory has never been confirmed. The reference timestamp is
@@ -256,14 +278,30 @@ below a mediocre verified match — usually wrong. Additive blending with
 normalized components is predictable, tunable, and survives missing factors
 (set their weight to 0).
 
-### Staleness Rules
+### Lifecycle Rules
 
 | Condition | Action |
 |-----------|--------|
-| Not accessed in 90 days | Flag as `stale` |
-| Not confirmed in 180 days | Suggest deprecation |
+| Not accessed in 90 days | Reported as **dormant** (`stats.dormant_count`) — a resting signal, never a confidence change |
+| Not confirmed in 180 days | Suggest deprecation (advisory only) |
 | Marked `deprecated` | Excluded from search results (unless explicitly requested) |
 | Confidence = `verified` + recent access | Boosted to top of results |
+
+> The old "flag as stale after 90 days" auto-demotion was **removed** — it
+> contradicted the never-forget model. `memory_stats(flag_stale=…)` is now a
+> deprecated, ignored no-op kept for backward compatibility.
+
+### Spreading Activation
+
+Recall is associative. When `memory_recall` or `memory_context` surfaces a set
+of memories, each result's **relation neighbours** (1 hop, both directions) are
+*reactivated*: their `last_accessed` is refreshed so they leave the dormant
+set, **without** incrementing `access_count` or writing an `access_log` row
+(a reactivation is not a direct access). This is how a dormant memory wakes when
+a *different* memory sparks it — the cluster lights up together. Implemented in
+`MemoryStore.touch_many()` and the `_spread_activation` handler helper;
+best-effort, so a failure never breaks a read. Tag-based spreading is a planned
+follow-up.
 
 ---
 

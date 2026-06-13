@@ -7,7 +7,7 @@ import sqlite3
 import time
 from datetime import UTC, datetime, timedelta
 
-from .decay import DEPRECATE_SUGGEST_AFTER_DAYS, STALE_AFTER_DAYS
+from .decay import DEPRECATE_SUGGEST_AFTER_DAYS, DORMANT_AFTER_DAYS
 
 logger = logging.getLogger(__name__)
 
@@ -21,33 +21,29 @@ def _cutoff_iso(days: int, now: datetime | None = None) -> str:
     return (now - timedelta(days=days)).isoformat()
 
 
-def flag_stale(
+def count_dormant(
     conn: sqlite3.Connection,
     *,
     namespace_id: str | None = None,
     now: datetime | None = None,
 ) -> int:
-    """Demote aged active memories to ``stale`` confidence (non-destructive).
+    """Count active memories not accessed within ``DORMANT_AFTER_DAYS``.
 
-    Sets ``confidence = 'stale'`` for memories not accessed within
-    ``STALE_AFTER_DAYS`` that are still ``verified`` or ``inferred``. This only
-    lowers the decay weight; content is preserved and the change is reversible
-    via ``memory_update``. Already-stale and deprecated memories are untouched.
-    Returns the number of memories flagged.
+    Dormancy is a **non-destructive signal** — resting, not rotting. Unlike the
+    old ``flag_stale`` (removed), this never changes a memory's confidence. A
+    dormant memory wakes back up the moment it is recalled, directly or via
+    spreading activation through a related memory.
     """
     now = now or datetime.now(UTC)
-    cutoff = _cutoff_iso(STALE_AFTER_DAYS, now)
+    cutoff = _cutoff_iso(DORMANT_AFTER_DAYS, now)
     and_ns = " AND namespace_id = ?" if namespace_id else ""
     ns_params: tuple = (namespace_id,) if namespace_id else ()
-    cur = conn.execute(
-        "UPDATE memories SET confidence = 'stale', updated_at = ? "
-        "WHERE last_accessed < ? AND confidence IN ('verified', 'inferred')" + and_ns,
-        (now.isoformat(), cutoff, *ns_params),
+    return _count(
+        conn,
+        "SELECT COUNT(*) FROM memories WHERE last_accessed < ? "
+        "AND confidence != 'deprecated'" + and_ns,
+        (cutoff, *ns_params),
     )
-    conn.commit()
-    if cur.rowcount:
-        logger.info("Flagged %d stale memories (cutoff=%s)", cur.rowcount, cutoff)
-    return cur.rowcount
 
 
 def prune_access_log(conn: sqlite3.Connection, *, force: bool = False) -> int:
@@ -95,15 +91,15 @@ def compute_stats(conn: sqlite3.Connection, *, namespace_id: str | None = None) 
         ).fetchall()
     }
 
-    stale_cutoff = _cutoff_iso(STALE_AFTER_DAYS)
+    dormant_cutoff = _cutoff_iso(DORMANT_AFTER_DAYS)
     deprecate_cutoff = _cutoff_iso(DEPRECATE_SUGGEST_AFTER_DAYS)
     and_ns = " AND namespace_id = ?" if namespace_id else ""
 
-    stale_count = _count(
+    dormant_count = _count(
         conn,
         f"SELECT COUNT(*) FROM memories WHERE last_accessed < ? "
         f"AND confidence != 'deprecated'{and_ns}",
-        (stale_cutoff, *ns_params),
+        (dormant_cutoff, *ns_params),
     )
     deprecate_suggest = _count(
         conn,
@@ -125,7 +121,9 @@ def compute_stats(conn: sqlite3.Connection, *, namespace_id: str | None = None) 
         "total_memories": total,
         "by_type": by_type,
         "by_confidence": by_confidence,
-        "stale_count": stale_count,
+        "dormant_count": dormant_count,
+        # Back-compat alias for older consumers; dormancy supersedes staleness.
+        "stale_count": dormant_count,
         "deprecation_suggested": deprecate_suggest,
         "namespaces": namespaces,
         "access_log_rows": _count(conn, "SELECT COUNT(*) FROM access_log"),

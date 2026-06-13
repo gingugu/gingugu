@@ -145,6 +145,27 @@ class MemoryStore:
         )
         self._conn.commit()
 
+    def touch_many(self, memory_ids: list[str]) -> int:
+        """Refresh ``last_accessed`` on memories without counting a real access.
+
+        This is the **spreading-activation** primitive: when a memory is
+        recalled, its related neighbours are *reactivated* — their dormancy
+        clock resets — but this is not a direct access, so ``access_count`` is
+        left untouched and no ``access_log`` row is written. Returns the number
+        of rows refreshed.
+        """
+        ids = list(dict.fromkeys(mid for mid in memory_ids if mid))
+        if not ids:
+            return 0
+        now = utcnow_iso()
+        placeholders = ", ".join("?" for _ in ids)
+        cur = self._conn.execute(
+            f"UPDATE memories SET last_accessed = ? WHERE id IN ({placeholders})",
+            (now, *ids),
+        )
+        self._conn.commit()
+        return cur.rowcount
+
     # --- Tags ---------------------------------------------------------------
 
     def _get_or_create_tag(self, name: str) -> str:

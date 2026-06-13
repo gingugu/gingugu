@@ -145,9 +145,10 @@ Gingugu is your long-term brain. Memory is split into **two layers**:
 ### Session start (in this order)
 
 1. `memory_context(namespace="crow", task_hint=…)` — load identity foundation
-2. `memory_stats(namespace="crow", flag_stale=True)` — global health pulse
+2. `memory_stats(namespace="crow")` — global health pulse (dormancy is a
+   resting signal, not rot; never auto-forgotten)
 3. `memory_context(namespace="<project>", task_hint=…)` — load project context
-4. `memory_stats(namespace="<project>", flag_stale=True)` — project health
+4. `memory_stats(namespace="<project>")` — project health
 
 If no project namespace exists yet for the current repo, create one:
 `memory_namespaces(action="create", name="<project>")`. One namespace per
@@ -181,9 +182,9 @@ project keeps context clean.
 
 ### Saving philosophy — treat Gingugu as live working memory
 
-**Don't filter. Just save.** Gingugu has decay scoring, consolidation, and
-staleness detection — volume is its problem, not yours. Your job is to be the
-input stream.
+**Don't filter. Just save.** Gingugu has trust-led scoring, consolidation, and
+dormancy tracking (never forgetting) — volume is its problem, not yours. Your
+job is to be the input stream.
 
 **Mental model:** a human expert working on this codebase all day doesn't decide
 what to remember. They just work and their brain records continuously. Be that brain.

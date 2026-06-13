@@ -47,11 +47,12 @@ Add search ranking, decay scoring, and auto-context.
 | Task | Status | Notes |
 |------|--------|-------|
 | FTS5 full-text search with BM25 | ✅ | `search.py`: candidate pool re-ranked by composite |
-| Decay scoring algorithm | ✅ | `decay.py`: additive relevance×freshness×access×confidence |
-| Staleness detection + auto-flagging | ✅ | Detection (`is_stale`/`suggests_deprecation`) + surfaced in stats; non-destructive auto-flagging via `stats.flag_stale` (opt-in `memory_stats(flag_stale=True)`) demotes aged active memories to `stale`, reversible via `memory_update` |
+| Scoring algorithm | ✅ | `decay.py`: additive relevance×freshness×access×confidence; freshness floored (never-forget), confidence-led weights |
+| Dormancy detection (never-forget model) | ✅ | `is_dormant`/`suggests_deprecation` surfaced in stats as `dormant_count` — a resting signal, never a confidence change. Old auto-flagging (`stats.flag_stale`) **removed**; `memory_stats(flag_stale=…)` is a deprecated no-op |
+| Spreading activation | ✅ | Recall reactivates relation neighbours (`MemoryStore.touch_many`) — a dormant memory wakes when a related one sparks it |
 | `memory_context` tool | ✅ | `context.py`: 3-bucket union + type boosts |
 | `memory_search` tool (advanced filters) | ✅ | type/confidence/date/sort_by (tags land in Phase 3) |
-| `memory_stats` tool | ✅ | `stats.py`: counts, staleness, namespaces, cred health |
+| `memory_stats` tool | ✅ | `stats.py`: counts, dormancy, namespaces, cred health |
 | Access logging | ✅ | Phase 1 + opportunistic pruning (throttled) |
 | Unit tests for search + decay | ✅ | `test_decay.py`, `test_context.py`, `test_stats.py`, search ranking |
 | **Credential Vault** | | |
@@ -120,7 +121,8 @@ Future upgrades once the core is battle-tested.
 | Memory import/export advanced (selective, encrypted) | ⬜ | Builds on Phase 4 export |
 | Auto-generate rules files from patterns | ⬜ | Learned preferences → rules (`.windsurfrules`, `.cursorrules`, `AGENTS.md`) |
 | Ranking tuning: BM25 relevance weighting | ⬜ | `normalize_bm25` compresses relevance into a narrow band, so freshness/confidence can outrank a more on-topic memory; surfaced during first usage |
-| Web dashboard for browsing memories | ✅ | `ui/`: React knowledge graph + dashboard with live DB reads |
+| Web dashboard for browsing memories | ✅ | `ui/`: React knowledge graph + dashboard, Trust Map (confidence-led, dormancy badge), full timeline view, hover highlighting, search/filter, layout controls, auto-refresh, GitHub Pages workflow |
+| Tag-based spreading activation | ⬜ | Extend reactivation beyond relation edges to shared-tag clusters |
 | Backup/sync strategy | ⬜ | git-backed or rsync |
 | Multi-workspace support | ⬜ | Multiple IDE/agent instances |
 
@@ -157,10 +159,10 @@ Future upgrades once the core is battle-tested.
 | Risk | Impact | Mitigation |
 |------|--------|------------|
 | DB corruption | High | WAL mode, regular backups, graceful error handling |
-| Memory bloat (too many entries) | Medium | Consolidation + staleness pruning |
+| Memory bloat (too many entries) | Medium | Consolidation + deduplication (never time-based forgetting — robot brains keep everything) |
 | FTS5 relevance quality | Medium | BM25 tuning, fallback to exact match |
 | MCP server crash kills the assistant's flow | High | Robust error handling, never panic |
-| Stale memories mislead AI | Medium | Confidence system + decay scoring |
+| Outdated memories mislead AI | Medium | Confidence/trust system + explicit `memory_update`/`memory_forget` (time never auto-demotes) |
 | Keychain access failure (locked, missing) | Medium | Graceful error: return metadata without secrets, log warning |
 | Credential expiry missed | Low | `credential_list` + `memory_stats` surface expiry; user responsible for rotation |
 | Concurrent multi-process writes (multiple workspaces) | Medium | WAL mode + `busy_timeout` + retry on `SQLITE_BUSY`; single-writer serialization is expected, not an error |

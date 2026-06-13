@@ -9,8 +9,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Memory lifecycle reframed — dormancy, not decay (never-forget model).** A
+  robot brain shouldn't auto-forget; time alone no longer destroys trust or
+  retrievability. Concretely:
+  - `freshness` now has a **floor of 0.35** (`floor + (1-floor)·exp(-λ·days)`)
+    so ancient memories asymptote toward the floor instead of zero.
+  - Default scoring weights rebalanced toward **trust**: confidence `0.20 → 0.35`,
+    freshness `0.25 → 0.10` (relevance/access unchanged); default
+    `MEMORY_DECAY_LAMBDA` `0.05 → 0.01`.
+  - **Auto-staleness removed.** `stats.flag_stale` (which demoted aged memories
+    to `stale` confidence) is gone; `memory_stats(flag_stale=…)` is now a
+    deprecated, ignored no-op. `memory_stats` reports `dormant_count` (with a
+    `stale_count` back-compat alias) — a resting signal that never mutates
+    confidence.
+  - The UI **Decay Heatmap** is now the **Trust Map**: color reflects
+    confidence-led trust (with the freshness floor), and a separate clock badge
+    marks dormant memories (90+ days untouched) instead of folding dormancy into
+    the health color.
+
 ### Added
 
+- **Spreading activation.** Recalling a memory (`memory_recall` /
+  `memory_context`) now reactivates its relation neighbours (1 hop) — refreshing
+  their `last_accessed` so they leave the dormant set — without inflating
+  `access_count` or writing an `access_log` row. A dormant memory wakes when a
+  related memory sparks it. Backed by the new `MemoryStore.touch_many()`.
+- **Memory Explorer UI — Phase 5 polish**: graph hover highlighting (connected
+  nodes/edges glow, the rest dim out), search + multi-faceted filter
+  (text, type, namespace, confidence), zoom-to-fit, layout sliders (node size,
+  link distance, repulsion), auto-refresh interval (Off/5s/30s/1m), promoted
+  Timeline to a top-level tab with day/week/month granularity, and the
+  **Trust Map** view that grades every memory on a confidence-led composite and
+  groups them by namespace/type/confidence, flagging dormant memories at a
+  glance.
+- **Static-mode dump CLI** `ui/dump_static.py` — writes the live DB to
+  `ui/src/data/sample.json` for one-command static refresh / GitHub Pages
+  builds.
+- **GitHub Pages workflow** `.github/workflows/ui-pages.yml` — auto-deploys
+  the UI on every `main` push (or via `workflow_dispatch`) using `VITE_BASE`
+  for repo-scoped hosting.
 - **Two-layer memory convention** (`crow` + project): a global `crow`
   namespace for cross-project identity, preferences, and meta-learnings,
   loaded at session start before any project namespace. Project namespaces

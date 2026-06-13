@@ -30,12 +30,14 @@ def _default_db_path(platform: str = sys.platform) -> Path:
 
 _DEFAULT_DB = _default_db_path()
 
-# Composite-score weight defaults (see docs/architecture.md → Decay Scoring).
+# Composite-score weight defaults (see docs/architecture.md → Scoring).
+# Confidence (trust) is the dominant standalone signal; freshness is a gentle
+# recency tiebreaker, not an eraser — dormant memories must stay retrievable.
 _DEFAULT_WEIGHTS = {
     "relevance": 0.45,
-    "freshness": 0.25,
+    "freshness": 0.10,
     "access": 0.10,
-    "confidence": 0.20,
+    "confidence": 0.35,
 }
 
 
@@ -133,7 +135,7 @@ def load_config() -> Config:
         namespace=os.environ.get("MEMORY_NAMESPACE") or None,
         namespace_path=os.environ.get("MEMORY_NAMESPACE_PATH") or None,
         auto_context_limit=_env_int("MEMORY_AUTO_CONTEXT_LIMIT", 10),
-        decay_lambda=_env_float("MEMORY_DECAY_LAMBDA", 0.05),
+        decay_lambda=_env_float("MEMORY_DECAY_LAMBDA", 0.01),
         weights=_load_weights(),
         log_level=os.environ.get("MEMORY_LOG_LEVEL", default_level).upper(),
     )

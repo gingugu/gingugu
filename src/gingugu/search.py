@@ -80,7 +80,7 @@ def search(
     created_before: str | None = None,
     limit: int = 10,
     weights: dict[str, float] | None = None,
-    decay_lambda: float = 0.05,
+    decay_lambda: float = 0.01,
     tags: list[str] | None = None,
 ) -> list[Memory]:
     """FTS5 search re-ranked by the composite decay score.
@@ -171,7 +171,7 @@ def advanced_search(
     include_deprecated: bool = False,
     limit: int = 10,
     weights: dict[str, float] | None = None,
-    decay_lambda: float = 0.05,
+    decay_lambda: float = 0.01,
     tags: list[str] | None = None,
 ) -> list[Memory]:
     """Filtered search. With a query, delegates to FTS5 + composite ranking;
@@ -226,7 +226,7 @@ def _list_by_filters(
     include_deprecated: bool,
     limit: int,
     weights: dict[str, float] | None,
-    decay_lambda: float,
+    decay_lambda: float = 0.01,
     tags: list[str] | None = None,
 ) -> list[Memory]:
     where: list[str] = []
