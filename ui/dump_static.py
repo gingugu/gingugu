@@ -27,7 +27,9 @@ DEFAULT_OUT = Path(__file__).resolve().parent / "src" / "data" / "sample.json"
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Dump Gingugu DB to a static JSON file for the UI.")
+    parser = argparse.ArgumentParser(
+        description="Dump Gingugu DB to a static JSON file for the UI."
+    )
     parser.add_argument(
         "--out",
         type=Path,
