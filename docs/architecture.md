@@ -408,8 +408,10 @@ Get health overview of the memory system.
 
 **Parameters:**
 - `namespace` (optional) — scope to namespace, or global if omitted
-- `flag_stale` (optional) — first demote aged active memories to `stale`
-  confidence (non-destructive, reversible via `memory_update`; default false)
+- `flag_stale` (optional, **deprecated**) — ignored no-op kept for backward
+  compatibility; the old auto-demotion contradicted the never-forget model and
+  was removed. Stats report `dormant_count` (a resting signal) instead and
+  never mutate confidence.
 
 ### `memory_search`
 Advanced search with full filter support.
