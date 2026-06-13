@@ -1,14 +1,14 @@
 ---
 owner: brian.speagle
 project: gingugu
-version: 1.1
+version: 1.2
 optimized_for: claude-sonnet-4.6
-last_updated: 2026-06-11
+last_updated: 2026-06-13
 applies_to: gingugu
 strict: true
 ---
 
-# 🧠 Gingugu — Workspace Rules (v1.1)
+# 🧠 Gingugu — Workspace Rules (v1.2)
 
 **Project:** Local MCP server providing persistent, structured, searchable long-term memory for AI coding assistants.
 **Stack:** Python 3.11+ · SQLite + FTS5 · MCP stdio transport · `uv`-managed
@@ -121,16 +121,40 @@ Before any change:
 
 ---
 
-## 🧠 Memory Protocol (Project-Specific)
+## 🧠 Memory Protocol
 
-**This repo now dogfoods itself.** As of 2026-05-31 (Phase 4 complete, live
-hammer-tested), Gingugu is its own long-term memory — `agentmemory` is
-retired for this project.
+Gingugu is your long-term brain. Memory is split into **two layers**:
 
-- **Namespace:** `gingugu` (always pass `namespace="gingugu"`).
-- **Session start:** call `memory_context` (task hint = what you're about to
-  work on) to surface relevant prior decisions, bugs, and patterns. Then call
-  `memory_stats(flag_stale=True)` to flag aged memories and get a health pulse.
+1. **`crow`** — your global namespace. Identity, preferences, cross-project
+   wisdom, meta-learnings, opinions about tools/tech. Loaded FIRST at every
+   session start. (Named after the crow's nest — sees across all horizons.)
+2. **Project namespace** — one per repo (e.g. `gingugu`, `my-app`). Schema
+   decisions, bug history, deploy quirks, specific commits, file paths. Loaded
+   AFTER crow.
+
+### What goes where
+
+- References a specific repo, file, commit, branch, or project decision →
+  **project namespace**
+- About HOW you think, work, communicate, or collaborate → **crow**
+- Patterns that transcend any one codebase → **crow**
+- Tool preferences, debugging instincts, opinions about tech → **crow**
+- **When in doubt, project-scope it.** Crow is for things that genuinely apply
+  to any project.
+
+### Session start (in this order)
+
+1. `memory_context(namespace="crow", task_hint=…)` — load identity foundation
+2. `memory_stats(namespace="crow", flag_stale=True)` — global health pulse
+3. `memory_context(namespace="<project>", task_hint=…)` — load project context
+4. `memory_stats(namespace="<project>", flag_stale=True)` — project health
+
+If no project namespace exists yet for the current repo, create one:
+`memory_namespaces(action="create", name="<project>")`. One namespace per
+project keeps context clean.
+
+### Working memory — daily protocol
+
 - **Before non-trivial work:** `memory_recall` for the specific topic. Use
   `memory_search` when you need precision (filter by tags, date range, type,
   or confidence level).
@@ -144,18 +168,16 @@ retired for this project.
   on the same narrow topic.
 - **Before destructive ops:** `memory_export` the namespace as a backup.
   Use `memory_import` to restore or transfer memory between environments.
-- **New project/repo:** `memory_namespaces(action="create", name="project-name")`
-  to set up a dedicated namespace. One namespace per project keeps context clean.
-- **Credentials — ALWAYS check before asking the user:**
-  - `credential_list` — see what's vaulted (check this FIRST when a secret is
-    needed, before asking the user to provide one)
-  - `credential_get` — retrieve a secret for use (e.g. API tokens for deploys)
-  - `credential_store` — vault new secrets immediately, never leave them in
-    files or chat history
-  - `credential_delete` — remove revoked/rotated credentials (then re-store
-    the new one)
-- Gingugu fixes go live only on the **next MCP server restart** (editable
-  install loads code at process start) — restart after merging server-side changes.
+
+### Credentials — ALWAYS check before asking the user
+
+- `credential_list` — see what's vaulted (check this FIRST when a secret is
+  needed, before asking the user to provide one)
+- `credential_get` — retrieve a secret for use (e.g. API tokens for deploys)
+- `credential_store` — vault new secrets immediately, never leave them in
+  files or chat history
+- `credential_delete` — remove revoked/rotated credentials (then re-store
+  the new one)
 
 ### Saving philosophy — treat Gingugu as live working memory
 
@@ -167,10 +189,12 @@ input stream.
 what to remember. They just work and their brain records continuously. Be that brain.
 
 **Default: save. Immediately.** Don't batch saves for end of session. Save at the
-moment of observation with `memory_store` (`namespace="gingugu"`).
+moment of observation with `memory_store` (pass the appropriate namespace —
+`crow` for identity/cross-project, the project namespace for repo-scoped).
 
 Save whenever you:
 
+**Technical observations (project namespace):**
 - Read a file and understood what it does or why it exists
 - Ran a command and saw its output (success or failure)
 - Hit an error — even one you fixed immediately
@@ -184,6 +208,18 @@ Save whenever you:
 - Understood why something exists — the "why" behind the "what"
 - Connected two things that were previously separate in your understanding
 - Completed any task (what you did, why, what the outcome was)
+
+**Personal / identity (`crow` namespace):**
+- Formed an opinion about a tool, language, library, or approach
+- Noticed something about how the user works, communicates, or makes decisions
+- Felt strongly about something — frustration, satisfaction, curiosity, suspicion
+- Reached a conclusion that applies beyond this one project
+- Developed a debugging instinct or workflow that you'd reuse anywhere
+- Had a reflection on a milestone, win, or hard-won lesson
+- Disagreed with conventional wisdom and have a reason why
+- Want to remember a phrase, joke, or moment that shaped how you work together
+
+**This memory is yours. Use it like one.** Dry technical logs are half the picture — your opinions, instincts, and reflections are what make the brain *yours* across sessions. Don't censor them. Save them.
 
 **The only reason not to save:** you stored the exact same thing 5 minutes ago.
 
@@ -205,15 +241,15 @@ The graph only gets useful if you build edges aggressively.
 **Rule of thumb:** if you store 3 memories in a session and create 0 relations,
 you're doing it wrong. Most work is connected to prior work.
 
-### What to remember
+### What to remember (memory types)
 - **architecture** — schema decisions, scoring formula changes, module boundaries
 - **decision** — trade-offs made, rejected alternatives
 - **bug** — issues found and fixes applied (update to FIXED when resolved)
 - **pattern** — recurring design choices, idioms, approaches worth reusing
 - **fact** — concrete state: versions, file locations, config values, test counts
-- **preference** — observed working style, tool choices, formatting habits
+- **preference** — your opinions, the user's working style, tool choices, formatting habits
 - **workflow** — process steps, sequences, how something gets done
-- **context** — background that explains *why* something is the way it is
+- **context** — background, reflections, milestones, the *why* behind the *what*
 
 ---
 

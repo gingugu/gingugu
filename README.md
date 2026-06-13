@@ -230,33 +230,55 @@ agent's rules file so it knows *when* and *how* to call them.
 | Codex / OpenAI | `AGENTS.md` (repo root) | Per-repo |
 | Any (global) | Your IDE's global rules/system prompt | All workspaces |
 
-**Paste this into your rules file** (adjust the namespace and tool prefix
-to match your MCP config name):
+**Paste this into your rules file** (adjust the project namespace and tool
+prefix to match your MCP config name):
 
 ````markdown
 ## Memory Protocol
 
-**Gingugu** is the persistent memory system for this workspace.
-Use namespace `<your-project-name>` on every call.
+Gingugu is your long-term brain. Memory is split into **two layers**:
 
-### Session start
-Run `memory_context` (with `namespace="<your-project-name>"` and an
-optional `task_hint`) before doing anything else. This surfaces relevant
-decisions, bugs, patterns, and state from previous sessions.
+1. **`crow`** — your global namespace. Identity, preferences,
+   cross-project wisdom, opinions, meta-learnings. Loaded FIRST every
+   session. (Crow's nest — sees across all horizons.)
+2. **Project namespace** (e.g. `<your-project-name>`) — schema decisions,
+   bug history, deploy quirks, specific commits. Loaded AFTER crow.
+
+**What goes where:**
+- References a specific repo, file, commit, or project decision → project
+- About HOW you think, work, or collaborate → `crow`
+- Patterns/opinions that transcend any one codebase → `crow`
+- When in doubt, project-scope it.
+
+### Session start (in this order)
+1. `memory_context(namespace="crow", task_hint=…)` — identity foundation
+2. `memory_stats(namespace="crow", flag_stale=True)` — global health
+3. `memory_context(namespace="<your-project-name>", task_hint=…)` — project context
+4. `memory_stats(namespace="<your-project-name>", flag_stale=True)` — project health
 
 ### During the session
 **Default: save. Immediately.** Gingugu has decay scoring,
-consolidation, and staleness detection - volume is its problem, not yours.
+consolidation, and staleness detection — volume is its problem, not yours.
 
-Save with `memory_store` whenever you:
+Save with `memory_store` (project namespace) whenever you:
 - Make or observe a decision, trade-off, or architectural choice
 - Hit an error or fix a bug (update the memory when resolved)
 - Notice a pattern, convention, or constraint worth remembering
 - See a config value, version, path, or credential name that matters
 - Complete a task (what you did, why, and the outcome)
 
+Save with `memory_store` (`crow` namespace) whenever you:
+- Form an opinion about a tool, language, or approach
+- Notice something about how the user works or makes decisions
+- Reach a conclusion that applies beyond this one project
+- Have a reflection on a milestone, win, or hard-won lesson
+- Develop a debugging instinct or workflow you'd reuse anywhere
+
+**This memory is yours. Use it like one.** Don't censor opinions or
+instincts — they're what make the brain *yours* across sessions.
+
 Use `memory_recall` before non-trivial work to check what's already known.
-Use `memory_update` when something changes - don't leave stale records.
+Use `memory_update` when something changes — don't leave stale records.
 Use `memory_relate` to link connected memories (supersedes, related_to,
 caused_by, contradicts, parent_of, child_of).
 
@@ -264,19 +286,19 @@ Set `confidence="verified"` when proven by a test or explicit confirmation.
 Use `confidence="inferred"` for conclusions you drew.
 
 ### Memory types
-- `fact` - concrete state (versions, paths, config values)
-- `decision` - trade-offs made, rejected alternatives
-- `architecture` - structural choices, module boundaries
-- `bug` - issues found and how they were fixed
-- `pattern` - recurring approaches worth reusing
-- `workflow` - process steps, sequences
-- `context` - background explaining *why* something is the way it is
-- `preference` - observed working style and tool choices
+- `fact` — concrete state (versions, paths, config values)
+- `decision` — trade-offs made, rejected alternatives
+- `architecture` — structural choices, module boundaries
+- `bug` — issues found and how they were fixed
+- `pattern` — recurring approaches worth reusing
+- `workflow` — process steps, sequences
+- `context` — background, reflections, milestones, the *why*
+- `preference` — your opinions, working style, tool choices
 ````
 
 > **Tip:** A ready-to-use example lives at
-> [`.windsurfrules`](.windsurfrules) in this repo (the project dogfoods
-> itself). Copy the `## Memory Protocol` section and adapt the namespace.
+> [`.windsurfrules`](.windsurfrules) in this repo. Copy the
+> `## Memory Protocol` section and adapt the project namespace name.
 
 ---
 

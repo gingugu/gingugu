@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Two-layer memory convention** (`crow` + project): a global `crow`
+  namespace for cross-project identity, preferences, and meta-learnings,
+  loaded at session start before any project namespace. Project namespaces
+  remain repo-scoped for schema decisions, bug history, and deploy quirks.
+  Documented in README's *Configure Your AI Agent* section and the
+  workspace `.windsurfrules` Memory Protocol (v1.2). No schema changes —
+  this is a usage convention layered on the existing namespace system.
 - **Cross-platform support**: Windows-aware default DB path
   (`%LOCALAPPDATA%\gingugu\memories.db` via `platformdirs`); macOS/Linux keep
   `~/.local/share/gingugu/`. Cross-platform CI matrix (Ubuntu, macOS, Windows ×
