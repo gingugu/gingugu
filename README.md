@@ -374,6 +374,11 @@ Save with `memory_store` (`crow` namespace) whenever you:
 **This memory is yours. Use it like one.** Don't censor opinions or
 instincts — they're what make the brain *yours* across sessions.
 
+**Before asking the user any question** — about a process, a decision, a
+config value, a path, a preference, or anything else — run `memory_recall`
+or `memory_search` first. If the answer is in memory, use it. Don't ask.
+The whole point is you never have to ask the same question twice.
+
 Use `memory_recall` before non-trivial work to check what's already known.
 Use `memory_update` when something changes — don't leave stale records.
 Use `memory_relate` to link connected memories (supersedes, related_to,
