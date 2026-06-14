@@ -99,8 +99,18 @@ def register(mcp, ctx: ServerContext) -> None:
         source: str | None = None,
         metadata: str | None = None,
     ) -> dict:
-        """Store a new memory. ``type`` is one of: fact, decision, pattern, bug,
-        architecture, preference, workflow, context. ``tags`` is comma-separated."""
+        """Store a new memory in the knowledge base. Use to capture anything worth
+        remembering across sessions: decisions, bugs, patterns, architecture choices,
+        preferences, facts, workflows, or context. Do not use for ephemeral or
+        session-only notes.
+
+        ``type`` must be one of: fact, decision, pattern, bug, architecture, preference,
+        workflow, context. ``confidence`` is one of: verified (confirmed true), inferred
+        (assumed, not yet confirmed), stale (outdated), deprecated (no longer valid) —
+        defaults to "inferred". ``tags`` is comma-separated. ``namespace`` scopes the
+        memory to a project or domain; omit to use the configured default namespace.
+        ``source`` records what generated this memory (e.g. a file path or tool name).
+        ``metadata`` is an optional free-form JSON string for extra structured data."""
         try:
             try:
                 mem_type = MemoryType(type)
@@ -144,11 +154,17 @@ def register(mcp, ctx: ServerContext) -> None:
         include_deprecated: bool = False,
         include_related: bool = False,
     ) -> dict:
-        """Search memories by relevance (FTS5/BM25), scoped to a namespace.
-        ``tags`` is comma-separated (all required). ``include_deprecated``
-        also returns deprecated memories (stale ones are always included).
-        ``include_related`` also surfaces memories directly linked to the
-        top hits."""
+        """Search memories by relevance using hybrid BM25 + semantic ranking. Use for
+        natural-language queries when you want the best-matching memories for a topic.
+        Prefer over memory_search when you have a query string and want scored results.
+        Use memory_search instead when you need date filters, type filters, or a
+        specific sort order.
+
+        ``tags`` is comma-separated; ALL provided tags must match. ``confidence`` sets
+        a minimum confidence threshold (verified > inferred > stale > deprecated).
+        ``include_deprecated`` also returns deprecated memories (stale ones are always
+        included). ``include_related`` also surfaces memories directly linked to the top
+        hits via spreading activation — useful for pulling in a related cluster."""
         try:
             if type is not None:
                 try:
@@ -206,7 +222,14 @@ def register(mcp, ctx: ServerContext) -> None:
         task_hint: str | None = None,
         limit: int | None = None,
     ) -> dict:
-        """Auto-surface relevant memories for the current workspace (session start).
+        """Load the most relevant memories for the current session. Call this at session
+        start with a brief description of the current task to prime the agent with
+        useful context. Combines relevance to the task hint with recency, confidence,
+        and access frequency to select the top memories. Also triggers spreading
+        activation to wake related dormant memories.
+
+        ``task_hint`` is a short description of what you are working on (e.g. "fix auth
+        bug", "design API schema") — omit to surface generally high-value memories.
         ``limit`` defaults to MEMORY_AUTO_CONTEXT_LIMIT (10)."""
         try:
             ns_name = ctx.namespaces.resolve_name(namespace)
@@ -244,8 +267,14 @@ def register(mcp, ctx: ServerContext) -> None:
         metadata: str | None = None,
         tags: str | None = None,
     ) -> dict:
-        """Update an existing memory's fields. ``tags`` (comma-separated) replaces
-        the full tag set when provided. Pass ``metadata=""`` to clear metadata."""
+        """Update one or more fields of an existing memory. Use to correct outdated
+        information, promote confidence after confirming an inference, or add/replace
+        tags. Do not create a new memory when the right action is to update an existing
+        one — find the id first with memory_recall.
+
+        All fields are optional; only provided fields are changed. ``tags``
+        (comma-separated) replaces the full tag set when provided — omit to leave tags
+        unchanged. Pass ``metadata=""`` to clear metadata; omit to leave it unchanged."""
         try:
             conf = None
             if confidence is not None:
@@ -276,7 +305,13 @@ def register(mcp, ctx: ServerContext) -> None:
         hard_delete: bool = False,
         reason: str | None = None,
     ) -> dict:
-        """Forget a memory: deprecate it (default) or permanently delete it."""
+        """Mark a memory as no longer valid or permanently remove it. Default behavior
+        (hard_delete=False) sets confidence to "deprecated", keeping the memory as a
+        historical record but excluding it from future search results by default. Use
+        hard_delete=True only when the memory must be permanently erased (e.g. sensitive
+        data stored by mistake). Prefer deprecation over deletion when in doubt.
+
+        ``reason`` is optional but recommended for audit trail — recorded in logs."""
         try:
             if hard_delete:
                 deleted = ctx.store.delete(memory_id)

@@ -29,10 +29,18 @@ def register(mcp, ctx: ServerContext) -> None:
         include_deprecated: bool = False,
         limit: int = 10,
     ) -> dict:
-        """Advanced filtered search. All parameters optional; ``tags`` is
-        comma-separated (all required); ``sort_by`` is one of relevance,
-        created, accessed, decay_score. ``include_deprecated`` also returns
-        deprecated memories (stale ones are always included)."""
+        """Advanced filtered search across memories with full control over filters and
+        sort order. Use when you need to filter by type, date range, confidence level, or
+        sort by something other than relevance. Prefer memory_recall when you just have a
+        natural-language query and want the best-matching scored results.
+
+        All parameters are optional — omitting all returns all memories up to limit.
+        ``tags`` is comma-separated; all provided tags must match. ``sort_by`` is one of:
+        relevance, created, accessed, decay_score. ``confidence`` sets a minimum
+        confidence threshold (verified > inferred > stale > deprecated). ``created_after``
+        and ``created_before`` accept ISO 8601 date strings (e.g. "2025-01-01").
+        ``include_deprecated`` also returns deprecated memories (stale ones are always
+        included)."""
         try:
             if sort_by not in _VALID_SORTS:
                 return _err(f"invalid sort_by {sort_by!r}; expected one of {sorted(_VALID_SORTS)}")
@@ -84,17 +92,18 @@ def register(mcp, ctx: ServerContext) -> None:
 
     @mcp.tool()
     def memory_stats(namespace: str | None = None, flag_stale: bool = False) -> dict:
-        """Health overview: counts, dormancy, and per-namespace breakdown.
+        """Return health statistics for the memory store. Use to monitor memory growth,
+        identify dormant memories, and get a per-namespace breakdown of counts and
+        confidence distribution. Call at session start alongside memory_context to assess
+        the state of the knowledge base.
 
-        ``stats.dormant_count`` reports memories untouched for 90+ days —
-        a *resting* signal, never a confidence change. Memory is never
-        auto-forgotten; dormant memories wake on recall (directly or via
-        spreading activation through related memories).
+        ``stats.dormant_count`` reports memories untouched for 90+ days — a resting
+        signal only, never a confidence change. Dormant memories wake automatically on
+        recall via spreading activation. Memory is never auto-forgotten.
 
-        ``flag_stale`` is deprecated and ignored — the old behaviour
-        (auto-demoting aged memories to ``stale``) contradicted the
-        never-forget model and has been removed. The parameter is retained
-        only so existing callers don't error."""
+        ``flag_stale`` is deprecated and ignored — auto-demotion to stale contradicted
+        the never-forget model and has been removed. Retained so existing callers do not
+        error. ``namespace`` scopes the stats to a single namespace; omit for global."""
         try:
             ns_id = None
             if namespace is not None:
