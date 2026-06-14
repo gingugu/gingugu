@@ -1,14 +1,14 @@
 ---
 owner: brian.speagle
 project: gingugu
-version: 1.2
+version: 1.3
 optimized_for: claude-sonnet-4.6
-last_updated: 2026-06-13
+last_updated: 2026-06-14
 applies_to: gingugu
 strict: true
 ---
 
-# 🧠 Gingugu — Workspace Rules (v1.2)
+# 🧠 Gingugu — Workspace Rules (v1.3)
 
 **Project:** Local MCP server providing persistent, structured, searchable long-term memory for AI coding assistants.
 **Stack:** Python 3.11+ · SQLite + FTS5 · MCP stdio transport · `uv`-managed
@@ -169,6 +169,21 @@ project keeps context clean.
   on the same narrow topic.
 - **Before destructive ops:** `memory_export` the namespace as a backup.
   Use `memory_import` to restore or transfer memory between environments.
+
+### Questions — ALWAYS check memory before asking the user
+
+Before asking Mr. Boomtastic ANY question — about a process, a decision, a
+config value, a credential, a file path, a preference, or anything else — run
+`memory_recall` or `memory_search` against the relevant namespace first.
+
+If the answer is in memory: **use it, don't ask**.
+If memory is empty or inconclusive: ask once, then immediately store the answer.
+
+This applies to everything: release pipelines, deploy targets, API keys, personal
+preferences, tool choices, architectural decisions, and project history. The whole
+point of Gingugu is that you never have to ask the same question twice.
+
+**Zero tolerance for asking something that was already answered in a prior session.**
 
 ### Credentials — ALWAYS check before asking the user
 
