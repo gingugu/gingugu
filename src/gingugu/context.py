@@ -17,6 +17,7 @@ import math
 import sqlite3
 
 from . import decay, search
+from .embeddings import EmbeddingProvider
 from .models import Memory
 
 _BOOST_TYPES = {"architecture", "decision"}
@@ -73,6 +74,7 @@ def build_context(
     limit: int = 10,
     weights: dict[str, float],
     decay_lambda: float = 0.01,
+    embedder: EmbeddingProvider | None = None,
 ) -> list[Memory]:
     """Assemble and rank the auto-context memory set."""
     by_id: dict[str, Memory] = {}
@@ -87,6 +89,7 @@ def build_context(
             limit=task_n,
             weights=weights,
             decay_lambda=decay_lambda,
+            embedder=embedder,
         ):
             by_id[mem.id] = mem
 

@@ -158,11 +158,36 @@ def _migration_003_tags_relations(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA_V3)
 
 
+# --- Migration 004: semantic embeddings ------------------------------------
+#
+# One embedding row per memory. The vector is stored as a packed float32
+# BLOB (see embeddings.pack/unpack). Embedding rows are optional — a
+# memory without one simply falls back to BM25-only ranking during search.
+# Storing the model name + dim alongside the blob lets us safely re-encode
+# if the active model changes (mismatched dims won't be combined silently).
+
+_SCHEMA_V4 = """
+CREATE TABLE memory_embeddings (
+    memory_id  TEXT PRIMARY KEY REFERENCES memories(id) ON DELETE CASCADE,
+    model      TEXT NOT NULL,
+    dim        INTEGER NOT NULL,
+    embedding  BLOB NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+"""
+
+
+def _migration_004_embeddings(conn: sqlite3.Connection) -> None:
+    conn.executescript(_SCHEMA_V4)
+
+
 # (target_version, migration_callable) — applied in order when current < target.
 MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
     (1, _migration_001_initial_schema),
     (2, _migration_002_credential_vault),
     (3, _migration_003_tags_relations),
+    (4, _migration_004_embeddings),
 ]
 
 

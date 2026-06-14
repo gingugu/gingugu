@@ -21,6 +21,8 @@ file on your machine.
 ## 📋 Table of Contents
 
 - [Why Gingugu](#why-gingugu)
+- [How It Compares](#how-it-compares)
+- [FAQ](#faq)
 - [Features](#features)
 - [Architecture](#architecture)
 - [Setup](#setup)
@@ -55,12 +57,103 @@ Where this goes long-term — federated, org-wide agent memory — lives in
 
 ---
 
+## How It Compares
+
+| | **Gingugu** | mem0 | Zep | OpenMemory MCP | Letta (MemGPT) | Claude Projects / Cursor / Windsurf |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| Truly local-first (no cloud calls) | ✅ | ⚠️ cloud-sync default | ❌ | ⚠️ | ⚠️ | ❌ |
+| Works across all your AI tools | ✅ MCP-native | ⚠️ SDK-dependent | ⚠️ | ✅ MCP-native | ❌ framework lock-in | ❌ tool lock-in |
+| Zero ongoing cost | ✅ | ❌ paid tier | ❌ LLM calls + Postgres | ❌ paid tier | ⚠️ | ✅ |
+| Hybrid search (BM25 + semantic) | ✅ built-in, local | ⚠️ paid tier | ✅ | ⚠️ | ⚠️ | ❌ |
+| Knowledge graph built-in | ✅ relations + tags | ⚠️ paid tier | ✅ LLM-extracted (best in class) | ⚠️ | ❌ | ❌ |
+| Auto entity/relation extraction | ❌ (explicit) | ⚠️ paid | ✅ | ⚠️ | ❌ | ❌ |
+| Credential vault | ✅ OS keychain | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Knowledge graph UI | ✅ | ❌ | ⚠️ cloud dashboard | ❌ | ❌ | ❌ |
+| Deployment footprint | One SQLite file | SDK + cloud | Postgres + cloud | SDK + cloud | Full framework | None (built-in) |
+
+**The honest take:** Zep has the most sophisticated knowledge graph — they
+auto-extract entities and relations using LLMs. We don't (yet). But theirs
+costs LLM calls per memory, needs Postgres, and lives in the cloud. Ours
+is one SQLite file, free forever, and offline-capable.
+
+**Where Gingugu wins outright:** the trifecta of *local-first*, *cross-tool*,
+and *zero-cost forever*. Nobody else hits all three.
+
+---
+
+## FAQ
+
+<details>
+<summary><strong>Why not just use Claude Projects / Cursor @memories / Windsurf Memories?</strong></summary>
+
+Those are great if you live in one tool. The moment you switch between
+Claude Code in the morning and Cursor in the afternoon, the memory is gone.
+Gingugu's memory follows you across every MCP client, lives on your machine,
+and is programmable (16 tools, structured types, relationships, confidence
+levels). The built-ins are convenience features. Gingugu is infrastructure.
+
+</details>
+
+<details>
+<summary><strong>Why SQLite + FTS5 instead of a vector database?</strong></summary>
+
+Both, actually. **We do hybrid retrieval out of the box:** BM25 over FTS5 +
+local semantic embeddings (via [`fastembed`](https://github.com/qdrant/fastembed),
+no PyTorch dependency), fused with Reciprocal Rank Fusion. No vector DB
+server required.
+
+Why this stack:
+1. **No deployment.** One SQLite file holds memories, FTS5 index, *and*
+   embeddings. No Postgres, no Pinecone, no Chroma server.
+2. **ONNX over PyTorch.** fastembed ships the embedding model as a ~50MB
+   ONNX runtime instead of 2GB of PyTorch — the install footprint stays
+   honest to the "one SQLite file" promise.
+3. **It composes.** Hybrid relevance feeds the composite (relevance ×
+   freshness × access × confidence) — every signal in one engine.
+
+You can disable semantic search via `MEMORY_EMBEDDINGS_ENABLED=false` and
+fall back to BM25-only. Swap the model via `MEMORY_EMBEDDINGS_MODEL` (any
+fastembed-supported model — defaults to `BAAI/bge-small-en-v1.5`).
+
+</details>
+
+<details>
+<summary><strong>Is this production-ready?</strong></summary>
+
+Yes. 138 tests passing. Self-hosted in this repo (the memories you see
+referenced in commits *are* Gingugu memories). WAL mode for concurrency.
+Hardened against adversarial input and write contention. CI matrix across
+Python 3.11–3.13 on Linux/macOS/Windows.
+
+</details>
+
+<details>
+<summary><strong>What happens when my memory store gets big?</strong></summary>
+
+SQLite FTS5 comfortably handles millions of rows. Gingugu adds composite
+re-ranking on top, but only over a small candidate pool (4× limit). For
+personal/team use you'll never hit a wall. Use `memory_consolidate` to
+merge duplicates or summarize clusters when things sprawl.
+
+</details>
+
+<details>
+<summary><strong>Why Python instead of TypeScript / Rust?</strong></summary>
+
+It's a local CLI/server tool. Python's SQLite + keyring + asyncio story is
+mature, the install footprint via `uv` is small, and there's no JS bundling
+or Rust toolchain required to use it. The MCP SDK is first-class in Python.
+
+</details>
+
+---
+
 ## Features
 
 | Feature | Description |
 |---------|-------------|
 | 🏷️ **Namespace Scoping** | Memories auto-scoped to repos/projects with cross-repo pattern sharing |
-| 🔍 **Full-Text Search** | SQLite FTS5 with BM25 ranking — fast, local, no API calls |
+| 🔍 **Hybrid Search** | SQLite FTS5 (BM25) + local semantic embeddings via [fastembed](https://github.com/qdrant/fastembed), fused with Reciprocal Rank Fusion — no PyTorch, no API calls |
 | ⏰ **Temporal Intelligence** | Trust-led scoring, dormancy tracking (never forgets), "last confirmed" tracking, spreading activation |
 | 🔗 **Relationships** | Link memories: supersedes, related_to, caused_by, contradicts |
 | 🎯 **Confidence Levels** | verified → inferred → stale → deprecated lifecycle |
@@ -110,30 +203,34 @@ See [docs/architecture.md](docs/architecture.md) for full technical details.
 ### Install
 
 ```bash
-# Clone
-git clone https://github.com/gingugu/gingugu.git && cd gingugu
-
-# Install with uv (recommended)
-uv sync
+# Recommended: uv (fast, manages Python for you)
+uv tool install gingugu
 
 # Or with pip
-pip install -e .
+pip install gingugu
 ```
 
-> ✅ **Phases 1–4 shipped** — storage engine, FTS5 search, decay scoring,
-> auto-context, the credential vault, the relationship graph (tags, relations,
-> consolidation), and full namespace + export/import management are built and
-> tested (**112 passing**). **16 MCP tools** live. See `docs/roadmap.md`.
+That's it. The `gingugu` command is now on your `PATH`.
+
+<details>
+<summary><strong>From source (for contributors)</strong></summary>
+
+```bash
+git clone https://github.com/gingugu/gingugu.git && cd gingugu
+uv sync
+uv run gingugu  # or pip install -e .
+```
+
+</details>
+
+> **Production-ready.** 16 MCP tools live. 138 tests passing. Dogfooded daily in
+> Windsurf — this repo's own memories live in a Gingugu database.
 
 ### Configure Your MCP Client
 
 Gingugu speaks standard [MCP](https://modelcontextprotocol.io) over stdio —
-it works with **any MCP client**. All of them boil down to the same thing:
-run `uv --directory /ABSOLUTE/PATH/TO/gingugu run gingugu`.
-
-> 🏄 Gingugu is **built and dogfooded daily in Windsurf** — this repo's own
-> memories live in a Gingugu database — but Claude Code, Claude Desktop,
-> Cursor, and Cline are first-class citizens too.
+it works with **any MCP client**. Claude Code, Claude Desktop, Cursor, Cline,
+and Windsurf are all first-class.
 
 <details open>
 <summary><strong>Windsurf</strong></summary>
@@ -335,6 +432,8 @@ Environment variables (all optional):
 | `MEMORY_NAMESPACE_PATH` | *(unset)* | Alternative: filesystem path; namespace derived from `basename` |
 | `MEMORY_AUTO_CONTEXT_LIMIT` | `10` | Max memories to surface on auto-context |
 | `MEMORY_DECAY_LAMBDA` | `0.01` | Freshness decay rate in **days⁻¹** (gentle; freshness is floored, so memories never fully fade) |
+| `MEMORY_EMBEDDINGS_ENABLED` | `true` | Toggle semantic search. `false` falls back to rank-based BM25-only retrieval |
+| `MEMORY_EMBEDDINGS_MODEL` | `BAAI/bge-small-en-v1.5` | Any fastembed-supported model. First use downloads ~80MB to `~/.cache/fastembed` |
 | `MEMORY_W_RELEVANCE` | `0.45` | Composite-score weight for FTS5 relevance |
 | `MEMORY_W_FRESHNESS` | `0.10` | Composite-score weight for freshness (a soft recency tiebreaker) |
 | `MEMORY_W_ACCESS` | `0.10` | Composite-score weight for access frequency |

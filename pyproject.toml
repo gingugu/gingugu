@@ -1,18 +1,19 @@
 [project]
 name = "gingugu"
-version = "0.2.0"
+version = "0.3.0"
 description = "A local, persistent memory system for AI coding assistants — an MCP server with a real long-term brain."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.11"
 authors = [{ name = "Brian Speagle" }]
-keywords = ["mcp", "memory", "ai", "agent", "sqlite", "fts5", "windsurf"]
+keywords = ["mcp", "memory", "ai", "agent", "sqlite", "fts5", "embeddings", "semantic-search", "windsurf"]
 
 dependencies = [
     "mcp>=1.25,<2",
     "pydantic>=2.7,<3",
     "keyring>=24.0,<26",
     "platformdirs>=4.0,<5",
+    "fastembed>=0.4,<1",
 ]
 
 [project.scripts]

@@ -1,8 +1,14 @@
-"""FTS5 full-text search with BM25 relevance and composite decay ranking.
+"""FTS5 + semantic hybrid search with composite ranking.
 
-A BM25 candidate pool is pulled from FTS5, then re-ranked by the composite
-decay score (relevance × freshness × access × confidence). See
+A BM25 candidate pool is pulled from FTS5, then re-ranked using Reciprocal
+Rank Fusion (RRF) of the BM25 ranking and a semantic similarity ranking
+over stored embeddings. The fused relevance feeds the composite decay
+score (relevance × freshness × access × confidence). See
 docs/architecture.md → Decay Scoring Algorithm.
+
+When no embeddings are available (provider disabled, missing rows, etc.)
+the relevance falls back to a rank-based BM25 score — which still fixes
+the old normalize_bm25 compression issue because ranks don't squash.
 """
 
 from __future__ import annotations
@@ -12,12 +18,17 @@ import re
 import sqlite3
 
 from . import decay
+from . import embeddings as emb
+from .embeddings import EmbeddingProvider, cosine
 from .models import CONFIDENCE_RANK, Confidence, Memory, normalize_tag
 
 logger = logging.getLogger(__name__)
 
 # Pull this many × limit BM25 candidates before composite re-ranking.
 _CANDIDATE_MULTIPLIER = 4
+
+# RRF constant. 60 is the canonical value from the original RRF paper.
+_RRF_K = 60
 
 _COLUMNS = (
     "m.id, m.namespace_id, m.type, m.title, m.content, m.confidence, m.source, "
@@ -44,8 +55,47 @@ def build_match_query(query: str) -> str | None:
 
 
 def normalize_bm25(raw: float) -> float:
-    """Map SQLite's negative BM25 (more negative = better) to [0, 1]."""
+    """Map SQLite's negative BM25 (more negative = better) to [0, 1].
+
+    Kept for backward compatibility with callers expecting a score-based
+    relevance. Suffers from compression: most decent matches cluster near
+    1.0, so freshness/confidence can outrank a clearly-better hit. The
+    rank-based fusion used by ``search()`` does not have this problem.
+    """
     return 1.0 / (1.0 + max(0.0, -raw))
+
+
+def _rrf_score(rank: int) -> float:
+    """Reciprocal Rank Fusion contribution for a single ranking, rank 1-indexed."""
+    return 1.0 / (_RRF_K + rank)
+
+
+def _fuse_ranks(
+    bm25_ranks: dict[str, int],
+    semantic_ranks: dict[str, int] | None,
+) -> dict[str, float]:
+    """Combine BM25 and semantic ranks into a unified [0, 1] relevance.
+
+    Items present in both rankings get the additive RRF benefit. Items in
+    only one still get a usable score. Output is normalized so the
+    theoretical maximum (rank 1 in both) maps to 1.0.
+    """
+    ids = set(bm25_ranks)
+    if semantic_ranks:
+        ids = ids.union(semantic_ranks)
+    if not ids:
+        return {}
+    # Max possible: rank 1 in both rankings.
+    max_score = 2.0 * _rrf_score(1) if semantic_ranks else _rrf_score(1)
+    out: dict[str, float] = {}
+    for mid in ids:
+        score = 0.0
+        if mid in bm25_ranks:
+            score += _rrf_score(bm25_ranks[mid])
+        if semantic_ranks and mid in semantic_ranks:
+            score += _rrf_score(semantic_ranks[mid])
+        out[mid] = min(1.0, score / max_score) if max_score else 0.0
+    return out
 
 
 def _confidence_filter(column: str, min_confidence: Confidence) -> tuple[str, list[object]]:
@@ -82,12 +132,17 @@ def search(
     weights: dict[str, float] | None = None,
     decay_lambda: float = 0.01,
     tags: list[str] | None = None,
+    embedder: EmbeddingProvider | None = None,
 ) -> list[Memory]:
-    """FTS5 search re-ranked by the composite decay score.
+    """FTS5 + semantic hybrid search re-ranked by the composite decay score.
 
-    When ``weights`` is provided, results are scored with the full composite
-    (relevance × freshness × access × confidence) and sorted descending.
-    Otherwise the raw normalized BM25 relevance is used as the score.
+    A BM25 candidate pool is pulled from FTS5, then re-ranked using RRF of
+    BM25 rank and (optionally) semantic-similarity rank over stored
+    embeddings. When ``weights`` is provided, the fused relevance feeds the
+    full composite (relevance × freshness × access × confidence) and results
+    are sorted descending. Without ``weights``, the fused relevance is the
+    final score. Without ``embedder``, search degrades to rank-based BM25
+    only (still better than the old normalized-score path).
     """
     match = build_match_query(query)
     if match is None:
@@ -130,12 +185,22 @@ def search(
     params.append(max(limit * _CANDIDATE_MULTIPLIER, limit))
 
     rows = conn.execute(sql, params).fetchall()
+    if not rows:
+        return []
+
+    # BM25 ranking: rows are already ordered ascending by bm25_score
+    # (more negative = better match), so position is the rank (1-indexed).
+    bm25_ranks: dict[str, int] = {row["id"]: i + 1 for i, row in enumerate(rows)}
+    candidate_ids = list(bm25_ranks)
+
+    semantic_ranks = _build_semantic_ranks(conn, query, candidate_ids, embedder)
+    fused = _fuse_ranks(bm25_ranks, semantic_ranks)
 
     results: list[Memory] = []
     for row in rows:
         data = {k: row[k] for k in row.keys() if k != "bm25_score"}
         mem = Memory(**data)
-        relevance = normalize_bm25(row["bm25_score"])
+        relevance = fused.get(mem.id, 0.0)
         if weights is not None:
             mem.score = decay.score_memory(
                 relevance=relevance,
@@ -153,6 +218,48 @@ def search(
 
     results.sort(key=lambda m: m.score or 0.0, reverse=True)
     return results[:limit]
+
+
+def _build_semantic_ranks(
+    conn: sqlite3.Connection,
+    query: str,
+    candidate_ids: list[str],
+    embedder: EmbeddingProvider | None,
+) -> dict[str, int] | None:
+    """Return a {memory_id: rank} dict from cosine similarity, or None.
+
+    Returns None if the embedder is missing/disabled, the query can't be
+    encoded, or no candidate has a current-dim embedding. Caller treats
+    None as "BM25-only ranking."
+    """
+    if embedder is None or not getattr(embedder, "enabled", False) or not candidate_ids:
+        return None
+    try:
+        query_vec = embedder.encode(query)
+    except Exception:  # pragma: no cover - defensive
+        logger.exception("query encode failed; falling back to BM25-only")
+        return None
+    if query_vec is None:
+        return None
+    placeholders = ", ".join("?" for _ in candidate_ids)
+    rows = conn.execute(
+        f"SELECT memory_id, embedding FROM memory_embeddings "
+        f"WHERE memory_id IN ({placeholders}) AND dim = ?",
+        (*candidate_ids, embedder.dim),
+    ).fetchall()
+    if not rows:
+        return None
+    sims: list[tuple[str, float]] = []
+    for r in rows:
+        try:
+            vec = emb.unpack(r["embedding"])
+        except Exception:  # pragma: no cover - defensive
+            continue
+        sims.append((r["memory_id"], cosine(query_vec, vec)))
+    if not sims:
+        return None
+    sims.sort(key=lambda x: x[1], reverse=True)
+    return {mid: i + 1 for i, (mid, _) in enumerate(sims)}
 
 
 _BASE_COLUMNS = _COLUMNS.replace("m.", "")
@@ -173,6 +280,7 @@ def advanced_search(
     weights: dict[str, float] | None = None,
     decay_lambda: float = 0.01,
     tags: list[str] | None = None,
+    embedder: EmbeddingProvider | None = None,
 ) -> list[Memory]:
     """Filtered search. With a query, delegates to FTS5 + composite ranking;
     without one, lists by metadata filters ordered by ``sort_by``."""
@@ -190,6 +298,7 @@ def advanced_search(
             weights=weights if sort_by in ("relevance", "decay_score") else None,
             decay_lambda=decay_lambda,
             tags=tags,
+            embedder=embedder,
         )
     else:
         results = _list_by_filters(

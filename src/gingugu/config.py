@@ -83,6 +83,8 @@ class Config:
     namespace_path: str | None
     auto_context_limit: int
     decay_lambda: float
+    embeddings_enabled: bool = True
+    embeddings_model: str = "BAAI/bge-small-en-v1.5"
     weights: dict[str, float] = field(default_factory=lambda: dict(_DEFAULT_WEIGHTS))
     log_level: str = "INFO"
 
@@ -136,6 +138,8 @@ def load_config() -> Config:
         namespace_path=os.environ.get("MEMORY_NAMESPACE_PATH") or None,
         auto_context_limit=_env_int("MEMORY_AUTO_CONTEXT_LIMIT", 10),
         decay_lambda=_env_float("MEMORY_DECAY_LAMBDA", 0.01),
+        embeddings_enabled=_env_bool("MEMORY_EMBEDDINGS_ENABLED", default=True),
+        embeddings_model=os.environ.get("MEMORY_EMBEDDINGS_MODEL") or "BAAI/bge-small-en-v1.5",
         weights=_load_weights(),
         log_level=os.environ.get("MEMORY_LOG_LEVEL", default_level).upper(),
     )

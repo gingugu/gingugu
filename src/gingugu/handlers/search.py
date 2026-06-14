@@ -70,6 +70,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 weights=ctx.config.weights,
                 decay_lambda=ctx.config.decay_lambda,
                 tags=tag_list,
+                embedder=ctx.store.embedder,
             )
             ctx.store.load_tags(results)
             return {

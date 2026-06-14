@@ -182,6 +182,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 weights=ctx.config.weights,
                 decay_lambda=ctx.config.decay_lambda,
                 tags=_split_csv(tags) or None,
+                embedder=ctx.store.embedder,
             )
             ctx.store.load_tags(results)
             summaries = [_memory_summary(m) for m in results]
@@ -219,6 +220,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 limit=limit if limit is not None else ctx.config.auto_context_limit,
                 weights=ctx.config.weights,
                 decay_lambda=ctx.config.decay_lambda,
+                embedder=ctx.store.embedder,
             )
             ctx.store.load_tags(results)
             # Spreading activation: surfacing context wakes the related cluster.

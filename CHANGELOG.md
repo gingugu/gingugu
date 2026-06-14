@@ -9,6 +9,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-14
+
+### Added
+
+- **Hybrid search: BM25 + local semantic embeddings.** Recall now fuses
+  FTS5 BM25 ranking with cosine similarity over local embeddings using
+  **Reciprocal Rank Fusion (RRF)**. Embeddings live in a new
+  `memory_embeddings` SQLite table (migration `v4`) — one row per memory,
+  packed float32 BLOB.
+- **Embedding provider via `fastembed` (PyTorch-free).** Ships ONNX
+  runtime (~50MB) + `BAAI/bge-small-en-v1.5` (~80MB, 384 dims) by default.
+  Total semantic-search footprint stays under ~150MB instead of the ~2GB
+  PyTorch tax. Model loads lazily on first encode.
+- **Startup embedding backfill.** New servers run a small backfill batch
+  on launch so existing memories pick up semantic search automatically
+  after upgrade. Subsequent writes embed inline.
+- New env vars `MEMORY_EMBEDDINGS_ENABLED` (default `true`) and
+  `MEMORY_EMBEDDINGS_MODEL` (default `BAAI/bge-small-en-v1.5`). Disabling
+  the provider degrades gracefully to rank-based BM25-only.
+- `EmbeddingProvider` Protocol + `NullEmbeddingProvider` /
+  `FastEmbedProvider` impls (`src/gingugu/embeddings.py`) — swapping
+  backends is a one-file change.
+- 20 new tests covering the embeddings module, RRF fusion, hybrid search
+  ordering, dim-mismatch filtering, and storage integration via a
+  deterministic `FakeEmbedder`. Suite: **138 passing** (was 118).
+
+### Changed
+
+- **BM25 ranking compression fixed.** The composite score's `relevance`
+  term now derives from **rank-based** RRF (1/(60+rank)) rather than the
+  old `normalize_bm25` score (which compressed all decent matches into a
+  narrow band near 1.0, letting freshness/confidence outrank clearly
+  more-relevant memories). `normalize_bm25` is retained for backward
+  compatibility but no longer drives search ordering.
+- `MemoryStore.__init__` accepts an optional `embedder: EmbeddingProvider`.
+  Defaults to `NullEmbeddingProvider` so existing call sites are unchanged.
+- `search.search()`, `search.advanced_search()`, and `context.build_context()`
+  accept an optional `embedder` kwarg and forward it through. All MCP
+  handlers (`memory_recall`, `memory_search`, `memory_context`) pass
+  `ctx.store.embedder` automatically.
+- README restructured for HN/Reddit launch: install leads with `pip install
+  gingugu`; phase-language status replaced with a production-ready callout;
+  added "How It Compares" table (mem0, Zep, OpenMemory MCP, Letta, built-in
+  tools) and an FAQ section.
+- Schema bumped to `user_version = 4`.
+
 ## [0.2.0] - 2026-06-13
 
 ### Changed

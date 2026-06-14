@@ -57,8 +57,8 @@ def test_v2_to_v3_upgrade_preserves_data(tmp_path: Path) -> None:
 
     # Upgrade.
     final = migrate(conn)
-    assert final == 3
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
+    assert final == 4
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 4
 
     # New tables exist.
     tables = {
@@ -81,7 +81,7 @@ def test_migrate_is_idempotent_when_current(tmp_path: Path) -> None:
     path = tmp_path / "legacy.db"
     conn = _open_v2(path)
     _seed_v2(conn)
-    assert migrate(conn) == 3
-    # Running again is a no-op (no error, stays at v3).
-    assert migrate(conn) == 3
+    assert migrate(conn) == 4
+    # Running again is a no-op (no error, stays at v4).
+    assert migrate(conn) == 4
     conn.close()

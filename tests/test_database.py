@@ -7,7 +7,7 @@ from gingugu.database import Database
 
 def test_migration_sets_user_version(db: Database) -> None:
     version = db.conn.execute("PRAGMA user_version").fetchone()[0]
-    assert version == 3
+    assert version == 4
 
 
 def test_wal_and_foreign_keys_enabled(db: Database) -> None:
@@ -34,5 +34,5 @@ def test_fts_triggers_exist(db: Database) -> None:
 def test_migrate_is_idempotent(db: Database) -> None:
     from gingugu.database import migrate
 
-    assert migrate(db.conn) == 3
-    assert migrate(db.conn) == 3
+    assert migrate(db.conn) == 4
+    assert migrate(db.conn) == 4

@@ -13,6 +13,7 @@ from mcp.server.fastmcp import FastMCP
 
 from .config import load_config
 from .database import Database
+from .embeddings import build_provider
 from .handlers import ServerContext, register_all
 from .namespaces import NamespaceManager
 from .storage import MemoryStore
@@ -31,9 +32,25 @@ def build_server() -> FastMCP:
     db = Database(config.db_path)
     conn = db.connect()
 
+    embedder = build_provider(
+        enabled=config.embeddings_enabled,
+        model_name=config.embeddings_model,
+    )
+    store = MemoryStore(conn, embedder=embedder)
+
+    # Backfill missing embeddings (small batch — lazy, so first store/recall
+    # absorbs the model download cost rather than blocking startup forever
+    # on large stores). Subsequent recalls will surface the rest naturally
+    # as memories get embedded on write.
+    try:
+        if embedder.enabled:
+            store.backfill_embeddings(batch_size=32)
+    except Exception:  # pragma: no cover - defensive
+        logger.exception("startup embedding backfill failed; continuing without")
+
     ctx = ServerContext(
         config=config,
-        store=MemoryStore(conn),
+        store=store,
         namespaces=NamespaceManager(conn, config),
         conn=conn,
     )
