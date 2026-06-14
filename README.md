@@ -11,6 +11,7 @@ file on your machine.
 [![MCP](https://img.shields.io/badge/protocol-MCP-green.svg)](https://modelcontextprotocol.io)
 [![SQLite](https://img.shields.io/badge/storage-SQLite-orange.svg)](https://sqlite.org)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
+[![Glama](https://glama.ai/mcp/servers/gingugu/gingugu/badges/score.svg)](https://glama.ai/mcp/servers/gingugu/gingugu)
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/gingugu/gingugu/main/docs/demo.gif" alt="Memory Explorer UI — knowledge graph and dashboard" width="800">
