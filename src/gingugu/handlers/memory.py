@@ -201,11 +201,15 @@ def register(mcp, ctx: ServerContext) -> None:
                 embedder=ctx.store.embedder,
             )
             ctx.store.load_tags(results)
+            seed_ids = [m.id for m in results]
             summaries = [_memory_summary(m) for m in results]
             if include_related:
-                summaries.extend(_collect_related(ctx, [m.id for m in results]))
+                summaries.extend(_collect_related(ctx, seed_ids))
+            # Credit the returned seeds as a real access (bumps access_count,
+            # refreshes last_accessed, writes access_log row).
+            ctx.store.record_accesses(seed_ids)
             # Spreading activation: recalling these memories wakes their cluster.
-            _spread_activation(ctx, [m.id for m in results])
+            _spread_activation(ctx, seed_ids)
             return {
                 "ok": True,
                 "namespace": ns_name,
@@ -246,8 +250,12 @@ def register(mcp, ctx: ServerContext) -> None:
                 embedder=ctx.store.embedder,
             )
             ctx.store.load_tags(results)
+            seed_ids = [m.id for m in results]
+            # Credit the surfaced seeds as a real access (bumps access_count,
+            # refreshes last_accessed, writes access_log row).
+            ctx.store.record_accesses(seed_ids)
             # Spreading activation: surfacing context wakes the related cluster.
-            _spread_activation(ctx, [m.id for m in results])
+            _spread_activation(ctx, seed_ids)
             return {
                 "ok": True,
                 "namespace": ns_name,

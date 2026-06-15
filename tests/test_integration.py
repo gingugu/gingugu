@@ -168,6 +168,50 @@ async def test_context_limit_defaults_from_config(limited_server) -> None:
 
 
 @pytest.mark.asyncio
+async def test_retrieval_handlers_credit_access(server) -> None:
+    """recall, search, and context must each bump access_count and write
+    access_log rows for the seeds they return — that's what powers the
+    Memory Explorer's Access Activity chart."""
+    a = _payload(
+        await server.call_tool(
+            "memory_store",
+            {"content": "use WAL mode", "title": "wal", "type": "pattern"},
+        )
+    )
+    b = _payload(
+        await server.call_tool(
+            "memory_store",
+            {"content": "busy_timeout avoids SQLITE_BUSY", "title": "busy", "type": "pattern"},
+        )
+    )
+    assert a["ok"] and b["ok"]
+
+    # Baseline: no accesses yet.
+    s0 = _payload(await server.call_tool("memory_stats", {}))
+    assert s0["stats"]["access_log_rows"] == 0
+
+    # recall credits its returned seeds.
+    rec = _payload(await server.call_tool("memory_recall", {"query": "wal mode"}))
+    assert rec["count"] >= 1
+    s1 = _payload(await server.call_tool("memory_stats", {}))
+    assert s1["stats"]["access_log_rows"] == rec["count"]
+
+    # search adds another row per returned seed.
+    srch = _payload(await server.call_tool("memory_search", {}))
+    s2 = _payload(await server.call_tool("memory_stats", {}))
+    assert s2["stats"]["access_log_rows"] == s1["stats"]["access_log_rows"] + srch["count"]
+
+    # context adds more on top.
+    ctx = _payload(await server.call_tool("memory_context", {}))
+    s3 = _payload(await server.call_tool("memory_stats", {}))
+    assert s3["stats"]["access_log_rows"] == s2["stats"]["access_log_rows"] + ctx["count"]
+
+    # access_count on a returned memory is non-zero after the dust settles.
+    final = _payload(await server.call_tool("memory_search", {"tags": ""}))
+    assert any(m["access_count"] > 0 for m in final["memories"])
+
+
+@pytest.mark.asyncio
 async def test_recall_fresh_config_namespace_returns_empty(limited_server) -> None:
     # Recall before anything is stored: the config-resolved namespace doesn't
     # exist yet — return an empty ok result, and don't create the namespace.

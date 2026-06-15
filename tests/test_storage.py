@@ -50,6 +50,30 @@ def test_access_increments_count(store: MemoryStore, namespaces: NamespaceManage
     assert fetched.access_count == 2
 
 
+def test_record_accesses_bulk(store: MemoryStore, namespaces: NamespaceManager) -> None:
+    """Bulk record_accesses bumps access_count for every id and writes one
+    access_log row per id. De-duplicates and ignores empty ids."""
+    ns_id = _ns_id(namespaces)
+    a = store.create(namespace_id=ns_id, type=MemoryType.FACT, title="a", content="c")
+    b = store.create(namespace_id=ns_id, type=MemoryType.FACT, title="b", content="c")
+
+    written = store.record_accesses([a.id, b.id, a.id, "", None])  # type: ignore[list-item]
+    assert written == 2  # de-duped, empties stripped
+
+    fa = store.get(a.id, record_access=False)
+    fb = store.get(b.id, record_access=False)
+    assert fa is not None and fa.access_count == 1
+    assert fb is not None and fb.access_count == 1
+
+    log_rows = store.conn.execute("SELECT COUNT(*) FROM access_log").fetchone()[0]
+    assert log_rows == 2
+
+
+def test_record_accesses_empty_is_noop(store: MemoryStore) -> None:
+    assert store.record_accesses([]) == 0
+    assert store.conn.execute("SELECT COUNT(*) FROM access_log").fetchone()[0] == 0
+
+
 def test_update_changes_fields(store: MemoryStore, namespaces: NamespaceManager) -> None:
     ns_id = _ns_id(namespaces)
     mem = store.create(namespace_id=ns_id, type=MemoryType.FACT, title="old", content="c")

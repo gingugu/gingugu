@@ -185,17 +185,34 @@ class MemoryStore:
         return cur.rowcount > 0
 
     def _record_access(self, memory_id: str) -> None:
+        self.record_accesses([memory_id])
+
+    def record_accesses(self, memory_ids: list[str]) -> int:
+        """Log a real access against each memory: bumps ``access_count``,
+        refreshes ``last_accessed``, and writes an ``access_log`` row.
+
+        This is the bulk primitive used by retrieval handlers (recall, search,
+        context) to credit the seeds they actually returned. Spreading-activation
+        neighbours go through ``touch_many`` instead — that path refreshes the
+        dormancy clock without inflating access counts. Returns the number of
+        memories whose row was updated.
+        """
+        ids = list(dict.fromkeys(mid for mid in memory_ids if mid))
+        if not ids:
+            return 0
         now = utcnow_iso()
-        self._conn.execute(
+        self._conn.executemany(
             "INSERT INTO access_log(id, memory_id, accessed_at) VALUES (?, ?, ?)",
-            (str(uuid.uuid4()), memory_id, now),
+            [(str(uuid.uuid4()), mid, now) for mid in ids],
         )
-        self._conn.execute(
-            "UPDATE memories SET access_count = access_count + 1, last_accessed = ? "
-            "WHERE id = ?",
-            (now, memory_id),
+        placeholders = ", ".join("?" for _ in ids)
+        cur = self._conn.execute(
+            f"UPDATE memories SET access_count = access_count + 1, last_accessed = ? "
+            f"WHERE id IN ({placeholders})",
+            (now, *ids),
         )
         self._conn.commit()
+        return cur.rowcount
 
     def touch_many(self, memory_ids: list[str]) -> int:
         """Refresh ``last_accessed`` on memories without counting a real access.

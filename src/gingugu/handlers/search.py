@@ -81,10 +81,16 @@ def register(mcp, ctx: ServerContext) -> None:
                 embedder=ctx.store.embedder,
             )
             ctx.store.load_tags(results)
+            summaries = [_memory_summary(m) for m in results]
+            # Credit the returned seeds as a real access (bumps access_count,
+            # refreshes last_accessed, writes access_log row). Spreading-
+            # activation neighbours are intentionally not credited here —
+            # search has no relation traversal.
+            ctx.store.record_accesses([m.id for m in results])
             return {
                 "ok": True,
                 "count": len(results),
-                "memories": [_memory_summary(m) for m in results],
+                "memories": summaries,
             }
         except Exception as exc:
             logger.exception("memory_search failed")

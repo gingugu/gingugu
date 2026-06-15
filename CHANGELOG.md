@@ -9,8 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Access Activity chart in Memory Explorer was always 0.** `memory_recall`,
+  `memory_search`, and `memory_context` returned memories without ever
+  crediting the access — `_record_access` was only reachable through
+  `MemoryStore.get()` and every callsite passed `record_access=False`. Added
+  a bulk `MemoryStore.record_accesses(ids)` primitive (one batched
+  `INSERT` into `access_log`, one batched `UPDATE` that bumps
+  `access_count` and refreshes `last_accessed`) and wired it into all three retrieval handlers for
+  the seeds they actually return. Spreading-activation neighbours still go
+  through `touch_many` (refresh dormancy clock without inflating counts),
+  preserving the never-forget model.
+
 ### Changed
 
+- **`__version__` is now read from installed package metadata.**
+  `gingugu.__version__` was hardcoded to `0.1.0` and silently drifted from
+  the real PyPI version. Now resolved via `importlib.metadata.version` so
+  it stays in sync with `pyproject.toml` automatically and falls back to
+  `0.0.0+unknown` when running from an uninstalled source tree.
 - **Release workflow now auto-creates GitHub Releases.** `release.yml`
   extracts the matching `CHANGELOG.md` section for the pushed tag and
   publishes it as a GitHub Release alongside the PyPI upload, so the
