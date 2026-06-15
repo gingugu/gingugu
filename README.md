@@ -68,18 +68,17 @@ instead of bucketing.
 
 | Capability | **Gingugu** | OpenMemory MCP | Mem0 OSS | Mem0 Platform | Graphiti (OSS) | Zep Cloud | Letta |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Local-first by default | ✅ | ✅ | ⚙️ configurable | ❌ hosted | ✅ self-hosted | ❌ | ⚙️ local mode |
-| MCP-native cross-tool memory | ✅ | ✅ | via integrations | hosted MCP | MCP server | platform / API | primarily Letta agents |
-| No mandatory hosted service | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ in local mode |
-| No LLM call required to store a memory | ✅ | ⚙️ config dependent | usually no | usually no | ❌ extraction-time | ❌ extraction-time | agent-managed |
-| Single-file storage | ✅ SQLite | ❌ | ❌ | ❌ | ❌ graph DB | ❌ | ❌ |
-| Lexical + semantic retrieval | ✅ hybrid ranking | engine dependent | ✅ | ✅ | ✅ + graph | ✅ + graph | partial |
-| Explicit confidence + lifecycle | ✅ | partial | partial | partial | temporal-fact model | governance tooling | agent-state model |
-| Explicit typed memory relations | ✅ | partial | entity / graph based | entity / graph based | graph-native | graph-native | ❌ |
-| Auto entity / relation extraction | ❌ (intentional) | engine dependent | ✅ | ✅ | ✅ | ✅ | ❌ |
-| Temporal graph validity | partial | partial | improving | ✅ | ✅ | ✅ | ❌ |
-| Local visual memory inspection | ✅ graph explorer | ✅ | dashboard | dashboard | framework-level | cloud tooling | ✅ ADE |
-| Operational footprint | very small | medium | medium–large | hosted | large | hosted | large |
+| Local-first by default | ✅ | ✅ | ⚙️ configurable | ❌ hosted | ✅ self-hosted | ❌ hosted | ⚙️ local mode |
+| MCP-native cross-tool memory | ✅ | ✅ | ❌ SDK only | ⚙️ hosted MCP | ✅ MCP server | ❌ API only | ❌ Letta agents only |
+| No mandatory hosted service | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ⚙️ in local mode |
+| No LLM call to store a memory | ✅ | ⚙️ engine dependent | ❌ extracts via LLM | ❌ extracts via LLM | ❌ extraction-time | ❌ extraction-time | ⚙️ agent-managed |
+| Single-file storage | ✅ SQLite | ❌ | ❌ | ❌ hosted | ❌ graph DB | ❌ hosted | ❌ |
+| Local visual memory inspection | ✅ graph explorer | ✅ dashboard | ⚙️ cloud dashboard | ❌ cloud only | ❌ framework-level | ❌ cloud tooling | ✅ ADE |
+| Lexical + semantic retrieval | ✅ hybrid ranking | ⚙️ engine dependent | ✅ | ✅ | ✅ + graph | ✅ + graph | ⚙️ partial |
+| Explicit confidence + lifecycle | ✅ 4-state | ⚙️ partial | ⚙️ partial | ⚙️ partial | ❌ uses temporal facts | ❌ uses governance tooling | ❌ uses agent state |
+| Typed memory relations | ✅ supersedes / contradicts / parent / etc | ⚙️ partial | ⚙️ via entity graph | ⚙️ via entity graph | ✅ graph-native | ✅ graph-native | ❌ |
+| Auto entity / relation extraction | ❌ intentional | ⚙️ engine dependent | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Operational footprint | very small | medium | medium-large | hosted | large | hosted | large |
 
 *Plus a built-in OS-keychain credential vault — useful alongside
 memory, but not really a memory feature, so it sits beside the matrix

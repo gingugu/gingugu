@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   extracts the matching `CHANGELOG.md` section for the pushed tag and
   publishes it as a GitHub Release alongside the PyPI upload, so the
   Releases page stays in sync with PyPI without a manual step.
+- **Comparison matrix scannability + transparency pass.** Every cell
+  in `README.md`'s "How It Compares" table now follows a consistent
+  glyph + qualifier convention (`✅ / ⚙️ / ❌` plus a short note)
+  instead of mixing verdicts and descriptive sentences. Dropped the
+  `Temporal graph validity` row (we don't compete there - inflating
+  ourselves with `partial` was dishonest). Sharpened the
+  `No LLM call to store a memory` row to honestly state each product's
+  default write behavior. Moved `Local visual memory inspection` up
+  next to the local-first cluster where it belongs.
 
 ## [0.3.4] - 2026-06-15
 
