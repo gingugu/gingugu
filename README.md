@@ -45,7 +45,7 @@ month ago — gone. Existing memory tools dump observations into a flat pile
 with no structure, no staleness tracking, no relationships, and no sense of
 what's relevant *right now*.
 
-Gingugu is designed to be the **actual brain** — not a junk drawer:
+Gingugu is designed to be a **structured long-term brain** — not a junk drawer:
 
 - **Remembers** across sessions, repos, and projects
 - **Organizes** knowledge by namespace, type, and relationships
@@ -75,10 +75,10 @@ Where this goes long-term — federated, org-wide agent memory — lives in
 **The honest take:** Zep has the most sophisticated knowledge graph — they
 auto-extract entities and relations using LLMs. We don't (yet). But theirs
 costs LLM calls per memory, needs Postgres, and lives in the cloud. Ours
-is one SQLite file, free forever, and offline-capable.
+is one SQLite file with zero ongoing cost and offline-capable.
 
-**Where Gingugu wins outright:** the trifecta of *local-first*, *cross-tool*,
-and *zero-cost forever*. Nobody else hits all three.
+**Where Gingugu's combination is unusual:** *local-first*, *cross-tool*,
+and *zero ongoing cost* in one package. That mix is rare in this space.
 
 ---
 
@@ -119,12 +119,21 @@ fastembed-supported model — defaults to `BAAI/bge-small-en-v1.5`).
 </details>
 
 <details>
-<summary><strong>Is this production-ready?</strong></summary>
+<summary><strong>Is this ready to use?</strong></summary>
 
-Yes. 138 tests passing. Self-hosted in this repo (the memories you see
-referenced in commits *are* Gingugu memories). WAL mode for concurrency.
-Hardened against adversarial input and write contention. CI matrix across
-Python 3.11–3.13 on Linux/macOS/Windows.
+Usable today for local personal workflows. 138 tests passing covering
+storage, search, migrations, concurrency, credentials, and edges.
+Hardened against adversarial input and write contention. WAL mode for
+concurrency. CI matrix across Python 3.11–3.13 on Linux/macOS/Windows.
+Dogfooded daily in this repo (the memories you see referenced in commits
+*are* Gingugu memories).
+
+It's still early — broader real-world validation across MCP clients,
+databases at large scale, and long upgrade horizons is the work ahead.
+Treat it as an early cognitive-runtime framework, not a finished product.
+See [`SECURITY.md`](SECURITY.md) for the threat model, and
+[`docs/future-architecture.md`](docs/future-architecture.md) for where
+this is headed.
 
 </details>
 
@@ -133,7 +142,8 @@ Python 3.11–3.13 on Linux/macOS/Windows.
 
 SQLite FTS5 comfortably handles millions of rows. Gingugu adds composite
 re-ranking on top, but only over a small candidate pool (4× limit). For
-personal/team use you'll never hit a wall. Use `memory_consolidate` to
+typical personal/team use it should hold up well — though we haven't
+yet benchmarked at the 100k+ memory scale. Use `memory_consolidate` to
 merge duplicates or summarize clusters when things sprawl.
 
 </details>
@@ -224,8 +234,9 @@ uv run gingugu  # or pip install -e .
 
 </details>
 
-> **Production-ready.** 16 MCP tools live. 138 tests passing. Dogfooded daily in
-> Windsurf — this repo's own memories live in a Gingugu database.
+> **Usable today.** 16 MCP tools live. 138 tests passing. Dogfooded daily in
+> Windsurf — this repo's own memories live in a Gingugu database. Early and
+> seeking broader real-world validation.
 
 ### Configure Your MCP Client
 

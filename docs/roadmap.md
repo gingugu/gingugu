@@ -130,6 +130,35 @@ Future upgrades once the core is battle-tested.
 
 ---
 
+## Phase 6: Cognitive Runtime (The Captain's Chair) 🧭
+
+> *Vision detailed in [`docs/future-architecture.md`](future-architecture.md).*
+
+The reframe from "memory database" to "persistent cognitive runtime
+for agents." Crystallized after an external architectural review on
+2026-06-14. Phase 6 is multi-release work, not a single sprint.
+
+| Task | Status | Notes |
+|------|--------|-------|
+| **True hybrid retrieval** (independent BM25 + vector candidates → RRF) | ⬜ | Today's pipeline gates semantic on the BM25 candidate pool. Real fix runs both retrievals independently and fuses the union |
+| **Migration auto-backup** (`memories.db.bak-before-vN`) | ⬜ | Lands in v0.3.2 |
+| **Access-weight reinforcement-loop fix** (log-scale or cap) | ⬜ | Lands in v0.3.2 |
+| **Typed JSON metadata validation** | ⬜ | Lands in v0.3.2 |
+| **Structured provenance** on every memory | ⬜ | `created_by`, `client`, `model`, `session_id`, `evidence[]`, `user_confirmed` |
+| **Memory-layer discriminator** | ⬜ | episodic / working / semantic / procedural |
+| **Proposal flow** for non-trivial claims | ⬜ | Agent proposes → governance accepts/quarantines/rejects → commit with audit trail |
+| **Memory packet recall format** | ⬜ | Returns `{claims, hypotheses, procedures, warnings}`, not flat list |
+| **Embedded runtime SDK** (`brain.run(model, message, ...)`) | ⬜ | Auto recall + capture around model invocation; MCP becomes one adapter |
+| **Property-based + failure-injection tests** | ⬜ | Hypothesis for adversarial inputs; chaos for keyring/disk/migrations |
+| **Retrieval evaluation corpus** (Recall@K, MRR) | ⬜ | Currently tuning weights by intuition |
+| **Credential vault per-service policy** + interactive approval | ⬜ | Closes the agent-mediated retrieval gap documented in `SECURITY.md` |
+| **Convergence with ForgeSmith** (epistemic + execution loop) | ⬜ | The bigger product story |
+
+**Milestone:** Gingugu graduates from "MCP server for AI memory" to
+"persistent cognitive runtime that agents wake up inside."
+
+---
+
 ## Decision Log
 
 | Date | Decision | Rationale |

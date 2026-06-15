@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `SECURITY.md` documenting the threat model, vulnerability reporting,
+  and the **agent-mediated credential exposure** boundary (the OS
+  keychain protects credentials from disk access, not from a process
+  the keychain has authorized — i.e. Gingugu itself when an agent calls
+  `credential_get`). Recommends treating the vault as a developer-
+  convenience feature, not a production secret store.
+- `docs/future-architecture.md` — vision document for the post-v0.3
+  direction: epistemic governance layer, structured provenance,
+  memory-layer separation (episodic / working / semantic / procedural),
+  proposal-flow writes, memory-packet recall, embedded runtime mode,
+  and the convergence story with ForgeSmith (epistemic + execution
+  governance).
+
+### Changed
+
+- README and gingugu.com claim sweep — *"production-ready"*,
+  *"free forever"*, *"never hit a wall"*, *"nobody else hits all
+  three"*, and *"actual brain"* softened to honest framing
+  (*"usable today"*, *"zero ongoing cost"*, *"should hold up well"*,
+  *"that mix is rare in this space"*, *"structured long-term brain"*).
+  Marketing was one version ahead of the operational proof; this aligns
+  the public framing with what the code can actually demonstrate.
+
 ## [0.3.0] - 2026-06-14
 
 ### Added
