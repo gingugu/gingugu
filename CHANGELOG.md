@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-06-15
+
+### Fixed
+
+- **Broken relative links on PyPI.** All relative links in `README.md`
+  (`LICENSE`, `SECURITY.md`, `docs/architecture.md`, `docs/enterprise-vision.md`,
+  `docs/future-architecture.md`, `examples/mcp_config.json`, `.windsurfrules`,
+  `CHANGELOG.md`) now point to absolute `https://github.com/gingugu/gingugu/blob/main/...`
+  URLs. PyPI doesn't ship the repo's file tree alongside the rendered
+  README, so relative links 404'd there. Works on GitHub and PyPI now.
+
 ## [0.3.2] - 2026-06-15
 
 ### Added

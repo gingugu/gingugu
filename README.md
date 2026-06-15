@@ -10,7 +10,7 @@ file on your machine.
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![MCP](https://img.shields.io/badge/protocol-MCP-green.svg)](https://modelcontextprotocol.io)
 [![SQLite](https://img.shields.io/badge/storage-SQLite-orange.svg)](https://sqlite.org)
-[![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-purple.svg)](https://github.com/gingugu/gingugu/blob/main/LICENSE)
 [![Glama](https://glama.ai/mcp/servers/gingugu/gingugu/badges/score.svg)](https://glama.ai/mcp/servers/gingugu/gingugu)
 
 <p align="center">
@@ -54,7 +54,7 @@ Gingugu is designed to be a **structured long-term brain** — not a junk drawer
 - **Consolidates** duplicate and related knowledge on demand
 
 Where this goes long-term — federated, org-wide agent memory — lives in
-[docs/enterprise-vision.md](docs/enterprise-vision.md).
+[docs/enterprise-vision.md](https://github.com/gingugu/gingugu/blob/main/docs/enterprise-vision.md).
 
 ---
 
@@ -131,8 +131,8 @@ Dogfooded daily in this repo (the memories you see referenced in commits
 It's still early — broader real-world validation across MCP clients,
 databases at large scale, and long upgrade horizons is the work ahead.
 Treat it as an early cognitive-runtime framework, not a finished product.
-See [`SECURITY.md`](SECURITY.md) for the threat model, and
-[`docs/future-architecture.md`](docs/future-architecture.md) for where
+See [`SECURITY.md`](https://github.com/gingugu/gingugu/blob/main/SECURITY.md) for the threat model, and
+[`docs/future-architecture.md`](https://github.com/gingugu/gingugu/blob/main/docs/future-architecture.md) for where
 this is headed.
 
 </details>
@@ -196,7 +196,7 @@ graph TD
     D --> G[(~/.local/share/gingugu/memories.db)]
 ```
 
-See [docs/architecture.md](docs/architecture.md) for full technical details.
+See [docs/architecture.md](https://github.com/gingugu/gingugu/blob/main/docs/architecture.md) for full technical details.
 
 ---
 
@@ -248,7 +248,7 @@ and Windsurf are all first-class.
 <summary><strong>Windsurf</strong></summary>
 
 Add to `~/.codeium/windsurf/mcp_config.json` — a ready-to-edit template lives
-at [`examples/mcp_config.json`](examples/mcp_config.json):
+at [`examples/mcp_config.json`](https://github.com/gingugu/gingugu/blob/main/examples/mcp_config.json):
 
 ```json
 {
@@ -411,7 +411,7 @@ Use `confidence="inferred"` for conclusions you drew.
 ````
 
 > **Tip:** A ready-to-use example lives at
-> [`.windsurfrules`](.windsurfrules) in this repo. Copy the
+> [`.windsurfrules`](https://github.com/gingugu/gingugu/blob/main/.windsurfrules) in this repo. Copy the
 > `## Memory Protocol` section and adapt the project namespace name.
 
 ---
@@ -528,9 +528,9 @@ uv run pytest tests/test_search.py -v
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT — see [`LICENSE`](https://github.com/gingugu/gingugu/blob/main/LICENSE).
 
-See [`CHANGELOG.md`](CHANGELOG.md) for release history.
+See [`CHANGELOG.md`](https://github.com/gingugu/gingugu/blob/main/CHANGELOG.md) for release history.
 
 ---
 
