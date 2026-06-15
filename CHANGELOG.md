@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Release workflow now auto-creates GitHub Releases.** `release.yml`
+  extracts the matching `CHANGELOG.md` section for the pushed tag and
+  publishes it as a GitHub Release alongside the PyPI upload, so the
+  Releases page stays in sync with PyPI without a manual step.
+
 ## [0.3.4] - 2026-06-15
 
 ### Changed
