@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 import uuid
@@ -16,6 +17,36 @@ _COLUMNS = (
     "id, namespace_id, type, title, content, confidence, source, "
     "created_at, updated_at, last_accessed, last_confirmed, access_count, metadata"
 )
+
+
+def _normalize_metadata(metadata: str | None) -> str | None:
+    """Validate and canonicalize a metadata payload.
+
+    The schema treats ``metadata`` as a JSON blob, so we enforce that on
+    write rather than letting arbitrary strings accumulate. Rules:
+
+    - ``None`` → ``None`` (unchanged).
+    - ``""`` → ``None`` (caller convention: empty string clears metadata).
+    - Otherwise must parse as a JSON **object** (``{...}``); arrays,
+      numbers, strings, booleans, and ``null`` are rejected. Object form
+      is what every existing callsite assumes and what future provenance
+      fields (``created_by``, ``client``, ``evidence``, …) plug into.
+    - Valid input is re-serialized with sorted keys so equivalent payloads
+      are stored identically (helps deduplication and diffs).
+
+    Raises ``ValueError`` on invalid JSON or wrong shape.
+    """
+    if metadata is None:
+        return None
+    if metadata == "":
+        return None
+    try:
+        parsed = json.loads(metadata)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"metadata must be valid JSON: {e}") from e
+    if not isinstance(parsed, dict):
+        raise ValueError(f"metadata must be a JSON object, got {type(parsed).__name__}")
+    return json.dumps(parsed, sort_keys=True, ensure_ascii=False)
 
 
 class MemoryStore:
@@ -51,6 +82,7 @@ class MemoryStore:
         metadata: str | None = None,
         tags: list[str] | None = None,
     ) -> Memory:
+        metadata = _normalize_metadata(metadata)
         now = utcnow_iso()
         mem = Memory(
             id=str(uuid.uuid4()),
@@ -118,10 +150,10 @@ class MemoryStore:
         # MCP optional params cannot distinguish absent from null).
         if metadata is None:
             new_metadata = existing.metadata
-        elif metadata == "":
-            new_metadata = None
         else:
-            new_metadata = metadata
+            # _normalize_metadata returns None for "" and validates JSON-object shape
+            # for everything else (raising ValueError on bad input).
+            new_metadata = _normalize_metadata(metadata)
         new_title = title if title is not None else existing.title
         new_content = content if content is not None else existing.content
         self._conn.execute(

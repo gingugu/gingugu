@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import pytest
+
 from gingugu.models import Confidence, MemoryType
 from gingugu.namespaces import NamespaceManager
-from gingugu.storage import MemoryStore
+from gingugu.storage import MemoryStore, _normalize_metadata
 
 
 def _ns_id(namespaces: NamespaceManager) -> str:
@@ -81,3 +83,67 @@ def test_delete(store: MemoryStore, namespaces: NamespaceManager) -> None:
 
 def test_get_missing_returns_none(store: MemoryStore) -> None:
     assert store.get("nope", record_access=False) is None
+
+
+# --- metadata JSON validation ---------------------------------------------
+
+
+def test_normalize_metadata_none_passthrough() -> None:
+    assert _normalize_metadata(None) is None
+
+
+def test_normalize_metadata_empty_string_clears() -> None:
+    assert _normalize_metadata("") is None
+
+
+def test_normalize_metadata_canonicalizes_keys() -> None:
+    """Equivalent JSON objects should produce identical stored strings."""
+    a = _normalize_metadata('{"b": 1, "a": 2}')
+    b = _normalize_metadata('{"a": 2, "b": 1}')
+    assert a == b == '{"a": 2, "b": 1}'
+
+
+def test_normalize_metadata_rejects_non_json() -> None:
+    with pytest.raises(ValueError, match="must be valid JSON"):
+        _normalize_metadata("not json at all")
+
+
+def test_normalize_metadata_rejects_non_object_shapes() -> None:
+    """Lists, scalars, etc. are valid JSON but not what metadata should hold."""
+    for payload in ("[1, 2, 3]", '"a string"', "42", "true", "null"):
+        with pytest.raises(ValueError, match="JSON object"):
+            _normalize_metadata(payload)
+
+
+def test_create_rejects_bad_metadata(store: MemoryStore, namespaces: NamespaceManager) -> None:
+    ns_id = _ns_id(namespaces)
+    with pytest.raises(ValueError):
+        store.create(
+            namespace_id=ns_id,
+            type=MemoryType.FACT,
+            title="t",
+            content="c",
+            metadata="not json",
+        )
+
+
+def test_update_rejects_bad_metadata(store: MemoryStore, namespaces: NamespaceManager) -> None:
+    ns_id = _ns_id(namespaces)
+    mem = store.create(namespace_id=ns_id, type=MemoryType.FACT, title="t", content="c")
+    with pytest.raises(ValueError):
+        store.update(mem.id, metadata="[1, 2, 3]")
+
+
+def test_create_canonicalizes_metadata_on_store(
+    store: MemoryStore, namespaces: NamespaceManager
+) -> None:
+    """Stored metadata should come back in canonical (sorted-keys) form."""
+    ns_id = _ns_id(namespaces)
+    mem = store.create(
+        namespace_id=ns_id,
+        type=MemoryType.FACT,
+        title="t",
+        content="c",
+        metadata='{"z": 1, "a": 2}',
+    )
+    assert mem.metadata == '{"a": 2, "z": 1}'

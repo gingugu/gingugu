@@ -141,9 +141,9 @@ for agents." Crystallized after an external architectural review on
 | Task | Status | Notes |
 |------|--------|-------|
 | **True hybrid retrieval** (independent BM25 + vector candidates → RRF) | ⬜ | Today's pipeline gates semantic on the BM25 candidate pool. Real fix runs both retrievals independently and fuses the union |
-| **Migration auto-backup** (`memories.db.bak-before-vN`) | ⬜ | Lands in v0.3.2 |
-| **Access-weight reinforcement-loop fix** (log-scale or cap) | ⬜ | Lands in v0.3.2 |
-| **Typed JSON metadata validation** | ⬜ | Lands in v0.3.2 |
+| **Migration auto-backup** (`memories.db.bak-before-vN`) | ✅ | Shipped in v0.3.2 |
+| **Access-weight reinforcement-loop fix** (log-scale or cap) | ✅ | Already in place — audited in v0.3.2 (log-scaled with saturation at 50; spreading activation does not increment access_count) |
+| **Typed JSON metadata validation** | ✅ | Shipped in v0.3.2 |
 | **Structured provenance** on every memory | ⬜ | `created_by`, `client`, `model`, `session_id`, `evidence[]`, `user_confirmed` |
 | **Memory-layer discriminator** | ⬜ | episodic / working / semantic / procedural |
 | **Proposal flow** for non-trivial claims | ⬜ | Agent proposes → governance accepts/quarantines/rejects → commit with audit trail |

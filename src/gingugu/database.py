@@ -14,6 +14,7 @@ index afterwards: ``INSERT INTO memories_fts(memories_fts) VALUES('rebuild')``.
 from __future__ import annotations
 
 import logging
+import shutil
 import sqlite3
 from collections.abc import Callable
 from pathlib import Path
@@ -191,16 +192,64 @@ MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
 ]
 
 
-def migrate(conn: sqlite3.Connection) -> int:
-    """Apply pending migrations. Returns the resulting schema version."""
+def _backup_before_migration(
+    db_path: Path, current_version: int, target_version: int
+) -> Path | None:
+    """Copy the DB to ``<name>.bak-before-vN`` before applying migrations.
+
+    Skipped for in-memory DBs and for first-time DB creation
+    (``current_version == 0``). If a backup file for this target version
+    already exists (e.g. from a previous failed migration attempt) we leave
+    it alone — overwriting could destroy the only known-good copy.
+
+    Returns the backup path on success, ``None`` if skipped.
+    """
+    if str(db_path) == ":memory:":
+        return None
+    if current_version == 0:  # fresh DB — nothing worth backing up yet
+        return None
+    if not db_path.exists():
+        return None
+
+    backup_path = db_path.with_name(f"{db_path.name}.bak-before-v{target_version}")
+    if backup_path.exists():
+        logger.info(
+            "Pre-migration backup already exists at %s; leaving it intact",
+            backup_path,
+        )
+        return backup_path
+
+    shutil.copy2(db_path, backup_path)
+    logger.info(
+        "Pre-migration backup created: %s (v%d -> v%d)",
+        backup_path,
+        current_version,
+        target_version,
+    )
+    return backup_path
+
+
+def migrate(conn: sqlite3.Connection, db_path: Path | None = None) -> int:
+    """Apply pending migrations. Returns the resulting schema version.
+
+    When ``db_path`` is provided and migrations are pending, a one-shot
+    backup of the live DB file is taken before the first migration runs
+    (``<db>.bak-before-vN`` where N is the first pending target). The
+    backup is best-effort: if it fails the migration still proceeds.
+    """
     current = conn.execute("PRAGMA user_version").fetchone()[0]
-    for target, fn in MIGRATIONS:
-        if current < target:
-            logger.info("Applying migration -> v%d", target)
-            fn(conn)
-            conn.execute(f"PRAGMA user_version = {target}")
-            conn.commit()
-            current = target
+    pending = [(t, fn) for t, fn in MIGRATIONS if current < t]
+    if pending and db_path is not None:
+        try:
+            _backup_before_migration(db_path, current, pending[0][0])
+        except OSError as e:  # disk full, permissions, etc.
+            logger.warning("Pre-migration backup failed (continuing): %s", e)
+    for target, fn in pending:
+        logger.info("Applying migration -> v%d", target)
+        fn(conn)
+        conn.execute(f"PRAGMA user_version = {target}")
+        conn.commit()
+        current = target
     return current
 
 
@@ -221,7 +270,7 @@ class Database:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
         conn.execute("PRAGMA busy_timeout=5000")
-        migrate(conn)
+        migrate(conn, db_path=self.db_path)
         self._conn = conn
         logger.info("Database ready at %s", self.db_path)
         return conn

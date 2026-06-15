@@ -9,8 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-06-15
+
 ### Added
 
+- **Pre-migration backups.** When `migrate()` is called with a known DB
+  path and there are pending migrations, the live DB file is now copied
+  to `<db>.bak-before-vN` (where N is the first pending target version)
+  before any schema change runs. Skipped for in-memory DBs and first-time
+  creation. Best-effort: if the copy fails (disk full, permissions) the
+  migration still proceeds with a logged warning. Existing backups for the
+  same target are never overwritten — preserves the only known-good copy
+  if a previous attempt failed mid-flight. `database._backup_before_migration`.
+- **Metadata JSON-object validation.** The `metadata` field is now
+  validated as a JSON object on both `create` and `update`. Invalid JSON
+  raises `ValueError`; non-object shapes (arrays, scalars, `null`) are
+  rejected. Valid input is canonicalized via `json.dumps(..., sort_keys=True)`
+  so equivalent payloads are stored identically — helps deduplication and
+  prepares the column for the structured provenance fields planned in
+  `docs/future-architecture.md`. `storage._normalize_metadata`.
 - `SECURITY.md` documenting the threat model, vulnerability reporting,
   and the **agent-mediated credential exposure** boundary (the OS
   keychain protects credentials from disk access, not from a process
@@ -23,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   proposal-flow writes, memory-packet recall, embedded runtime mode,
   and the convergence story with ForgeSmith (epistemic + execution
   governance).
+- 13 new tests covering migration backup behavior (5) and metadata
+  validation (8). Suite: **151 passing** (was 138).
 
 ### Changed
 
@@ -33,6 +52,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   *"that mix is rare in this space"*, *"structured long-term brain"*).
   Marketing was one version ahead of the operational proof; this aligns
   the public framing with what the code can actually demonstrate.
+
+### Audit notes (no code change)
+
+- Reviewed the access-frequency reinforcement-loop concern raised in
+  external review. Confirmed already mitigated: `decay.access_score`
+  is log-scaled with saturation at 50 accesses, and `MemoryStore.touch_many`
+  (spreading activation) explicitly does **not** increment `access_count` —
+  it only refreshes `last_accessed`. Bounded by the `w_access=0.10` weight
+  in the composite. No change shipped; documented here so the next reviewer
+  knows it was considered.
 
 ## [0.3.0] - 2026-06-14
 
