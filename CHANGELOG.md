@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Comparison matrix rewritten for factual fairness.** `README.md`'s
+  "How It Compares" section now uses an edition-aware 7-column matrix
+  (`Gingugu | OpenMemory MCP | Mem0 OSS | Mem0 Platform | Graphiti
+  (OSS) | Zep Cloud | Letta`) instead of bucketing OSS, managed,
+  and MCP variants into one cell per product. OpenMemory MCP is now
+  correctly marked local-first; Letta is credited for its ADE visual
+  inspector; the conflated "knowledge graph built-in" row is split
+  into *typed memory relations* and *auto entity / relation
+  extraction* so Graphiti's actual lead on extraction is honest.
+  Framing copy reset to the real Gingugu lane (one inspectable local
+  memory layer for a developer using several coding agents — no cloud
+  account, no agent framework, no graph DB, no LLM call to store a
+  memory) rather than overstating differentiation.
+
 ## [0.3.3] - 2026-06-15
 
 ### Fixed

@@ -60,25 +60,46 @@ Where this goes long-term — federated, org-wide agent memory — lives in
 
 ## How It Compares
 
-| | **Gingugu** | mem0 | Zep | OpenMemory MCP | Letta (MemGPT) | Claude Projects / Cursor / Windsurf |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| Truly local-first (no cloud calls) | ✅ | ⚠️ cloud-sync default | ❌ | ⚠️ | ⚠️ | ❌ |
-| Works across all your AI tools | ✅ MCP-native | ⚠️ SDK-dependent | ⚠️ | ✅ MCP-native | ❌ framework lock-in | ❌ tool lock-in |
-| Zero ongoing cost | ✅ | ❌ paid tier | ❌ LLM calls + Postgres | ❌ paid tier | ⚠️ | ✅ |
-| Hybrid search (BM25 + semantic) | ✅ built-in, local | ⚠️ paid tier | ✅ | ⚠️ | ⚠️ | ❌ |
-| Knowledge graph built-in | ✅ relations + tags | ⚠️ paid tier | ✅ LLM-extracted (best in class) | ⚠️ | ❌ | ❌ |
-| Auto entity/relation extraction | ❌ (explicit) | ⚠️ paid | ✅ | ⚠️ | ❌ | ❌ |
-| Credential vault | ✅ OS keychain | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Knowledge graph UI | ✅ | ❌ | ⚠️ cloud dashboard | ❌ | ❌ | ❌ |
-| Deployment footprint | One SQLite file | SDK + cloud | Postgres + cloud | SDK + cloud | Full framework | None (built-in) |
+These products aren't all the same shape. Mem0 ships an OSS framework
+*and* a managed platform. Zep is the managed product whose OSS sibling
+is the Graphiti temporal-graph framework. Letta is a full
+stateful-agent runtime rather than a memory layer. We split them out
+instead of bucketing.
 
-**The honest take:** Zep has the most sophisticated knowledge graph — they
-auto-extract entities and relations using LLMs. We don't (yet). But theirs
-costs LLM calls per memory, needs Postgres, and lives in the cloud. Ours
-is one SQLite file with zero ongoing cost and offline-capable.
+| Capability | **Gingugu** | OpenMemory MCP | Mem0 OSS | Mem0 Platform | Graphiti (OSS) | Zep Cloud | Letta |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| Local-first by default | ✅ | ✅ | ⚙️ configurable | ❌ hosted | ✅ self-hosted | ❌ | ⚙️ local mode |
+| MCP-native cross-tool memory | ✅ | ✅ | via integrations | hosted MCP | MCP server | platform / API | primarily Letta agents |
+| No mandatory hosted service | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ in local mode |
+| No LLM call required to store a memory | ✅ | ⚙️ config dependent | usually no | usually no | ❌ extraction-time | ❌ extraction-time | agent-managed |
+| Single-file storage | ✅ SQLite | ❌ | ❌ | ❌ | ❌ graph DB | ❌ | ❌ |
+| Lexical + semantic retrieval | ✅ hybrid ranking | engine dependent | ✅ | ✅ | ✅ + graph | ✅ + graph | partial |
+| Explicit confidence + lifecycle | ✅ | partial | partial | partial | temporal-fact model | governance tooling | agent-state model |
+| Explicit typed memory relations | ✅ | partial | entity / graph based | entity / graph based | graph-native | graph-native | ❌ |
+| Auto entity / relation extraction | ❌ (intentional) | engine dependent | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Temporal graph validity | partial | partial | improving | ✅ | ✅ | ✅ | ❌ |
+| Local visual memory inspection | ✅ graph explorer | ✅ | dashboard | dashboard | framework-level | cloud tooling | ✅ ADE |
+| Operational footprint | very small | medium | medium–large | hosted | large | hosted | large |
 
-**Where Gingugu's combination is unusual:** *local-first*, *cross-tool*,
-and *zero ongoing cost* in one package. That mix is rare in this space.
+*Plus a built-in OS-keychain credential vault — useful alongside
+memory, but not really a memory feature, so it sits beside the matrix
+rather than inside it.*
+
+**The honest take.** Gingugu doesn't lead the field on every axis.
+Graphiti has the more sophisticated temporal knowledge graph. Mem0 has
+the broader ecosystem and a managed platform. Letta is a more complete
+stateful-agent runtime. Zep is built for enterprise scale and
+governance.
+
+**Where Gingugu wins.** When you're an individual developer using
+several coding agents and you want one inspectable local memory layer
+— without adopting a cloud account, an agent framework, a graph
+database, or an LLM call for every memory written. One SQLite file.
+MCP-native. Explicit trust and lifecycle. Typed relations. That lane
+is ours, and OpenMemory MCP is the only product squarely in it. We
+differentiate from OpenMemory through confidence states, lifecycle
+semantics, typed relations, last-confirmed tracking, supersession and
+contradiction, structured namespaces, and a local graph explorer.
 
 ---
 
