@@ -359,11 +359,10 @@ Gingugu is your long-term brain. Memory is split into **two layers**:
 - Patterns/opinions that transcend any one codebase → `crow`
 - When in doubt, project-scope it.
 
-### Session start (in this order)
-1. `memory_context(namespace="crow", task_hint=…)` — identity foundation
+### Session start
+1. `memory_context(namespace="crow", task_hint=…)` — identity foundation (always first)
 2. `memory_stats(namespace="crow")` — global health (dormancy is a resting signal, never auto-forgotten)
-3. `memory_context(namespace="<your-project-name>", task_hint=…)` — project context
-4. `memory_stats(namespace="<your-project-name>")` — project health
+3. For **each repo in the workspace** (multi-repo workspaces are common), in parallel: `memory_context(namespace="<project>", task_hint=…)` and `memory_stats(namespace="<project>")` — load all of them speculatively rather than asking the user which one to focus on
 
 ### During the session
 **Default: save. Immediately.** Gingugu has trust-led scoring,
