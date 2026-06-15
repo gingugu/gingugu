@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-06-15
+
 ### Changed
 
 - **Comparison matrix rewritten for factual fairness.** `README.md`'s
