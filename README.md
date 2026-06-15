@@ -1,4 +1,8 @@
-# 🧠 Gingugu
+<p align="center">
+  <img src="https://raw.githubusercontent.com/gingugu/gingugu/main/docs/logo.svg" alt="Gingugu logo" width="160">
+</p>
+
+# Gingugu
 
 **Your AI forgets everything between sessions. Gingugu fixes that.**
 
