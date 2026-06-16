@@ -85,6 +85,9 @@ class Config:
     decay_lambda: float
     embeddings_enabled: bool = True
     embeddings_model: str = "BAAI/bge-small-en-v1.5"
+    embeddings_backend: str = "fastembed"
+    embeddings_ollama_host: str = "http://localhost:11434"
+    embeddings_ollama_model: str = "nomic-embed-text"
     weights: dict[str, float] = field(default_factory=lambda: dict(_DEFAULT_WEIGHTS))
     log_level: str = "INFO"
 
@@ -140,6 +143,13 @@ def load_config() -> Config:
         decay_lambda=_env_float("MEMORY_DECAY_LAMBDA", 0.01),
         embeddings_enabled=_env_bool("MEMORY_EMBEDDINGS_ENABLED", default=True),
         embeddings_model=os.environ.get("MEMORY_EMBEDDINGS_MODEL") or "BAAI/bge-small-en-v1.5",
+        embeddings_backend=os.environ.get("MEMORY_EMBEDDINGS_BACKEND") or "fastembed",
+        embeddings_ollama_host=(
+            os.environ.get("MEMORY_EMBEDDINGS_OLLAMA_HOST") or "http://localhost:11434"
+        ),
+        embeddings_ollama_model=(
+            os.environ.get("MEMORY_EMBEDDINGS_OLLAMA_MODEL") or "nomic-embed-text"
+        ),
         weights=_load_weights(),
         log_level=os.environ.get("MEMORY_LOG_LEVEL", default_level).upper(),
     )

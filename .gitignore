@@ -83,3 +83,5 @@ ui/dist/
 *.secret
 secrets/
 credentials/
+
+*.zip

@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-06-16
+
+### Added
+
+- **Ollama embedding backend.** Set `MEMORY_EMBEDDINGS_BACKEND=ollama` to
+  delegate all embedding calls to a running Ollama process via its HTTP API
+  instead of loading the fastembed ONNX model in-process. Zero extra memory
+  footprint — Ollama uses whatever embedding model it already has loaded.
+  Configure with `MEMORY_EMBEDDINGS_OLLAMA_MODEL` (default: `nomic-embed-text`)
+  and `MEMORY_EMBEDDINGS_OLLAMA_HOST` (default: `http://localhost:11434`).
+  Gracefully falls back to `NullEmbeddingProvider` if Ollama is unreachable at
+  startup. No new dependencies — uses stdlib `urllib.request`.
+- **`*.zip` added to `.gitignore`.**
+
 ## [0.3.5] - 2026-06-16
 
 ### Added

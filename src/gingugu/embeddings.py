@@ -1,24 +1,32 @@
-"""Local embedding provider for semantic search.
+"""Embedding providers for semantic search.
 
-Wraps fastembed's ONNX-based encoder behind a small protocol so swapping
-backends later is a one-file change. Lazy model loading — the model isn't
-downloaded or initialized until the first encode call.
+Supports two backends, selected via MEMORY_EMBEDDINGS_BACKEND:
 
-The encoder is intentionally PyTorch-free. fastembed ships ONNX runtime
-(~50MB) and the default model (BAAI/bge-small-en-v1.5) is ~80MB on disk —
-total footprint stays well under sentence-transformers' ~2GB.
+- **fastembed** (default) — ONNX-based local encoder. Lazy-loads the model
+  on first use (~80MB into ~/.cache/fastembed). PyTorch-free.
+- **ollama** — delegates to a running Ollama process via its HTTP API.
+  Zero extra memory footprint — uses whatever embedding model Ollama already
+  has loaded. Requires Ollama to be running (``ollama serve``).
+
+Both implement the ``EmbeddingProvider`` protocol so storage and search are
+backend-agnostic.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import struct
+import urllib.request
 from typing import Protocol
 
 logger = logging.getLogger(__name__)
 
 # Default model — strong English retrieval performance, 384-dim, ~80MB.
 DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
+
+DEFAULT_OLLAMA_HOST = "http://localhost:11434"
+DEFAULT_OLLAMA_MODEL = "nomic-embed-text"
 
 
 class EmbeddingProvider(Protocol):
@@ -54,6 +62,55 @@ class NullEmbeddingProvider:
     @property
     def enabled(self) -> bool:
         return False
+
+
+class OllamaEmbeddingProvider:
+    """Ollama-backed encoder via the local Ollama HTTP API.
+
+    Calls ``POST /api/embeddings`` on the running Ollama process instead of
+    loading an ONNX model into this process. Zero extra memory footprint —
+    Ollama is assumed to already be running with an embedding model loaded.
+
+    Dimensions are detected automatically on the first successful encode call.
+    """
+
+    def __init__(
+        self,
+        model_name: str = DEFAULT_OLLAMA_MODEL,
+        host: str = DEFAULT_OLLAMA_HOST,
+    ) -> None:
+        self.model_name = model_name
+        self._host = host.rstrip("/")
+        self.dim = 0
+
+    @property
+    def enabled(self) -> bool:
+        return True
+
+    def _call(self, text: str) -> list[float] | None:
+        url = f"{self._host}/api/embeddings"
+        payload = json.dumps({"model": self.model_name, "prompt": text}).encode()
+        req = urllib.request.Request(
+            url, data=payload, headers={"Content-Type": "application/json"}
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                body = json.loads(resp.read())
+            vec: list[float] = body["embedding"]
+            if self.dim == 0:
+                self.dim = len(vec)
+            return vec
+        except Exception:
+            logger.exception(
+                "Ollama embed call failed (host=%s model=%s)", self._host, self.model_name
+            )
+            return None
+
+    def encode(self, text: str) -> list[float] | None:
+        return self._call(text)
+
+    def encode_many(self, texts: list[str]) -> list[list[float] | None]:
+        return [self._call(t) for t in texts]
 
 
 class FastEmbedProvider:
@@ -112,13 +169,37 @@ class FastEmbedProvider:
             return [None] * len(texts)
 
 
-def build_provider(enabled: bool, model_name: str = DEFAULT_MODEL) -> EmbeddingProvider:
-    """Factory: returns FastEmbedProvider if enabled and importable, else Null.
+def build_provider(
+    enabled: bool,
+    model_name: str = DEFAULT_MODEL,
+    backend: str = "fastembed",
+    ollama_host: str = DEFAULT_OLLAMA_HOST,
+    ollama_model: str = DEFAULT_OLLAMA_MODEL,
+) -> EmbeddingProvider:
+    """Factory: returns the configured EmbeddingProvider or Null.
 
-    Probes the fastembed import lazily so a disabled provider never touches it.
+    Backend is selected by ``backend``:
+    - ``"fastembed"`` (default) — ONNX local encoder; falls back to Null if
+      fastembed is not installed.
+    - ``"ollama"`` — delegates to the local Ollama HTTP API; falls back to
+      Null if Ollama is not reachable at ``ollama_host``.
     """
     if not enabled:
         return NullEmbeddingProvider()
+
+    if backend == "ollama":
+        provider = OllamaEmbeddingProvider(model_name=ollama_model, host=ollama_host)
+        test = provider.encode("probe")
+        if test is None:
+            logger.warning(
+                "Ollama not reachable at %s; semantic search disabled. "
+                "Ensure Ollama is running or set MEMORY_EMBEDDINGS_BACKEND=fastembed.",
+                ollama_host,
+            )
+            return NullEmbeddingProvider()
+        logger.info("Ollama embedding backend ready: model=%s dim=%d", ollama_model, provider.dim)
+        return provider
+
     try:
         import fastembed  # noqa: F401
     except ImportError:

@@ -35,6 +35,9 @@ def build_server() -> FastMCP:
     embedder = build_provider(
         enabled=config.embeddings_enabled,
         model_name=config.embeddings_model,
+        backend=config.embeddings_backend,
+        ollama_host=config.embeddings_ollama_host,
+        ollama_model=config.embeddings_ollama_model,
     )
     store = MemoryStore(conn, embedder=embedder)
 

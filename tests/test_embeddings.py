@@ -8,11 +8,14 @@ a `FakeEmbedder` that returns repeatable, small vectors.
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from gingugu.database import Database
 from gingugu.embeddings import (
     NullEmbeddingProvider,
+    OllamaEmbeddingProvider,
     build_provider,
     cosine,
     pack,
@@ -101,6 +104,82 @@ def test_build_provider_disabled_returns_null():
     p = build_provider(enabled=False)
     assert not p.enabled
     assert p.encode("anything") is None
+
+
+# --- OllamaEmbeddingProvider ------------------------------------------------
+
+
+def _mock_ollama_response(vec: list[float]) -> MagicMock:
+    """Build a mock urllib response that returns the given embedding vector."""
+    body = f'{{"embedding": {vec}}}'
+    resp = MagicMock()
+    resp.__enter__ = MagicMock(return_value=resp)
+    resp.__exit__ = MagicMock(return_value=False)
+    resp.read.return_value = body.encode()
+    return resp
+
+
+def test_ollama_provider_encode_success():
+    provider = OllamaEmbeddingProvider(model_name="nomic-embed-text", host="http://localhost:11434")
+    mock_resp = _mock_ollama_response([0.1, 0.2, 0.3])
+
+    with patch("urllib.request.urlopen", return_value=mock_resp):
+        result = provider.encode("hello world")
+
+    assert result == pytest.approx([0.1, 0.2, 0.3])
+
+
+def test_ollama_provider_dim_detected_on_first_call():
+    provider = OllamaEmbeddingProvider()
+    assert provider.dim == 0
+
+    mock_resp = _mock_ollama_response([0.5, 0.6, 0.7, 0.8])
+    with patch("urllib.request.urlopen", return_value=mock_resp):
+        provider.encode("probe")
+
+    assert provider.dim == 4
+
+
+def test_ollama_provider_encode_returns_none_on_failure():
+    provider = OllamaEmbeddingProvider()
+    with patch("urllib.request.urlopen", side_effect=OSError("connection refused")):
+        result = provider.encode("hello")
+    assert result is None
+
+
+def test_ollama_provider_encode_many():
+    provider = OllamaEmbeddingProvider()
+    mock_resp = _mock_ollama_response([1.0, 0.0])
+    with patch("urllib.request.urlopen", return_value=mock_resp):
+        results = provider.encode_many(["a", "b", "c"])
+    assert len(results) == 3
+    assert all(r == pytest.approx([1.0, 0.0]) for r in results)
+
+
+def test_ollama_provider_strips_trailing_slash_from_host():
+    provider = OllamaEmbeddingProvider(host="http://localhost:11434/")
+    assert provider._host == "http://localhost:11434"
+
+
+def test_build_provider_ollama_falls_back_on_unreachable():
+    with patch("urllib.request.urlopen", side_effect=OSError("connection refused")):
+        provider = build_provider(enabled=True, backend="ollama")
+    assert not provider.enabled
+    assert isinstance(provider, NullEmbeddingProvider)
+
+
+def test_build_provider_ollama_returns_ollama_provider_on_success():
+    mock_resp = _mock_ollama_response([0.1, 0.2])
+    with patch("urllib.request.urlopen", return_value=mock_resp):
+        provider = build_provider(enabled=True, backend="ollama")
+    assert provider.enabled
+    assert isinstance(provider, OllamaEmbeddingProvider)
+
+
+def test_build_provider_ollama_disabled_returns_null():
+    provider = build_provider(enabled=False, backend="ollama")
+    assert not provider.enabled
+    assert isinstance(provider, NullEmbeddingProvider)
 
 
 # --- RRF fusion -------------------------------------------------------------
