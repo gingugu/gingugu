@@ -164,3 +164,55 @@ def test_stats_reports_dormant_count(
     assert result["dormant_count"] == 1
     # Back-compat alias preserved.
     assert result["stale_count"] == 1
+
+
+def test_hygiene_flags_ghost_namespaces(store: MemoryStore, namespaces: NamespaceManager) -> None:
+    ns_a = namespaces.get_or_create("has-content").id
+    namespaces.get_or_create("empty-one")
+    namespaces.get_or_create("empty-two")
+    store.create(namespace_id=ns_a, type=MemoryType.FACT, title="t", content="x")
+    result = stats.compute_stats(store.conn)
+    assert set(result["hygiene"]["ghost_namespaces"]) >= {"empty-one", "empty-two"}
+    assert "has-content" not in result["hygiene"]["ghost_namespaces"]
+
+
+def test_hygiene_flags_duplicate_titles(store: MemoryStore, namespaces: NamespaceManager) -> None:
+    ns_id = namespaces.get_or_create("test-ns").id
+    a = store.create(namespace_id=ns_id, type=MemoryType.FACT, title="dup", content="x")
+    b = store.create(namespace_id=ns_id, type=MemoryType.FACT, title="dup", content="y")
+    store.create(namespace_id=ns_id, type=MemoryType.FACT, title="solo", content="z")
+    result = stats.compute_stats(store.conn)
+    hygiene = result["hygiene"]
+    assert hygiene["duplicate_title_count"] == 1
+    sample = hygiene["duplicate_title_sample"]
+    assert len(sample) == 1
+    assert sample[0]["title"] == "dup"
+    assert sample[0]["namespace"] == "test-ns"
+    assert set(sample[0]["ids"]) == {a.id, b.id}
+
+
+def test_hygiene_ignores_deprecated_dupes(store: MemoryStore, namespaces: NamespaceManager) -> None:
+    """Deprecated memories are historical records — duplicate titles across
+    one active + one deprecated entry shouldn't trip the cleanup signal."""
+    ns_id = namespaces.get_or_create("test-ns").id
+    store.create(namespace_id=ns_id, type=MemoryType.FACT, title="t", content="x")
+    store.create(
+        namespace_id=ns_id,
+        type=MemoryType.FACT,
+        title="t",
+        content="y",
+        confidence=Confidence.DEPRECATED,
+    )
+    result = stats.compute_stats(store.conn)
+    assert result["hygiene"]["duplicate_title_count"] == 0
+
+
+def test_hygiene_namespace_scoped_skips_ghost_list(
+    store: MemoryStore, namespaces: NamespaceManager
+) -> None:
+    """A namespace-scoped stats call shouldn't surface unrelated empty namespaces."""
+    ns_a = namespaces.get_or_create("ns-a").id
+    namespaces.get_or_create("empty")
+    store.create(namespace_id=ns_a, type=MemoryType.FACT, title="t", content="x")
+    result = stats.compute_stats(store.conn, namespace_id=ns_a)
+    assert result["hygiene"]["ghost_namespaces"] == []

@@ -69,6 +69,45 @@ def _spread_activation(ctx: ServerContext, seed_ids: list[str]) -> int:
         return 0
 
 
+# Minimum fused-relevance score for a memory to be surfaced as a near-duplicate
+# of an incoming ``memory_store`` payload. 0.5 keeps the signal-to-noise honest:
+# trivially-shared tokens (e.g. "the") fall below it while genuine title/topic
+# overlap clears it. Tunable from feel as we accumulate data.
+_DEDUPE_MIN_SCORE = 0.5
+_DEDUPE_LIMIT = 3
+
+
+def _find_similar(
+    ctx: ServerContext,
+    *,
+    namespace_id: str,
+    title: str,
+    content: str,
+) -> list[dict]:
+    """Return up to ``_DEDUPE_LIMIT`` existing memories in ``namespace_id`` that
+    look like near-duplicates of a new (``title``, ``content``) payload.
+
+    Uses the existing hybrid BM25+semantic search over the namespace and keeps
+    hits above ``_DEDUPE_MIN_SCORE``. Best-effort: any failure is swallowed so
+    the store itself never breaks on a dedup-hint error.
+    """
+    query = f"{title} {content}".strip()
+    if not query:
+        return []
+    try:
+        hits = search_mod.search(
+            ctx.conn,
+            query=query,
+            namespace_id=namespace_id,
+            limit=_DEDUPE_LIMIT,
+            embedder=ctx.store.embedder,
+        )
+    except Exception:  # never block a store on a hint failure
+        logger.warning("dedupe hint search failed", exc_info=True)
+        return []
+    return [_memory_summary(m) for m in hits if (m.score or 0.0) >= _DEDUPE_MIN_SCORE]
+
+
 def _memory_summary(mem: Memory) -> dict:
     data = {
         "id": mem.id,
@@ -98,6 +137,7 @@ def register(mcp, ctx: ServerContext) -> None:
         confidence: str = "inferred",
         source: str | None = None,
         metadata: str | None = None,
+        dedupe_check: bool = True,
     ) -> dict:
         """Store a new memory in the knowledge base. Use to capture anything worth
         remembering across sessions: decisions, bugs, patterns, architecture choices,
@@ -110,7 +150,13 @@ def register(mcp, ctx: ServerContext) -> None:
         defaults to "inferred". ``tags`` is comma-separated. ``namespace`` scopes the
         memory to a project or domain; omit to use the configured default namespace.
         ``source`` records what generated this memory (e.g. a file path or tool name).
-        ``metadata`` is an optional free-form JSON string for extra structured data."""
+        ``metadata`` is an optional free-form JSON string for extra structured data.
+
+        When ``dedupe_check`` is True (default), the response includes a
+        ``similar_memories`` list of up to 3 existing memories in the same
+        namespace whose content/title overlap strongly with this one — a
+        non-blocking hint so the caller can choose to update/relate/consolidate
+        instead of accumulating near-duplicates. Disable for bulk imports."""
         try:
             try:
                 mem_type = MemoryType(type)
@@ -128,6 +174,11 @@ def register(mcp, ctx: ServerContext) -> None:
 
             ns_name = ctx.namespaces.resolve_name(namespace)
             ns = ctx.namespaces.get_or_create(ns_name)
+            similar = (
+                _find_similar(ctx, namespace_id=ns.id, title=title, content=content)
+                if dedupe_check
+                else []
+            )
             mem = ctx.store.create(
                 namespace_id=ns.id,
                 type=mem_type,
@@ -138,7 +189,12 @@ def register(mcp, ctx: ServerContext) -> None:
                 metadata=metadata,
                 tags=_split_csv(tags),
             )
-            return {"ok": True, "memory": _memory_summary(mem), "namespace": ns_name}
+            return {
+                "ok": True,
+                "memory": _memory_summary(mem),
+                "namespace": ns_name,
+                "similar_memories": similar,
+            }
         except Exception as exc:  # never crash the MCP loop
             logger.exception("memory_store failed")
             return _err(f"memory_store failed: {exc}")

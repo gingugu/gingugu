@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Near-duplicate hint on `memory_store`.** Every store now returns a
+  `similar_memories` list of up to 3 existing memories in the same
+  namespace whose content/title strongly overlap with the new one. The
+  store always proceeds — this is a non-blocking signal so the caller can
+  choose to consolidate, relate, or update instead of accumulating
+  near-duplicates. Set `dedupe_check=False` for bulk imports.
+- **Hygiene block on `memory_stats`.** `compute_stats` now includes a
+  cheap, SQL-only `hygiene` summary surfacing the easy-to-detect cleanup
+  candidates that the manual namespace-scan workflow looks for first:
+  ghost namespaces (zero memories) and exact-title duplicate clusters
+  within a namespace. Lets the agent decide *at session start* whether a
+  deeper sweep is warranted, without auto-deleting anything.
+
 ### Fixed
 
 - **Access Activity chart in Memory Explorer was always 0.** `memory_recall`,

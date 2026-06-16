@@ -212,6 +212,54 @@ async def test_retrieval_handlers_credit_access(server) -> None:
 
 
 @pytest.mark.asyncio
+async def test_memory_store_surfaces_similar_memories(server) -> None:
+    """memory_store should return near-duplicate hints, but never block on them."""
+    first = _payload(
+        await server.call_tool(
+            "memory_store",
+            {
+                "content": "always enable WAL mode on SQLite for write concurrency",
+                "title": "use WAL mode for SQLite",
+                "type": "pattern",
+            },
+        )
+    )
+    assert first["ok"]
+    # First store in an empty namespace: no similar memories possible.
+    assert first["similar_memories"] == []
+
+    second = _payload(
+        await server.call_tool(
+            "memory_store",
+            {
+                "content": "WAL mode on SQLite is required for our write concurrency setup",
+                "title": "use WAL mode for SQLite",
+                "type": "pattern",
+            },
+        )
+    )
+    assert second["ok"]
+    # The new memory is committed regardless, AND the prior near-duplicate is flagged.
+    assert second["memory"]["id"] != first["memory"]["id"]
+    assert any(m["id"] == first["memory"]["id"] for m in second["similar_memories"])
+
+    # Explicit opt-out skips the check entirely (bulk-import path).
+    skipped = _payload(
+        await server.call_tool(
+            "memory_store",
+            {
+                "content": "WAL mode is the SQLite concurrency answer",
+                "title": "use WAL mode for SQLite",
+                "type": "pattern",
+                "dedupe_check": False,
+            },
+        )
+    )
+    assert skipped["ok"]
+    assert skipped["similar_memories"] == []
+
+
+@pytest.mark.asyncio
 async def test_recall_fresh_config_namespace_returns_empty(limited_server) -> None:
     # Recall before anything is stored: the config-resolved namespace doesn't
     # exist yet — return an empty ok result, and don't create the namespace.
