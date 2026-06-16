@@ -123,22 +123,23 @@ levels). The built-ins are convenience features. Gingugu is infrastructure.
 <summary><strong>Why SQLite + FTS5 instead of a vector database?</strong></summary>
 
 Both, actually. **We do hybrid retrieval out of the box:** BM25 over FTS5 +
-local semantic embeddings (via [`fastembed`](https://github.com/qdrant/fastembed),
-no PyTorch dependency), fused with Reciprocal Rank Fusion. No vector DB
+local semantic embeddings, fused with Reciprocal Rank Fusion. No vector DB
 server required.
 
 Why this stack:
 1. **No deployment.** One SQLite file holds memories, FTS5 index, *and*
    embeddings. No Postgres, no Pinecone, no Chroma server.
-2. **ONNX over PyTorch.** fastembed ships the embedding model as a ~50MB
-   ONNX runtime instead of 2GB of PyTorch — the install footprint stays
-   honest to the "one SQLite file" promise.
+2. **Two embedding backends — pick one:**
+   - **fastembed** (default) — ONNX-based, no PyTorch, ~80MB model download
+     to `~/.cache/fastembed`. Works fully offline after first use.
+   - **Ollama** — delegates to your already-running Ollama process via its
+     HTTP API. Zero extra memory footprint. Set
+     `MEMORY_EMBEDDINGS_BACKEND=ollama`.
 3. **It composes.** Hybrid relevance feeds the composite (relevance ×
    freshness × access × confidence) — every signal in one engine.
 
 You can disable semantic search via `MEMORY_EMBEDDINGS_ENABLED=false` and
-fall back to BM25-only. Swap the model via `MEMORY_EMBEDDINGS_MODEL` (any
-fastembed-supported model — defaults to `BAAI/bge-small-en-v1.5`).
+fall back to BM25-only.
 
 </details>
 
@@ -188,7 +189,7 @@ or Rust toolchain required to use it. The MCP SDK is first-class in Python.
 | Feature | Description |
 |---------|-------------|
 | 🏷️ **Namespace Scoping** | Memories auto-scoped to repos/projects with cross-repo pattern sharing |
-| 🔍 **Hybrid Search** | SQLite FTS5 (BM25) + local semantic embeddings via [fastembed](https://github.com/qdrant/fastembed), fused with Reciprocal Rank Fusion — no PyTorch, no API calls |
+| 🔍 **Hybrid Search** | SQLite FTS5 (BM25) + semantic embeddings fused with Reciprocal Rank Fusion. Two backends: [fastembed](https://github.com/qdrant/fastembed) (ONNX, offline) or Ollama (zero extra footprint, uses your existing Ollama process) |
 | ⏰ **Temporal Intelligence** | Trust-led scoring, dormancy tracking (never forgets), "last confirmed" tracking, spreading activation |
 | 🔗 **Relationships** | Link memories: supersedes, related_to, caused_by, contradicts |
 | 🎯 **Confidence Levels** | verified → inferred → stale → deprecated lifecycle |
@@ -473,7 +474,10 @@ Environment variables (all optional):
 | `MEMORY_AUTO_CONTEXT_LIMIT` | `10` | Max memories to surface on auto-context |
 | `MEMORY_DECAY_LAMBDA` | `0.01` | Freshness decay rate in **days⁻¹** (gentle; freshness is floored, so memories never fully fade) |
 | `MEMORY_EMBEDDINGS_ENABLED` | `true` | Toggle semantic search. `false` falls back to rank-based BM25-only retrieval |
-| `MEMORY_EMBEDDINGS_MODEL` | `BAAI/bge-small-en-v1.5` | Any fastembed-supported model. First use downloads ~80MB to `~/.cache/fastembed` |
+| `MEMORY_EMBEDDINGS_BACKEND` | `fastembed` | Embedding backend: `fastembed` (ONNX, offline) or `ollama` (delegates to local Ollama process) |
+| `MEMORY_EMBEDDINGS_MODEL` | `BAAI/bge-small-en-v1.5` | fastembed model. First use downloads ~80MB to `~/.cache/fastembed` |
+| `MEMORY_EMBEDDINGS_OLLAMA_MODEL` | `nomic-embed-text` | Ollama model to use when `MEMORY_EMBEDDINGS_BACKEND=ollama` |
+| `MEMORY_EMBEDDINGS_OLLAMA_HOST` | `http://localhost:11434` | Ollama host when `MEMORY_EMBEDDINGS_BACKEND=ollama` |
 | `MEMORY_W_RELEVANCE` | `0.45` | Composite-score weight for FTS5 relevance |
 | `MEMORY_W_FRESHNESS` | `0.10` | Composite-score weight for freshness (a soft recency tiebreaker) |
 | `MEMORY_W_ACCESS` | `0.10` | Composite-score weight for access frequency |

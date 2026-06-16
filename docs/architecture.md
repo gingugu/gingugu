@@ -677,7 +677,7 @@ src/gingugu/
 
 ## Future Enhancements (v2+)
 
-- **Local embeddings** via `sentence-transformers` for semantic search
+- **SSE transport** (`gingugu serve`) — HTTP/SSE mode for multi-machine personal access with bearer token auth
 - **LLM-powered consolidation** — use the AI itself to summarize memory clusters
 - **Rules integration** — auto-generate rules files (`.windsurfrules`, `.cursorrules`, `AGENTS.md`) from learned patterns
 - **Multi-agent support** — shared memory across different AI tools
