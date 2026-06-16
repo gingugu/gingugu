@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`memory_context` no longer evicts freshly-stored memories at session
+  start.** The auto-context engine built a union of three intent buckets
+  (task-relevant, recently-active, cross-namespace patterns) then collapsed
+  them into a single composite-score sort capped at `limit`. Because the
+  composite is relevance- and confidence-dominated, a memory saved in the
+  previous session (never accessed, `access_count=0`) was out-ranked by older,
+  heavily-accessed memories and pushed past the cut — so "where we left off"
+  context silently vanished. `build_context` now uses **guaranteed per-bucket
+  quotas**: each bucket is ranked by its own native signal and reserves a share
+  of the slots, filled recency-first (`ceil(limit × 0.3)`), then task relevance
+  (`ceil(limit × 0.5)`), then cross-namespace (3). Remaining slots are
+  backfilled by composite score. Only `context.py` changed; `memory_recall`
+  and `memory_search` ranking are untouched.
+
 ## [0.3.6] - 2026-06-16
 
 ### Added

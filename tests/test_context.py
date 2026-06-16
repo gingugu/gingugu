@@ -73,3 +73,51 @@ def test_context_type_boost(store: MemoryStore, namespaces: NamespaceManager) ->
     results = context.build_context(store.conn, namespace_id=ns_id, limit=10, weights=WEIGHTS)
     titles = [m.title for m in results]
     assert titles.index("arch") < titles.index("plain")
+
+
+def test_context_fresh_memory_survives_high_access_competition(
+    store: MemoryStore, namespaces: NamespaceManager
+) -> None:
+    # Regression: a freshly-stored, never-accessed memory (the "where we left
+    # off" signal) used to be evicted past the limit by older, heavily-accessed
+    # memories whose composite score won the single global sort. The recency
+    # quota must guarantee it surfaces.
+    ns_id = namespaces.get_or_create("test-ns").id
+    limit = 10
+    # Build `limit` competitors and hammer their access_count so each one's
+    # composite score beats a never-accessed memory.
+    for i in range(limit):
+        comp = store.create(
+            namespace_id=ns_id, type=MemoryType.FACT, title=f"old-{i}", content="prior work"
+        )
+        for _ in range(20):
+            store.record_accesses([comp.id])
+    # The newest memory is created last (newest last_accessed) but never accessed.
+    fresh = store.create(
+        namespace_id=ns_id, type=MemoryType.BUG, title="traefik outage", content="root cause found"
+    )
+    results = context.build_context(store.conn, namespace_id=ns_id, limit=limit, weights=WEIGHTS)
+    assert any(m.id == fresh.id for m in results), "fresh memory was evicted from context"
+
+
+def test_context_recency_quota_does_not_starve_task_relevance(
+    store: MemoryStore, namespaces: NamespaceManager
+) -> None:
+    # The guaranteed recency quota must not crowd out a strong task-hint match:
+    # a memory matching the hint should still surface even when many unrelated
+    # memories were touched more recently.
+    ns_id = namespaces.get_or_create("test-ns").id
+    target = store.create(
+        namespace_id=ns_id, type=MemoryType.FACT, title="db", content="sqlite indexing tips"
+    )
+    for i in range(10):
+        store.create(
+            namespace_id=ns_id,
+            type=MemoryType.FACT,
+            title=f"noise-{i}",
+            content="unrelated chatter",
+        )
+    results = context.build_context(
+        store.conn, namespace_id=ns_id, task_hint="sqlite indexing", limit=10, weights=WEIGHTS
+    )
+    assert any(m.id == target.id for m in results), "task-relevant memory was starved"

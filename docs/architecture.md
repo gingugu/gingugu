@@ -346,19 +346,30 @@ Auto-surface relevant memories for the current workspace. Called on session star
 - `limit` (optional) — max memories to surface (defaults to
   `MEMORY_AUTO_CONTEXT_LIMIT`, which defaults to 10)
 
-**Retrieval strategy:** the result set is a *union* of three buckets, then
-de-duplicated and sorted by composite score (Step 2 above):
+**Retrieval strategy:** the result draws from three intent buckets, each ranked
+by its *own* native signal and given a **guaranteed quota** of the `limit`
+slots. This replaces the older "union, then one global composite sort" design,
+which let the relevance/access-dominated composite score evict freshly-stored
+memories — the "where we left off" signal — at session start.
 
 1. **Task-relevant (if `task_hint` provided)** — FTS5 search scoped to
-   `namespace`, top `ceil(limit × 0.5)` by composite score.
-2. **Recently active in this namespace** — last `limit` memories ordered by
-   `last_accessed DESC`, excluding `deprecated`.
+   `namespace`, ranked by composite score. Quota `ceil(limit × 0.5)`.
+2. **Recently active in this namespace** — memories ordered by
+   `last_accessed DESC` (pure recency), excluding `deprecated`. Quota
+   `ceil(limit × 0.3)`.
 3. **Cross-namespace high-confidence patterns** — `type IN ('pattern',
-   'preference')` with `confidence='verified'`, top 3 by composite score.
-   Lets a pattern learned in repo A surface in repo B.
+   'preference')` with `confidence='verified'`, ranked by `access_count`.
+   Quota 3. Lets a pattern learned in repo A surface in repo B.
 
-Final cap at `limit`. Boost weights for types `architecture` and `decision`
-by +0.1 to score (they're disproportionately useful for session start).
+Quotas are filled **recency-first**, then task relevance, then cross-namespace
+(which yields first when slots are contended), so a never-accessed memory
+created in the previous session always survives the cut. A memory appearing in
+more than one bucket keeps its highest score. Any slots left after the
+guaranteed quotas are **backfilled** from the combined pool by composite score.
+
+Final cap at `limit`, presented in composite order. Boost weights for types
+`architecture` and `decision` by +0.1 to score (they're disproportionately
+useful for session start).
 
 ### `memory_update`
 Update an existing memory's content, confidence, or metadata.
