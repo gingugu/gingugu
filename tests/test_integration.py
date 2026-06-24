@@ -260,6 +260,144 @@ async def test_memory_store_surfaces_similar_memories(server) -> None:
 
 
 @pytest.mark.asyncio
+async def test_memory_store_suggests_relations(server) -> None:
+    """memory_store should return suggested_relations as a structural API:
+    a list, disjoint from similar_memories, excluding self and already-related
+    memories, and skippable via ``relation_check=False``."""
+    a = _payload(
+        await server.call_tool(
+            "memory_store",
+            {
+                "content": "postgres EXPLAIN ANALYZE reveals slow sequential scans",
+                "title": "postgres EXPLAIN ANALYZE",
+                "type": "pattern",
+            },
+        )
+    )
+    b = _payload(
+        await server.call_tool(
+            "memory_store",
+            {
+                "content": "postgres autovacuum tuning prevents table bloat",
+                "title": "postgres autovacuum tuning",
+                "type": "pattern",
+            },
+        )
+    )
+    aid, bid = a["memory"]["id"], b["memory"]["id"]
+    assert aid and bid
+
+    third = _payload(
+        await server.call_tool(
+            "memory_store",
+            {
+                "content": "postgres index strategy matters more than CPU for OLTP",
+                "title": "postgres indexing strategy",
+                "type": "pattern",
+            },
+        )
+    )
+    assert third["ok"]
+    suggested = third["suggested_relations"]
+    similar = third["similar_memories"]
+    assert isinstance(suggested, list)
+    suggested_ids = {s["id"] for s in suggested}
+    similar_ids = {s["id"] for s in similar}
+    # Contract: new memory never suggested as related to itself.
+    assert third["memory"]["id"] not in suggested_ids
+    # Contract: suggested_relations is disjoint from similar_memories (different
+    # signals — merge candidates vs link candidates).
+    assert suggested_ids.isdisjoint(similar_ids)
+
+    # Contract: explicit opt-out returns an empty list (bulk-import path).
+    skipped = _payload(
+        await server.call_tool(
+            "memory_store",
+            {
+                "content": "anything postgres",
+                "title": "postgres misc",
+                "type": "pattern",
+                "relation_check": False,
+            },
+        )
+    )
+    assert skipped["suggested_relations"] == []
+
+    # Contract: already-related memories are excluded from suggestions.
+    # Force a moderate match into the suggestion zone by linking a -> third,
+    # then re-trigger suggestions via memory_update on `third`. ``a`` should
+    # never appear in the re-checked suggestions.
+    _payload(
+        await server.call_tool(
+            "memory_relate",
+            {"source_id": third["memory"]["id"], "target_id": aid, "relation_type": "related_to"},
+        )
+    )
+    refresh = _payload(
+        await server.call_tool(
+            "memory_update",
+            {
+                "memory_id": third["memory"]["id"],
+                "content": "postgres index strategy matters more than CPU for OLTP",
+            },
+        )
+    )
+    assert refresh["ok"]
+    refreshed_suggested = {s["id"] for s in refresh.get("suggested_relations", [])}
+    assert aid not in refreshed_suggested, "already-related memory must not be suggested"
+
+
+@pytest.mark.asyncio
+async def test_memory_update_suggests_relations_only_on_content_change(server) -> None:
+    """memory_update should only return suggested_relations when title/content
+    was actually provided — tag-only or confidence-only updates skip it."""
+    a = _payload(
+        await server.call_tool(
+            "memory_store",
+            {
+                "content": "use ruff for linting python projects",
+                "title": "ruff linting",
+                "type": "pattern",
+            },
+        )
+    )
+    _ = _payload(
+        await server.call_tool(
+            "memory_store",
+            {
+                "content": "use black for formatting python projects",
+                "title": "black formatting",
+                "type": "pattern",
+            },
+        )
+    )
+
+    # Tag-only update: no suggested_relations key in the response.
+    tag_only = _payload(
+        await server.call_tool(
+            "memory_update",
+            {"memory_id": a["memory"]["id"], "tags": "lint,python"},
+        )
+    )
+    assert tag_only["ok"]
+    assert "suggested_relations" not in tag_only
+
+    # Content update: suggested_relations is computed.
+    content_update = _payload(
+        await server.call_tool(
+            "memory_update",
+            {
+                "memory_id": a["memory"]["id"],
+                "content": "ruff lints python projects — replaces flake8 and isort",
+            },
+        )
+    )
+    assert content_update["ok"]
+    assert "suggested_relations" in content_update
+    assert isinstance(content_update["suggested_relations"], list)
+
+
+@pytest.mark.asyncio
 async def test_recall_fresh_config_namespace_returns_empty(limited_server) -> None:
     # Recall before anything is stored: the config-resolved namespace doesn't
     # exist yet — return an empty ok result, and don't create the namespace.

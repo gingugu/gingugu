@@ -89,6 +89,13 @@ def _spread_activation(ctx: ServerContext, seed_ids: list[str]) -> int:
 _DEDUPE_MIN_SCORE = 0.5
 _DEDUPE_LIMIT = 3
 
+# Minimum fused-relevance score for a memory to be surfaced as a relation
+# candidate. Softer than ``_DEDUPE_MIN_SCORE`` because suggesting a *relation*
+# is a weaker claim than flagging a *duplicate* — moderate topical overlap is
+# enough to be worth a `memory_relate` nudge.
+_RELATION_MIN_SCORE = 0.3
+_RELATION_LIMIT = 3
+
 
 def _find_similar(
     ctx: ServerContext,
@@ -119,3 +126,57 @@ def _find_similar(
         logger.warning("dedupe hint search failed", exc_info=True)
         return []
     return [_memory_summary(m) for m in hits if (m.score or 0.0) >= _DEDUPE_MIN_SCORE]
+
+
+def _suggest_relations(
+    ctx: ServerContext,
+    *,
+    memory_id: str | None,
+    namespace_id: str,
+    title: str,
+    content: str,
+    exclude_ids: set[str] | None = None,
+) -> list[dict]:
+    """Return up to ``_RELATION_LIMIT`` existing memories in ``namespace_id``
+    that look like relation candidates for a (``title``, ``content``) payload.
+
+    Excludes ``memory_id`` itself, any ids in ``exclude_ids`` (typically the
+    already-surfaced ``similar_memories``), and any memory already linked to
+    ``memory_id`` via an existing relation (either direction). Keeps hits above
+    ``_RELATION_MIN_SCORE``. Best-effort: any failure is swallowed so the store
+    itself never breaks on a hint error.
+    """
+    query = f"{title} {content}".strip()
+    if not query:
+        return []
+    skip: set[str] = set(exclude_ids or set())
+    if memory_id:
+        skip.add(memory_id)
+        try:
+            for other_id in RelationManager(ctx.conn).related_ids(memory_id):
+                skip.add(other_id)
+        except Exception:
+            logger.warning("relation lookup failed in suggestion hint", exc_info=True)
+    try:
+        # Pull a few extra so post-filtering by skip-set still leaves a useful
+        # number of candidates.
+        hits = search_mod.search(
+            ctx.conn,
+            query=query,
+            namespace_id=namespace_id,
+            limit=_RELATION_LIMIT + len(skip),
+            embedder=ctx.store.embedder,
+        )
+    except Exception:
+        logger.warning("relation hint search failed", exc_info=True)
+        return []
+    out: list[dict] = []
+    for mem in hits:
+        if mem.id in skip:
+            continue
+        if (mem.score or 0.0) < _RELATION_MIN_SCORE:
+            continue
+        out.append(_memory_summary(mem))
+        if len(out) >= _RELATION_LIMIT:
+            break
+    return out
