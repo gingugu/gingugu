@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-06-24
+
 ### Added
 
 - **`memory_store` and `memory_update` now suggest relation candidates.** When
