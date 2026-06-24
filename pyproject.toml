@@ -1,6 +1,6 @@
 [project]
 name = "gingugu"
-version = "0.3.7"
+version = "0.3.8"
 description = "A local, persistent memory system for AI coding assistants — an MCP server with a real long-term brain."
 readme = "README.md"
 license = { file = "LICENSE" }
