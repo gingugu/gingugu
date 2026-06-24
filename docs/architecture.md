@@ -319,6 +319,20 @@ Store a new memory with full metadata.
 - `confidence` (optional) — defaults to `inferred`
 - `source` (optional) — where this knowledge came from
 - `metadata` (optional) — JSON string of additional data
+- `dedupe_check` (optional, default `true`) — also return `similar_memories`,
+  a non-blocking hint of up to 3 near-duplicates (score ≥ 0.5) in the same
+  namespace; disable for bulk imports
+- `relation_check` (optional, default `true`) — also return
+  `suggested_relations`, a non-blocking hint of up to 3 link candidates with
+  moderate topical overlap (score ≥ 0.3) that aren't already related; disable
+  for bulk imports
+
+**Hint bands.** `similar_memories` flags merge candidates (high overlap),
+`suggested_relations` flags link candidates (moderate overlap, with
+already-related and already-similar memories filtered out). The two lists are
+always disjoint — a high-overlap match goes to `similar_memories`, leaving
+`suggested_relations` for genuinely complementary memories worth wiring up via
+`memory_relate`.
 
 ### `memory_recall`
 Search and retrieve memories ranked by relevance × freshness.
@@ -380,6 +394,11 @@ Update an existing memory's content, confidence, or metadata.
 - `title` (optional) — new title
 - `confidence` (optional) — new confidence level
 - `metadata` (optional) — updated metadata JSON
+- `tags` (optional) — comma-separated; replaces the full tag set when provided
+- `relation_check` (optional, default `true`) — when `title` or `content` was
+  provided, also return `suggested_relations` (same semantics as
+  `memory_store`); tag-only or confidence-only updates skip the check because
+  the matching surface didn't change
 
 ### `memory_relate`
 Create a relationship between two memories.

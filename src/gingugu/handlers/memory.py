@@ -19,6 +19,7 @@ from .helpers import (
     _memory_summary,
     _split_csv,
     _spread_activation,
+    _suggest_relations,
 )
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ def register(mcp, ctx: ServerContext) -> None:
         source: str | None = None,
         metadata: str | None = None,
         dedupe_check: bool = True,
+        relation_check: bool = True,
     ) -> dict:
         """Store a new memory in the knowledge base. Use to capture anything worth
         remembering across sessions: decisions, bugs, patterns, architecture choices,
@@ -54,7 +56,13 @@ def register(mcp, ctx: ServerContext) -> None:
         ``similar_memories`` list of up to 3 existing memories in the same
         namespace whose content/title overlap strongly with this one — a
         non-blocking hint so the caller can choose to update/relate/consolidate
-        instead of accumulating near-duplicates. Disable for bulk imports."""
+        instead of accumulating near-duplicates. Disable for bulk imports.
+
+        When ``relation_check`` is True (default), the response also includes a
+        ``suggested_relations`` list of up to 3 memories with moderate topical
+        overlap that aren't already linked — a nudge to call ``memory_relate``
+        and grow the knowledge graph. Distinct from ``similar_memories``: those
+        are merge candidates, these are link candidates."""
         try:
             try:
                 mem_type = MemoryType(type)
@@ -87,11 +95,24 @@ def register(mcp, ctx: ServerContext) -> None:
                 metadata=metadata,
                 tags=_split_csv(tags),
             )
+            relations = (
+                _suggest_relations(
+                    ctx,
+                    memory_id=mem.id,
+                    namespace_id=ns.id,
+                    title=title,
+                    content=content,
+                    exclude_ids={s["id"] for s in similar},
+                )
+                if relation_check
+                else []
+            )
             return {
                 "ok": True,
                 "memory": _memory_summary(mem),
                 "namespace": ns_name,
                 "similar_memories": similar,
+                "suggested_relations": relations,
             }
         except Exception as exc:  # never crash the MCP loop
             logger.exception("memory_store failed")
@@ -228,6 +249,7 @@ def register(mcp, ctx: ServerContext) -> None:
         confidence: str | None = None,
         metadata: str | None = None,
         tags: str | None = None,
+        relation_check: bool = True,
     ) -> dict:
         """Update one or more fields of an existing memory. Use to correct outdated
         information, promote confidence after confirming an inference, or add/replace
@@ -236,7 +258,13 @@ def register(mcp, ctx: ServerContext) -> None:
 
         All fields are optional; only provided fields are changed. ``tags``
         (comma-separated) replaces the full tag set when provided — omit to leave tags
-        unchanged. Pass ``metadata=""`` to clear metadata; omit to leave it unchanged."""
+        unchanged. Pass ``metadata=""`` to clear metadata; omit to leave it unchanged.
+
+        When ``relation_check`` is True (default) and ``title`` or ``content`` was
+        provided, the response includes a ``suggested_relations`` list of up to 3
+        existing memories worth linking that aren't already related. Tag-only or
+        confidence-only updates skip the check since the matching surface didn't
+        change."""
         try:
             conf = None
             if confidence is not None:
@@ -256,7 +284,16 @@ def register(mcp, ctx: ServerContext) -> None:
             if tags is not None:
                 ctx.store.set_tags(memory_id, _split_csv(tags))
             mem.tags = ctx.store.get_tags(memory_id)
-            return {"ok": True, "memory": _memory_summary(mem)}
+            response: dict = {"ok": True, "memory": _memory_summary(mem)}
+            if relation_check and (title is not None or content is not None):
+                response["suggested_relations"] = _suggest_relations(
+                    ctx,
+                    memory_id=mem.id,
+                    namespace_id=mem.namespace_id,
+                    title=mem.title,
+                    content=mem.content,
+                )
+            return response
         except Exception as exc:
             logger.exception("memory_update failed")
             return _err(f"memory_update failed: {exc}")

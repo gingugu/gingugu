@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`memory_store` and `memory_update` now suggest relation candidates.** When
+  storing or updating a memory, the response includes a `suggested_relations`
+  list of up to 3 existing memories with moderate topical overlap that aren't
+  already linked — a non-blocking nudge to call `memory_relate` and grow the
+  knowledge graph. Distinct from the existing `similar_memories` hint:
+  `similar_memories` flags merge candidates (high overlap, score ≥ 0.5),
+  `suggested_relations` flags link candidates (moderate overlap, score ≥ 0.3,
+  with already-related and already-similar memories filtered out). New
+  `relation_check: bool = True` param on both tools; set `False` for bulk
+  imports. `memory_update` skips the check when only tags or confidence
+  changed (matching surface didn't change).
+
 ## [0.3.7] - 2026-06-16
 
 ### Fixed
