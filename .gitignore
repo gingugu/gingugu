@@ -71,6 +71,11 @@ ui/dist/
 *.swp
 *.swo
 
+# Claude Code runtime artifacts
+logs/
+.claude/data/
+.claude/hooks/**/__pycache__/
+
 # Env files
 .env
 .env.local
