@@ -1,0 +1,73 @@
+# Architecture
+
+## Overview
+
+Gingugu is a single-process **MCP server** that an AI client spawns over stdio.
+It owns one local SQLite database and exposes a set of memory tools. There is no
+network service, no auth layer, no remote storage — the entire system is the
+server process plus the DB file plus an optional local web UI.
+
+```
+AI client (Claude Code / Cursor / Windsurf / …)
+        │  MCP stdio (JSON-RPC)
+        ▼
+  gingugu server.py  ──►  handlers/*  ──►  storage / search / relations / context
+        │                                        │
+        ▼                                        ▼
+  config.py (DB path)                    SQLite (memories + FTS5 + relations)
+                                                 ▲
+                              ui/api.py ──────────┘  (read-mostly Memory Explorer)
+```
+
+## Layers
+
+1. **Transport** — `server.py` registers MCP tools and routes calls to handlers.
+   It is the crash boundary: no exception escapes to the client.
+2. **Handlers** (`handlers/`) — thin adapters that validate input, call the core
+   modules, and return structured dicts. Split by domain: `memory`, `search`,
+   `relations`, `admin`, `credentials`, plus `helpers`.
+3. **Core** — `storage`, `search`, `embeddings`, `context`, `relations`,
+   `consolidation`, `decay`, `stats`, `namespaces`, `portability`.
+4. **Persistence** — `database.py` owns the SQLite connection, schema,
+   migrations, WAL, and FTS5 triggers. `config.py` resolves the DB path.
+
+## Memory Model
+
+- **Two namespaces layers:** `crow` (global identity/cross-project) + one per
+  project. Every memory belongs to exactly one namespace.
+- **Typed memories:** `type` ∈ {fact, decision, pattern, bug, architecture,
+  preference, workflow, context}; `confidence` ∈ {verified, inferred, stale,
+  deprecated}.
+- **Graph:** directed typed relations (`supersedes`, `related_to`, `caused_by`,
+  `contradicts`, `parent_of`, `child_of`). Recall uses **spreading activation** —
+  surfacing a memory wakes its linked cluster.
+- **Never-forget:** `decay.py` tracks dormancy (untouched ≥ 90 days) as a
+  *resting signal* only. Nothing is auto-demoted or auto-deleted; only explicit
+  `memory_forget` removes a memory.
+
+## Retrieval
+
+- `memory_recall` blends **BM25** (FTS5 lexical) with **semantic** similarity
+  (embeddings), combined with recency, confidence, and access frequency.
+- `memory_context` is the session-priming entrypoint: top-N by relevance to a
+  task hint, plus spreading activation into related memories.
+- `memory_search` is the precision path: explicit filters (tags, type, date,
+  confidence) and sort order.
+
+## Key Decisions
+
+- **Local-first, single file.** No server to run, no cloud dependency; the DB is
+  portable and inspectable. Trade-off: no built-in multi-user sync (out of scope).
+- **Never-forget over decay.** Biological-style decay was removed because the
+  product promise is "your AI never forgets"; dormancy + spreading activation
+  preserves recall quality without deleting history.
+- **Hints, not gates.** `similar_memories` / `suggested_relations` nudge the
+  caller toward merges/edges but never block a write.
+- **Server resilience over strictness.** Handlers fail soft (structured errors)
+  so a bad call never takes down the client's memory layer.
+
+## Future Direction
+
+See `docs/future-architecture.md` — the long-term vision is epistemic governance
+(versioned claims backed by evidence) and an embedded cognitive runtime that
+wraps model invocation with automatic recall + capture. Roadmap-only, not current work.
