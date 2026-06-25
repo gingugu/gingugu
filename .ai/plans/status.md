@@ -18,9 +18,11 @@ _Last updated: 2026-06-25_
 
 ## In Progress
 
-- **Claude Code onboarding kit** — porting the `.claude/` kit + `.ai/` knowledge
-  base + `CLAUDE.md` / `AGENTS.md` from the devex-ai-gateway pattern (this work).
-  Branch `feature/claude-code-onboarding`.
+- **Claude Code onboarding kit** — PR #6 (`feature/claude-code-onboarding`).
+  CI was red on all 9 matrix jobs: `ruff check .` / `black --check .` graded the
+  ported `.claude/hooks/` kit against gingugu's style. Fixed by excluding
+  `.claude/` from both (it's portable agent tooling, not the package). Awaiting
+  re-run + merge.
 
 ## Blocked / Pending
 
