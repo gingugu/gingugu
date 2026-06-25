@@ -37,10 +37,15 @@ packages = ["src/gingugu"]
 [tool.black]
 line-length = 100
 target-version = ["py311"]
+# .claude/ holds the portable Claude Code hook kit (shared verbatim across repos);
+# it is agent tooling, not part of the gingugu package, so it is exempt from our style.
+extend-exclude = '''/\.claude/'''
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Exempt the vendored Claude Code hook kit (see [tool.black] note).
+extend-exclude = [".claude"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "UP", "B"]
