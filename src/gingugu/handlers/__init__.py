@@ -31,4 +31,7 @@ def register_all(mcp, ctx: ServerContext) -> None:
     search.register(mcp, ctx)
     relations.register(mcp, ctx)
     admin.register(mcp, ctx)
-    credentials.register(mcp, ctx)
+    # Credential vault is opt-out: a shared/central instance runs with
+    # MEMORY_CREDENTIALS_ENABLED=false so it never exposes secret tools.
+    if ctx.config.credentials_enabled:
+        credentials.register(mcp, ctx)
