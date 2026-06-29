@@ -34,6 +34,9 @@ _Last updated: 2026-06-29_
 
 ## Recently Completed
 
+- **2026-06-29** — Positive-path unit tests for `_suggest_relations`
+  (`tests/test_suggest_relations.py`): mocked search scores pin threshold,
+  self/exclude-id, already-related, and limit behavior.
 - **2026-06-29** — README "Memory Explorer UI" section clarified: explicit
   Terminal 1 / Terminal 2 labels + Node.js 18+ prerequisite.
 - **2026-06-26** — Claude Code onboarding kit merged (PR #6); history scrubbed
@@ -49,5 +52,4 @@ _Last updated: 2026-06-29_
 
 - Refactor `handlers/memory.py` under 300 lines (own PR).
 - README "Memory Explorer UI" section: clearer Terminal 1 / Terminal 2 labels + Node.js prereq.
-- Positive-path unit test for `_suggest_relations` with mocked search scores.
 - Phase 6 backlog (hybrid RRF retrieval, structured provenance) — see `docs/roadmap.md`.
