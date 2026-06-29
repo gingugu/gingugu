@@ -37,6 +37,8 @@ Gingugu instance serves Windsurf and Claude Code against one DB.
 | `credential_*` | OS-keychain secret vault | ✅ Shipped |
 | `suggested_relations` hint | Nudge edge creation at store time | ✅ Shipped (v0.3.8) |
 | Memory Explorer UI | Browse graph + dashboard | ✅ Shipped |
+| `gingugu serve` (transport) | Run over streamable HTTP + Bearer auth (hosted/central) | ✅ Shipped |
+| `MEMORY_CREDENTIALS_ENABLED` flag | Run an instance without the credential vault | ✅ Shipped |
 
 ## Principles
 
@@ -49,7 +51,10 @@ Gingugu instance serves Windsurf and Claude Code against one DB.
 
 ## Out of Scope (today)
 
-- Multi-user / team sync, hosted backend, cloud storage.
+- Multi-user / team sync and per-user RBAC. (A single hosted instance is now
+  possible via `gingugu serve` behind one shared Bearer token, but multi-tenant
+  auth and selective local→central knowledge promotion are roadmap.)
+- Cloud storage / managed service.
 - Auto-truth / unattended belief governance (see `docs/future-architecture.md` — roadmap).
 
 ## Roadmap

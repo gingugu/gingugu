@@ -90,6 +90,14 @@ class Config:
     embeddings_ollama_model: str = "nomic-embed-text"
     weights: dict[str, float] = field(default_factory=lambda: dict(_DEFAULT_WEIGHTS))
     log_level: str = "INFO"
+    # Tool-surface + transport. credentials_enabled gates the credential_* tools
+    # so a shared/central instance can run without exposing a secret vault
+    # (also sidesteps the headless-keyring problem). serve_* configure the
+    # `gingugu serve` streamable-HTTP transport.
+    credentials_enabled: bool = True
+    serve_host: str = "127.0.0.1"
+    serve_port: int = 8765
+    serve_token: str | None = None
 
     @property
     def resolved_namespace(self) -> str | None:
@@ -152,6 +160,10 @@ def load_config() -> Config:
         ),
         weights=_load_weights(),
         log_level=os.environ.get("MEMORY_LOG_LEVEL", default_level).upper(),
+        credentials_enabled=_env_bool("MEMORY_CREDENTIALS_ENABLED", default=True),
+        serve_host=os.environ.get("MEMORY_SERVE_HOST") or "127.0.0.1",
+        serve_port=_env_int("MEMORY_SERVE_PORT", 8765),
+        serve_token=os.environ.get("MEMORY_SERVE_TOKEN") or None,
     )
 
 

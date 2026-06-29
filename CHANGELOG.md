@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`gingugu serve` — run the memory server over the network.** A new CLI
+  subcommand exposes the same MCP server over **streamable HTTP** (the current
+  MCP transport, which supersedes the legacy HTTP+SSE) so a hosted/central
+  instance can be reached remotely; `gingugu` with no arguments still runs over
+  stdio. Access is gated by a **Bearer token** (`MEMORY_SERVE_TOKEN`): if unset,
+  a token is read from `<db-dir>/serve_token`, or generated, saved `0600`, and
+  printed — the server never starts open, and the token is stable across
+  restarts without any external secret store. A `/healthz` endpoint is exempt
+  for load-balancer probes. New env vars: `MEMORY_SERVE_HOST` (default
+  `127.0.0.1`), `MEMORY_SERVE_PORT` (default `8765`), `MEMORY_SERVE_TOKEN`.
+- **`MEMORY_CREDENTIALS_ENABLED` flag (default `true`).** Set `false` to run an
+  instance without the four `credential_*` tools — for a shared/central server
+  that should not expose a secret vault (also sidesteps the headless-keyring
+  problem on serverless/Pi/Jetson hosts).
+
 ## [0.3.8] - 2026-06-24
 
 ### Added

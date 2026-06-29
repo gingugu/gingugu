@@ -18,7 +18,11 @@ _Last updated: 2026-06-29_
 
 ## In Progress
 
-- _None tracked._
+- **Networked brain (Phase 5 reframe → "The Crow's Nest").** Building toward a
+  hosted/central gingugu instance fed by repo ingestion + selective local→central
+  knowledge promotion. Transport keystone (`gingugu serve`) is done; the
+  promotion bridge (external agent, with a provenance stamp) is the next build.
+  See `docs/roadmap.md` and the architecture memory in the `gingugu` namespace.
 
 ## Blocked / Pending
 
@@ -30,6 +34,15 @@ _Last updated: 2026-06-29_
 
 ## Recently Completed
 
+- **2026-06-29** — `gingugu serve` streamable-HTTP transport with Bearer-token
+  auth and a `/healthz` probe; self-persisting token at `<db-dir>/serve_token`;
+  `MEMORY_CREDENTIALS_ENABLED` flag to run an instance without the credential
+  vault. New `serve.py` module; 9 tests (`tests/test_serve.py`), 185 total.
+  Verified live (auth gating + full MCP handshake + client store/recall against
+  a central instance over the wire). Branch `feature/serve-transport`.
+- **2026-06-29** — Reconciled `docs/roadmap.md` with shipped reality (Phase 4 →
+  Phase 5 complete / Phase 6 in flight; 112 → 176 test count; embeddings + RRF
+  marked shipped).
 - **2026-06-29** — Positive-path unit tests for `_suggest_relations`
   (`tests/test_suggest_relations.py`): mocked search scores pin threshold,
   self/exclude-id, already-related, and limit behavior.
@@ -50,4 +63,10 @@ _Last updated: 2026-06-29_
 
 ## Next Up
 
+- **Promotion bridge** — external agent that reads promotable memories from a
+  local brain (verified bug/pattern/decision/architecture/fact, minus personal
+  or episodic noise) and writes them to central with a provenance stamp.
+- Repo-ingestion agent to cold-seed central with org breadth.
+- Data-ownership decision before hosting work-repo knowledge (personal vs
+  company AWS, or scrubbed/synthetic seed).
 - Phase 6 backlog (hybrid RRF retrieval, structured provenance) — see `docs/roadmap.md`.
