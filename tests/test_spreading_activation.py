@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 from gingugu.config import Config
 from gingugu.database import Database
 from gingugu.handlers import ServerContext
-from gingugu.handlers.memory import _spread_activation
+from gingugu.handlers.helpers import _spread_activation
 from gingugu.models import MemoryType, RelationType
 from gingugu.namespaces import NamespaceManager
 from gingugu.relations import RelationManager
