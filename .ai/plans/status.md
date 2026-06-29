@@ -18,11 +18,7 @@ _Last updated: 2026-06-29_
 
 ## In Progress
 
-- **`handlers/memory.py` split** — refactor branch `refactor/split-memory-handler`:
-  read tools (`memory_recall`, `memory_context`) moved to `handlers/recall.py`;
-  `memory.py` keeps the write side (store/update/forget). Shared `_err` /
-  `_memory_summary` / `_spread_activation` imports repointed from `.memory` to
-  `.helpers`. Both modules now under 300 lines.
+- _None tracked._
 
 ## Blocked / Pending
 
@@ -39,6 +35,10 @@ _Last updated: 2026-06-29_
   self/exclude-id, already-related, and limit behavior.
 - **2026-06-29** — README "Memory Explorer UI" section clarified: explicit
   Terminal 1 / Terminal 2 labels + Node.js 18+ prerequisite.
+- **2026-06-29** — `handlers/memory.py` split (PR #7): read tools
+  (`memory_recall`, `memory_context`) moved to new `handlers/recall.py`;
+  `memory.py` keeps the write side. `memory.py` 327→203, `recall.py` 152.
+  Shared helper imports repointed from `.memory` to `.helpers`.
 - **2026-06-26** — Claude Code onboarding kit merged (PR #6); history scrubbed
   of work-repo references + Claude co-author lines (gingugu is public/personal).
 - **2026-06-25** — Claude Code config + AI knowledge base added (this kit):
@@ -50,6 +50,4 @@ _Last updated: 2026-06-29_
 
 ## Next Up
 
-- Refactor `handlers/memory.py` under 300 lines (own PR).
-- README "Memory Explorer UI" section: clearer Terminal 1 / Terminal 2 labels + Node.js prereq.
 - Phase 6 backlog (hybrid RRF retrieval, structured provenance) — see `docs/roadmap.md`.
