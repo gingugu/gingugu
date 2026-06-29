@@ -10,7 +10,7 @@ import logging
 
 from .. import portability
 from . import ServerContext
-from .memory import _err
+from .helpers import _err
 
 logger = logging.getLogger(__name__)
 
