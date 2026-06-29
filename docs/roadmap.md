@@ -4,14 +4,17 @@
 
 ---
 
-## Current Status: **Phase 4 — Integration Complete + Dogfooding Live** ✅
+## Current Status: **Phase 5 Complete — Phase 6 (Cognitive Runtime) In Flight** ⛵
 
-> Sails are set and we've left port: namespace CRUD, JSON export/import, a
-> config template, a session-start workflow, debug logging, and a full
-> end-to-end test — all green (**112 passing**). **16 MCP tools** live. First
-> real usage caught and fixed the AND/OR recall bug; a hardening round
-> (concurrency, adversarial input, upgrade migration) followed, then a
-> 2-round pre-launch code review. The repo **dogfoods itself**.
+> Shipped and public: **v0.3.8 on PyPI**, **16 MCP tools** live, **176 tests
+> passing** (ruff + black clean), CI green on ubuntu/macos/windows × 3.11–3.13.
+> Phases 1–4 (storage, intelligence, relations, integration) are done and
+> battle-tested. Phase 5 landed the big upgrades: local semantic embeddings
+> (fastembed ONNX + Ollama backend), RRF hybrid ranking, the never-forget
+> dormancy + spreading-activation reframe, and the full Memory Explorer UI
+> (Trust Map, timeline, GitHub Pages deploy). The repo **dogfoods itself**.
+> Now charting **Phase 6** — the reframe from "memory database" to "persistent
+> cognitive runtime for agents."
 
 ---
 
@@ -116,11 +119,11 @@ Future upgrades once the core is battle-tested.
 
 | Task | Status | Notes |
 |------|--------|-------|
-| Local embeddings (sentence-transformers) | ⬜ | Semantic search upgrade |
+| Local embeddings | ✅ | v0.3.0: fastembed ONNX (`BAAI/bge-small-en-v1.5`), lazy-load, `NullEmbeddingProvider` fallback; v0.3.6 added an Ollama backend (`nomic-embed-text`) |
 | LLM-powered consolidation | ⬜ | AI summarizes memory clusters |
 | Memory import/export advanced (selective, encrypted) | ⬜ | Builds on Phase 4 export |
 | Auto-generate rules files from patterns | ⬜ | Learned preferences → rules (`.windsurfrules`, `.cursorrules`, `AGENTS.md`) |
-| Ranking tuning: BM25 relevance weighting | ⬜ | `normalize_bm25` compresses relevance into a narrow band, so freshness/confidence can outrank a more on-topic memory; surfaced during first usage |
+| Ranking tuning: BM25 relevance weighting | ✅ | v0.3.0: the `normalize_bm25` compression issue (freshness/confidence outranking a more on-topic memory) fixed via RRF (Reciprocal Rank Fusion) hybrid scoring |
 | Web dashboard for browsing memories | ✅ | `ui/`: React knowledge graph + dashboard, Trust Map (confidence-led, dormancy badge), full timeline view, hover highlighting, search/filter, layout controls, auto-refresh, GitHub Pages workflow |
 | Tag-based spreading activation | ⬜ | Extend reactivation beyond relation edges to shared-tag clusters |
 | Backup/sync strategy | ⬜ | git-backed or rsync |
@@ -199,4 +202,4 @@ for agents." Crystallized after an external architectural review on
 
 ---
 
-*Next action: launch (repo public + posts), then Phase 5 (Advanced) — local embeddings for semantic search; BM25 ranking tuning; UI polish. Gingugu is self-hosting.*
+*Next action: Phase 6 (Cognitive Runtime). Highest-leverage thread that needs no architectural shift — true hybrid retrieval (RRF over independent BM25 + vector candidate pools), backed by a retrieval evaluation corpus (Recall@K / MRR) so ranking changes are measured, not eyeballed. Gingugu is public, self-hosting, and shipping.*
