@@ -34,6 +34,8 @@ _Last updated: 2026-06-29_
 
 ## Recently Completed
 
+- **2026-06-29** — README "Memory Explorer UI" section clarified: explicit
+  Terminal 1 / Terminal 2 labels + Node.js 18+ prerequisite.
 - **2026-06-26** — Claude Code onboarding kit merged (PR #6); history scrubbed
   of work-repo references + Claude co-author lines (gingugu is public/personal).
 - **2026-06-25** — Claude Code config + AI knowledge base added (this kit):
@@ -45,6 +47,7 @@ _Last updated: 2026-06-29_
 
 ## Next Up
 
+- Refactor `handlers/memory.py` under 300 lines (own PR).
 - README "Memory Explorer UI" section: clearer Terminal 1 / Terminal 2 labels + Node.js prereq.
 - Positive-path unit test for `_suggest_relations` with mocked search scores.
 - Phase 6 backlog (hybrid RRF retrieval, structured provenance) — see `docs/roadmap.md`.
