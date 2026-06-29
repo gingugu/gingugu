@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 
 from .. import search as search_mod
@@ -14,6 +15,19 @@ logger = logging.getLogger(__name__)
 
 def _err(message: str) -> dict:
     return {"ok": False, "error": message}
+
+
+def _coerce_metadata(metadata: str | dict | list | None) -> str | None:
+    """Accept metadata as a JSON string *or* an already-parsed object.
+
+    Over HTTP transports the MCP layer hands a JSON-object argument to the
+    server as a ``dict``, so a ``str``-only param would reject it. Serialize
+    dict/list back to a JSON string for the storage layer (which validates
+    and stores JSON text); pass strings/None through unchanged.
+    """
+    if isinstance(metadata, (dict, list)):
+        return json.dumps(metadata)
+    return metadata
 
 
 def _split_csv(value: str | None) -> list[str]:
