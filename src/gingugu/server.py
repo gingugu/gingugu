@@ -64,7 +64,18 @@ def build_server() -> FastMCP:
 
 
 def main() -> None:
-    """Console-script entry point: run the server over stdio."""
+    """Console-script entry point.
+
+    ``gingugu``        → run over stdio (default; local MCP client transport).
+    ``gingugu serve``  → run over streamable HTTP for a remote/central brain.
+    """
+    import sys
+
+    if sys.argv[1:2] == ["serve"]:
+        from .serve import serve
+
+        serve()
+        return
     build_server().run()
 
 
