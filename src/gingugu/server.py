@@ -66,8 +66,9 @@ def build_server() -> FastMCP:
 def main() -> None:
     """Console-script entry point.
 
-    ``gingugu``        → run over stdio (default; local MCP client transport).
-    ``gingugu serve``  → run over streamable HTTP for a remote/central brain.
+    ``gingugu``         → run over stdio (default; local MCP client transport).
+    ``gingugu serve``   → run over streamable HTTP for a remote/central brain.
+    ``gingugu promote`` → promote local gold memories up to a central brain.
     """
     import sys
 
@@ -75,6 +76,11 @@ def main() -> None:
         from .serve import serve
 
         serve()
+        return
+    if sys.argv[1:2] == ["promote"]:
+        from .promote import main as promote_main
+
+        promote_main(sys.argv[2:])
         return
     build_server().run()
 
