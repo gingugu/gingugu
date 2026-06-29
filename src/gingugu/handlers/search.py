@@ -8,7 +8,7 @@ from .. import search as search_mod
 from .. import stats as stats_mod
 from ..models import Confidence, MemoryType
 from . import ServerContext
-from .memory import _err, _memory_summary
+from .helpers import _err, _memory_summary
 
 logger = logging.getLogger(__name__)
 
