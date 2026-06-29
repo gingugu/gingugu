@@ -39,6 +39,7 @@ Gingugu instance serves Windsurf and Claude Code against one DB.
 | Memory Explorer UI | Browse graph + dashboard | ✅ Shipped |
 | `gingugu serve` (transport) | Run over streamable HTTP + Bearer auth (hosted/central) | ✅ Shipped |
 | `MEMORY_CREDENTIALS_ENABLED` flag | Run an instance without the credential vault | ✅ Shipped |
+| `gingugu promote` (client) | Promote local gold → central brain (filter + provenance, idempotent) | ✅ Shipped (Stage 1) |
 
 ## Principles
 
