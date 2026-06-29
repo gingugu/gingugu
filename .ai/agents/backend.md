@@ -16,8 +16,9 @@ The Python MCP server and its core: `server.py`, `handlers/`, `storage.py`,
   + `CHANGELOG.md`, and add/adjust integration tests.
 - **Storage discipline** per `.ai/standards/02-database.md`: WAL, `user_version`
   migrations (additive), FTS5 triggers in lockstep, never-forget.
-- **300-line limit.** `handlers/memory.py` is currently over — split it before
-  growing it further.
+- **300-line limit.** Split modules before they cross it — `handlers/` is
+  already domain-split (write `memory.py`, read `recall.py`, `search.py`,
+  `relations.py`, `admin.py`, `credentials.py`, shared `helpers.py`).
 - **Async.** Handlers are async; test with `pytest-asyncio`.
 - Verify against the MCP spec, SQLite FTS5 docs, and the `mcp` SDK before
   changing transport or schema behavior.
