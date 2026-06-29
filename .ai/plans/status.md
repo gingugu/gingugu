@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-06-25_
+_Last updated: 2026-06-29_
 
 ## Shipped / Working
 
@@ -35,6 +35,8 @@ _Last updated: 2026-06-25_
 
 ## Recently Completed
 
+- **2026-06-29** — README "Memory Explorer UI" section clarified: explicit
+  Terminal 1 / Terminal 2 labels + Node.js 18+ prerequisite.
 - **2026-06-25** — Claude Code config + AI knowledge base added (this kit):
   generic `.claude/hooks/`, `settings.json`, `/creating-pr` (GitHub) +
   `/sink-the-ship` commands, `CLAUDE.md`, `AGENTS.md`, populated `.ai/`, and
@@ -45,6 +47,5 @@ _Last updated: 2026-06-25_
 ## Next Up
 
 - Refactor `handlers/memory.py` under 300 lines (own PR).
-- README "Memory Explorer UI" section: clearer Terminal 1 / Terminal 2 labels + Node.js prereq.
 - Positive-path unit test for `_suggest_relations` with mocked search scores.
 - Phase 6 backlog (hybrid RRF retrieval, structured provenance) — see `docs/roadmap.md`.
