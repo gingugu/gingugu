@@ -6,9 +6,10 @@
 
 ## What This Repo Does
 
-- Exposes a **Model Context Protocol (MCP)** server (stdio transport) that any
-  MCP client (Claude Code, Claude Desktop, Cursor, Windsurf, Cline, …) can use
-  as long-term memory.
+- Exposes a **Model Context Protocol (MCP)** server — **stdio** by default, or
+  **streamable HTTP** via `gingugu serve` (Bearer-token auth) for a hosted/central
+  instance — that any MCP client (Claude Code, Claude Desktop, Cursor, Windsurf,
+  Cline, …) can use as long-term memory.
 - Stores memories in a single local **SQLite** database (FTS5 full-text +
   semantic embeddings) at the platform data dir — never inside the repo.
 - Organizes memory in **two layers**: a global `crow` namespace (identity,
@@ -26,7 +27,8 @@
 ## Tech Stack
 
 - **Python** `>=3.11`; CI matrix ubuntu/macos/windows × 3.11–3.13
-- **MCP** Python SDK (`mcp>=1.25,<2`), stdio transport
+- **MCP** Python SDK (`mcp>=1.25,<2`); **stdio** (default) + **streamable HTTP**
+  (`gingugu serve`, via `starlette` + `uvicorn`)
 - **SQLite + FTS5** (WAL mode); semantic embeddings for hybrid retrieval
 - **platformdirs** for the cross-platform DB path
 - **uv**-managed; `ruff` + `black`; `pytest` + `pytest-asyncio`
@@ -39,8 +41,9 @@
 
 | Module | Responsibility |
 |---|---|
-| `server.py` | MCP server entrypoint; tool registration; must never crash |
-| `config.py` | Config + cross-platform DB path (platformdirs) |
+| `server.py` | MCP server entrypoint; `gingugu` (stdio) / `gingugu serve` dispatch; tool registration; must never crash |
+| `serve.py` | `gingugu serve`: streamable-HTTP transport + Bearer-token auth + `/healthz` |
+| `config.py` | Config + cross-platform DB path (platformdirs); transport + credentials-flag settings |
 | `database.py` | Connection, schema, WAL, migrations (`PRAGMA user_version`), FTS5 triggers |
 | `models.py` | Memory / namespace / relation data models |
 | `storage.py` | Memory CRUD (store, update, forget) |
@@ -66,6 +69,8 @@
 - **Lifecycle:** `memory_consolidate`, `memory_export`, `memory_import`,
   `memory_namespaces`
 - **Credentials:** `credential_list`, `credential_get`, `credential_store`, `credential_delete`
+  — gated by `MEMORY_CREDENTIALS_ENABLED` (default true); a shared/central
+  instance runs with it `false` to omit the vault.
 
 `memory_store` / `memory_update` return non-blocking `similar_memories` (merge
 candidates, score ≥ 0.5) and `suggested_relations` (link candidates, score ≥ 0.3) hints.

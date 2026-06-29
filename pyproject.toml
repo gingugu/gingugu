@@ -14,6 +14,10 @@ dependencies = [
     "keyring>=24.0,<26",
     "platformdirs>=4.0,<5",
     "fastembed>=0.4,<1",
+    # `gingugu serve` (streamable-HTTP transport). Shipped transitively via mcp
+    # today, but serve.py imports them directly, so declare them explicitly.
+    "starlette>=0.37",
+    "uvicorn>=0.30",
 ]
 
 [project.scripts]

@@ -2,10 +2,11 @@
 
 ## Overview
 
-Gingugu is a single-process **MCP server** that an AI client spawns over stdio.
-It owns one local SQLite database and exposes a set of memory tools. There is no
-network service, no auth layer, no remote storage — the entire system is the
-server process plus the DB file plus an optional local web UI.
+Gingugu is a single-process **MCP server**. By default an AI client spawns it
+over **stdio**; it can also run over **streamable HTTP** (`gingugu serve`, gated
+by a Bearer token) so a hosted/central instance is reachable remotely. It owns
+one local SQLite database and exposes a set of memory tools — the entire system
+is the server process plus the DB file plus an optional local web UI.
 
 ```
 AI client (Claude Code / Cursor / Windsurf / …)
@@ -22,7 +23,12 @@ AI client (Claude Code / Cursor / Windsurf / …)
 ## Layers
 
 1. **Transport** — `server.py` registers MCP tools and routes calls to handlers.
-   It is the crash boundary: no exception escapes to the client.
+   It is the crash boundary: no exception escapes to the client. Two transports
+   share this path: **stdio** (default) and **streamable HTTP** via `serve.py`
+   (`gingugu serve`), which wraps the same server in a Starlette app with
+   Bearer-token auth middleware and a `/healthz` probe. The `credential_*` tools
+   are gated by `MEMORY_CREDENTIALS_ENABLED` so a shared instance can omit the
+   secret vault.
 2. **Handlers** (`handlers/`) — thin adapters that validate input, call the core
    modules, and return structured dicts. Split by domain: `memory`, `search`,
    `relations`, `admin`, `credentials`, plus `helpers`.
@@ -58,6 +64,10 @@ AI client (Claude Code / Cursor / Windsurf / …)
 
 - **Local-first, single file.** No server to run, no cloud dependency; the DB is
   portable and inspectable. Trade-off: no built-in multi-user sync (out of scope).
+- **Optional network transport, still single-owner.** `gingugu serve` exposes
+  the brain over HTTP behind one shared Bearer token for a hosted/central
+  instance, but it stays a single SQLite file with no per-user RBAC —
+  multi-tenant auth remains roadmap (see `docs/future-architecture.md`).
 - **Never-forget over decay.** Biological-style decay was removed because the
   product promise is "your AI never forgets"; dormancy + spreading activation
   preserves recall quality without deleting history.

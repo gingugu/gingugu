@@ -263,6 +263,31 @@ uv run gingugu  # or pip install -e .
 > Windsurf — this repo's own memories live in a Gingugu database. Early and
 > seeking broader real-world validation.
 
+### Run as a remote server (optional)
+
+By default `gingugu` runs over **stdio** (the client spawns it). To reach one
+shared instance over the network instead — a hosted/central brain — run:
+
+```bash
+gingugu serve   # streamable HTTP on http://127.0.0.1:8765/mcp
+```
+
+Every request needs a Bearer token. Set `MEMORY_SERVE_TOKEN` to pin one, or let
+the server generate and persist it to `<db-dir>/serve_token` (printed on first
+start, reused after). Set `MEMORY_SERVE_HOST=0.0.0.0` to accept remote
+connections, and put it behind HTTPS in production — a Bearer token over plain
+HTTP is sniffable. Point a client at it with:
+
+```json
+{ "mcpServers": { "gingugu": {
+  "url": "http://<host>:8765/mcp",
+  "headers": { "Authorization": "Bearer <token>" }
+} } }
+```
+
+This is a single shared secret with no per-user RBAC — right-sized for a trusted
+internal endpoint, not a multi-tenant service.
+
 ### Configure Your MCP Client
 
 Gingugu speaks standard [MCP](https://modelcontextprotocol.io) over stdio —
@@ -488,6 +513,10 @@ Environment variables (all optional):
 | `MEMORY_W_FRESHNESS` | `0.10` | Composite-score weight for freshness (a soft recency tiebreaker) |
 | `MEMORY_W_ACCESS` | `0.10` | Composite-score weight for access frequency |
 | `MEMORY_W_CONFIDENCE` | `0.35` | Composite-score weight for confidence (trust — the dominant standalone signal) |
+| `MEMORY_CREDENTIALS_ENABLED` | `true` | Expose the `credential_*` vault tools. Set `false` to run an instance without a secret vault (e.g. a shared/central server) |
+| `MEMORY_SERVE_HOST` | `127.0.0.1` | Bind host for `gingugu serve` (set `0.0.0.0` to accept remote connections) |
+| `MEMORY_SERVE_PORT` | `8765` | Bind port for `gingugu serve` |
+| `MEMORY_SERVE_TOKEN` | *(unset)* | Bearer token required by `gingugu serve`. If unset, a token is read from `<db-dir>/serve_token`, or generated, saved `0600`, and printed |
 | `MEMORY_LOG_LEVEL` | `INFO` | Logging verbosity (logs go to **stderr** — stdout is the MCP transport) |
 | `MEMORY_DEBUG` | `false` | Convenience switch for `DEBUG` logging (`MEMORY_LOG_LEVEL` wins if also set) |
 
