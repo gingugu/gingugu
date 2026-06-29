@@ -8,7 +8,7 @@ from .. import consolidation
 from ..models import RelationType
 from ..relations import RelationManager
 from . import ServerContext
-from .memory import _err
+from .helpers import _err
 
 logger = logging.getLogger(__name__)
 

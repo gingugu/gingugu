@@ -54,6 +54,6 @@ Gingugu instance serves Windsurf and Claude Code against one DB.
 
 ## Roadmap
 
-Tracked in `docs/roadmap.md`. Near-term: `handlers/memory.py` refactor, UI doc
-polish, positive-path relation tests. Longer-term (Phase 6): hybrid RRF
+Tracked in `docs/roadmap.md`. Near-term: UI doc polish, positive-path relation
+tests. Longer-term (Phase 6): hybrid RRF
 retrieval, structured provenance, epistemic governance, embedded cognitive runtime.
