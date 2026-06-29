@@ -25,6 +25,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instance without the four `credential_*` tools — for a shared/central server
   that should not expose a secret vault (also sidesteps the headless-keyring
   problem on serverless/Pi/Jetson hosts).
+- **`gingugu promote` — promote local "gold" up to a central brain.** A new CLI
+  (an MCP *client*; the server stays a pure store) reads a source instance,
+  keeps only durable org-knowledge, stamps provenance, and stores it into a
+  central instance — idempotently (re-runs skip already-promoted memories). The
+  filter is exclusion-based, not type-gated: it keeps `verified` memories minus
+  episodic/personal tags, and **refuses to promote any content that looks like a
+  live secret** so a shared brain never becomes a credential leak. Tokens come
+  from `GINGUGU_SOURCE_TOKEN` / `GINGUGU_TARGET_TOKEN`; `--dry-run` reports what
+  would move without writing. Read-only on the source.
+
+### Fixed
+
+- **`metadata` now accepts a JSON object, not only a JSON string, on
+  `memory_store` / `memory_update`.** Over HTTP transports the MCP layer
+  delivers a JSON-object argument as a dict, so the `str`-only parameter
+  rejected it — structured `metadata` was unusable for any remote client. The
+  handlers now coerce a dict/list back to JSON text for storage.
 
 ## [0.3.8] - 2026-06-24
 

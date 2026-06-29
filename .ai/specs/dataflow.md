@@ -76,6 +76,23 @@ credential_store / credential_get / credential_list / credential_delete
   → only non-secret metadata is listed; secret values never touch the DB, files, or logs
 ```
 
+## Promotion (local → central)
+
+```
+gingugu promote (promote.py — an MCP client, not the server)
+  → memory_export(source_ns) from the LOCAL brain (read-only)
+  → filter: keep verified, minus episodic/personal tags, minus secret-content
+  → memory_export(target_ns) from CENTRAL → collect already-promoted source ids
+  → memory_store each fresh one into CENTRAL with a provenance stamp
+     (metadata.promoted_from{instance,namespace,id,contributor,promoted_at}
+      + `promoted` tag + source="promotion:<ns>")
+  → idempotent: re-runs skip ids already present
+```
+
+Stage 1 = insert + skip-already-promoted. Stage 2 (consolidate near-dupes into
+one canonical memory with `contributors[]`) and Stage 3 (conflict → `contradicts`
+edges via an LLM judge) layer on later.
+
 ## Release
 
 ```

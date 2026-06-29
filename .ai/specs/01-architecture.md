@@ -68,6 +68,11 @@ AI client (Claude Code / Cursor / Windsurf / …)
   the brain over HTTP behind one shared Bearer token for a hosted/central
   instance, but it stays a single SQLite file with no per-user RBAC —
   multi-tenant auth remains roadmap (see `docs/future-architecture.md`).
+- **Promotion is a client, not server logic.** `gingugu promote` (`promote.py`)
+  speaks the public MCP tool surface to two instances — read-only `memory_export`
+  from a local brain, filtered `memory_store` into a central brain with a
+  provenance stamp. The server gains no promotion-specific code; the selective
+  local→central absorption lives entirely in the client. Keeps the store pure.
 - **Never-forget over decay.** Biological-style decay was removed because the
   product promise is "your AI never forgets"; dormancy + spreading activation
   preserves recall quality without deleting history.
