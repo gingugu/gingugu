@@ -18,11 +18,11 @@ _Last updated: 2026-06-29_
 
 ## In Progress
 
-- **Claude Code onboarding kit** — PR #6 (`feature/claude-code-onboarding`).
-  CI was red on all 9 matrix jobs: `ruff check .` / `black --check .` graded the
-  ported `.claude/hooks/` kit against gingugu's style. Fixed by excluding
-  `.claude/` from both (it's portable agent tooling, not the package). Awaiting
-  re-run + merge.
+- **`handlers/memory.py` split** — refactor branch `refactor/split-memory-handler`:
+  read tools (`memory_recall`, `memory_context`) moved to `handlers/recall.py`;
+  `memory.py` keeps the write side (store/update/forget). Shared `_err` /
+  `_memory_summary` / `_spread_activation` imports repointed from `.memory` to
+  `.helpers`. Both modules now under 300 lines.
 
 ## Blocked / Pending
 
@@ -30,13 +30,14 @@ _Last updated: 2026-06-29_
 
 ## Known Issues
 
-- **`handlers/memory.py` exceeds the 300-line limit** — needs a refactor in its
-  own PR (suggested split: per-tool modules, or `read.py` + `write.py`).
+- _None tracked._
 
 ## Recently Completed
 
 - **2026-06-29** — README "Memory Explorer UI" section clarified: explicit
   Terminal 1 / Terminal 2 labels + Node.js 18+ prerequisite.
+- **2026-06-26** — Claude Code onboarding kit merged (PR #6); history scrubbed
+  of work-repo references + Claude co-author lines (gingugu is public/personal).
 - **2026-06-25** — Claude Code config + AI knowledge base added (this kit):
   generic `.claude/hooks/`, `settings.json`, `/creating-pr` (GitHub) +
   `/sink-the-ship` commands, `CLAUDE.md`, `AGENTS.md`, populated `.ai/`, and
@@ -47,5 +48,6 @@ _Last updated: 2026-06-29_
 ## Next Up
 
 - Refactor `handlers/memory.py` under 300 lines (own PR).
+- README "Memory Explorer UI" section: clearer Terminal 1 / Terminal 2 labels + Node.js prereq.
 - Positive-path unit test for `_suggest_relations` with mocked search scores.
 - Phase 6 backlog (hybrid RRF retrieval, structured provenance) — see `docs/roadmap.md`.
