@@ -54,7 +54,7 @@
 | `namespaces.py` | Namespace CRUD |
 | `credentials.py` | OS-keychain credential vault |
 | `portability.py` | Export / import a namespace |
-| `handlers/` | MCP tool handlers: `memory.py`, `search.py`, `relations.py`, `admin.py`, `credentials.py`, `helpers.py` |
+| `handlers/` | MCP tool handlers: `memory.py` (store/update/forget), `recall.py` (recall/context), `search.py`, `relations.py`, `admin.py`, `credentials.py`, `helpers.py` |
 
 ---
 

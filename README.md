@@ -443,13 +443,19 @@ Use `confidence="inferred"` for conclusions you drew.
 ## Memory Explorer UI
 
 A React-based visualization dashboard lives in `ui/` for exploring your memory
-data interactively.
+data interactively. It runs as two processes — a Python API server and the Vite
+dev server — so use two terminals.
+
+**Prerequisite:** Node.js 18+ and npm (for the frontend). The API server uses
+the same Python environment as gingugu.
 
 ```bash
-# Start the API server (reads live from your DB)
+# Terminal 1 - API server (reads live from your DB)
 uv run python ui/api.py
+```
 
-# In another terminal, start the UI
+```bash
+# Terminal 2 - frontend dev server
 cd ui && npm install && npm run dev
 ```
 
