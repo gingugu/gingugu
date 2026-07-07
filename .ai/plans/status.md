@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-06-29_
+_Last updated: 2026-07-07_
 
 ## Shipped / Working
 
@@ -18,15 +18,22 @@ _Last updated: 2026-06-29_
 
 ## In Progress
 
-- **Networked brain (Phase 5 reframe → "The Crow's Nest").** Building toward a
-  hosted/central gingugu instance fed by repo ingestion + selective local→central
-  knowledge promotion. Done: transport keystone (`gingugu serve`) and the
-  promotion bridge **Stage 1** (`gingugu promote` — filter + provenance +
-  idempotent store). Next: **Stage 2** consolidation (merge near-dupes into one
-  canonical memory with a `contributors[]` list), then **Stage 3** conflict
-  detection (`contradicts` edges via a small local LLM judge / Ollama), then
-  **Stage 4** wiring the source to the real local brain. See `docs/roadmap.md`
-  and the architecture memory in the `gingugu` namespace.
+- **Dogfooding-feedback arc (tasks 1-6, three themed PRs).** A month of hard
+  daily use surfaced six retrieval-efficiency and hygiene pain points; shipping
+  them as: **PR A** (context efficiency: multi-namespace `memory_context` +
+  compact mode + context loads no longer credited as accesses — branch
+  `feature/context-efficiency`, this PR), **PR B** (staleness hints for
+  point-in-time memories referencing open PRs/branches), **PR C** (save
+  discipline via `.claude` client hooks + proactive near-dupe surfacing and a
+  brain cleanup pass).
+- **Networked brain (Phase 5 reframe → "The Crow's Nest") — parked behind the
+  feedback arc.** Done: transport keystone (`gingugu serve`) and the promotion
+  bridge **Stage 1** (`gingugu promote`, merged in PR #11). Next when resumed:
+  **Stage 2** consolidation (merge near-dupes into one canonical memory with a
+  `contributors[]` list), then **Stage 3** conflict detection (`contradicts`
+  edges via a small local LLM judge / Ollama), then **Stage 4** wiring the
+  source to the real local brain. See `docs/roadmap.md` and the architecture
+  memory in the `gingugu` namespace.
 
 ## Blocked / Pending
 
@@ -38,6 +45,14 @@ _Last updated: 2026-06-29_
 
 ## Recently Completed
 
+- **2026-07-07** — Context efficiency (PR A of the feedback arc):
+  `memory_context` accepts a comma-separated namespace list and de-dupes
+  across loads (cross-namespace patterns previously repeated per namespace);
+  new `compact` mode returns title + ~200-char excerpt; context loads now
+  refresh the dormancy clock only instead of bumping `access_count` (closes
+  the rich-get-richer ranking loop). 5 new tests, 206 total.
+- **2026-07-07** — PR #11 merged: promotion bridge Stage 1 + metadata-over-HTTP
+  dict coercion fix.
 - **2026-06-29** — Promotion bridge **Stage 1** (`gingugu promote`,
   `src/gingugu/promote.py`): MCP client that reads a source brain, applies the
   locked exclusion-based filter (verified, minus episodic/personal tags, minus
@@ -76,9 +91,10 @@ _Last updated: 2026-06-29_
 
 ## Next Up
 
-- **Promotion bridge** — external agent that reads promotable memories from a
-  local brain (verified bug/pattern/decision/architecture/fact, minus personal
-  or episodic noise) and writes them to central with a provenance stamp.
+- **Feedback arc PR B + PR C** (staleness hints; save-discipline hooks +
+  near-dupe surfacing/cleanup) — see In Progress.
+- **Promotion bridge Stage 2-4** — consolidation with `contributors[]`,
+  conflict detection, wiring to the real local brain (Stage 1 shipped, PR #11).
 - Repo-ingestion agent to cold-seed central with org breadth.
 - Data-ownership decision before hosting work-repo knowledge (personal vs
   company AWS, or scrubbed/synthetic seed).

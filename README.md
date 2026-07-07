@@ -410,9 +410,13 @@ Gingugu is your long-term brain. Memory is split into **two layers**:
 - When in doubt, project-scope it.
 
 ### Session start
-1. `memory_context(namespace="crow", task_hint=…)` — identity foundation (always first)
+1. `memory_context(namespace="crow,<project>[,<project2>…]", task_hint=…)` — one call loads
+   the identity foundation plus every repo in the workspace (multi-repo workspaces are common),
+   de-duplicated across namespaces; load all of them speculatively rather than asking the user
+   which one to focus on. Add `compact=true` for a lighter payload and pull full bodies with
+   `memory_recall` as needed.
 2. `memory_stats(namespace="crow")` — global health (dormancy is a resting signal, never auto-forgotten)
-3. For **each repo in the workspace** (multi-repo workspaces are common), in parallel: `memory_context(namespace="<project>", task_hint=…)` and `memory_stats(namespace="<project>")` — load all of them speculatively rather than asking the user which one to focus on
+3. `memory_stats(namespace="<project>")` for each project namespace, in parallel with step 2
 
 ### During the session
 **Default: save. Immediately.** Gingugu has trust-led scoring,
@@ -545,7 +549,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 |------|---------|
 | `memory_store` | Save a new memory |
 | `memory_recall` | Search + retrieve (ranked by relevance × freshness) |
-| `memory_context` | Auto-surface relevant memories for current workspace |
+| `memory_context` | Auto-surface relevant memories (one or many namespaces, deduped; optional compact mode) |
 | `memory_update` | Update content, confidence, or metadata |
 | `memory_relate` | Create relationships between memories |
 | `memory_consolidate` | Merge/summarize related memories |
