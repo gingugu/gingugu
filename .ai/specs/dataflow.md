@@ -28,11 +28,19 @@ memory_recall(query, namespace, filters)
 ## Context (session priming)
 
 ```
-memory_context(namespace, task_hint, limit)
-  → context.py selects top-N by relevance-to-hint + value signals
+memory_context(namespace | "ns1,ns2,…", task_hint, limit, compact)
+  → context.py selects top-N per namespace by relevance-to-hint + value signals
+  → multi-namespace calls de-dupe across loads (highest-scoring instance wins);
+    each memory is stamped with its home namespace
   → spreading activation wakes related dormant memories
   → returns the working set the agent should hold for the session
+    (compact=true: title + ~200-char summary instead of full content)
 ```
+
+Context loads are protocol-driven reads: they refresh `last_accessed` (dormancy
+clock, via `touch_many`) but do **not** bump `access_count` or write
+`access_log` rows — those are reserved for `memory_recall`/`memory_search`
+hits, so session-start loads can't inflate the access ranking signal.
 
 ## Relations + spreading activation
 

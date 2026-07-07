@@ -56,7 +56,11 @@ AI client (Claude Code / Cursor / Windsurf / …)
 - `memory_recall` blends **BM25** (FTS5 lexical) with **semantic** similarity
   (embeddings), combined with recency, confidence, and access frequency.
 - `memory_context` is the session-priming entrypoint: top-N by relevance to a
-  task hint, plus spreading activation into related memories.
+  task hint, plus spreading activation into related memories. Accepts a
+  comma-separated namespace list (one call per session, de-duped across
+  namespaces) and a `compact` mode (title + excerpt). Context loads refresh
+  the dormancy clock but don't count as accesses — `access_count` is a pure
+  recall/search usage signal.
 - `memory_search` is the precision path: explicit filters (tags, type, date,
   confidence) and sort order.
 

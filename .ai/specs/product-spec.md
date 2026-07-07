@@ -28,7 +28,7 @@ Gingugu instance serves Windsurf and Claude Code against one DB.
 | `memory_forget` | Deprecate / delete (only removal path) | ✅ Shipped |
 | `memory_recall` | Hybrid BM25 + semantic retrieval | ✅ Shipped |
 | `memory_search` | Precision retrieval with filters | ✅ Shipped |
-| `memory_context` | Session priming + spreading activation | ✅ Shipped |
+| `memory_context` | Session priming + spreading activation (multi-namespace, deduped; compact mode; not access-credited) | ✅ Shipped |
 | `memory_stats` | Health: counts, confidence, dormancy, hygiene | ✅ Shipped |
 | `memory_relate` | Build typed graph edges | ✅ Shipped |
 | `memory_consolidate` | merge / summarize / deduplicate | ✅ Shipped |
