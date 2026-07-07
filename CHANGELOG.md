@@ -83,6 +83,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Memory Explorer timeline: honest activity chart.** The "Access activity"
+  chart summed each memory's lifetime `access_count` at its `last_accessed`
+  bucket, piling a memory's whole history into its newest bucket - with the
+  new context-load semantics that read as phantom recent activity. Now
+  "Recently active": each memory counted once at its last-touched date.
 - **`metadata` now accepts a JSON object, not only a JSON string, on
   `memory_store` / `memory_update`.** Over HTTP transports the MCP layer
   delivers a JSON-object argument as a dict, so the `str`-only parameter
