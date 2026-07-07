@@ -45,6 +45,12 @@ _Last updated: 2026-07-07_
 
 ## Recently Completed
 
+- **2026-07-07** — Staleness review hints (PR B of the feedback arc): new
+  `staleness.py` detector for point-in-time content (open-PR references,
+  waiting-on phrasing, unmerged branches — gated on 14 days unconfirmed;
+  expired/as-of dates fire immediately). Advisory `review_hints` on
+  `memory_context` results + `review` block in `memory_stats`. Never mutates.
+  14 new tests, 220 total.
 - **2026-07-07** — Context efficiency (PR A of the feedback arc):
   `memory_context` accepts a comma-separated namespace list and de-dupes
   across loads (cross-namespace patterns previously repeated per namespace);
