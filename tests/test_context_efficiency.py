@@ -85,6 +85,20 @@ async def test_namespace_list_is_deduped_and_stripped(server) -> None:
 
 
 @pytest.mark.asyncio
+async def test_blank_csv_items_do_not_mint_empty_namespace(server) -> None:
+    """Peer-review regression: 'proj-x,' must not get_or_create a namespace
+    literally named "" — blank items are dropped before any bootstrap."""
+    await _seed(server)
+    ctx = _payload(await server.call_tool("memory_context", {"namespace": "proj-x, ,"}))
+    assert ctx["ok"]
+    assert ctx["namespace"] == "proj-x"  # single-ns shape: blanks were dropped
+    assert "namespaces" not in ctx
+
+    listing = _payload(await server.call_tool("memory_namespaces", {"action": "list"}))
+    assert all(ns["name"] for ns in listing["namespaces"]), "empty-named namespace created"
+
+
+@pytest.mark.asyncio
 async def test_single_namespace_shape_is_backward_compatible(server) -> None:
     """A single-namespace call keeps the historical ``namespace`` key and
     gains a readable per-memory namespace stamp."""

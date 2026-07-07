@@ -23,15 +23,9 @@
       "Bash(git commit:*)",
       "Bash(git stash:*)",
       "Bash(git checkout *)",
-      "Bash(git push:*)",
-      "Bash(curl:*)",
-      "Bash(glab api:*)",
-      "Bash(jira issue:*)",
-      "Bash(gh:*)",
       "Bash(uv run:*)",
       "Bash(node:*)",
-      "Bash(npx:*)",
-      "Bash(aws configure:*)"
+      "Bash(npx:*)"
     ],
     "deny": []
   },
@@ -101,7 +95,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/stop.py --chat --notify",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/stop.py --chat --notify --check-memory-saves",
             "timeout": 30
           }
         ]

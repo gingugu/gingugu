@@ -22,7 +22,7 @@ docs/architecture.md → Review hints.
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from .decay import days_between, reference_timestamp
 
@@ -30,10 +30,13 @@ from .decay import days_between, reference_timestamp
 # many days — in-flight state is expected to be in flight for a sprint or so.
 REVIEW_HINT_AFTER_DAYS = 14
 
-_PR_REF = r"(?:PR|MR|pull request|merge request)\s*[#!]?\d+"
+# Leading \b keeps the alternation from matching inside longer words ("GDPR").
+_PR_REF = r"\b(?:PR|MR|pull request|merge request)\s*[#!]?\d+"
 
 # label → pattern. All matching is case-insensitive; the window between the
 # reference and the status word is capped so unrelated sentences don't pair up.
+# The waiting-on lookbehinds skip past-tense narrative ("was blocked on…"):
+# a resolved story is history, not in-flight state.
 _GATED_PATTERNS: dict[str, re.Pattern[str]] = {
     "open-pr-reference": re.compile(
         rf"(?:{_PR_REF}[^.\n]{{0,80}}?\b(?:open|waiting|awaiting|pending|unmerged|"
@@ -42,7 +45,8 @@ _GATED_PATTERNS: dict[str, re.Pattern[str]] = {
         re.IGNORECASE,
     ),
     "waiting-on": re.compile(
-        r"\b(?:waiting (?:on|for)|awaiting|blocked (?:on|by))\b", re.IGNORECASE
+        r"(?<!was )(?<!were )\b(?:waiting (?:on|for)|awaiting|blocked (?:on|by))\b",
+        re.IGNORECASE,
     ),
     "unmerged-branch": re.compile(
         r"\bbranch\b[^.\n]{0,60}\b(?:not\s+(?:yet\s+)?merged|unmerged|still open)\b",
@@ -61,6 +65,16 @@ def _parse_date(text: str) -> datetime | None:
         return None
 
 
+def _latest_date(pattern: re.Pattern[str], content: str) -> datetime | None:
+    """The newest date a pattern names in the content, or None.
+
+    Only the newest occurrence matters: "expires 2026-01-01; RENEWED: expires
+    2027-01-01" is current, not expired.
+    """
+    dates = [d for m in pattern.finditer(content) if (d := _parse_date(m.group(1)))]
+    return max(dates) if dates else None
+
+
 def review_signals(
     content: str,
     *,
@@ -77,19 +91,15 @@ def review_signals(
     now = now or datetime.now(UTC)
     signals: list[str] = []
 
-    # Ungated: the content names its own expiry/observation date.
-    for match in _EXPIRES.finditer(content):
-        expiry = _parse_date(match.group(1))
-        if expiry is not None and expiry < now:
-            signals.append("expired-date")
-            break
-    for match in _AS_OF.finditer(content):
-        observed = _parse_date(match.group(1))
-        if observed is not None and days_between(observed.isoformat(), now) >= (
-            REVIEW_HINT_AFTER_DAYS
-        ):
-            signals.append("stale-as-of-date")
-            break
+    # Ungated: the content names its own expiry/observation date. A bare
+    # YYYY-MM-DD parses to midnight, so an expiry counts only once its whole
+    # day has passed — "expires <today>" is still valid.
+    expiry = _latest_date(_EXPIRES, content)
+    if expiry is not None and expiry + timedelta(days=1) <= now:
+        signals.append("expired-date")
+    observed = _latest_date(_AS_OF, content)
+    if observed is not None and (now - observed).days >= REVIEW_HINT_AFTER_DAYS:
+        signals.append("stale-as-of-date")
 
     # Gated: in-flight-state phrasing, only once the confirmation clock is old.
     anchor = reference_timestamp(last_confirmed, updated_at, created_at)

@@ -21,12 +21,12 @@ _Last updated: 2026-07-07_
 - **Dogfooding-feedback arc (tasks 1-6, three themed PRs).** A month of hard
   daily use surfaced six retrieval-efficiency and hygiene pain points; shipping
   them as: **PR A** (context efficiency: multi-namespace `memory_context` +
-  compact mode + context loads no longer credited as accesses — branch
+  compact mode + context loads no longer credited as accesses - branch
   `feature/context-efficiency`, this PR), **PR B** (staleness hints for
   point-in-time memories referencing open PRs/branches), **PR C** (save
   discipline via `.claude` client hooks + proactive near-dupe surfacing and a
   brain cleanup pass).
-- **Networked brain (Phase 5 reframe → "The Crow's Nest") — parked behind the
+- **Networked brain (Phase 5 reframe → "The Crow's Nest") - parked behind the
   feedback arc.** Done: transport keystone (`gingugu serve`) and the promotion
   bridge **Stage 1** (`gingugu promote`, merged in PR #11). Next when resumed:
   **Stage 2** consolidation (merge near-dupes into one canonical memory with a
@@ -45,19 +45,25 @@ _Last updated: 2026-07-07_
 
 ## Recently Completed
 
-- **2026-07-07** — Staleness review hints (PR B of the feedback arc): new
+- **2026-07-07** - Save discipline + dupe surfacing (PR C of the feedback
+  arc): `memory_consolidate` suggest mode (read-only pairwise-embedding
+  near-dupe scan, title-only fallback, 1000-memory cap) and a
+  `--check-memory-saves` flag on the `.claude` kit Stop hook (blocks a stop
+  once per session when ≥15 tool calls but zero gingugu writes - guards the
+  lost-session failure mode). 8 new tests, 228 total.
+- **2026-07-07** - Staleness review hints (PR B of the feedback arc): new
   `staleness.py` detector for point-in-time content (open-PR references,
-  waiting-on phrasing, unmerged branches — gated on 14 days unconfirmed;
+  waiting-on phrasing, unmerged branches - gated on 14 days unconfirmed;
   expired/as-of dates fire immediately). Advisory `review_hints` on
   `memory_context` results + `review` block in `memory_stats`. Never mutates.
   14 new tests, 220 total.
-- **2026-07-07** — Context efficiency (PR A of the feedback arc):
+- **2026-07-07** - Context efficiency (PR A of the feedback arc):
   `memory_context` accepts a comma-separated namespace list and de-dupes
   across loads (cross-namespace patterns previously repeated per namespace);
   new `compact` mode returns title + ~200-char excerpt; context loads now
   refresh the dormancy clock only instead of bumping `access_count` (closes
   the rich-get-richer ranking loop). 5 new tests, 206 total.
-- **2026-07-07** — PR #11 merged: promotion bridge Stage 1 + metadata-over-HTTP
+- **2026-07-07** - PR #11 merged: promotion bridge Stage 1 + metadata-over-HTTP
   dict coercion fix.
 - **2026-06-29** — Promotion bridge **Stage 1** (`gingugu promote`,
   `src/gingugu/promote.py`): MCP client that reads a source brain, applies the
@@ -98,8 +104,8 @@ _Last updated: 2026-07-07_
 ## Next Up
 
 - **Feedback arc PR B + PR C** (staleness hints; save-discipline hooks +
-  near-dupe surfacing/cleanup) — see In Progress.
-- **Promotion bridge Stage 2-4** — consolidation with `contributors[]`,
+  near-dupe surfacing/cleanup) - see In Progress.
+- **Promotion bridge Stage 2-4** - consolidation with `contributors[]`,
   conflict detection, wiring to the real local brain (Stage 1 shipped, PR #11).
 - Repo-ingestion agent to cold-seed central with org breadth.
 - Data-ownership decision before hosting work-repo knowledge (personal vs

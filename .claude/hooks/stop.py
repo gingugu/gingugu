@@ -11,6 +11,11 @@ Stop Hook
 
 Announces task completion via TTS when the agent stops.
 Supports LLM-generated completion messages and transcript logging.
+
+With --check-memory-saves, also enforces Gingugu save discipline: if the
+session shows substantial tool activity but ZERO gingugu memory writes, the
+stop is blocked once (per session) with a reminder to save before context is
+lost. Guards the "unsaved session vanishes" failure mode.
 """
 
 import argparse
@@ -20,6 +25,30 @@ import random
 import subprocess
 import sys
 from pathlib import Path
+
+# Gingugu write tools — any of these counts as "the session saved something".
+# memory_consolidate is deliberately NOT here: without memory_ids it doubles
+# as a read-only suggest scan, and the transcript only shows the tool name.
+MEMORY_WRITE_TOOLS = {
+    "mcp__gingugu__memory_store",
+    "mcp__gingugu__memory_update",
+    "mcp__gingugu__memory_relate",
+    "mcp__gingugu__memory_forget",
+}
+
+# Below this many total tool calls the session is treated as conversational —
+# no nudge (a quick Q&A turn shouldn't trip the check).
+DEFAULT_MIN_TOOL_CALLS = 15
+
+SAVE_REMINDER = (
+    "Gingugu save-discipline check: this session has substantial tool activity "
+    "({total} tool calls) but ZERO gingugu memory writes. Unsaved sessions "
+    "vanish - save what this session learned NOW: memory_store the decisions, "
+    "bugs, patterns, and outcomes (project namespace; crow for cross-project "
+    "lessons), then memory_relate the new memories to their cluster. If there "
+    "is genuinely nothing worth saving, you may stop again and this check will "
+    "not re-fire this session."
+)
 
 try:
     from dotenv import load_dotenv
@@ -120,6 +149,81 @@ def announce_completion():
         pass
 
 
+def _entry_tool_names(entry):
+    """Tool names from the assistant message's own content blocks.
+
+    Deliberately shallow: tool_use blocks live in entry.message.content (or a
+    top-level content list). Recursing into arbitrary values would also count
+    tool calls embedded inside tool RESULTS (e.g. a subagent's transcript),
+    letting a subagent's memory_store satisfy the parent session's save check.
+    """
+    message = entry.get("message") if isinstance(entry, dict) else None
+    content = (message or entry).get("content") if isinstance(entry, dict) else None
+    if not isinstance(content, list):
+        return []
+    return [
+        block["name"]
+        for block in content
+        if isinstance(block, dict)
+        and block.get("type") == "tool_use"
+        and isinstance(block.get("name"), str)
+    ]
+
+
+def _state_root():
+    """Anchor hook state at the project dir, not wherever the session stands.
+
+    cwd follows the user around (and can be another repo entirely); the flag
+    must live in one stable place for once-per-session to hold.
+    """
+    return Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
+
+
+def check_memory_saves(input_data, min_tool_calls):
+    """Return a block decision when real work happened but nothing was saved.
+
+    Blocks at most once per session (state flag under logs/save_check/), so a
+    session with genuinely nothing to save can stop on the second attempt.
+    Returns None immediately on the first gingugu write seen — a saved session
+    never pays for a full transcript parse. Fail-soft: any parsing problem
+    means no block. Known limit: the transcript shows a tool_use block even
+    for calls the user denied, so a denied save still counts as saved.
+    """
+    try:
+        if input_data.get("stop_hook_active"):
+            return None  # already continuing from a blocked stop
+        transcript_path = input_data.get("transcript_path")
+        if not transcript_path or not os.path.exists(transcript_path):
+            return None
+
+        session_id = str(input_data.get("session_id") or "unknown")
+        state_file = _state_root() / "logs" / "save_check" / f"{session_id}.flag"
+        if state_file.exists():
+            return None  # one nudge per session, ever
+
+        total = 0
+        with open(transcript_path) as fh:
+            for line in fh:
+                if '"tool_use"' not in line:
+                    continue
+                try:
+                    names = _entry_tool_names(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+                if any(name in MEMORY_WRITE_TOOLS for name in names):
+                    return None  # session saved something; stop scanning
+                total += len(names)
+
+        if total < min_tool_calls:
+            return None
+
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        state_file.write_text("nudged")
+        return {"decision": "block", "reason": SAVE_REMINDER.format(total=total)}
+    except Exception:
+        return None
+
+
 def main():
     try:
         parser = argparse.ArgumentParser()
@@ -132,6 +236,17 @@ def main():
             "--notify",
             action="store_true",
             help="Enable TTS completion announcement",
+        )
+        parser.add_argument(
+            "--check-memory-saves",
+            action="store_true",
+            help="Block the stop once if the session did work but never saved to gingugu",
+        )
+        parser.add_argument(
+            "--min-tool-calls",
+            type=int,
+            default=DEFAULT_MIN_TOOL_CALLS,
+            help="Tool-call threshold below which the save check stays quiet",
         )
         args = parser.parse_args()
 
@@ -180,6 +295,12 @@ def main():
                         json.dump(chat_data, f, indent=2)
                 except Exception:
                     pass
+
+        if args.check_memory_saves:
+            decision = check_memory_saves(input_data, args.min_tool_calls)
+            if decision is not None:
+                print(json.dumps(decision))
+                sys.exit(0)
 
         if args.notify:
             announce_completion()
