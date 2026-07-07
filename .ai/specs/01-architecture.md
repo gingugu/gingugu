@@ -77,6 +77,18 @@ AI client (Claude Code / Cursor / Windsurf / …)
   from a local brain, filtered `memory_store` into a central brain with a
   provenance stamp. The server gains no promotion-specific code; the selective
   local→central absorption lives entirely in the client. Keeps the store pure.
+- **Onboarding is client-side too.** `gingugu init` (`bootstrap/`) writes no
+  server code — it copies packaged templates (`bootstrap/templates/*.tmpl`) into
+  a target repo: for Claude Code, a `SessionStart` hook that auto-injects the
+  memory startup contract every session (a rules file is not guaranteed to load
+  into context; a hook is), a `Stop` save-discipline hook, and the
+  `/sink-the-ship` command — merging both hooks into `.claude/settings.json`
+  non-destructively (`settings.py`) and appending the hooks' runtime artifacts
+  (`logs/`, `.claude/data/`, `settings.local.json`) to the target's `.gitignore`
+  so transcripts never get committed. Output is a themed 90s boot sequence
+  (`theme.py`, degrades to monochrome off-TTY). Other clients (`--client`) get a
+  rules file. This closes the gap where the repo's own hook-based install
+  outperformed the copy-paste setup shipped to users.
 - **Never-forget over decay.** Biological-style decay was removed because the
   product promise is "your AI never forgets"; dormancy + spreading activation
   preserves recall quality without deleting history.
