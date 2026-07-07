@@ -64,45 +64,23 @@ Where this goes long-term — federated, org-wide agent memory — lives in
 
 ## How It Compares
 
-These products aren't all the same shape. Mem0 ships an OSS framework
-*and* a managed platform. Zep is the managed product whose OSS sibling
-is the Graphiti temporal-graph framework. Letta is a full
-stateful-agent runtime rather than a memory layer. We split them out
-instead of bucketing.
-
-| Capability | **Gingugu** | OpenMemory MCP | Mem0 OSS | Mem0 Platform | Graphiti (OSS) | Zep Cloud | Letta |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Local-first by default | ✅ | ✅ | ⚙️ configurable | ❌ hosted | ✅ self-hosted | ❌ hosted | ⚙️ local mode |
-| MCP-native cross-tool memory | ✅ | ✅ | ❌ SDK only | ⚙️ hosted MCP | ✅ MCP server | ❌ API only | ❌ Letta agents only |
-| No mandatory hosted service | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ⚙️ in local mode |
-| No LLM call to store a memory | ✅ | ⚙️ engine dependent | ❌ extracts via LLM | ❌ extracts via LLM | ❌ extraction-time | ❌ extraction-time | ⚙️ agent-managed |
-| Single-file storage | ✅ SQLite | ❌ | ❌ | ❌ hosted | ❌ graph DB | ❌ hosted | ❌ |
-| Local visual memory inspection | ✅ graph explorer | ✅ dashboard | ⚙️ cloud dashboard | ❌ cloud only | ❌ framework-level | ❌ cloud tooling | ✅ ADE |
-| Lexical + semantic retrieval | ✅ hybrid ranking | ⚙️ engine dependent | ✅ | ✅ | ✅ + graph | ✅ + graph | ⚙️ partial |
-| Explicit confidence + lifecycle | ✅ 4-state | ⚙️ partial | ⚙️ partial | ⚙️ partial | ❌ uses temporal facts | ❌ uses governance tooling | ❌ uses agent state |
-| Typed memory relations | ✅ supersedes / contradicts / parent / etc | ⚙️ partial | ⚙️ via entity graph | ⚙️ via entity graph | ✅ graph-native | ✅ graph-native | ❌ |
-| Auto entity / relation extraction | ❌ intentional | ⚙️ engine dependent | ✅ | ✅ | ✅ | ✅ | ❌ |
-| Operational footprint | very small | medium | medium-large | hosted | large | hosted | large |
-
-*Plus a built-in OS-keychain credential vault — useful alongside
-memory, but not really a memory feature, so it sits beside the matrix
-rather than inside it.*
-
 **The honest take.** Gingugu doesn't lead the field on every axis.
 Graphiti has the more sophisticated temporal knowledge graph. Mem0 has
 the broader ecosystem and a managed platform. Letta is a more complete
 stateful-agent runtime. Zep is built for enterprise scale and
-governance.
+governance. (We used to maintain a capability matrix here; those
+products ship fast, and stale claims about someone else's tool help
+nobody - go evaluate them directly.)
 
-**Where Gingugu wins.** When you're an individual developer using
-several coding agents and you want one inspectable local memory layer
-— without adopting a cloud account, an agent framework, a graph
-database, or an LLM call for every memory written. One SQLite file.
-MCP-native. Explicit trust and lifecycle. Typed relations. That lane
-is ours, and OpenMemory MCP is the only product squarely in it. We
-differentiate from OpenMemory through confidence states, lifecycle
-semantics, typed relations, last-confirmed tracking, supersession and
-contradiction, structured namespaces, and a local graph explorer.
+**Where Gingugu wins.** When you're a developer using several coding
+agents and you want one inspectable local memory layer - without
+adopting a cloud account, an agent framework, a graph database, or an
+LLM call for every memory written. One SQLite file. MCP-native.
+Explicit trust and lifecycle. Typed relations. Advisory staleness
+hints. And when a team wants to go further, the same server runs as a
+shared central brain over HTTP (`gingugu serve`) and harvests each
+developer's local gold into it (`gingugu promote`) - no platform
+migration, same single file.
 
 ---
 
@@ -146,7 +124,7 @@ fall back to BM25-only.
 <details>
 <summary><strong>Is this ready to use?</strong></summary>
 
-Usable today for local personal workflows. 138 tests passing covering
+Usable today for local personal workflows. 237 tests passing covering
 storage, search, migrations, concurrency, credentials, and edges.
 Hardened against adversarial input and write contention. WAL mode for
 concurrency. CI matrix across Python 3.11–3.13 on Linux/macOS/Windows.
@@ -191,13 +169,15 @@ or Rust toolchain required to use it. The MCP SDK is first-class in Python.
 | 🏷️ **Namespace Scoping** | Memories auto-scoped to repos/projects with cross-repo pattern sharing |
 | 🔍 **Hybrid Search** | SQLite FTS5 (BM25) + semantic embeddings fused with Reciprocal Rank Fusion. Two backends: [fastembed](https://github.com/qdrant/fastembed) (ONNX, offline) or Ollama (zero extra footprint, uses your existing Ollama process) |
 | ⏰ **Temporal Intelligence** | Trust-led scoring, dormancy tracking (never forgets), "last confirmed" tracking, spreading activation |
-| 🔗 **Relationships** | Link memories: supersedes, related_to, caused_by, contradicts |
+| 🔔 **Review Hints** | Point-in-time memories ("PR #947 open, waiting on…", passed expiry dates) get advisory staleness flags on every read - you reconcile, the server never mutates |
+| 🔗 **Relationships** | Link memories: supersedes, related_to, caused_by, contradicts, parent_of, child_of |
 | 🎯 **Confidence Levels** | verified → inferred → stale → deprecated lifecycle |
-| 🧹 **Consolidation Tools** | Merge duplicates, summarize clusters, deduplicate on demand |
-| 🚀 **Auto-Context** | Surfaces relevant memories on session start — zero manual effort |
-| 📊 **Health Metrics** | Memory stats, dormancy reports, namespace overviews |
+| 🧹 **Consolidation Tools** | Find near-duplicate clusters (read-only suggest scan), then merge, summarize, or deduplicate on demand |
+| 🚀 **Auto-Context** | Surfaces relevant memories on session start - one call loads many namespaces deduped, with an optional compact mode for lighter payloads |
+| 📊 **Health Metrics** | Memory stats, dormancy reports, review sweep, namespace overviews |
 | 🔐 **Credential Vault** | Secure service-bundle storage for API keys/tokens via OS Keychain |
 | 🌐 **Memory Explorer UI** | Interactive knowledge graph + dashboard for visualizing memory data |
+| 📡 **Central Brain (optional)** | `gingugu serve` runs the same server over HTTP behind a Bearer token; `gingugu promote` harvests a local brain's durable knowledge up to it with provenance stamps |
 
 ---
 
@@ -208,7 +188,7 @@ graph TD
     A[AI Assistant<br/>any MCP client] -->|MCP Protocol| B[Gingugu Server]
     B --> C[Search Engine<br/>FTS5 + BM25]
     B --> D[Storage Layer<br/>SQLite + WAL]
-    B --> E[Decay Engine<br/>Scoring + Pruning]
+    B --> E[Decay Engine<br/>Scoring + Dormancy]
     B --> F[Context Engine<br/>Auto-Retrieval]
     B --> H[Consolidation Engine<br/>Merge + Dedupe]
     B --> K[Credential Vault]
@@ -259,9 +239,9 @@ uv run gingugu  # or pip install -e .
 
 </details>
 
-> **Usable today.** 16 MCP tools live. 138 tests passing. Dogfooded daily in
-> Windsurf — this repo's own memories live in a Gingugu database. Early and
-> seeking broader real-world validation.
+> **Usable today.** 16 MCP tools live. 237 tests passing. Dogfooded daily in
+> Claude Code and Windsurf — this repo's own memories live in a Gingugu
+> database. Early and seeking broader real-world validation.
 
 ### Run as a remote server (optional)
 
@@ -287,6 +267,26 @@ HTTP is sniffable. Point a client at it with:
 
 This is a single shared secret with no per-user RBAC — right-sized for a trusted
 internal endpoint, not a multi-tenant service.
+
+### Promote memories to a central brain (optional)
+
+Once a central instance exists, `gingugu promote` harvests a local brain's
+durable knowledge up to it - the tribal-knowledge loop:
+
+```bash
+GINGUGU_SOURCE_TOKEN=<local-token> GINGUGU_TARGET_TOKEN=<central-token> \
+  gingugu promote --source-url http://127.0.0.1:8765/mcp --source-ns my-project \
+                  --target-url https://central:8765/mcp --target-ns org \
+                  --contributor brian --dry-run   # drop --dry-run to actually write
+```
+
+The promoter is an MCP *client* (the server stays a pure store). It is
+read-only on the source, idempotent on re-runs, and applies an exclusion
+filter: only `verified` memories move, minus episodic session noise, minus
+personal-context tags, and it **refuses to promote anything that looks like a
+live secret** - a shared brain must never become a credential leak. Each
+promoted memory carries a provenance stamp (source instance, namespace,
+contributor, timestamp).
 
 ### Configure Your MCP Client
 
@@ -552,12 +552,12 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_context` | Auto-surface relevant memories (one or many namespaces, deduped; optional compact mode) |
 | `memory_update` | Update content, confidence, or metadata |
 | `memory_relate` | Create relationships between memories |
-| `memory_consolidate` | Merge/summarize related memories |
+| `memory_consolidate` | Merge/summarize/deduplicate; call without ids for a read-only near-dupe scan |
 | `memory_forget` | Deprecate or remove a memory |
 | `memory_namespaces` | List/create/update/delete namespaces |
 | `memory_export` | Export memories + tags + relations to portable JSON |
 | `memory_import` | Restore a JSON export (skip or replace on conflict) |
-| `memory_stats` | Health overview (dormancy, counts, coverage) |
+| `memory_stats` | Health overview (dormancy, counts, coverage, review sweep) |
 | `memory_search` | Advanced filtered search (type, tags, confidence, dates) |
 | `credential_store` | Store/update a service credential bundle |
 | `credential_get` | Retrieve credentials (secrets from OS Keychain) |
