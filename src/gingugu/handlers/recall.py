@@ -1,8 +1,10 @@
 """Memory retrieval tool handlers: recall, context.
 
-The read side of the memory surface. Both tools fetch existing memories,
-credit the surfaced seeds as a real access, and fire spreading activation to
-wake the related cluster. Mutating handlers live in ``memory.py``.
+The read side of the memory surface. Both tools fetch existing memories and
+fire spreading activation to wake the related cluster. ``memory_recall``
+credits its seeds as a real access; ``memory_context`` is a protocol-driven
+read and only refreshes the dormancy clock (see the handler docstring).
+Mutating handlers live in ``memory.py``.
 
 All handlers wrap their work in try/except and return structured dict
 responses — the MCP server must never crash the client flow.
@@ -14,10 +16,11 @@ import logging
 
 from .. import context as context_mod
 from .. import search as search_mod
-from ..models import Confidence, MemoryType
+from ..models import Confidence, Memory, MemoryType
 from . import ServerContext
 from .helpers import (
     _collect_related,
+    _compact_summary,
     _err,
     _memory_summary,
     _split_csv,
@@ -110,6 +113,7 @@ def register(mcp, ctx: ServerContext) -> None:
         namespace: str | None = None,
         task_hint: str | None = None,
         limit: int | None = None,
+        compact: bool = False,
     ) -> dict:
         """Load the most relevant memories for the current session. Call this at session
         start with a brief description of the current task to prime the agent with
@@ -117,36 +121,72 @@ def register(mcp, ctx: ServerContext) -> None:
         and access frequency to select the top memories. Also triggers spreading
         activation to wake related dormant memories.
 
-        ``task_hint`` is a short description of what you are working on (e.g. "fix auth
-        bug", "design API schema") — omit to surface generally high-value memories.
-        ``limit`` defaults to MEMORY_AUTO_CONTEXT_LIMIT (10)."""
+        ``namespace`` accepts a single name or a comma-separated list (e.g.
+        "crow,my-project"): a multi-namespace call loads every namespace in one
+        shot and de-duplicates memories that surface in more than one, and each
+        memory is stamped with its source ``namespace``. ``limit`` applies per
+        namespace and defaults to MEMORY_AUTO_CONTEXT_LIMIT (10). ``task_hint``
+        is a short description of what you are working on (e.g. "fix auth bug")
+        — omit to surface generally high-value memories. ``compact=True``
+        returns title + a ~200-char ``summary`` instead of full content — pull
+        the full body with memory_recall when a memory matters.
+
+        Context loads refresh each surfaced memory's dormancy clock but do not
+        count as real accesses: ``access_count`` is reserved for
+        memory_recall/memory_search hits, so protocol-driven session-start
+        loads don't inflate ranking signals."""
         try:
-            ns_name = ctx.namespaces.resolve_name(namespace)
-            # Session start in a fresh workspace is the one read that should
-            # bootstrap its namespace, so get_or_create is intentional here.
-            ns = ctx.namespaces.get_or_create(ns_name)
-            results = context_mod.build_context(
-                ctx.conn,
-                namespace_id=ns.id,
-                task_hint=task_hint,
-                limit=limit if limit is not None else ctx.config.auto_context_limit,
-                weights=ctx.config.weights,
-                decay_lambda=ctx.config.decay_lambda,
-                embedder=ctx.store.embedder,
-            )
+            requested = _split_csv(namespace)
+            ns_names = list(dict.fromkeys(requested)) or [ctx.namespaces.resolve_name(None)]
+            eff_limit = limit if limit is not None else ctx.config.auto_context_limit
+
+            # Load each namespace, de-duplicating across them: a memory that
+            # surfaces in several loads (typically via the cross-namespace
+            # pattern bucket) keeps its highest-scoring instance.
+            best: dict[str, Memory] = {}
+            loaded_total = 0
+            for name in ns_names:
+                # Session start in a fresh workspace is the one read that should
+                # bootstrap its namespace, so get_or_create is intentional here.
+                ns = ctx.namespaces.get_or_create(name)
+                for mem in context_mod.build_context(
+                    ctx.conn,
+                    namespace_id=ns.id,
+                    task_hint=task_hint,
+                    limit=eff_limit,
+                    weights=ctx.config.weights,
+                    decay_lambda=ctx.config.decay_lambda,
+                    embedder=ctx.store.embedder,
+                ):
+                    loaded_total += 1
+                    current = best.get(mem.id)
+                    if current is None or (mem.score or 0.0) > (current.score or 0.0):
+                        best[mem.id] = mem
+
+            results = sorted(best.values(), key=lambda m: m.score or 0.0, reverse=True)
             ctx.store.load_tags(results)
             seed_ids = [m.id for m in results]
-            # Credit the surfaced seeds as a real access (bumps access_count,
-            # refreshes last_accessed, writes access_log row).
-            ctx.store.record_accesses(seed_ids)
+            # A context load is a protocol-driven read, not a real access:
+            # refresh the dormancy clock only (no access_count bump, no
+            # access_log row) so session-start loads don't inflate ranking.
+            ctx.store.touch_many(seed_ids)
             # Spreading activation: surfacing context wakes the related cluster.
             _spread_activation(ctx, seed_ids)
-            return {
-                "ok": True,
-                "namespace": ns_name,
-                "count": len(results),
-                "memories": [_memory_summary(m) for m in results],
-            }
+
+            ns_name_by_id = {n.id: n.name for n in ctx.namespaces.list()}
+            summaries = []
+            for mem in results:
+                summary = _compact_summary(mem) if compact else _memory_summary(mem)
+                summary["namespace"] = ns_name_by_id.get(mem.namespace_id, mem.namespace_id)
+                summaries.append(summary)
+
+            payload: dict = {"ok": True, "count": len(results), "memories": summaries}
+            if len(ns_names) == 1:
+                payload["namespace"] = ns_names[0]
+            else:
+                payload["namespaces"] = ns_names
+                payload["duplicates_removed"] = loaded_total - len(results)
+            return payload
         except Exception as exc:
             logger.exception("memory_context failed")
             return _err(f"memory_context failed: {exc}")

@@ -354,11 +354,32 @@ Search and retrieve memories ranked by relevance × freshness.
 Auto-surface relevant memories for the current workspace. Called on session start.
 
 **Parameters:**
-- `namespace` (optional) — auto-resolved from config when omitted. Created if
-  absent (session start in a fresh workspace bootstraps its namespace).
+- `namespace` (optional) — a single name **or a comma-separated list**
+  (e.g. `"crow,my-project"`). Auto-resolved from config when omitted. Created
+  if absent (session start in a fresh workspace bootstraps its namespace).
+  A multi-namespace call loads every namespace in one shot and
+  **de-duplicates across them** — a memory that surfaces in more than one
+  load (typically via the cross-namespace pattern bucket) keeps its
+  highest-scoring instance. The response carries `namespaces` (the resolved
+  list) and `duplicates_removed`; a single-namespace call keeps the
+  historical `namespace` key. Every returned memory is stamped with its home
+  `namespace` name.
 - `task_hint` (optional) — brief description of current task for better relevance
-- `limit` (optional) — max memories to surface (defaults to
+- `limit` (optional) — max memories to surface **per namespace** (defaults to
   `MEMORY_AUTO_CONTEXT_LIMIT`, which defaults to 10)
+- `compact` (optional, default `false`) — return a lightweight payload:
+  full `content` is replaced by a whitespace-normalized ~200-char `summary`
+  excerpt and bookkeeping fields (timestamps, `access_count`) are dropped.
+  Pull the full body with `memory_recall` when a memory matters.
+
+**Access semantics:** a context load is a *protocol-driven read*, not real
+usage signal. Surfaced memories get their dormancy clock refreshed
+(`last_accessed`, via `MemoryStore.touch_many()`) but **`access_count` is not
+incremented and no `access_log` row is written** — those are reserved for
+`memory_recall`/`memory_search` hits. This keeps mandatory session-start loads
+from inflating the access component of the composite score (a rich-get-richer
+feedback loop where whatever already ranks high gets auto-loaded, bumped, and
+ranks higher still).
 
 **Retrieval strategy:** the result draws from three intent buckets, each ranked
 by its *own* native signal and given a **guaranteed quota** of the `limit`
