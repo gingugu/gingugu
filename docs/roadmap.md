@@ -134,6 +134,7 @@ Future upgrades once the core is battle-tested.
 | Review hints for point-in-time memories | ✅ | v0.4.0: `staleness.py` flags open-PR/waiting-on phrasing (14-day gate) + passed expiry dates on every read surface; `memory_stats` review sweep. Advisory only |
 | Suggest-mode near-dupe scanning | ✅ | v0.4.0: `memory_consolidate` without ids = read-only pairwise-embedding cluster scan (0.9 threshold, tuned on a real brain), title fallback |
 | Save-discipline Stop hook (`.claude` kit) | ✅ | v0.4.0: blocks a stop once per session when real work happened but nothing was saved |
+| `gingugu init` one-command bootstrap | ✅ | Installs the Claude Code hook kit (SessionStart contract auto-inject + Stop save-discipline + `/sink-the-ship`) with a non-destructive `.claude/settings.json` merge; `--client` writes a Windsurf/Cursor/Cline rules file. Ships the hook-based install users couldn't get from copy-paste docs |
 
 **Milestone:** The brain becomes genuinely smarter over time.
 

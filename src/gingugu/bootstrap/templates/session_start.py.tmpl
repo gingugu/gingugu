@@ -1,0 +1,93 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+"""Gingugu SessionStart hook.
+
+Injects the Gingugu memory startup contract into Claude Code's context at the
+start of every fresh session (startup / clear / resume). This is what makes the
+memory protocol *reliable*: unlike a rules file (which is not guaranteed to be
+loaded into context), a SessionStart hook re-injects the contract every time.
+
+The project namespace is derived from the working directory name, so this hook
+is fully portable — drop it into any repo and it targets that repo's namespace.
+
+Installed by `gingugu init`. Pure stdlib; never crashes (fails soft on any error).
+"""
+
+import json
+import os
+import sys
+from pathlib import Path
+
+
+def build_startup_contract(cwd: str) -> str:
+    """Imperative Gingugu startup contract, injected fresh every session."""
+    project = Path(cwd).name
+    return (
+        "=== SESSION STARTUP CONTRACT (Gingugu memory protocol - do this FIRST) ===\n"
+        "Before responding to the first user message, run these in parallel as your\n"
+        "opening action. Non-negotiable:\n"
+        f'  - mcp__gingugu__memory_context(namespace="crow,{project}", task_hint=...)\n'
+        "    # ONE call: identity + project, deduped across namespaces. Append any\n"
+        '    # other workspace repos to the list ("crow,proj-a,proj-b"). Use\n'
+        "    # compact=true for a lighter payload; pull full bodies via memory_recall.\n"
+        '  - mcp__gingugu__memory_stats(namespace="crow")\n'
+        f'  - mcp__gingugu__memory_stats(namespace="{project}")\n'
+        "Before asking for ANY secret/token/credential: mcp__gingugu__credential_list()\n"
+        "Rules: do not skip; do not ask which repo (the workspace is the answer);\n"
+        'if a namespace is missing, create it with memory_namespaces(action="create", name=...).\n'
+        "Check memory_recall before asking anything answered in a prior session.\n"
+        "=== END CONTRACT ==="
+    )
+
+
+def build_context(source: str, cwd: str) -> str:
+    parts: list[str] = []
+
+    # Contract only on a fresh context window, not mid-session compaction.
+    if source in ("startup", "clear", "resume"):
+        parts.append(build_startup_contract(cwd))
+        parts.append("")
+
+    # Preload the project's checked-in memory digest if present.
+    memory_file = Path(cwd, ".ai", "memory.md")
+    if memory_file.exists():
+        try:
+            content = memory_file.read_text().strip()
+            if content:
+                parts.append("--- Project Memory (.ai/memory.md) ---")
+                parts.append(content[:2000])
+        except OSError:
+            pass
+
+    return "\n".join(parts)
+
+
+def main() -> None:
+    try:
+        input_data = json.loads(sys.stdin.read())
+        source = input_data.get("source", "startup")
+        cwd = input_data.get("cwd", os.getcwd())
+
+        context = build_context(source, cwd)
+        if context:
+            print(
+                json.dumps(
+                    {
+                        "hookSpecificOutput": {
+                            "hookEventName": "SessionStart",
+                            "additionalContext": context,
+                        }
+                    }
+                )
+            )
+        sys.exit(0)
+    except Exception:
+        # A hook must never break the session.
+        sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,41 @@
+## Memory Protocol
+
+Gingugu is your long-term brain. Memory is split into **two layers**:
+
+1. **`crow`** — your global namespace. Identity, preferences, cross-project
+   wisdom, opinions, meta-learnings. Loaded FIRST every session.
+2. **Project namespace** (named for this repo) — schema decisions, bug history,
+   deploy quirks, specific commits. Loaded AFTER crow.
+
+**What goes where:**
+- References a specific repo, file, commit, or project decision → project
+- About HOW you think, work, or collaborate → `crow`
+- Patterns/opinions that transcend any one codebase → `crow`
+- When in doubt, project-scope it.
+
+### Session start
+1. `memory_context(namespace="crow,<project>[,<project2>…]", task_hint=…)` — one
+   call loads the identity foundation plus every repo in the workspace,
+   de-duplicated across namespaces. Load them all speculatively rather than
+   asking which one to focus on. Add `compact=true` for a lighter payload and
+   pull full bodies with `memory_recall` as needed.
+2. `memory_stats(namespace="crow")` — global health.
+3. `memory_stats(namespace="<project>")` for each project namespace.
+
+### During the session
+**Default: save. Immediately.** Save with `memory_store` (project namespace)
+whenever you make a decision, hit or fix a bug, notice a pattern or constraint,
+see a config value/version/path that matters, or complete a task. Save to
+`crow` when you form an opinion about a tool, notice how the user works, or
+reach a conclusion that applies beyond this one project.
+
+**Before asking the user any question** — run `memory_recall` or `memory_search`
+first. If the answer is in memory, use it. Don't ask the same thing twice.
+
+Use `memory_update` when something changes. Use `memory_relate` to link
+connected memories (supersedes, related_to, caused_by, contradicts, parent_of,
+child_of). Set `confidence="verified"` when proven; `inferred` for conclusions.
+
+### Memory types
+`fact`, `decision`, `architecture`, `bug`, `pattern`, `workflow`, `context`,
+`preference`.
