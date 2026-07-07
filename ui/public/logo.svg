@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 520">
+  <defs>
+    <!-- Outer glow for bright nodes -->
+    <filter id="glow-bright" x="-120%" y="-120%" width="340%" height="340%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <!-- Soft glow for dim nodes -->
+    <filter id="glow-soft" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <!-- Background radial gradient -->
+    <radialGradient id="bg" cx="50%" cy="48%" r="52%">
+      <stop offset="0%"   stop-color="#0d1f3c"/>
+      <stop offset="100%" stop-color="#080d1a"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="520" height="520" rx="76" fill="url(#bg)"/>
+
+  <!-- ── G-shape edge connections ─────────────────────────────────────── -->
+  <!-- Primary edges (purple, solid) -->
+  <g stroke="#7c3aed" stroke-width="2.8" stroke-linecap="round" opacity="0.75">
+    <!-- Top arc: P1→P2→P3 -->
+    <line x1="358" y1="112" x2="218" y2="90"/>
+    <line x1="218" y1="90"  x2="100" y2="188"/>
+    <!-- Left side: P3→P4→P5 -->
+    <line x1="100" y1="188" x2="80"  y2="262"/>
+    <line x1="80"  y1="262" x2="100" y2="348"/>
+    <!-- Bottom arc: P5→P6→P7 -->
+    <line x1="100" y1="348" x2="216" y2="428"/>
+    <line x1="216" y1="428" x2="346" y2="416"/>
+    <!-- Right side down to bar: P7→P8→P9 -->
+    <line x1="346" y1="416" x2="422" y2="336"/>
+    <line x1="422" y1="336" x2="422" y2="260"/>
+    <!-- Horizontal bar: P9→P10 -->
+    <line x1="422" y1="260" x2="295" y2="260"/>
+  </g>
+
+  <!-- Secondary "network" cross-links (dashed, fainter) -->
+  <g stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="5,5" opacity="0.28">
+    <line x1="218" y1="90"  x2="80"  y2="262"/>
+    <line x1="100" y1="348" x2="346" y2="416"/>
+    <line x1="358" y1="112" x2="422" y2="260"/>
+    <line x1="216" y1="428" x2="295" y2="260"/>
+  </g>
+
+  <!-- Ambient floating nodes (background depth) -->
+  <g fill="#38bdf8" opacity="0.22" filter="url(#glow-soft)">
+    <circle cx="178" cy="178" r="4.5"/>
+    <circle cx="155" cy="315" r="4"/>
+    <circle cx="282" cy="385" r="4"/>
+    <circle cx="370" cy="200" r="4.5"/>
+    <circle cx="248" cy="158" r="3.5"/>
+    <circle cx="162" cy="378" r="3.5"/>
+  </g>
+
+  <!-- ── Main G-path nodes ──────────────────────────────────────────────── -->
+  <!-- Teal nodes (the G arc) -->
+  <g fill="#00d9ff" filter="url(#glow-bright)">
+    <circle cx="358" cy="112" r="10"/>
+    <circle cx="218" cy="90"  r="10"/>
+    <circle cx="100" cy="188" r="10"/>
+    <circle cx="80"  cy="262" r="11"/>
+    <circle cx="100" cy="348" r="10"/>
+    <circle cx="216" cy="428" r="10"/>
+    <circle cx="346" cy="416" r="10"/>
+    <circle cx="422" cy="336" r="10"/>
+  </g>
+  <!-- Purple nodes (the bar — the thing that makes it a G, not a C) -->
+  <g fill="#a78bfa" filter="url(#glow-bright)">
+    <circle cx="422" cy="260" r="11"/>
+    <circle cx="295" cy="260" r="11"/>
+  </g>
+
+  <!-- ── Wordmark ────────────────────────────────────────────────────────── -->
+  <text
+    x="260" y="490"
+    font-family="'SF Mono', 'JetBrains Mono', 'Fira Code', monospace"
+    font-size="28"
+    font-weight="600"
+    letter-spacing="6"
+    fill="#00d9ff"
+    text-anchor="middle"
+    opacity="0.85"
+  >gingugu</text>
+</svg>
