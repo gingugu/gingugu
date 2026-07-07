@@ -4,7 +4,7 @@ _Last updated: 2026-07-07_
 
 ## Shipped / Working
 
-- **v0.3.8 on PyPI** — released via Trusted Publishing (OIDC) on tag; GitHub
+- **v0.4.0 on PyPI** — released via Trusted Publishing (OIDC) on tag; GitHub
   Release auto-cut from CHANGELOG.
 - **Two-layer memory** — `crow` (global identity) + per-project namespaces, live.
 - **Never-forget model** — dormancy + spreading activation replaced time-based
@@ -18,17 +18,11 @@ _Last updated: 2026-07-07_
 
 ## In Progress
 
-- **Docs refresh (README + gingugu.com).** Reconciling public-facing claims
-  with the shipped state: stale test count (138 → 237), "Pruning" in the
-  architecture diagram (contradicted never-forget), missing promote/serve/
-  review-hints/suggest-mode coverage, and removal of the competitor
-  capability matrix (rot-prone third-party claims) in favor of the
-  honest-take prose. Branch `docs/readme-refresh`.
-- **Release pending.** CHANGELOG `[Unreleased]` holds the whole feedback arc
-  plus serve/promote - needs a version-bump + tag to reach PyPI, then
-  `uv tool install --reinstall` + client restart to dogfood the new context
-  loading, then the `.claude/hooks/session_start.py` startup contract text
-  should switch to the single multi-namespace `memory_context` call.
+- **v0.4.0 released** (2026-07-07): serve, promote Stage 1, multi-namespace
+  context + compact, review hints, suggest mode, save hook, timeline chart
+  fix. Remaining: dogfood the new context loading after client restart; the
+  `.claude/hooks/session_start.py` startup contract + global agent rules now
+  reference the single multi-namespace `memory_context` call.
 - **Networked brain (Phase 5 reframe → "The Crow's Nest").** Done: transport
   keystone (`gingugu serve`) and the promotion bridge **Stage 1**
   (`gingugu promote`, merged in PR #11). Next: **Stage 2** consolidation
@@ -112,8 +106,6 @@ _Last updated: 2026-07-07_
 
 ## Next Up
 
-- **Feedback arc PR B + PR C** (staleness hints; save-discipline hooks +
-  near-dupe surfacing/cleanup) - see In Progress.
 - **Promotion bridge Stage 2-4** - consolidation with `contributors[]`,
   conflict detection, wiring to the real local brain (Stage 1 shipped, PR #11).
 - Repo-ingestion agent to cold-seed central with org breadth.
