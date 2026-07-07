@@ -16,6 +16,7 @@ import logging
 
 from .. import context as context_mod
 from .. import search as search_mod
+from .. import staleness
 from ..models import Confidence, Memory, MemoryType
 from . import ServerContext
 from .helpers import (
@@ -134,7 +135,12 @@ def register(mcp, ctx: ServerContext) -> None:
         Context loads refresh each surfaced memory's dormancy clock but do not
         count as real accesses: ``access_count`` is reserved for
         memory_recall/memory_search hits, so protocol-driven session-start
-        loads don't inflate ranking signals."""
+        loads don't inflate ranking signals.
+
+        A surfaced memory may carry ``review_hints`` — advisory signals that
+        its content describes point-in-time state (an open PR, a "waiting on"
+        note, a passed expiry date) that hasn't been confirmed recently.
+        Reconcile with memory_update / memory_forget if it's no longer true."""
         try:
             requested = _split_csv(namespace)
             ns_names = list(dict.fromkeys(requested)) or [ctx.namespaces.resolve_name(None)]
@@ -178,6 +184,17 @@ def register(mcp, ctx: ServerContext) -> None:
             for mem in results:
                 summary = _compact_summary(mem) if compact else _memory_summary(mem)
                 summary["namespace"] = ns_name_by_id.get(mem.namespace_id, mem.namespace_id)
+                # Advisory nudge for point-in-time content ("PR #12 open,
+                # waiting on…") that hasn't been confirmed recently — the
+                # reader reconciles it, never the server.
+                hints = staleness.review_signals(
+                    mem.content,
+                    last_confirmed=mem.last_confirmed,
+                    updated_at=mem.updated_at,
+                    created_at=mem.created_at,
+                )
+                if hints:
+                    summary["review_hints"] = hints
                 summaries.append(summary)
 
             payload: dict = {"ok": True, "count": len(results), "memories": summaries}
