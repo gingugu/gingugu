@@ -4,17 +4,19 @@
 
 ---
 
-## Current Status: **Phase 5 Complete — Phase 6 (Cognitive Runtime) In Flight** ⛵
+## Current Status: **Phase 5.5 (The Crow's Nest) In Flight — Stage 1 Shipped** ⛵
 
-> Shipped and public: **v0.3.8 on PyPI**, **16 MCP tools** live, **176 tests
-> passing** (ruff + black clean), CI green on ubuntu/macos/windows × 3.11–3.13.
-> Phases 1–4 (storage, intelligence, relations, integration) are done and
-> battle-tested. Phase 5 landed the big upgrades: local semantic embeddings
-> (fastembed ONNX + Ollama backend), RRF hybrid ranking, the never-forget
-> dormancy + spreading-activation reframe, and the full Memory Explorer UI
-> (Trust Map, timeline, GitHub Pages deploy). The repo **dogfoods itself**.
-> Now charting **Phase 6** — the reframe from "memory database" to "persistent
-> cognitive runtime for agents."
+> Shipped and public: **v0.3.8 on PyPI** (v0.4.0 staged on main), **16 MCP
+> tools** live, **237 tests passing** (ruff + black clean), CI green on
+> ubuntu/macos/windows × 3.11–3.13. Phases 1-4 (storage, intelligence,
+> relations, integration) are done and battle-tested. Phase 5 landed the big
+> upgrades: local semantic embeddings (fastembed ONNX + Ollama backend), RRF
+> hybrid ranking, the never-forget dormancy + spreading-activation reframe,
+> the Memory Explorer UI, and the dogfooding-feedback arc (multi-namespace
+> auto-context + compact mode, review hints, suggest-mode dupe scanning,
+> save-discipline hook). Phase 5.5 is turning gingugu into a **networked
+> brain**: `gingugu serve` (streamable HTTP + Bearer auth) and promotion
+> Stage 1 (`gingugu promote`) are live. The repo **dogfoods itself**.
 
 ---
 
@@ -128,8 +130,33 @@ Future upgrades once the core is battle-tested.
 | Tag-based spreading activation | ⬜ | Extend reactivation beyond relation edges to shared-tag clusters |
 | Backup/sync strategy | ⬜ | git-backed or rsync |
 | Multi-workspace support | ⬜ | Multiple IDE/agent instances |
+| Multi-namespace auto-context + compact mode | ✅ | v0.4.0: one `memory_context` call loads many namespaces deduped; `compact` returns title + excerpt. Context loads refresh dormancy without inflating `access_count` |
+| Review hints for point-in-time memories | ✅ | v0.4.0: `staleness.py` flags open-PR/waiting-on phrasing (14-day gate) + passed expiry dates on every read surface; `memory_stats` review sweep. Advisory only |
+| Suggest-mode near-dupe scanning | ✅ | v0.4.0: `memory_consolidate` without ids = read-only pairwise-embedding cluster scan (0.9 threshold, tuned on a real brain), title fallback |
+| Save-discipline Stop hook (`.claude` kit) | ✅ | v0.4.0: blocks a stop once per session when real work happened but nothing was saved |
 
 **Milestone:** The brain becomes genuinely smarter over time.
+
+---
+
+## Phase 5.5: The Crow's Nest — Networked Brain 🐦‍⬛
+
+The hard split between per-dev **local brains** (organic capture during real
+work) and a shared **central brain** (deliberate collection), joined by the
+promotion loop: harvest each developer's durable knowledge before it dies in
+their head. Cold-crawl breadth is the seed; promoted organic gold is the moat.
+
+| Task | Status | Notes |
+|------|--------|-------|
+| `gingugu serve` - streamable HTTP + Bearer auth | ✅ | Same server over the network; self-persisting token, `/healthz`, `MEMORY_CREDENTIALS_ENABLED=false` for shared instances |
+| Promotion **Stage 1**: `gingugu promote` | ✅ | MCP client (server stays a pure store). Exclusion filter (verified, minus episodic/personal tags, minus secret-looking content), provenance stamp, idempotent re-runs, read-only on source |
+| Promotion **Stage 2**: consolidate near-dupes into one canonical memory with `contributors[]` | ⬜ | Dupes from multiple devs = single source of truth + independent confirmation strengthens trust |
+| Promotion **Stage 3**: conflict detection → human-reviewed `contradicts` edges | ⬜ | Small local LLM judge (Ollama), never auto-overwrite |
+| Promotion **Stage 4**: wire the source side to the real local brain | ⬜ | Today's flow is verified across two local serve instances |
+| Repo-ingestion agent (cold-seed central with org breadth) | ⬜ | External agent speaking MCP - no repo parsing inside the server |
+| Data-ownership decision before hosting real work knowledge | ⬜ | Personal vs company infra, or scrubbed/synthetic seed |
+
+**Milestone:** Tribal knowledge survives the person who learned it.
 
 ---
 
@@ -202,4 +229,8 @@ for agents." Crystallized after an external architectural review on
 
 ---
 
-*Next action: Phase 6 (Cognitive Runtime). Highest-leverage thread that needs no architectural shift — true hybrid retrieval (RRF over independent BM25 + vector candidate pools), backed by a retrieval evaluation corpus (Recall@K / MRR) so ranking changes are measured, not eyeballed. Gingugu is public, self-hosting, and shipping.*
+*Next action: Phase 5.5 Stages 2-4 (consolidation with contributors, conflict
+detection, wiring promotion to the real local brain). In parallel from Phase 6:
+true hybrid retrieval (RRF over independent BM25 + vector candidate pools),
+backed by a retrieval evaluation corpus (Recall@K / MRR) so ranking changes are
+measured, not eyeballed. Gingugu is public, self-hosting, and shipping.*
