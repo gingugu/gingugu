@@ -45,6 +45,12 @@ _Last updated: 2026-07-07_
 
 ## Recently Completed
 
+- **2026-07-07** — Save discipline + dupe surfacing (PR C of the feedback
+  arc): `memory_consolidate` suggest mode (read-only pairwise-embedding
+  near-dupe scan, title-only fallback, 1000-memory cap) and a
+  `--check-memory-saves` flag on the `.claude` kit Stop hook (blocks a stop
+  once per session when ≥15 tool calls but zero gingugu writes — guards the
+  lost-session failure mode). 8 new tests, 228 total.
 - **2026-07-07** — Staleness review hints (PR B of the feedback arc): new
   `staleness.py` detector for point-in-time content (open-PR references,
   waiting-on phrasing, unmerged branches — gated on 14 days unconfirmed;
