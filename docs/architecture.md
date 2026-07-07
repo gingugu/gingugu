@@ -303,6 +303,29 @@ a *different* memory sparks it — the cluster lights up together. Implemented i
 best-effort, so a failure never breaks a read. Tag-based spreading is a planned
 follow-up.
 
+### Review Hints
+
+Never-forget means nothing is auto-demoted — but a **point-in-time** memory
+("PR #947 open, waiting on Joe"; "key expires 2026-06-29") goes silently wrong
+the moment the world moves on. `staleness.py` detects such content and nudges
+the *reader* to reconcile it; the server never mutates anything.
+
+Two signal classes (all regex-based, case-insensitive):
+
+- **Gated** — in-flight phrasing that only fires once the memory hasn't been
+  confirmed for `REVIEW_HINT_AFTER_DAYS` (14): `open-pr-reference` (a PR/MR
+  number near open/waiting/pending/unmerged wording, either order),
+  `waiting-on` (waiting on/for, awaiting, blocked on/by), `unmerged-branch`.
+- **Ungated** — the content names its own clock and fires immediately:
+  `expired-date` (`expires <YYYY-MM-DD>` in the past), `stale-as-of-date`
+  (`as of <YYYY-MM-DD>` older than the gate window).
+
+Surfaced in two places: each `memory_context` result may carry
+`review_hints: [...]`, and `memory_stats` returns a `review` block
+(`review_suggested` count + up to 5 sample entries) for a namespace-wide
+audit. The expected reaction is `memory_update` (reconfirm or correct) or
+`memory_forget` — the caller's judgment, never the server's.
+
 ---
 
 ## MCP Tools Specification
@@ -371,6 +394,10 @@ Auto-surface relevant memories for the current workspace. Called on session star
   full `content` is replaced by a whitespace-normalized ~200-char `summary`
   excerpt and bookkeeping fields (timestamps, `access_count`) are dropped.
   Pull the full body with `memory_recall` when a memory matters.
+
+Each returned memory may carry `review_hints` — advisory signals that its
+content describes point-in-time state that may have gone stale (see *Review
+Hints* under Scoring & Memory Lifecycle).
 
 **Access semantics:** a context load is a *protocol-driven read*, not real
 usage signal. Surfaced memories get their dormancy clock refreshed
@@ -463,6 +490,10 @@ Get health overview of the memory system.
   compatibility; the old auto-demotion contradicted the never-forget model and
   was removed. Stats report `dormant_count` (a resting signal) instead and
   never mutate confidence.
+
+The response includes a `review` block — `review_suggested` (count of active
+memories tripping a review signal; see *Review Hints* above) plus up to 5
+sample entries (`id`, `title`, `signals`). Advisory only.
 
 ### `memory_search`
 Advanced search with full filter support.

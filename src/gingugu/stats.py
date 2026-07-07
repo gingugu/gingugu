@@ -8,6 +8,7 @@ import time
 from datetime import UTC, datetime, timedelta
 
 from .decay import DEPRECATE_SUGGEST_AFTER_DAYS, DORMANT_AFTER_DAYS
+from .staleness import review_signals
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +130,45 @@ def compute_stats(conn: sqlite3.Connection, *, namespace_id: str | None = None) 
         "access_log_rows": _count(conn, "SELECT COUNT(*) FROM access_log"),
         "credentials": _credential_health(conn),
         "hygiene": compute_hygiene(conn, namespace_id=namespace_id),
+        "review": compute_review(conn, namespace_id=namespace_id),
+    }
+
+
+# Cap on how many review-flagged memories we list in the stats sample; the
+# full count is always reported.
+_REVIEW_SAMPLE_LIMIT = 5
+
+
+def compute_review(conn: sqlite3.Connection, *, namespace_id: str | None = None) -> dict:
+    """Advisory review sweep: point-in-time memories that may have gone stale.
+
+    Runs the ``staleness.review_signals`` detector over every active memory
+    (see that module for the signal set and gating). Purely informational —
+    nothing is demoted or deleted; the caller decides whether to
+    ``memory_update`` (reconfirm/correct) or ``memory_forget`` each hit.
+    """
+    and_ns = " AND namespace_id = ?" if namespace_id else ""
+    ns_params: tuple = (namespace_id,) if namespace_id else ()
+    rows = conn.execute(
+        "SELECT id, title, content, last_confirmed, updated_at, created_at "
+        "FROM memories WHERE confidence != 'deprecated'" + and_ns,
+        ns_params,
+    ).fetchall()
+
+    flagged = []
+    for row in rows:
+        signals = review_signals(
+            row["content"],
+            last_confirmed=row["last_confirmed"],
+            updated_at=row["updated_at"],
+            created_at=row["created_at"],
+        )
+        if signals:
+            flagged.append({"id": row["id"], "title": row["title"], "signals": signals})
+
+    return {
+        "review_suggested": len(flagged),
+        "sample": flagged[:_REVIEW_SAMPLE_LIMIT],
     }
 
 

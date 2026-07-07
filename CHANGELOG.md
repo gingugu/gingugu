@@ -46,6 +46,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   memory's full `content` with a whitespace-normalized ~200-char `summary`
   excerpt and drops bookkeeping fields — a 5-10× lighter session-start payload.
   Pull the full body with `memory_recall` when a memory matters.
+- **Review hints for point-in-time memories.** A memory like "PR #947 open,
+  waiting on Joe" is true at write time and silently wrong once the PR merges.
+  New `staleness.py` detector flags in-flight phrasing (open-PR references,
+  waiting-on/blocked-on, unmerged branches) on memories not confirmed within
+  14 days, plus self-dating signals that fire immediately (`expires
+  <past-date>`, stale `as of <date>`). Surfaced as advisory `review_hints` on
+  `memory_context` results and a namespace-wide `review` block (count +
+  sample) in `memory_stats`. Purely informational — never-forget stands; the
+  caller reconciles with `memory_update`/`memory_forget`.
 
 ### Changed
 
