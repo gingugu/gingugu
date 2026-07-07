@@ -156,9 +156,11 @@ def build_startup_contract(cwd):
         "=== SESSION STARTUP CONTRACT (Gingugu memory protocol - do this FIRST) ===\n"
         "Before responding to the first user message, run these in parallel as your\n"
         "opening action. Non-negotiable:\n"
-        '  - mcp__gingugu__memory_context(namespace="crow")   # identity, always first\n'
+        f'  - mcp__gingugu__memory_context(namespace="crow,{project}", task_hint=...)\n'
+        "    # ONE call: identity + project, deduped across namespaces. Append any\n"
+        '    # other workspace repos to the list ("crow,proj-a,proj-b"). Use\n'
+        "    # compact=true for a lighter payload; pull full bodies via memory_recall.\n"
         '  - mcp__gingugu__memory_stats(namespace="crow")\n'
-        f'  - mcp__gingugu__memory_context(namespace="{project}")\n'
         f'  - mcp__gingugu__memory_stats(namespace="{project}")\n'
         "Before asking for ANY secret/token/credential: mcp__gingugu__credential_list()\n"
         "Rules: do not skip; do not ask which repo (the workspace is the answer);\n"
