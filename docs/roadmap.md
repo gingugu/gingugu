@@ -6,7 +6,7 @@
 
 ## Current Status: **Phase 5.5 (The Crow's Nest) In Flight — Stage 1 Shipped** ⛵
 
-> Shipped and public: **v0.3.8 on PyPI** (v0.4.0 staged on main), **16 MCP
+> Shipped and public: **v0.4.0 on PyPI**, **16 MCP
 > tools** live, **237 tests passing** (ruff + black clean), CI green on
 > ubuntu/macos/windows × 3.11–3.13. Phases 1-4 (storage, intelligence,
 > relations, integration) are done and battle-tested. Phase 5 landed the big
