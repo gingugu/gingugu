@@ -107,6 +107,7 @@ export default function App() {
     <div className="h-screen flex flex-col bg-gray-950">
       <header className="flex items-center justify-between px-6 py-3 border-b border-gray-800 bg-gray-950/90 backdrop-blur-sm">
         <div className="flex items-center gap-3">
+          <img src="/logo.svg" alt="Gingugu" width={28} height={28} className="rounded-md" />
           <Brain className="text-blue-500" size={24} />
           <h1 className="text-lg font-bold text-white tracking-tight">Memory Explorer</h1>
           {loading ? (
