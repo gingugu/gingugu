@@ -101,7 +101,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/stop.py --chat --notify",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/stop.py --chat --notify --check-memory-saves",
             "timeout": 30
           }
         ]

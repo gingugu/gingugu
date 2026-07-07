@@ -51,9 +51,11 @@ def register(mcp, ctx: ServerContext) -> None:
 
     @mcp.tool()
     def memory_consolidate(
-        memory_ids: str,
+        memory_ids: str | None = None,
         strategy: str = "merge",
         keep_originals: bool = True,
+        namespace: str | None = None,
+        min_similarity: float = consolidation.SUGGEST_MIN_SIMILARITY,
     ) -> dict:
         """Combine multiple memories into one to reduce redundancy and knowledge bloat.
         Use when several related memories about the same topic have accumulated over time.
@@ -64,8 +66,32 @@ def register(mcp, ctx: ServerContext) -> None:
         of: merge (concatenate all content into one memory), summarize (produce a
         condensed combined summary), deduplicate (keep the highest-confidence entry and
         deprecate the rest). ``keep_originals=True`` (default) preserves originals as
-        deprecated; set False to hard-delete them."""
+        deprecated; set False to hard-delete them.
+
+        **Suggest mode:** omit ``memory_ids`` for a read-only near-duplicate scan of
+        ``namespace`` (or the resolved default). Returns candidate clusters found by
+        pairwise embedding similarity at or above ``min_similarity`` (falls back to
+        exact-title clusters when no embeddings exist). Nothing is written — inspect
+        the clusters, then call again with ``memory_ids`` to actually consolidate."""
         try:
+            if memory_ids is None or not memory_ids.strip():
+                if not 0.0 < min_similarity <= 1.0:
+                    return _err("min_similarity must be in (0, 1]")
+                ns_name = ctx.namespaces.resolve_name(namespace)
+                ns = ctx.namespaces.get(ns_name)
+                if ns is None:
+                    # Read-only scan must not bootstrap a namespace (matches
+                    # memory_recall's explicit-unknown-namespace behavior).
+                    return _err(f"namespace {ns_name!r} not found")
+                result = consolidation.find_duplicate_clusters(
+                    ctx.conn, namespace_id=ns.id, min_similarity=min_similarity
+                )
+                if result["scanned"] == 0:
+                    result = consolidation.find_title_duplicate_clusters(
+                        ctx.conn, namespace_id=ns.id
+                    )
+                return {"ok": True, "namespace": ns_name, **result}
+
             ids = [m.strip() for m in memory_ids.split(",") if m.strip()]
             if len(ids) < 2:
                 return _err("memory_ids must list at least 2 ids")

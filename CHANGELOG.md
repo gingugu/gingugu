@@ -55,6 +55,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `memory_context` results and a namespace-wide `review` block (count +
   sample) in `memory_stats`. Purely informational — never-forget stands; the
   caller reconciles with `memory_update`/`memory_forget`.
+- **Suggest mode on `memory_consolidate`.** Call it without `memory_ids` for a
+  **read-only** near-duplicate scan of a namespace: pairwise embedding cosine
+  over stored vectors (threshold `min_similarity`, default 0.85), union-found
+  into candidate clusters with ids, titles, and peak similarity. Falls back to
+  exact-title clusters when no embeddings exist. Nothing is written — inspect
+  the clusters, then call again with `memory_ids` to consolidate. Scan is
+  capped at 1000 memories per namespace (O(N²)).
+- **Save-discipline Stop hook (`.claude` kit).** `stop.py --check-memory-saves`
+  blocks the stop **once per session** when the transcript shows substantial
+  tool activity (default ≥15 calls) but zero gingugu memory writes, with a
+  reminder to save before the session's knowledge is lost. Second stop always
+  goes through — a nudge, not a cage. Wired into `.claude/settings.json`.
 
 ### Changed
 
