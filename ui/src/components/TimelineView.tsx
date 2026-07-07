@@ -57,14 +57,18 @@ export default function TimelineView({ memories, namespaces }: Props) {
     )
   }, [memories, granularity])
 
-  const accessSeries = useMemo(() => {
+  // One count per memory at its last-activity date. Summing lifetime
+  // access_count here piled a memory's whole history into its newest bucket -
+  // and since context loads now refresh last_accessed without incrementing
+  // the count, that read as phantom recent activity with hollowed-out history.
+  const activitySeries = useMemo(() => {
     const byBucket = new Map<string, number>()
     for (const m of memories) {
       const k = bucketKey(m.last_accessed || m.updated_at || m.created_at, granularity)
-      byBucket.set(k, (byBucket.get(k) ?? 0) + (m.access_count || 0))
+      byBucket.set(k, (byBucket.get(k) ?? 0) + 1)
     }
     return Array.from(byBucket.entries())
-      .map(([bucket, accesses]) => ({ bucket, accesses }))
+      .map(([bucket, active]) => ({ bucket, active }))
       .sort((a, b) => a.bucket.localeCompare(b.bucket))
   }, [memories, granularity])
 
@@ -151,9 +155,9 @@ export default function TimelineView({ memories, namespaces }: Props) {
         </ResponsiveContainer>
       </ChartCard>
 
-      <ChartCard title="Access activity (last accessed timestamps × access count)">
+      <ChartCard title="Recently active (memories by last-touched date)">
         <ResponsiveContainer width="100%" height={200}>
-          <AreaChart data={accessSeries} margin={{ left: -10 }}>
+          <AreaChart data={activitySeries} margin={{ left: -10 }}>
             <defs>
               <linearGradient id="accGrad" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#a855f7" stopOpacity={0.5} />
@@ -167,7 +171,7 @@ export default function TimelineView({ memories, namespaces }: Props) {
               contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }}
               labelFormatter={labelFormatter}
             />
-            <Area type="monotone" dataKey="accesses" stroke="#a855f7" fill="url(#accGrad)" strokeWidth={2} />
+            <Area type="monotone" dataKey="active" stroke="#a855f7" fill="url(#accGrad)" strokeWidth={2} />
           </AreaChart>
         </ResponsiveContainer>
       </ChartCard>
