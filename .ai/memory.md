@@ -54,7 +54,8 @@
 | `relations.py` | Typed graph edges between memories |
 | `consolidation.py` | merge / summarize / deduplicate clusters |
 | `decay.py` | Dormancy as a resting signal — never auto-forgets |
-| `stats.py` | Health stats (counts, confidence, dormancy, hygiene) |
+| `stats.py` | Health stats (counts, confidence, dormancy, hygiene, review sweep) |
+| `staleness.py` | Advisory review hints for point-in-time memories |
 | `namespaces.py` | Namespace CRUD |
 | `credentials.py` | OS-keychain credential vault |
 | `portability.py` | Export / import a namespace |
