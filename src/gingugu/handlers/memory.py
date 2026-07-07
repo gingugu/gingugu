@@ -14,6 +14,7 @@ import logging
 from ..models import Confidence, MemoryType
 from . import ServerContext
 from .helpers import (
+    _coerce_metadata,
     _err,
     _find_similar,
     _memory_summary,
@@ -34,7 +35,7 @@ def register(mcp, ctx: ServerContext) -> None:
         tags: str | None = None,
         confidence: str = "inferred",
         source: str | None = None,
-        metadata: str | None = None,
+        metadata: str | dict | None = None,
         dedupe_check: bool = True,
         relation_check: bool = True,
     ) -> dict:
@@ -91,7 +92,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 content=content,
                 confidence=conf,
                 source=source,
-                metadata=metadata,
+                metadata=_coerce_metadata(metadata),
                 tags=_split_csv(tags),
             )
             relations = (
@@ -123,7 +124,7 @@ def register(mcp, ctx: ServerContext) -> None:
         title: str | None = None,
         content: str | None = None,
         confidence: str | None = None,
-        metadata: str | None = None,
+        metadata: str | dict | None = None,
         tags: str | None = None,
         relation_check: bool = True,
     ) -> dict:
@@ -153,7 +154,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 title=title,
                 content=content,
                 confidence=conf,
-                metadata=metadata,
+                metadata=_coerce_metadata(metadata),
             )
             if mem is None:
                 return _err(f"memory {memory_id!r} not found")

@@ -20,9 +20,13 @@ _Last updated: 2026-06-29_
 
 - **Networked brain (Phase 5 reframe → "The Crow's Nest").** Building toward a
   hosted/central gingugu instance fed by repo ingestion + selective local→central
-  knowledge promotion. Transport keystone (`gingugu serve`) is done; the
-  promotion bridge (external agent, with a provenance stamp) is the next build.
-  See `docs/roadmap.md` and the architecture memory in the `gingugu` namespace.
+  knowledge promotion. Done: transport keystone (`gingugu serve`) and the
+  promotion bridge **Stage 1** (`gingugu promote` — filter + provenance +
+  idempotent store). Next: **Stage 2** consolidation (merge near-dupes into one
+  canonical memory with a `contributors[]` list), then **Stage 3** conflict
+  detection (`contradicts` edges via a small local LLM judge / Ollama), then
+  **Stage 4** wiring the source to the real local brain. See `docs/roadmap.md`
+  and the architecture memory in the `gingugu` namespace.
 
 ## Blocked / Pending
 
@@ -34,6 +38,15 @@ _Last updated: 2026-06-29_
 
 ## Recently Completed
 
+- **2026-06-29** — Promotion bridge **Stage 1** (`gingugu promote`,
+  `src/gingugu/promote.py`): MCP client that reads a source brain, applies the
+  locked exclusion-based filter (verified, minus episodic/personal tags, minus
+  secret-content), stamps provenance, and stores into a central brain
+  idempotently. Also fixed a real latent bug — `metadata` on
+  `memory_store`/`memory_update` now accepts a dict (HTTP transports deliver
+  JSON objects as dicts; the `str`-only param had made remote metadata
+  unusable). 16 new tests, 201 total. Verified live across two instances.
+  Branch `feature/promote-bridge`.
 - **2026-06-29** — `gingugu serve` streamable-HTTP transport with Bearer-token
   auth and a `/healthz` probe; self-persisting token at `<db-dir>/serve_token`;
   `MEMORY_CREDENTIALS_ENABLED` flag to run an instance without the credential
