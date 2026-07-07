@@ -6,8 +6,8 @@
 
 ## Current Status: **Phase 5.5 (The Crow's Nest) In Flight — Stage 1 Shipped** ⛵
 
-> Shipped and public: **v0.4.0 on PyPI**, **16 MCP
-> tools** live, **237 tests passing** (ruff + black clean), CI green on
+> Shipped and public: **v0.5.0 on PyPI**, **16 MCP
+> tools** live, **254 tests passing** (ruff + black clean), CI green on
 > ubuntu/macos/windows × 3.11–3.13. Phases 1-4 (storage, intelligence,
 > relations, integration) are done and battle-tested. Phase 5 landed the big
 > upgrades: local semantic embeddings (fastembed ONNX + Ollama backend), RRF
@@ -134,7 +134,7 @@ Future upgrades once the core is battle-tested.
 | Review hints for point-in-time memories | ✅ | v0.4.0: `staleness.py` flags open-PR/waiting-on phrasing (14-day gate) + passed expiry dates on every read surface; `memory_stats` review sweep. Advisory only |
 | Suggest-mode near-dupe scanning | ✅ | v0.4.0: `memory_consolidate` without ids = read-only pairwise-embedding cluster scan (0.9 threshold, tuned on a real brain), title fallback |
 | Save-discipline Stop hook (`.claude` kit) | ✅ | v0.4.0: blocks a stop once per session when real work happened but nothing was saved |
-| `gingugu init` one-command bootstrap | ✅ | Installs the Claude Code hook kit (SessionStart contract auto-inject + Stop save-discipline + `/sink-the-ship`) with a non-destructive `.claude/settings.json` merge; `--client` writes a Windsurf/Cursor/Cline rules file. Ships the hook-based install users couldn't get from copy-paste docs |
+| `gingugu init` one-command bootstrap | ✅ | v0.5.0: installs the Claude Code hook kit (SessionStart contract auto-inject + Stop save-discipline + `/sink-the-ship`) with a non-destructive `.claude/settings.json` merge; `--client` writes a Windsurf/Cursor/Cline rules file. Ships the hook-based install users couldn't get from copy-paste docs |
 
 **Milestone:** The brain becomes genuinely smarter over time.
 
