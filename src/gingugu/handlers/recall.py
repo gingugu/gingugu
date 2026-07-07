@@ -16,10 +16,10 @@ import logging
 
 from .. import context as context_mod
 from .. import search as search_mod
-from .. import staleness
 from ..models import Confidence, Memory, MemoryType
 from . import ServerContext
 from .helpers import (
+    _attach_review_hints,
     _collect_related,
     _compact_summary,
     _err,
@@ -91,7 +91,7 @@ def register(mcp, ctx: ServerContext) -> None:
             )
             ctx.store.load_tags(results)
             seed_ids = [m.id for m in results]
-            summaries = [_memory_summary(m) for m in results]
+            summaries = [_attach_review_hints(_memory_summary(m), m) for m in results]
             if include_related:
                 summaries.extend(_collect_related(ctx, seed_ids))
             # Credit the returned seeds as a real access (bumps access_count,
@@ -184,18 +184,7 @@ def register(mcp, ctx: ServerContext) -> None:
             for mem in results:
                 summary = _compact_summary(mem) if compact else _memory_summary(mem)
                 summary["namespace"] = ns_name_by_id.get(mem.namespace_id, mem.namespace_id)
-                # Advisory nudge for point-in-time content ("PR #12 open,
-                # waiting on…") that hasn't been confirmed recently — the
-                # reader reconciles it, never the server.
-                hints = staleness.review_signals(
-                    mem.content,
-                    last_confirmed=mem.last_confirmed,
-                    updated_at=mem.updated_at,
-                    created_at=mem.created_at,
-                )
-                if hints:
-                    summary["review_hints"] = hints
-                summaries.append(summary)
+                summaries.append(_attach_review_hints(summary, mem))
 
             payload: dict = {"ok": True, "count": len(results), "memories": summaries}
             if len(ns_names) == 1:

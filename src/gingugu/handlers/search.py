@@ -8,7 +8,7 @@ from .. import search as search_mod
 from .. import stats as stats_mod
 from ..models import Confidence, MemoryType
 from . import ServerContext
-from .helpers import _err, _memory_summary
+from .helpers import _attach_review_hints, _err, _memory_summary
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 embedder=ctx.store.embedder,
             )
             ctx.store.load_tags(results)
-            summaries = [_memory_summary(m) for m in results]
+            summaries = [_attach_review_hints(_memory_summary(m), m) for m in results]
             # Credit the returned seeds as a real access (bumps access_count,
             # refreshes last_accessed, writes access_log row). Spreading-
             # activation neighbours are intentionally not credited here —

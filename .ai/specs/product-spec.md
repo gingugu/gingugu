@@ -31,7 +31,7 @@ Gingugu instance serves Windsurf and Claude Code against one DB.
 | `memory_context` | Session priming + spreading activation (multi-namespace, deduped; compact mode; not access-credited) | ✅ Shipped |
 | `memory_stats` | Health: counts, confidence, dormancy, hygiene, review sweep | ✅ Shipped |
 | `memory_relate` | Build typed graph edges | ✅ Shipped |
-| `memory_consolidate` | merge / summarize / deduplicate | ✅ Shipped |
+| `memory_consolidate` | merge / summarize / deduplicate + read-only near-dupe suggest scan | ✅ Shipped |
 | `memory_export` / `memory_import` | Back up / transfer a namespace | ✅ Shipped |
 | `memory_namespaces` | Namespace CRUD | ✅ Shipped |
 | `credential_*` | OS-keychain secret vault | ✅ Shipped |

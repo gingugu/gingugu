@@ -55,6 +55,17 @@ def test_merged_pr_record_is_not_flagged() -> None:
     assert _signals("PR #955 merged Jun 16 2026, clusters restored") == []
 
 
+def test_pr_inside_longer_word_does_not_match() -> None:
+    # Peer-review regression: "GDPR #5 open ..." must not trip the PR pattern.
+    assert _signals("GDPR #5 open question about data retention") == []
+
+
+def test_past_tense_blocked_on_is_not_flagged() -> None:
+    # Peer-review regression: resolved narrative is history, not in-flight state.
+    assert _signals("fixed the deadlock: worker was blocked on the queue lock") == []
+    assert _signals("we were waiting for the vendor back then") == []
+
+
 # --- ungated signals (carry their own clock) --------------------------------
 
 
@@ -69,6 +80,25 @@ def test_expired_date_fires_even_when_fresh() -> None:
 
 def test_future_expiry_does_not_fire() -> None:
     assert review_signals("cert expires 2027-01-01", last_confirmed=_FRESH, now=_NOW) == []
+
+
+def test_expiry_today_is_still_valid() -> None:
+    # Peer-review regression: an expiry counts only once its whole day passed.
+    assert review_signals("token expires 2026-07-07", last_confirmed=_FRESH, now=_NOW) == []
+    assert "expired-date" in review_signals(
+        "token expires 2026-07-06", last_confirmed=_FRESH, now=_NOW
+    )
+
+
+def test_renewed_expiry_uses_latest_date() -> None:
+    # Peer-review regression: the newest date wins — a renewal clears the flag.
+    content = "expires 2026-01-01; RENEWED: expires 2027-01-01"
+    assert review_signals(content, last_confirmed=_FRESH, now=_NOW) == []
+
+
+def test_renewed_as_of_uses_latest_date() -> None:
+    content = "as of 2026-06-01 two replicas; as of 2026-07-06 three replicas"
+    assert review_signals(content, last_confirmed=_FRESH, now=_NOW) == []
 
 
 def test_old_as_of_date_fires() -> None:
@@ -139,3 +169,29 @@ async def test_context_and_stats_surface_review_hints(server) -> None:
     assert review["review_suggested"] == 1
     assert review["sample"][0]["id"] == flagged["memory"]["id"]
     assert "expired-date" in review["sample"][0]["signals"]
+
+
+@pytest.mark.asyncio
+async def test_recall_and_search_also_carry_review_hints(server) -> None:
+    """Peer-review regression: hint absence must mean the same thing on every
+    read surface — recall and search stamp review_hints like context does."""
+    flagged = _payload(
+        await server.call_tool(
+            "memory_store",
+            {
+                "content": "the deploy key expires 2026-06-29, rotate it",
+                "title": "deploy key expiry",
+                "type": "fact",
+            },
+        )
+    )
+    assert flagged["ok"]
+    fid = flagged["memory"]["id"]
+
+    rec = _payload(await server.call_tool("memory_recall", {"query": "deploy key expiry"}))
+    rec_hit = next(m for m in rec["memories"] if m["id"] == fid)
+    assert "expired-date" in rec_hit["review_hints"]
+
+    srch = _payload(await server.call_tool("memory_search", {}))
+    srch_hit = next(m for m in srch["memories"] if m["id"] == fid)
+    assert "expired-date" in srch_hit["review_hints"]
