@@ -1,0 +1,126 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+"""Gingugu Stop hook — save-discipline check.
+
+When the agent tries to stop, this checks the session transcript: if there was
+substantial tool activity but ZERO gingugu memory writes, it blocks the stop
+once (per session) with a reminder to save before the context is lost. Guards
+the "unsaved session vanishes" failure mode.
+
+Blocks at most once per session — a session with genuinely nothing to save can
+stop on the second attempt. Fails soft: any parsing problem means no block.
+
+Installed by `gingugu init`. Pure stdlib; never crashes.
+"""
+
+import argparse
+import json
+import os
+import sys
+from pathlib import Path
+
+# Any of these counts as "the session saved something".
+MEMORY_WRITE_TOOLS = {
+    "mcp__gingugu__memory_store",
+    "mcp__gingugu__memory_update",
+    "mcp__gingugu__memory_relate",
+    "mcp__gingugu__memory_forget",
+}
+
+# Below this many total tool calls, the session is treated as conversational.
+DEFAULT_MIN_TOOL_CALLS = 15
+
+SAVE_REMINDER = (
+    "Gingugu save-discipline check: this session has substantial tool activity "
+    "({total} tool calls) but ZERO gingugu memory writes. Unsaved sessions "
+    "vanish - save what this session learned NOW: memory_store the decisions, "
+    "bugs, patterns, and outcomes (project namespace; crow for cross-project "
+    "lessons), then memory_relate the new memories to their cluster. If there "
+    "is genuinely nothing worth saving, you may stop again and this check will "
+    "not re-fire this session."
+)
+
+
+def _entry_tool_names(entry: dict) -> list[str]:
+    """Tool names from the assistant message's own content blocks.
+
+    Deliberately shallow: recursing into tool RESULTS would let a subagent's
+    memory_store satisfy the parent session's save check.
+    """
+    message = entry.get("message") if isinstance(entry, dict) else None
+    content = (message or entry).get("content") if isinstance(entry, dict) else None
+    if not isinstance(content, list):
+        return []
+    return [
+        block["name"]
+        for block in content
+        if isinstance(block, dict)
+        and block.get("type") == "tool_use"
+        and isinstance(block.get("name"), str)
+    ]
+
+
+def _state_root() -> Path:
+    """Anchor state at the project dir, not wherever the session currently stands."""
+    return Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
+
+
+def check_memory_saves(input_data: dict, min_tool_calls: int) -> dict | None:
+    try:
+        if input_data.get("stop_hook_active"):
+            return None  # already continuing from a blocked stop
+        transcript_path = input_data.get("transcript_path")
+        if not transcript_path or not os.path.exists(transcript_path):
+            return None
+
+        session_id = str(input_data.get("session_id") or "unknown")
+        state_file = _state_root() / "logs" / "save_check" / f"{session_id}.flag"
+        if state_file.exists():
+            return None  # one nudge per session, ever
+
+        total = 0
+        with open(transcript_path) as fh:
+            for line in fh:
+                if '"tool_use"' not in line:
+                    continue
+                try:
+                    names = _entry_tool_names(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+                if any(name in MEMORY_WRITE_TOOLS for name in names):
+                    return None  # session saved something; stop scanning
+                total += len(names)
+
+        if total < min_tool_calls:
+            return None
+
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        state_file.write_text("nudged")
+        return {"decision": "block", "reason": SAVE_REMINDER.format(total=total)}
+    except Exception:
+        return None
+
+
+def main() -> None:
+    try:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--check-memory-saves", action="store_true")
+        parser.add_argument("--min-tool-calls", type=int, default=DEFAULT_MIN_TOOL_CALLS)
+        args = parser.parse_args()
+
+        input_data = json.load(sys.stdin)
+
+        if args.check_memory_saves:
+            decision = check_memory_saves(input_data, args.min_tool_calls)
+            if decision is not None:
+                print(json.dumps(decision))
+        sys.exit(0)
+    except Exception:
+        sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

@@ -15,6 +15,10 @@ _Last updated: 2026-07-07_
 - **Credential vault** — OS-keychain backed; `credential_*` tools.
 - **Memory Explorer UI** — React/Vite graph + dashboard under `ui/`.
 - **Cross-platform** — platformdirs DB path; CI green on ubuntu/macos/windows × 3.11–3.13.
+- **`gingugu init` bootstrap** — one command installs the Claude Code hook kit
+  (SessionStart contract auto-inject + Stop save-discipline + `/sink-the-ship`),
+  non-destructive `.claude/settings.json` merge; `--client` writes a rules file
+  for Windsurf/Cursor/Cline. Closes the "our install beats the shipped install" gap.
 
 ## In Progress
 

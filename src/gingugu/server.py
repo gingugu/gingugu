@@ -69,6 +69,7 @@ def main() -> None:
     ``gingugu``         → run over stdio (default; local MCP client transport).
     ``gingugu serve``   → run over streamable HTTP for a remote/central brain.
     ``gingugu promote`` → promote local gold memories up to a central brain.
+    ``gingugu init``    → bootstrap a repo's Claude Code hooks / rules file.
     """
     import sys
 
@@ -82,6 +83,10 @@ def main() -> None:
 
         promote_main(sys.argv[2:])
         return
+    if sys.argv[1:2] == ["init"]:
+        from .bootstrap import main as init_main
+
+        raise SystemExit(init_main(sys.argv[2:]))
     build_server().run()
 
 

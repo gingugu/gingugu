@@ -41,9 +41,10 @@
 
 | Module | Responsibility |
 |---|---|
-| `server.py` | MCP server entrypoint; `gingugu` (stdio) / `gingugu serve` dispatch; tool registration; must never crash |
+| `server.py` | MCP server entrypoint; `gingugu` (stdio) / `serve` / `promote` / `init` dispatch; tool registration; must never crash |
 | `serve.py` | `gingugu serve`: streamable-HTTP transport + Bearer-token auth + `/healthz` |
 | `promote.py` | `gingugu promote`: MCP client that promotes local "gold" to a central brain (filter + provenance + idempotent store) — not part of the server |
+| `bootstrap/` | `gingugu init`: copies packaged hook/command/rules templates into a target repo (Claude Code hooks + non-destructive settings merge, or a `--client` rules file) — not part of the server |
 | `config.py` | Config + cross-platform DB path (platformdirs); transport + credentials-flag settings |
 | `database.py` | Connection, schema, WAL, migrations (`PRAGMA user_version`), FTS5 triggers |
 | `models.py` | Memory / namespace / relation data models |

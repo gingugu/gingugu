@@ -376,8 +376,52 @@ order.
 ### Configure Your AI Agent
 
 The MCP server gives your assistant the *tools*, but it won't use them
-effectively without instructions. Add the memory protocol below to your
-agent's rules file so it knows *when* and *how* to call them.
+effectively without instructions telling it *when* and *how* to call them.
+
+#### Recommended (Claude Code): `gingugu init`
+
+One command bootstraps a repo with the strongest setup Claude Code allows:
+
+```bash
+cd your-repo
+gingugu init
+```
+
+It installs:
+
+- **`.claude/hooks/session_start.py`** — a `SessionStart` hook that auto-injects
+  the memory startup contract into context *every session*. This is the key
+  advantage: unlike a rules file (which is **not** guaranteed to be loaded into
+  context), a hook fires every time, so the protocol is always present. The
+  project namespace is derived from the repo's folder name automatically.
+- **`.claude/hooks/stop.py`** — a `Stop` hook that blocks once if a working
+  session never saved anything, guarding the "unsaved session vanishes" trap.
+- **`.claude/commands/sink-the-ship.md`** — a `/sink-the-ship` command to flush
+  everything worth keeping before you close a session.
+- Both hooks wired into `.claude/settings.json`, **merged non-destructively** —
+  any existing config is backed up (`settings.json.bak`) and preserved.
+- The runtime artifacts the hooks generate (`logs/`, `.claude/data/`,
+  `.claude/settings.local.json`) appended to your `.gitignore` — so a session
+  transcript never gets committed, which matters most on a public repo.
+
+It's idempotent (re-run any time), `--dry-run` previews without writing, and
+`--force` overwrites existing hook files. Then register the server as `gingugu`
+and restart your client:
+
+```bash
+claude mcp add gingugu -- gingugu
+```
+
+#### Other tools (Windsurf / Cursor / Cline)
+
+These have no hook system, so there's no auto-injection to install — the setup
+is a static rules file. Let `gingugu init` write it for you:
+
+```bash
+gingugu init --client windsurf   # or cursor, cline
+```
+
+…or paste the memory protocol below into the rules file yourself.
 
 **Which file?** Depends on your IDE / tool:
 
