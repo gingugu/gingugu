@@ -6,6 +6,7 @@ import json
 import logging
 
 from .. import search as search_mod
+from .. import staleness
 from ..models import Memory
 from ..relations import RelationManager
 from . import ServerContext
@@ -31,7 +32,9 @@ def _coerce_metadata(metadata: str | dict | list | None) -> str | None:
 
 
 def _split_csv(value: str | None) -> list[str]:
-    return [item.strip() for item in value.split(",")] if value else []
+    # Drop empty items so "crow," / "a,,b" don't yield "" entries — an empty
+    # string reaching get_or_create would mint a namespace literally named "".
+    return [item.strip() for item in value.split(",") if item.strip()] if value else []
 
 
 def _memory_summary(mem: Memory) -> dict:
@@ -78,6 +81,24 @@ def _compact_summary(mem: Memory) -> dict:
     if mem.score is not None:
         data["score"] = round(mem.score, 4)
     return data
+
+
+def _attach_review_hints(summary: dict, mem: Memory) -> dict:
+    """Stamp advisory ``review_hints`` onto a summary when the memory's content
+    describes point-in-time state that hasn't been confirmed recently.
+
+    Shared by every read surface (context, recall, search) so hint absence
+    means the same thing everywhere: no staleness signal detected.
+    """
+    hints = staleness.review_signals(
+        mem.content,
+        last_confirmed=mem.last_confirmed,
+        updated_at=mem.updated_at,
+        created_at=mem.created_at,
+    )
+    if hints:
+        summary["review_hints"] = hints
+    return summary
 
 
 def _collect_related(ctx: ServerContext, seed_ids: list[str]) -> list[dict]:

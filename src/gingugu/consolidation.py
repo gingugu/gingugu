@@ -15,6 +15,7 @@ only place memories are intentionally mutated/removed, and only on explicit
 from __future__ import annotations
 
 import logging
+import math
 import sqlite3
 from collections import Counter
 
@@ -27,9 +28,11 @@ logger = logging.getLogger(__name__)
 
 _SUMMARY_SNIPPET = 160
 
-# Suggest-mode scan bounds. The pairwise cosine pass is O(N²) — trivial for a
-# personal namespace (hundreds), unreasonable past this cap.
-SUGGEST_MIN_SIMILARITY = 0.85
+# Suggest-mode scan bounds. The pairwise pass is O(N²) — acceptable for a
+# personal namespace (hundreds), unreasonable past this cap. 0.90 was tuned on
+# a real ~450-memory brain: below it, transitive union-find chains topically
+# related memories (a story arc) into mega-clusters; true near-dupes sit above.
+SUGGEST_MIN_SIMILARITY = 0.9
 _SUGGEST_SCAN_CAP = 1000
 _SUGGEST_CLUSTER_LIMIT = 10
 
@@ -101,11 +104,16 @@ def _retire_originals(
             store.delete(mem.id)
 
 
-def _clusters_from_pairs(
-    pair_sims: dict[tuple[str, str], float], members: list[str]
-) -> list[list[str]]:
-    """Union-find the above-threshold pairs into connected components."""
-    parent = {mid: mid for mid in members}
+def _cluster_pairs(
+    pair_sims: dict[tuple[str, str], float],
+) -> tuple[dict[str, list[str]], dict[str, float]]:
+    """Union-find the above-threshold pairs into components.
+
+    Returns ``(groups, peaks)`` keyed by component root. Nodes appear only via
+    pairs, so every group has at least 2 members and peaks are computed in one
+    pass instead of rescanning all pairs per cluster.
+    """
+    parent: dict[str, str] = {}
 
     def find(x: str) -> str:
         while parent[x] != x:
@@ -114,12 +122,19 @@ def _clusters_from_pairs(
         return x
 
     for a, b in pair_sims:
+        parent.setdefault(a, a)
+        parent.setdefault(b, b)
         parent[find(a)] = find(b)
 
+    peaks: dict[str, float] = {}
+    for (a, _b), sim in pair_sims.items():
+        root = find(a)
+        peaks[root] = max(peaks.get(root, 0.0), sim)
+
     groups: dict[str, list[str]] = {}
-    for mid in members:
-        groups.setdefault(find(mid), []).append(mid)
-    return [g for g in groups.values() if len(g) >= 2]
+    for node in parent:
+        groups.setdefault(find(node), []).append(node)
+    return groups, peaks
 
 
 def find_duplicate_clusters(
@@ -134,9 +149,13 @@ def find_duplicate_clusters(
     Pairwise cosine over the stored embeddings of active memories; pairs at or
     above ``min_similarity`` are union-found into clusters. Returns candidate
     clusters (ids + titles + peak similarity) for the caller to inspect and
-    feed back into ``consolidate`` — nothing is written. Memories without an
-    embedding row (or with a different-dim embedding from an older model) are
-    skipped and reported in ``skipped_no_embedding``.
+    feed back into ``consolidate`` — nothing is written.
+
+    Only the modal-dimension embeddings (the current model generation, same
+    convention as search's dim filter) are compared: rows with no embedding
+    are reported in ``skipped_no_embedding``, rows from an older model (or a
+    zero vector) in ``skipped_stale_model``. Vectors are normalized once so
+    each pair costs a bare dot product.
     """
     rows = conn.execute(
         "SELECT m.id, m.title, e.embedding FROM memories m "
@@ -151,41 +170,52 @@ def find_duplicate_clusters(
         )
 
     titles: dict[str, str] = {}
-    vecs: dict[str, list[float]] = {}
-    skipped = 0
+    by_dim: dict[int, dict[str, list[float]]] = {}
+    no_embedding = 0
     for row in rows:
         titles[row["id"]] = row["title"]
         if row["embedding"] is None:
-            skipped += 1
+            no_embedding += 1
             continue
-        vecs[row["id"]] = emb.unpack(row["embedding"])
+        vec = emb.unpack(row["embedding"])
+        by_dim.setdefault(len(vec), {})[row["id"]] = vec
 
-    members = list(vecs)
+    modal = max(by_dim.values(), key=len) if by_dim else {}
+    stale_model = sum(len(group) for group in by_dim.values()) - len(modal)
+
+    unit: dict[str, list[float]] = {}
+    for mid, vec in modal.items():
+        norm = math.sqrt(sum(x * x for x in vec))
+        if norm > 0.0:
+            unit[mid] = [x / norm for x in vec]
+        else:
+            stale_model += 1  # zero vector: unusable for similarity
+
+    members = list(unit)
     pair_sims: dict[tuple[str, str], float] = {}
     for i, a in enumerate(members):
+        vec_a = unit[a]
         for b in members[i + 1 :]:
-            if len(vecs[a]) != len(vecs[b]):  # different embedding model/dim
-                continue
-            sim = emb.cosine(vecs[a], vecs[b])
+            sim = sum(x * y for x, y in zip(vec_a, unit[b], strict=True))
             if sim >= min_similarity:
                 pair_sims[(a, b)] = sim
 
-    clusters = []
-    for group in _clusters_from_pairs(pair_sims, members):
-        peak = max(sim for (a, b), sim in pair_sims.items() if a in group and b in group)
-        clusters.append(
-            {
-                "ids": group,
-                "titles": [titles[mid] for mid in group],
-                "similarity": round(peak, 3),
-            }
-        )
+    groups, peaks = _cluster_pairs(pair_sims)
+    clusters = [
+        {
+            "ids": group,
+            "titles": [titles[mid] for mid in group],
+            "similarity": round(peaks[root], 3),
+        }
+        for root, group in groups.items()
+    ]
     clusters.sort(key=lambda c: c["similarity"], reverse=True)
 
     return {
         "mode": "semantic",
         "scanned": len(members),
-        "skipped_no_embedding": skipped,
+        "skipped_no_embedding": no_embedding,
+        "skipped_stale_model": stale_model,
         "clusters": clusters[:limit],
     }
 

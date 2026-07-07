@@ -23,15 +23,9 @@
       "Bash(git commit:*)",
       "Bash(git stash:*)",
       "Bash(git checkout *)",
-      "Bash(git push:*)",
-      "Bash(curl:*)",
-      "Bash(glab api:*)",
-      "Bash(jira issue:*)",
-      "Bash(gh:*)",
       "Bash(uv run:*)",
       "Bash(node:*)",
-      "Bash(npx:*)",
-      "Bash(aws configure:*)"
+      "Bash(npx:*)"
     ],
     "deny": []
   },

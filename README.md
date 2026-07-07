@@ -410,7 +410,7 @@ Gingugu is your long-term brain. Memory is split into **two layers**:
 - When in doubt, project-scope it.
 
 ### Session start
-1. `memory_context(namespace="crow,<project>[,<project2>…]", task_hint=…)` — one call loads
+1. `memory_context(namespace="crow,<project>[,<project2>…]", task_hint=…)` - one call loads
    the identity foundation plus every repo in the workspace (multi-repo workspaces are common),
    de-duplicated across namespaces; load all of them speculatively rather than asking the user
    which one to focus on. Add `compact=true` for a lighter payload and pull full bodies with

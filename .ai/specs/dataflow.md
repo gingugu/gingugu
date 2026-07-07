@@ -39,7 +39,7 @@ memory_context(namespace | "ns1,ns2,…", task_hint, limit, compact)
 
 Context loads are protocol-driven reads: they refresh `last_accessed` (dormancy
 clock, via `touch_many`) but do **not** bump `access_count` or write
-`access_log` rows — those are reserved for `memory_recall`/`memory_search`
+`access_log` rows - those are reserved for `memory_recall`/`memory_search`
 hits, so session-start loads can't inflate the access ranking signal.
 
 ## Relations + spreading activation
@@ -58,7 +58,7 @@ they are built. Store-then-relate is the expected loop.
 - `memory_update` — mutate an existing memory (re-runs hint checks on title/content change).
 - `memory_forget` — the ONLY removal path (deprecate or hard-delete). Nothing is
   auto-forgotten.
-- `memory_consolidate` — merge / summarize / deduplicate a cluster; without
+- `memory_consolidate` - merge / summarize / deduplicate a cluster; without
   `memory_ids`, a read-only suggest scan surfaces near-dupe clusters
   (pairwise embedding cosine, title-only fallback) to feed back in.
 - `memory_export` / `memory_import` — back up or transfer a namespace (export
