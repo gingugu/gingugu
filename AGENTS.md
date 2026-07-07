@@ -31,12 +31,14 @@ Gingugu is your long-term brain. Memory is split into **two layers**:
 **Load everything the workspace might need, in parallel. Don't ask the user
 which repo they care about — the workspace itself is the answer.**
 
-1. `memory_context(namespace="crow", task_hint=…)` — identity foundation (always first)
+1. `memory_context(namespace="crow,<project>[,<project2>…]", task_hint=…)` - ONE
+   call loads the identity foundation plus every repo in the workspace,
+   de-duplicated across namespaces. Add `compact=true` for a lighter payload
+   and pull full bodies with `memory_recall` when a memory matters.
 2. `memory_stats(namespace="crow")` — global health pulse (dormancy is a
    resting signal, not rot; never auto-forgotten)
-3. **For EACH repo present in the workspace**, in parallel:
-   - `memory_context(namespace="<project>", task_hint=…)` — project context
-   - `memory_stats(namespace="<project>")` — project health
+3. `memory_stats(namespace="<project>")` for each project namespace, in
+   parallel with step 2
 
 Multi-repo workspaces are common (e.g. `gingugu` + `gingugu.com` side-by-side).
 Load them all speculatively — the cost is near-zero and it prevents an

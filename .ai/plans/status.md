@@ -18,22 +18,25 @@ _Last updated: 2026-07-07_
 
 ## In Progress
 
-- **Dogfooding-feedback arc (tasks 1-6, three themed PRs).** A month of hard
-  daily use surfaced six retrieval-efficiency and hygiene pain points; shipping
-  them as: **PR A** (context efficiency: multi-namespace `memory_context` +
-  compact mode + context loads no longer credited as accesses - branch
-  `feature/context-efficiency`, this PR), **PR B** (staleness hints for
-  point-in-time memories referencing open PRs/branches), **PR C** (save
-  discipline via `.claude` client hooks + proactive near-dupe surfacing and a
-  brain cleanup pass).
-- **Networked brain (Phase 5 reframe → "The Crow's Nest") - parked behind the
-  feedback arc.** Done: transport keystone (`gingugu serve`) and the promotion
-  bridge **Stage 1** (`gingugu promote`, merged in PR #11). Next when resumed:
-  **Stage 2** consolidation (merge near-dupes into one canonical memory with a
-  `contributors[]` list), then **Stage 3** conflict detection (`contradicts`
-  edges via a small local LLM judge / Ollama), then **Stage 4** wiring the
-  source to the real local brain. See `docs/roadmap.md` and the architecture
-  memory in the `gingugu` namespace.
+- **Docs refresh (README + gingugu.com).** Reconciling public-facing claims
+  with the shipped state: stale test count (138 → 237), "Pruning" in the
+  architecture diagram (contradicted never-forget), missing promote/serve/
+  review-hints/suggest-mode coverage, and removal of the competitor
+  capability matrix (rot-prone third-party claims) in favor of the
+  honest-take prose. Branch `docs/readme-refresh`.
+- **Release pending.** CHANGELOG `[Unreleased]` holds the whole feedback arc
+  plus serve/promote - needs a version-bump + tag to reach PyPI, then
+  `uv tool install --reinstall` + client restart to dogfood the new context
+  loading, then the `.claude/hooks/session_start.py` startup contract text
+  should switch to the single multi-namespace `memory_context` call.
+- **Networked brain (Phase 5 reframe → "The Crow's Nest").** Done: transport
+  keystone (`gingugu serve`) and the promotion bridge **Stage 1**
+  (`gingugu promote`, merged in PR #11). Next: **Stage 2** consolidation
+  (merge near-dupes into one canonical memory with a `contributors[]` list),
+  then **Stage 3** conflict detection (`contradicts` edges via a small local
+  LLM judge / Ollama), then **Stage 4** wiring the source to the real local
+  brain. See `docs/roadmap.md` and the architecture memory in the `gingugu`
+  namespace.
 
 ## Blocked / Pending
 
@@ -45,6 +48,12 @@ _Last updated: 2026-07-07_
 
 ## Recently Completed
 
+- **2026-07-07** - Feedback arc peer-reviewed and MERGED (PRs #12, #15, #14;
+  main @ 47ea06e). 8-finder/6-verifier review confirmed 21 findings; all
+  fixed in 1e05867 (staleness regex hardening, empty-namespace guard,
+  suggest-gate tightening, modal-dim embedding filter, stats prefilter,
+  hook state-root + write-tool set, threshold 0.85 → 0.9). 237 tests.
+  Real-brain DESI-54 dupe pair consolidated (backup taken first).
 - **2026-07-07** - Save discipline + dupe surfacing (PR C of the feedback
   arc): `memory_consolidate` suggest mode (read-only pairwise-embedding
   near-dupe scan, title-only fallback, 1000-memory cap) and a
