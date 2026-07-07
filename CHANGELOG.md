@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **`gingugu init` — bootstrap a repo so an assistant actually uses the brain.**
+  A new CLI subcommand that installs the memory protocol as *tooling*, not just
+  documentation. For **Claude Code** (default) it writes a `SessionStart` hook
+  that auto-injects the startup contract into context every session (a rules
+  file is not guaranteed to be loaded; a hook is), a `Stop` hook that enforces
+  save-discipline, and the `/sink-the-ship` session-end command — then wires
+  both hooks into `.claude/settings.json`, merged **non-destructively** (existing
+  config is backed up to `settings.json.bak` and preserved). The project
+  namespace is derived from the repo folder name. Idempotent; `--dry-run`
+  previews, `--force` overwrites. For Windsurf / Cursor / Cline (no hook system),
+  `--client windsurf|cursor|cline` writes the matching rules file with the
+  protocol block instead. Closes the gap where the project's own install (hooks)
+  was far more capable than the copy-paste setup shipped to users.
+  - Also appends the runtime artifacts the hooks generate (`logs/`,
+    `.claude/data/`, `.claude/settings.local.json`, hook `__pycache__/`) to the
+    target repo's `.gitignore`, non-destructively — so a session transcript
+    never lands in the repo, which matters most on a public one.
+  - Output is themed: a 90s h@x0rZ boot-sequence (ASCII banner + `[ OK ]` log),
+    which degrades to clean monochrome when piped or `NO_COLOR` is set.
+
+---
+
 ## [0.4.0] - 2026-07-07
 
 ### Added
