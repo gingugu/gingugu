@@ -68,13 +68,15 @@ def register(mcp, ctx: ServerContext) -> None:
         deprecate the rest). ``keep_originals=True`` (default) preserves originals as
         deprecated; set False to hard-delete them.
 
-        **Suggest mode:** omit ``memory_ids`` for a read-only near-duplicate scan of
-        ``namespace`` (or the resolved default). Returns candidate clusters found by
-        pairwise embedding similarity at or above ``min_similarity`` (falls back to
-        exact-title clusters when no embeddings exist). Nothing is written — inspect
-        the clusters, then call again with ``memory_ids`` to actually consolidate."""
+        **Suggest mode:** omit ``memory_ids`` entirely for a read-only near-duplicate
+        scan of ``namespace`` (or the resolved default). Returns candidate clusters
+        found by pairwise embedding similarity at or above ``min_similarity`` (falls
+        back to exact-title clusters when embeddings are absent or sparse). Nothing
+        is written — inspect the clusters, then call again with ``memory_ids`` to
+        actually consolidate. An empty ``memory_ids`` string is still an error, so
+        a caller that built its id list from an empty collection fails loudly."""
         try:
-            if memory_ids is None or not memory_ids.strip():
+            if memory_ids is None:
                 if not 0.0 < min_similarity <= 1.0:
                     return _err("min_similarity must be in (0, 1]")
                 ns_name = ctx.namespaces.resolve_name(namespace)
@@ -86,7 +88,12 @@ def register(mcp, ctx: ServerContext) -> None:
                 result = consolidation.find_duplicate_clusters(
                     ctx.conn, namespace_id=ns.id, min_similarity=min_similarity
                 )
-                if result["scanned"] == 0:
+                # Fall back to exact-title clusters when embeddings can't see
+                # the namespace: none at all, or the semantic pass found
+                # nothing while unembedded memories dominate the corpus.
+                if result["scanned"] == 0 or (
+                    not result["clusters"] and result["skipped_no_embedding"] > 0
+                ):
                     result = consolidation.find_title_duplicate_clusters(
                         ctx.conn, namespace_id=ns.id
                     )

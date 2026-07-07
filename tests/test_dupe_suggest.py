@@ -64,6 +64,8 @@ def test_semantic_scan_skips_dim_mismatch_and_missing(seeded) -> None:
 
     result = find_duplicate_clusters(conn, namespace_id=ns.id)
     assert result["skipped_no_embedding"] == 1  # e
+    assert result["skipped_stale_model"] == 1  # d: non-modal dim = old model
+    assert result["scanned"] == 3  # only the modal-dim generation is compared
     assert all(d.id not in cl["ids"] for cl in result["clusters"])  # no cross-dim pair
 
 
@@ -159,3 +161,50 @@ async def test_suggest_mode_unknown_namespace_errors(server) -> None:
 async def test_suggest_mode_validates_min_similarity(server) -> None:
     result = _payload(await server.call_tool("memory_consolidate", {"min_similarity": 1.5}))
     assert result["ok"] is False
+
+
+@pytest.mark.asyncio
+async def test_empty_memory_ids_string_still_errors(server) -> None:
+    """Peer-review regression: only OMITTING memory_ids enters suggest mode.
+    An empty string (e.g. ','.join([]) from an upstream bug) fails loudly."""
+    result = _payload(await server.call_tool("memory_consolidate", {"memory_ids": ""}))
+    assert result["ok"] is False
+    assert "at least 2" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_title_fallback_when_embeddings_sparse(server, monkeypatch) -> None:
+    """Peer-review regression: one embedded memory must not blind the title
+    fallback for a namespace dominated by unembedded memories."""
+    from gingugu.handlers import relations as relations_handler
+
+    one = _payload(
+        await server.call_tool(
+            "memory_store",
+            {"content": "alpha", "title": "twin", "type": "fact"},
+        )
+    )
+    two = _payload(
+        await server.call_tool(
+            "memory_store",
+            {"content": "beta", "title": "twin", "type": "fact"},
+        )
+    )
+    assert one["ok"] and two["ok"]
+
+    monkeypatch.setattr(
+        relations_handler.consolidation,
+        "find_duplicate_clusters",
+        lambda conn, **kw: {
+            "mode": "semantic",
+            "scanned": 1,
+            "skipped_no_embedding": 2,
+            "skipped_stale_model": 0,
+            "clusters": [],
+        },
+    )
+    result = _payload(await server.call_tool("memory_consolidate", {}))
+    assert result["ok"]
+    assert result["mode"] == "title-only"
+    assert len(result["clusters"]) == 1
+    assert set(result["clusters"][0]["ids"]) == {one["memory"]["id"], two["memory"]["id"]}

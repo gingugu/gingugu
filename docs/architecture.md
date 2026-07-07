@@ -305,18 +305,18 @@ follow-up.
 
 ### Review Hints
 
-Never-forget means nothing is auto-demoted — but a **point-in-time** memory
+Never-forget means nothing is auto-demoted - but a **point-in-time** memory
 ("PR #947 open, waiting on Joe"; "key expires 2026-06-29") goes silently wrong
 the moment the world moves on. `staleness.py` detects such content and nudges
 the *reader* to reconcile it; the server never mutates anything.
 
 Two signal classes (all regex-based, case-insensitive):
 
-- **Gated** — in-flight phrasing that only fires once the memory hasn't been
+- **Gated** - in-flight phrasing that only fires once the memory hasn't been
   confirmed for `REVIEW_HINT_AFTER_DAYS` (14): `open-pr-reference` (a PR/MR
   number near open/waiting/pending/unmerged wording, either order),
   `waiting-on` (waiting on/for, awaiting, blocked on/by), `unmerged-branch`.
-- **Ungated** — the content names its own clock and fires immediately:
+- **Ungated** - the content names its own clock and fires immediately:
   `expired-date` (`expires <YYYY-MM-DD>` in the past), `stale-as-of-date`
   (`as of <YYYY-MM-DD>` older than the gate window).
 
@@ -324,7 +324,7 @@ Surfaced in two places: each `memory_context` result may carry
 `review_hints: [...]`, and `memory_stats` returns a `review` block
 (`review_suggested` count + up to 5 sample entries) for a namespace-wide
 audit. The expected reaction is `memory_update` (reconfirm or correct) or
-`memory_forget` — the caller's judgment, never the server's.
+`memory_forget` - the caller's judgment, never the server's.
 
 ---
 
@@ -377,32 +377,32 @@ Search and retrieve memories ranked by relevance × freshness.
 Auto-surface relevant memories for the current workspace. Called on session start.
 
 **Parameters:**
-- `namespace` (optional) — a single name **or a comma-separated list**
+- `namespace` (optional) - a single name **or a comma-separated list**
   (e.g. `"crow,my-project"`). Auto-resolved from config when omitted. Created
   if absent (session start in a fresh workspace bootstraps its namespace).
   A multi-namespace call loads every namespace in one shot and
-  **de-duplicates across them** — a memory that surfaces in more than one
+  **de-duplicates across them** - a memory that surfaces in more than one
   load (typically via the cross-namespace pattern bucket) keeps its
   highest-scoring instance. The response carries `namespaces` (the resolved
   list) and `duplicates_removed`; a single-namespace call keeps the
   historical `namespace` key. Every returned memory is stamped with its home
   `namespace` name.
 - `task_hint` (optional) — brief description of current task for better relevance
-- `limit` (optional) — max memories to surface **per namespace** (defaults to
+- `limit` (optional) - max memories to surface **per namespace** (defaults to
   `MEMORY_AUTO_CONTEXT_LIMIT`, which defaults to 10)
-- `compact` (optional, default `false`) — return a lightweight payload:
+- `compact` (optional, default `false`) - return a lightweight payload:
   full `content` is replaced by a whitespace-normalized ~200-char `summary`
   excerpt and bookkeeping fields (timestamps, `access_count`) are dropped.
   Pull the full body with `memory_recall` when a memory matters.
 
-Each returned memory may carry `review_hints` — advisory signals that its
+Each returned memory may carry `review_hints` - advisory signals that its
 content describes point-in-time state that may have gone stale (see *Review
 Hints* under Scoring & Memory Lifecycle).
 
 **Access semantics:** a context load is a *protocol-driven read*, not real
 usage signal. Surfaced memories get their dormancy clock refreshed
 (`last_accessed`, via `MemoryStore.touch_many()`) but **`access_count` is not
-incremented and no `access_log` row is written** — those are reserved for
+incremented and no `access_log` row is written** - those are reserved for
 `memory_recall`/`memory_search` hits. This keeps mandatory session-start loads
 from inflating the access component of the composite score (a rich-get-richer
 feedback loop where whatever already ranks high gets auto-loaded, bumped, and
@@ -457,27 +457,35 @@ Create a relationship between two memories.
 - `relation_type` (required) — supersedes|related_to|caused_by|contradicts|parent_of|child_of
 
 ### `memory_consolidate`
-Merge or summarize related memories into a single consolidated memory — or,
+Merge or summarize related memories into a single consolidated memory - or,
 without `memory_ids`, discover which memories are worth consolidating.
 
 **Parameters:**
-- `memory_ids` (optional) — comma-separated UUIDs to consolidate (min 2).
-  **Omit for suggest mode** (see below).
+- `memory_ids` (optional) - comma-separated UUIDs to consolidate (min 2).
+  **Omit entirely for suggest mode** (an empty string is still an error, so a
+  caller that built its id list from an empty collection fails loudly).
 - `strategy` (optional) — merge|summarize|deduplicate (default: merge)
 - `keep_originals` (optional) — retain originals as deprecated (default: true)
-- `namespace` (optional, suggest mode) — namespace to scan; resolved from
+- `namespace` (optional, suggest mode) - namespace to scan; resolved from
   config when omitted. Unknown namespaces are an error (reads never create).
-- `min_similarity` (optional, suggest mode) — pairwise cosine threshold in
-  (0, 1], default 0.85
+- `min_similarity` (optional, suggest mode) - pairwise similarity threshold in
+  (0, 1], default 0.9. Tuned on a real brain: below ~0.9, transitive
+  union-find chains topically-related memories into "story arc" clusters;
+  true near-duplicates sit above it. Lower it deliberately to explore topic
+  clusters (useful for `memory_relate` candidates, not consolidation).
 
 **Suggest mode:** with no `memory_ids`, runs a **read-only** near-duplicate
-scan of the namespace: pairwise cosine over stored embeddings, union-found
-into clusters, returned as `{mode: "semantic", scanned, skipped_no_embedding,
-clusters: [{ids, titles, similarity}]}` sorted by peak similarity (top 10).
-Memories without an embedding row — or with a different-dim embedding from an
-older model — are skipped; when *no* embeddings exist at all, falls back to
-exact-title clusters (`mode: "title-only"`). Nothing is written: inspect the
-clusters, then call again with `memory_ids` to actually consolidate. The
+scan of the namespace: pairwise similarity over stored embeddings (normalized
+once, so each pair is a bare dot product), union-found into clusters,
+returned as `{mode: "semantic", scanned, skipped_no_embedding,
+skipped_stale_model, clusters: [{ids, titles, similarity}]}` sorted by peak
+similarity (top 10). Only the modal-dimension embeddings (the current model
+generation, matching search's dim filter) are compared: rows with no
+embedding are counted in `skipped_no_embedding`, older-model or zero vectors
+in `skipped_stale_model`. Falls back to exact-title clusters
+(`mode: "title-only"`) when no embeddings exist or when the semantic pass
+finds nothing while unembedded memories dominate. Nothing is written: inspect
+the clusters, then call again with `memory_ids` to actually consolidate. The
 O(N²) scan is capped at 1000 active memories per namespace.
 
 ### `memory_forget`
@@ -507,7 +515,7 @@ Get health overview of the memory system.
   was removed. Stats report `dormant_count` (a resting signal) instead and
   never mutate confidence.
 
-The response includes a `review` block — `review_suggested` (count of active
+The response includes a `review` block - `review_suggested` (count of active
 memories tripping a review signal; see *Review Hints* above) plus up to 5
 sample entries (`id`, `title`, `signals`). Advisory only.
 

@@ -27,11 +27,12 @@ import sys
 from pathlib import Path
 
 # Gingugu write tools — any of these counts as "the session saved something".
+# memory_consolidate is deliberately NOT here: without memory_ids it doubles
+# as a read-only suggest scan, and the transcript only shows the tool name.
 MEMORY_WRITE_TOOLS = {
     "mcp__gingugu__memory_store",
     "mcp__gingugu__memory_update",
     "mcp__gingugu__memory_relate",
-    "mcp__gingugu__memory_consolidate",
     "mcp__gingugu__memory_forget",
 }
 
@@ -148,16 +149,34 @@ def announce_completion():
         pass
 
 
-def _collect_tool_names(node, out):
-    """Recursively collect tool_use block names from a transcript entry."""
-    if isinstance(node, dict):
-        if node.get("type") == "tool_use" and isinstance(node.get("name"), str):
-            out.append(node["name"])
-        for value in node.values():
-            _collect_tool_names(value, out)
-    elif isinstance(node, list):
-        for value in node:
-            _collect_tool_names(value, out)
+def _entry_tool_names(entry):
+    """Tool names from the assistant message's own content blocks.
+
+    Deliberately shallow: tool_use blocks live in entry.message.content (or a
+    top-level content list). Recursing into arbitrary values would also count
+    tool calls embedded inside tool RESULTS (e.g. a subagent's transcript),
+    letting a subagent's memory_store satisfy the parent session's save check.
+    """
+    message = entry.get("message") if isinstance(entry, dict) else None
+    content = (message or entry).get("content") if isinstance(entry, dict) else None
+    if not isinstance(content, list):
+        return []
+    return [
+        block["name"]
+        for block in content
+        if isinstance(block, dict)
+        and block.get("type") == "tool_use"
+        and isinstance(block.get("name"), str)
+    ]
+
+
+def _state_root():
+    """Anchor hook state at the project dir, not wherever the session stands.
+
+    cwd follows the user around (and can be another repo entirely); the flag
+    must live in one stable place for once-per-session to hold.
+    """
+    return Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
 
 
 def check_memory_saves(input_data, min_tool_calls):
@@ -165,7 +184,10 @@ def check_memory_saves(input_data, min_tool_calls):
 
     Blocks at most once per session (state flag under logs/save_check/), so a
     session with genuinely nothing to save can stop on the second attempt.
-    Fail-soft: any parsing problem means no block.
+    Returns None immediately on the first gingugu write seen — a saved session
+    never pays for a full transcript parse. Fail-soft: any parsing problem
+    means no block. Known limit: the transcript shows a tool_use block even
+    for calls the user denied, so a denied save still counts as saved.
     """
     try:
         if input_data.get("stop_hook_active"):
@@ -175,23 +197,24 @@ def check_memory_saves(input_data, min_tool_calls):
             return None
 
         session_id = str(input_data.get("session_id") or "unknown")
-        state_file = Path(os.getcwd()) / "logs" / "save_check" / f"{session_id}.flag"
+        state_file = _state_root() / "logs" / "save_check" / f"{session_id}.flag"
         if state_file.exists():
             return None  # one nudge per session, ever
 
-        tool_names = []
+        total = 0
         with open(transcript_path) as fh:
             for line in fh:
                 if '"tool_use"' not in line:
                     continue
                 try:
-                    _collect_tool_names(json.loads(line), tool_names)
+                    names = _entry_tool_names(json.loads(line))
                 except json.JSONDecodeError:
                     continue
+                if any(name in MEMORY_WRITE_TOOLS for name in names):
+                    return None  # session saved something; stop scanning
+                total += len(names)
 
-        total = len(tool_names)
-        saves = sum(1 for name in tool_names if name in MEMORY_WRITE_TOOLS)
-        if total < min_tool_calls or saves > 0:
+        if total < min_tool_calls:
             return None
 
         state_file.parent.mkdir(parents=True, exist_ok=True)

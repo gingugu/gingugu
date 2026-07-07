@@ -36,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   would move without writing. Read-only on the source.
 - **Multi-namespace `memory_context`.** The `namespace` parameter now accepts a
   comma-separated list (e.g. `"crow,my-project"`): one call loads every
-  namespace and **de-duplicates memories that surface in more than one** —
+  namespace and **de-duplicates memories that surface in more than one** -
   previously, loading N namespaces at session start returned the same
   high-scoring cross-namespace patterns N times. The response carries
   `namespaces` + `duplicates_removed` (single-namespace calls keep the
@@ -44,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   home `namespace` name. `limit` applies per namespace.
 - **`compact` mode on `memory_context`.** `compact=true` replaces each
   memory's full `content` with a whitespace-normalized ~200-char `summary`
-  excerpt and drops bookkeeping fields — a 5-10× lighter session-start payload.
+  excerpt and drops bookkeeping fields - a 5-10× lighter session-start payload.
   Pull the full body with `memory_recall` when a memory matters.
 - **Review hints for point-in-time memories.** A memory like "PR #947 open,
   waiting on Joe" is true at write time and silently wrong once the PR merges.
@@ -53,26 +53,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   14 days, plus self-dating signals that fire immediately (`expires
   <past-date>`, stale `as of <date>`). Surfaced as advisory `review_hints` on
   `memory_context` results and a namespace-wide `review` block (count +
-  sample) in `memory_stats`. Purely informational — never-forget stands; the
+  sample) in `memory_stats`. Purely informational - never-forget stands; the
   caller reconciles with `memory_update`/`memory_forget`.
 - **Suggest mode on `memory_consolidate`.** Call it without `memory_ids` for a
-  **read-only** near-duplicate scan of a namespace: pairwise embedding cosine
-  over stored vectors (threshold `min_similarity`, default 0.85), union-found
-  into candidate clusters with ids, titles, and peak similarity. Falls back to
-  exact-title clusters when no embeddings exist. Nothing is written — inspect
+  **read-only** near-duplicate scan of a namespace: pairwise embedding
+  similarity over stored vectors (threshold `min_similarity`, default 0.9 -
+  tuned on a real brain; lower values cluster by topic, not duplication),
+  union-found into candidate clusters with ids, titles, and peak similarity.
+  Only current-generation (modal-dim) embeddings are compared; stale-model
+  vectors are reported in `skipped_stale_model`. Falls back to exact-title
+  clusters when embeddings are absent or sparse. Nothing is written - inspect
   the clusters, then call again with `memory_ids` to consolidate. Scan is
-  capped at 1000 memories per namespace (O(N²)).
+  capped at 1000 memories per namespace (O(N²), vectors normalized once).
 - **Save-discipline Stop hook (`.claude` kit).** `stop.py --check-memory-saves`
   blocks the stop **once per session** when the transcript shows substantial
   tool activity (default ≥15 calls) but zero gingugu memory writes, with a
   reminder to save before the session's knowledge is lost. Second stop always
-  goes through — a nudge, not a cage. Wired into `.claude/settings.json`.
+  goes through - a nudge, not a cage. Wired into `.claude/settings.json`.
 
 ### Changed
 
 - **Context loads no longer count as accesses.** `memory_context` refreshes
   each surfaced memory's dormancy clock (`last_accessed`) but no longer bumps
-  `access_count` or writes `access_log` rows — those are reserved for
+  `access_count` or writes `access_log` rows - those are reserved for
   `memory_recall` / `memory_search` hits. Mandatory session-start loads were
   inflating the access component of the composite score, a rich-get-richer
   loop where whatever already ranked high got auto-loaded, credited, and
