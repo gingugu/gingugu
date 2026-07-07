@@ -457,12 +457,28 @@ Create a relationship between two memories.
 - `relation_type` (required) — supersedes|related_to|caused_by|contradicts|parent_of|child_of
 
 ### `memory_consolidate`
-Merge or summarize related memories into a single consolidated memory.
+Merge or summarize related memories into a single consolidated memory — or,
+without `memory_ids`, discover which memories are worth consolidating.
 
 **Parameters:**
-- `memory_ids` (required) — comma-separated UUIDs to consolidate
+- `memory_ids` (optional) — comma-separated UUIDs to consolidate (min 2).
+  **Omit for suggest mode** (see below).
 - `strategy` (optional) — merge|summarize|deduplicate (default: merge)
 - `keep_originals` (optional) — retain originals as deprecated (default: true)
+- `namespace` (optional, suggest mode) — namespace to scan; resolved from
+  config when omitted. Unknown namespaces are an error (reads never create).
+- `min_similarity` (optional, suggest mode) — pairwise cosine threshold in
+  (0, 1], default 0.85
+
+**Suggest mode:** with no `memory_ids`, runs a **read-only** near-duplicate
+scan of the namespace: pairwise cosine over stored embeddings, union-found
+into clusters, returned as `{mode: "semantic", scanned, skipped_no_embedding,
+clusters: [{ids, titles, similarity}]}` sorted by peak similarity (top 10).
+Memories without an embedding row — or with a different-dim embedding from an
+older model — are skipped; when *no* embeddings exist at all, falls back to
+exact-title clusters (`mode: "title-only"`). Nothing is written: inspect the
+clusters, then call again with `memory_ids` to actually consolidate. The
+O(N²) scan is capped at 1000 active memories per namespace.
 
 ### `memory_forget`
 Deprecate or permanently delete a memory.

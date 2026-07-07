@@ -15,8 +15,10 @@ only place memories are intentionally mutated/removed, and only on explicit
 from __future__ import annotations
 
 import logging
+import sqlite3
 from collections import Counter
 
+from . import embeddings as emb
 from .models import CONFIDENCE_RANK, Confidence, Memory, MemoryType, RelationType
 from .relations import RelationManager
 from .storage import MemoryStore
@@ -24,6 +26,12 @@ from .storage import MemoryStore
 logger = logging.getLogger(__name__)
 
 _SUMMARY_SNIPPET = 160
+
+# Suggest-mode scan bounds. The pairwise cosine pass is O(N²) — trivial for a
+# personal namespace (hundreds), unreasonable past this cap.
+SUGGEST_MIN_SIMILARITY = 0.85
+_SUGGEST_SCAN_CAP = 1000
+_SUGGEST_CLUSTER_LIMIT = 10
 
 
 def _load(store: MemoryStore, memory_ids: list[str]) -> list[Memory]:
@@ -91,6 +99,111 @@ def _retire_originals(
             store.update(mem.id, confidence=Confidence.DEPRECATED)
         else:
             store.delete(mem.id)
+
+
+def _clusters_from_pairs(
+    pair_sims: dict[tuple[str, str], float], members: list[str]
+) -> list[list[str]]:
+    """Union-find the above-threshold pairs into connected components."""
+    parent = {mid: mid for mid in members}
+
+    def find(x: str) -> str:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for a, b in pair_sims:
+        parent[find(a)] = find(b)
+
+    groups: dict[str, list[str]] = {}
+    for mid in members:
+        groups.setdefault(find(mid), []).append(mid)
+    return [g for g in groups.values() if len(g) >= 2]
+
+
+def find_duplicate_clusters(
+    conn: sqlite3.Connection,
+    *,
+    namespace_id: str,
+    min_similarity: float = SUGGEST_MIN_SIMILARITY,
+    limit: int = _SUGGEST_CLUSTER_LIMIT,
+) -> dict:
+    """Read-only semantic near-duplicate scan over one namespace.
+
+    Pairwise cosine over the stored embeddings of active memories; pairs at or
+    above ``min_similarity`` are union-found into clusters. Returns candidate
+    clusters (ids + titles + peak similarity) for the caller to inspect and
+    feed back into ``consolidate`` — nothing is written. Memories without an
+    embedding row (or with a different-dim embedding from an older model) are
+    skipped and reported in ``skipped_no_embedding``.
+    """
+    rows = conn.execute(
+        "SELECT m.id, m.title, e.embedding FROM memories m "
+        "LEFT JOIN memory_embeddings e ON e.memory_id = m.id "
+        "WHERE m.namespace_id = ? AND m.confidence != 'deprecated'",
+        (namespace_id,),
+    ).fetchall()
+    if len(rows) > _SUGGEST_SCAN_CAP:
+        raise ValueError(
+            f"namespace has {len(rows)} active memories; the O(N²) suggest scan "
+            f"is capped at {_SUGGEST_SCAN_CAP}"
+        )
+
+    titles: dict[str, str] = {}
+    vecs: dict[str, list[float]] = {}
+    skipped = 0
+    for row in rows:
+        titles[row["id"]] = row["title"]
+        if row["embedding"] is None:
+            skipped += 1
+            continue
+        vecs[row["id"]] = emb.unpack(row["embedding"])
+
+    members = list(vecs)
+    pair_sims: dict[tuple[str, str], float] = {}
+    for i, a in enumerate(members):
+        for b in members[i + 1 :]:
+            if len(vecs[a]) != len(vecs[b]):  # different embedding model/dim
+                continue
+            sim = emb.cosine(vecs[a], vecs[b])
+            if sim >= min_similarity:
+                pair_sims[(a, b)] = sim
+
+    clusters = []
+    for group in _clusters_from_pairs(pair_sims, members):
+        peak = max(sim for (a, b), sim in pair_sims.items() if a in group and b in group)
+        clusters.append(
+            {
+                "ids": group,
+                "titles": [titles[mid] for mid in group],
+                "similarity": round(peak, 3),
+            }
+        )
+    clusters.sort(key=lambda c: c["similarity"], reverse=True)
+
+    return {
+        "mode": "semantic",
+        "scanned": len(members),
+        "skipped_no_embedding": skipped,
+        "clusters": clusters[:limit],
+    }
+
+
+def find_title_duplicate_clusters(
+    conn: sqlite3.Connection, *, namespace_id: str, limit: int = _SUGGEST_CLUSTER_LIMIT
+) -> dict:
+    """Fallback duplicate scan when no embeddings exist: exact-title clusters."""
+    rows = conn.execute(
+        "SELECT title, GROUP_CONCAT(id) AS ids, COUNT(*) AS n FROM memories "
+        "WHERE namespace_id = ? AND confidence != 'deprecated' "
+        "GROUP BY title HAVING n > 1 ORDER BY n DESC, title ASC",
+        (namespace_id,),
+    ).fetchall()
+    clusters = [
+        {"ids": row["ids"].split(","), "titles": [row["title"]] * row["n"]} for row in rows[:limit]
+    ]
+    return {"mode": "title-only", "clusters": clusters}
 
 
 def consolidate(
