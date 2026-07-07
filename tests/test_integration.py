@@ -169,9 +169,10 @@ async def test_context_limit_defaults_from_config(limited_server) -> None:
 
 @pytest.mark.asyncio
 async def test_retrieval_handlers_credit_access(server) -> None:
-    """recall, search, and context must each bump access_count and write
-    access_log rows for the seeds they return — that's what powers the
-    Memory Explorer's Access Activity chart."""
+    """recall and search must bump access_count and write access_log rows for
+    the seeds they return — that's what powers the Memory Explorer's Access
+    Activity chart. context is a protocol-driven read: it refreshes the
+    dormancy clock only, so session-start loads don't inflate ranking."""
     a = _payload(
         await server.call_tool(
             "memory_store",
@@ -201,10 +202,12 @@ async def test_retrieval_handlers_credit_access(server) -> None:
     s2 = _payload(await server.call_tool("memory_stats", {}))
     assert s2["stats"]["access_log_rows"] == s1["stats"]["access_log_rows"] + srch["count"]
 
-    # context adds more on top.
+    # context does NOT add access_log rows or bump access_count — it's a
+    # protocol read, not a real access (the access_count pollution fix).
     ctx = _payload(await server.call_tool("memory_context", {}))
+    assert ctx["count"] >= 1
     s3 = _payload(await server.call_tool("memory_stats", {}))
-    assert s3["stats"]["access_log_rows"] == s2["stats"]["access_log_rows"] + ctx["count"]
+    assert s3["stats"]["access_log_rows"] == s2["stats"]["access_log_rows"]
 
     # access_count on a returned memory is non-zero after the dust settles.
     final = _payload(await server.call_tool("memory_search", {"tags": ""}))

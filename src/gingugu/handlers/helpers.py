@@ -52,6 +52,34 @@ def _memory_summary(mem: Memory) -> dict:
     return data
 
 
+# Compact summaries replace full content with a short excerpt. 200 chars is
+# roughly two terminal lines — enough to recognize the memory and decide
+# whether to pull the full body via memory_recall.
+_COMPACT_CONTENT_CHARS = 200
+
+
+def _compact_summary(mem: Memory) -> dict:
+    """Lightweight variant of ``_memory_summary`` for ``compact`` context loads.
+
+    Full ``content`` is replaced by a whitespace-normalized excerpt under
+    ``summary``; bookkeeping fields (timestamps, access_count) are dropped.
+    """
+    excerpt = " ".join(mem.content.split())
+    if len(excerpt) > _COMPACT_CONTENT_CHARS:
+        excerpt = excerpt[:_COMPACT_CONTENT_CHARS].rsplit(" ", 1)[0] + " …"
+    data = {
+        "id": mem.id,
+        "type": mem.type.value,
+        "title": mem.title,
+        "summary": excerpt,
+        "confidence": mem.confidence.value,
+        "tags": mem.tags,
+    }
+    if mem.score is not None:
+        data["score"] = round(mem.score, 4)
+    return data
+
+
 def _collect_related(ctx: ServerContext, seed_ids: list[str]) -> list[dict]:
     """Fetch memories directly related to the seeds, excluding the seeds."""
     relations = RelationManager(ctx.conn)

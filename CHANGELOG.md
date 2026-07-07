@@ -34,6 +34,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   live secret** so a shared brain never becomes a credential leak. Tokens come
   from `GINGUGU_SOURCE_TOKEN` / `GINGUGU_TARGET_TOKEN`; `--dry-run` reports what
   would move without writing. Read-only on the source.
+- **Multi-namespace `memory_context`.** The `namespace` parameter now accepts a
+  comma-separated list (e.g. `"crow,my-project"`): one call loads every
+  namespace and **de-duplicates memories that surface in more than one** —
+  previously, loading N namespaces at session start returned the same
+  high-scoring cross-namespace patterns N times. The response carries
+  `namespaces` + `duplicates_removed` (single-namespace calls keep the
+  historical `namespace` key), and every returned memory is stamped with its
+  home `namespace` name. `limit` applies per namespace.
+- **`compact` mode on `memory_context`.** `compact=true` replaces each
+  memory's full `content` with a whitespace-normalized ~200-char `summary`
+  excerpt and drops bookkeeping fields — a 5-10× lighter session-start payload.
+  Pull the full body with `memory_recall` when a memory matters.
+
+### Changed
+
+- **Context loads no longer count as accesses.** `memory_context` refreshes
+  each surfaced memory's dormancy clock (`last_accessed`) but no longer bumps
+  `access_count` or writes `access_log` rows — those are reserved for
+  `memory_recall` / `memory_search` hits. Mandatory session-start loads were
+  inflating the access component of the composite score, a rich-get-richer
+  loop where whatever already ranked high got auto-loaded, credited, and
+  ranked higher still.
 
 ### Fixed
 
