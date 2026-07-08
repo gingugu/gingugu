@@ -52,7 +52,10 @@ _Last updated: 2026-07-08_
   recall/search results now stamp each memory's home namespace like context.
   Comma-hint errors on single-namespace tools + `memory_store` junk-namespace
   guard. Root cause: observed an agent generalize context's CSV form to recall
-  and hit `namespace 'a,b' not found`. 8 new tests, 263 total.
+  and hit `namespace 'a,b' not found`. Same PR: `compact` mode on
+  recall/search (context's 0.4.0 payload diet; related extras compacted too) -
+  fixes broad recalls blowing MCP clients' tool-result token caps (Claude
+  Code was dumping 80k+-char recall results to files). 14 new tests, 269 total.
 - **2026-07-07** - Feedback arc peer-reviewed and MERGED (PRs #12, #15, #14;
   main @ 47ea06e). 8-finder/6-verifier review confirmed 21 findings; all
   fixed in 1e05867 (staleness regex hardening, empty-namespace guard,

@@ -378,6 +378,12 @@ Search and retrieve memories ranked by relevance × freshness.
   ones are always included; the minimum-confidence filter excludes them)
 - `include_related` (optional) — also surface memories directly linked to the
   top hits via relations
+- `compact` (optional, default `false`) - same lightweight payload as
+  `memory_context`'s compact mode: full `content` replaced by a ~200-char
+  `summary` excerpt, bookkeeping fields dropped, `include_related` extras
+  compacted too. Use for broad exploratory queries that would otherwise
+  exceed MCP clients' tool-result token budgets; compact recalls still
+  credit access.
 
 ### `memory_context`
 Auto-surface relevant memories for the current workspace. Called on session start.
@@ -542,6 +548,8 @@ Advanced search with full filter support.
 - `sort_by` (optional) — relevance|created|accessed|decay_score
 - `include_deprecated` (optional) — also return deprecated memories
 - `limit` (optional) — max results
+- `compact` (optional, default `false`) — title + ~200-char `summary`
+  instead of full content (same semantics as `memory_recall`'s compact mode)
 
 ### `memory_export`
 Export memories to a portable JSON payload (backup/transfer). Credentials are

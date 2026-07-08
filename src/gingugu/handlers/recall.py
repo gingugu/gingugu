@@ -44,12 +44,18 @@ def register(mcp, ctx: ServerContext) -> None:
         limit: int = 10,
         include_deprecated: bool = False,
         include_related: bool = False,
+        compact: bool = False,
     ) -> dict:
         """Search memories by relevance using hybrid BM25 + semantic ranking. Use for
         natural-language queries when you want the best-matching memories for a topic.
         Prefer over memory_search when you have a query string and want scored results.
         Use memory_search instead when you need date filters, type filters, or a
         specific sort order.
+
+        ``compact=True`` returns title + a ~200-char ``summary`` instead of full
+        content (related extras included) — the right mode for broad exploratory
+        queries where full bodies would flood the client's tool-result budget.
+        Recall the one or two memories that matter with a targeted follow-up.
 
         ``namespace`` accepts a single name or a comma-separated list (e.g.
         "crow,my-project") to search several namespaces in one ranked pass.
@@ -106,9 +112,10 @@ def register(mcp, ctx: ServerContext) -> None:
             )
             ctx.store.load_tags(results)
             seed_ids = [m.id for m in results]
-            summaries = [_attach_review_hints(_memory_summary(m), m) for m in results]
+            summarize = _compact_summary if compact else _memory_summary
+            summaries = [_attach_review_hints(summarize(m), m) for m in results]
             if include_related:
-                summaries.extend(_collect_related(ctx, seed_ids))
+                summaries.extend(_collect_related(ctx, seed_ids, compact=compact))
             # Credit the returned seeds as a real access (bumps access_count,
             # refreshes last_accessed, writes access_log row).
             ctx.store.record_accesses(seed_ids)

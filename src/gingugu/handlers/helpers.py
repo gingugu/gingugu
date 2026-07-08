@@ -116,10 +116,13 @@ _COMPACT_CONTENT_CHARS = 200
 
 
 def _compact_summary(mem: Memory) -> dict:
-    """Lightweight variant of ``_memory_summary`` for ``compact`` context loads.
+    """Lightweight variant of ``_memory_summary`` for ``compact`` reads
+    (memory_context, memory_recall, memory_search).
 
     Full ``content`` is replaced by a whitespace-normalized excerpt under
     ``summary``; bookkeeping fields (timestamps, access_count) are dropped.
+    ``namespace_id`` is identity, not bookkeeping — kept so namespace
+    stamping works uniformly across full and compact payloads.
     """
     excerpt = " ".join(mem.content.split())
     if len(excerpt) > _COMPACT_CONTENT_CHARS:
@@ -130,6 +133,7 @@ def _compact_summary(mem: Memory) -> dict:
         "title": mem.title,
         "summary": excerpt,
         "confidence": mem.confidence.value,
+        "namespace_id": mem.namespace_id,
         "tags": mem.tags,
     }
     if mem.score is not None:
@@ -155,8 +159,12 @@ def _attach_review_hints(summary: dict, mem: Memory) -> dict:
     return summary
 
 
-def _collect_related(ctx: ServerContext, seed_ids: list[str]) -> list[dict]:
-    """Fetch memories directly related to the seeds, excluding the seeds."""
+def _collect_related(ctx: ServerContext, seed_ids: list[str], compact: bool = False) -> list[dict]:
+    """Fetch memories directly related to the seeds, excluding the seeds.
+
+    ``compact`` mirrors the caller's payload mode — related extras are part of
+    the same response and must not reinflate a compact read.
+    """
     relations = RelationManager(ctx.conn)
     seen = set(seed_ids)
     extra: list[dict] = []
@@ -168,7 +176,7 @@ def _collect_related(ctx: ServerContext, seed_ids: list[str]) -> list[dict]:
             mem = ctx.store.get(other_id, record_access=False)
             if mem is None:
                 continue
-            summary = _memory_summary(mem)
+            summary = _compact_summary(mem) if compact else _memory_summary(mem)
             summary["via_relation"] = True
             extra.append(summary)
     return extra

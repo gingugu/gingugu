@@ -10,6 +10,7 @@ from ..models import Confidence, MemoryType
 from . import ServerContext
 from .helpers import (
     _attach_review_hints,
+    _compact_summary,
     _err,
     _memory_summary,
     _resolve_namespaces,
@@ -36,6 +37,7 @@ def register(mcp, ctx: ServerContext) -> None:
         sort_by: str = "relevance",
         include_deprecated: bool = False,
         limit: int = 10,
+        compact: bool = False,
     ) -> dict:
         """Advanced filtered search across memories with full control over filters and
         sort order. Use when you need to filter by type, date range, confidence level, or
@@ -52,7 +54,9 @@ def register(mcp, ctx: ServerContext) -> None:
         confidence threshold (verified > inferred > stale > deprecated). ``created_after``
         and ``created_before`` accept ISO 8601 date strings (e.g. "2025-01-01").
         ``include_deprecated`` also returns deprecated memories (stale ones are always
-        included)."""
+        included). ``compact=True`` returns title + a ~200-char ``summary`` instead of
+        full content — the right mode for broad sweeps where full bodies would flood
+        the client's tool-result budget; pull full bodies with a targeted follow-up."""
         try:
             if sort_by not in _VALID_SORTS:
                 return _err(f"invalid sort_by {sort_by!r}; expected one of {sorted(_VALID_SORTS)}")
@@ -96,7 +100,8 @@ def register(mcp, ctx: ServerContext) -> None:
                 embedder=ctx.store.embedder,
             )
             ctx.store.load_tags(results)
-            summaries = [_attach_review_hints(_memory_summary(m), m) for m in results]
+            summarize = _compact_summary if compact else _memory_summary
+            summaries = [_attach_review_hints(summarize(m), m) for m in results]
             # Credit the returned seeds as a real access (bumps access_count,
             # refreshes last_accessed, writes access_log row). Spreading-
             # activation neighbours are intentionally not credited here —
