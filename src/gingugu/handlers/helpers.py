@@ -7,7 +7,7 @@ import logging
 
 from .. import search as search_mod
 from .. import staleness
-from ..models import Memory
+from ..models import Memory, Namespace
 from ..relations import RelationManager
 from . import ServerContext
 
@@ -35,6 +35,60 @@ def _split_csv(value: str | None) -> list[str]:
     # Drop empty items so "crow," / "a,,b" don't yield "" entries — an empty
     # string reaching get_or_create would mint a namespace literally named "".
     return [item.strip() for item in value.split(",") if item.strip()] if value else []
+
+
+def _resolve_namespaces(
+    ctx: ServerContext, names: list[str]
+) -> tuple[dict[str, Namespace], dict | None]:
+    """Resolve explicit namespace names for a read surface.
+
+    Returns ``(resolved, error)``: ``resolved`` maps each name to its
+    ``Namespace`` in request order; ``error`` is a structured error dict naming
+    every unknown namespace (reads must never mint namespaces — matches the
+    single-namespace behavior of memory_recall/memory_search).
+    """
+    resolved: dict[str, Namespace] = {}
+    missing: list[str] = []
+    for name in names:
+        ns = ctx.namespaces.get(name)
+        if ns is None:
+            missing.append(name)
+        else:
+            resolved[name] = ns
+    if missing:
+        if len(missing) == 1:
+            return {}, _err(f"namespace {missing[0]!r} not found")
+        listed = ", ".join(repr(n) for n in missing)
+        return {}, _err(f"namespaces {listed} not found")
+    return resolved, None
+
+
+def _single_namespace_not_found(namespace: str) -> dict:
+    """Unknown-namespace error for tools that take exactly one namespace.
+
+    When the value contains a comma the caller almost certainly generalized the
+    CSV form from the multi-namespace read tools — say so in the error instead
+    of leaving them guessing.
+    """
+    msg = f"namespace {namespace!r} not found"
+    if "," in namespace:
+        msg += (
+            " (this tool takes a single namespace; comma-separated lists are "
+            "supported by memory_context, memory_recall, and memory_search)"
+        )
+    return _err(msg)
+
+
+def _stamp_namespace_names(ctx: ServerContext, summaries: list[dict]) -> None:
+    """Add a human-readable ``namespace`` field to each summary in place.
+
+    Uses a global id→name map so related memories pulled in from *other*
+    namespaces (via include_related) are stamped correctly too.
+    """
+    name_by_id = {n.id: n.name for n in ctx.namespaces.list()}
+    for summary in summaries:
+        ns_id = summary.get("namespace_id")
+        summary["namespace"] = name_by_id.get(ns_id, ns_id)
 
 
 def _memory_summary(mem: Memory) -> dict:

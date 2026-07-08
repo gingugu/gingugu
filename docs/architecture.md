@@ -362,9 +362,15 @@ Search and retrieve memories ranked by relevance × freshness.
 
 **Parameters:**
 - `query` (required) — natural language search query
-- `namespace` (optional) — scope to specific namespace. An explicit unknown
-  namespace is an error (reads never create namespaces); when omitted and the
-  config-resolved namespace doesn't exist yet, returns an empty result.
+- `namespace` (optional) — a single name **or a comma-separated list**
+  (e.g. `"crow,my-project"`) searched in one ranked pass. Unlike
+  `memory_context`, `limit` caps the **total** merged result list, not each
+  namespace. A multi-namespace response carries `namespaces` (the resolved
+  list) instead of the historical `namespace` key; every returned memory is
+  stamped with its home `namespace` name either way. Any explicit unknown
+  namespace is an error naming the missing one(s) (reads never create
+  namespaces); when omitted and the config-resolved namespace doesn't exist
+  yet, returns an empty result.
 - `type` (optional) — filter by memory type
 - `confidence` (optional) — minimum confidence level (rank order: `verified > inferred > stale > deprecated`; see *Confidence ordering* above)
 - `limit` (optional) — max results (default 10)
@@ -524,7 +530,10 @@ Advanced search with full filter support.
 
 **Parameters:**
 - `query` (optional) — text search query
-- `namespace` (optional) — namespace filter
+- `namespace` (optional) — a single name, a comma-separated list (same
+  semantics as `memory_recall`: `limit` is the total cap, unknown names are
+  an error, multi responses carry `namespaces`), or omitted to search every
+  namespace. Every returned memory is stamped with its home `namespace` name.
 - `type` (optional) — memory type filter
 - `tags` (optional) — required tags (comma-separated)
 - `confidence` (optional) — confidence filter
