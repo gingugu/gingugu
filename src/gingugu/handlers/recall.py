@@ -24,8 +24,10 @@ from .helpers import (
     _compact_summary,
     _err,
     _memory_summary,
+    _resolve_namespaces,
     _split_csv,
     _spread_activation,
+    _stamp_namespace_names,
 )
 
 logger = logging.getLogger(__name__)
@@ -42,12 +44,25 @@ def register(mcp, ctx: ServerContext) -> None:
         limit: int = 10,
         include_deprecated: bool = False,
         include_related: bool = False,
+        compact: bool = False,
     ) -> dict:
         """Search memories by relevance using hybrid BM25 + semantic ranking. Use for
         natural-language queries when you want the best-matching memories for a topic.
         Prefer over memory_search when you have a query string and want scored results.
         Use memory_search instead when you need date filters, type filters, or a
         specific sort order.
+
+        ``compact=True`` returns title + a ~200-char ``summary`` instead of full
+        content (related extras included) — the right mode for broad exploratory
+        queries where full bodies would flood the client's tool-result budget.
+        Recall the one or two memories that matter with a targeted follow-up.
+
+        ``namespace`` accepts a single name or a comma-separated list (e.g.
+        "crow,my-project") to search several namespaces in one ranked pass.
+        Unlike memory_context, ``limit`` is the TOTAL result cap: the best
+        ``limit`` matches across all listed namespaces, not per namespace. A
+        multi-namespace response carries ``namespaces`` and stamps each memory
+        with its source ``namespace``.
 
         ``tags`` is comma-separated; ALL provided tags must match. ``confidence`` sets
         a minimum confidence threshold (verified > inferred > stale > deprecated).
@@ -67,19 +82,25 @@ def register(mcp, ctx: ServerContext) -> None:
                 except ValueError:
                     return _err(f"invalid confidence {confidence!r}")
 
-            ns_name = ctx.namespaces.resolve_name(namespace)
-            ns = ctx.namespaces.get(ns_name)
-            if ns is None:
-                if namespace is not None:
-                    # Explicit unknown namespace is a caller mistake — don't
-                    # silently create a junk row on a read (matches memory_search).
-                    return _err(f"namespace {namespace!r} not found")
-                # Config-resolved namespace with nothing stored yet: empty result.
-                return {"ok": True, "namespace": ns_name, "count": 0, "memories": []}
+            requested = list(dict.fromkeys(_split_csv(namespace)))
+            if requested:
+                # Explicit unknown namespaces are a caller mistake — don't
+                # silently create junk rows on a read (matches memory_search).
+                resolved, error = _resolve_namespaces(ctx, requested)
+                if error is not None:
+                    return error
+            else:
+                ns_name = ctx.namespaces.resolve_name(None)
+                ns = ctx.namespaces.get(ns_name)
+                if ns is None:
+                    # Config-resolved namespace with nothing stored yet: empty result.
+                    return {"ok": True, "namespace": ns_name, "count": 0, "memories": []}
+                resolved = {ns_name: ns}
+            ns_ids = [ns.id for ns in resolved.values()]
             results = search_mod.search(
                 ctx.conn,
                 query=query,
-                namespace_id=ns.id,
+                namespace_id=ns_ids[0] if len(ns_ids) == 1 else ns_ids,
                 type=type,
                 min_confidence=min_conf,
                 include_deprecated=include_deprecated,
@@ -91,20 +112,24 @@ def register(mcp, ctx: ServerContext) -> None:
             )
             ctx.store.load_tags(results)
             seed_ids = [m.id for m in results]
-            summaries = [_attach_review_hints(_memory_summary(m), m) for m in results]
+            summarize = _compact_summary if compact else _memory_summary
+            summaries = [_attach_review_hints(summarize(m), m) for m in results]
             if include_related:
-                summaries.extend(_collect_related(ctx, seed_ids))
+                summaries.extend(_collect_related(ctx, seed_ids, compact=compact))
             # Credit the returned seeds as a real access (bumps access_count,
             # refreshes last_accessed, writes access_log row).
             ctx.store.record_accesses(seed_ids)
             # Spreading activation: recalling these memories wakes their cluster.
             _spread_activation(ctx, seed_ids)
-            return {
-                "ok": True,
-                "namespace": ns_name,
-                "count": len(summaries),
-                "memories": summaries,
-            }
+            # Every read surface stamps a readable per-memory namespace
+            # (matches memory_context).
+            _stamp_namespace_names(ctx, summaries)
+            payload: dict = {"ok": True, "count": len(summaries), "memories": summaries}
+            if len(resolved) == 1:
+                payload["namespace"] = next(iter(resolved))
+            else:
+                payload["namespaces"] = list(resolved)
+            return payload
         except Exception as exc:
             logger.exception("memory_recall failed")
             return _err(f"memory_recall failed: {exc}")

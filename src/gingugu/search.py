@@ -106,6 +106,18 @@ def _confidence_filter(column: str, min_confidence: Confidence) -> tuple[str, li
     return f"{column} IN ({placeholders})", list(allowed)
 
 
+def _namespace_filter(column: str, namespace_id: str | list[str]) -> tuple[str, list[object]]:
+    """WHERE fragment scoping to one namespace id or any of several.
+
+    Callers must not pass an empty list — resolve/validate namespace names
+    before building the query.
+    """
+    if isinstance(namespace_id, str):
+        return f"{column} = ?", [namespace_id]
+    placeholders = ", ".join("?" for _ in namespace_id)
+    return f"{column} IN ({placeholders})", list(namespace_id)
+
+
 def _tag_filter(column: str, tags: list[str]) -> tuple[str, list[object]]:
     """WHERE fragment requiring a memory to carry *all* given tags."""
     names = list(dict.fromkeys(normalize_tag(t) for t in tags if t.strip()))
@@ -122,7 +134,7 @@ def search(
     conn: sqlite3.Connection,
     *,
     query: str,
-    namespace_id: str | None = None,
+    namespace_id: str | list[str] | None = None,
     type: str | None = None,
     min_confidence: Confidence | None = None,
     include_deprecated: bool = False,
@@ -152,8 +164,9 @@ def search(
     params: list[object] = [match]
 
     if namespace_id is not None:
-        where.append("m.namespace_id = ?")
-        params.append(namespace_id)
+        ns_clause, ns_params = _namespace_filter("m.namespace_id", namespace_id)
+        where.append(ns_clause)
+        params.extend(ns_params)
     if type is not None:
         where.append("m.type = ?")
         params.append(type)
@@ -269,7 +282,7 @@ def advanced_search(
     conn: sqlite3.Connection,
     *,
     query: str | None = None,
-    namespace_id: str | None = None,
+    namespace_id: str | list[str] | None = None,
     type: str | None = None,
     min_confidence: Confidence | None = None,
     created_after: str | None = None,
@@ -327,7 +340,7 @@ def advanced_search(
 def _list_by_filters(
     conn: sqlite3.Connection,
     *,
-    namespace_id: str | None,
+    namespace_id: str | list[str] | None,
     type: str | None,
     min_confidence: Confidence | None,
     created_after: str | None,
@@ -341,8 +354,9 @@ def _list_by_filters(
     where: list[str] = []
     params: list[object] = []
     if namespace_id is not None:
-        where.append("namespace_id = ?")
-        params.append(namespace_id)
+        ns_clause, ns_params = _namespace_filter("namespace_id", namespace_id)
+        where.append(ns_clause)
+        params.extend(ns_params)
     if type is not None:
         where.append("type = ?")
         params.append(type)

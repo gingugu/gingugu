@@ -10,7 +10,7 @@ import logging
 
 from .. import portability
 from . import ServerContext
-from .helpers import _err
+from .helpers import _err, _single_namespace_not_found
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ def register(mcp, ctx: ServerContext) -> None:
             if action == "update":
                 ns = ctx.namespaces.update(name, path=path, description=description)
                 if ns is None:
-                    return _err(f"namespace {name!r} not found")
+                    return _single_namespace_not_found(name)
                 return {"ok": True, "action": "updated", "namespace": _namespace_summary(ns)}
 
             # action == "delete"
@@ -91,7 +91,7 @@ def register(mcp, ctx: ServerContext) -> None:
             if namespace is not None:
                 ns = ctx.namespaces.get(namespace)
                 if ns is None:
-                    return _err(f"namespace {namespace!r} not found")
+                    return _single_namespace_not_found(namespace)
                 ns_id = ns.id
             payload = portability.export_data(
                 ctx.conn, namespace_id=ns_id, include_deprecated=include_deprecated
