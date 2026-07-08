@@ -8,7 +8,7 @@ from .. import consolidation
 from ..models import RelationType
 from ..relations import RelationManager
 from . import ServerContext
-from .helpers import _err
+from .helpers import _err, _single_namespace_not_found
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 if ns is None:
                     # Read-only scan must not bootstrap a namespace (matches
                     # memory_recall's explicit-unknown-namespace behavior).
-                    return _err(f"namespace {ns_name!r} not found")
+                    return _single_namespace_not_found(ns_name)
                 result = consolidation.find_duplicate_clusters(
                     ctx.conn, namespace_id=ns.id, min_similarity=min_similarity
                 )

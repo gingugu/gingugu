@@ -18,12 +18,23 @@ memory_store(content, title, type, namespace, tags, confidence)
 ## Recall
 
 ```
-memory_recall(query, namespace, filters)
+memory_recall(query, namespace | "ns1,ns2,…", filters)
   → search.py: BM25 (FTS5) lexical score  ⊕  semantic similarity (embeddings)
+  → multi-namespace: one ranked SQL pass over all listed namespaces
+    (IN clause); limit caps the TOTAL list (unlike context's per-namespace limit)
   → blend with recency + confidence + access frequency
   → if include_related: spreading activation pulls linked memories (via_relation=true)
-  → ranked list
+  → ranked list; every memory stamped with its home namespace
+    (compact=true: title + ~200-char summary instead of full content,
+    related extras compacted too - keeps broad recalls under MCP clients'
+    tool-result token caps; access is still credited)
 ```
+
+`memory_search` takes the same namespace forms (single, CSV, or omitted =
+all namespaces). Unknown namespaces error and name the missing one(s) — reads
+never mint namespaces. Single-namespace-only tools return a comma-hint when
+handed a CSV value, and `memory_store` rejects CSV outright rather than
+minting a junk namespace named `"a,b"`.
 
 ## Context (session priming)
 

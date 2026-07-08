@@ -78,6 +78,14 @@ def register(mcp, ctx: ServerContext) -> None:
                     f"{[c.value for c in Confidence]}"
                 )
 
+            if namespace is not None and "," in namespace:
+                # get_or_create would mint a junk namespace literally named
+                # "a,b" — fail fast instead of storing into it.
+                return _err(
+                    f"memory_store takes a single namespace, got {namespace!r}; "
+                    "comma-separated lists are only supported by memory_context, "
+                    "memory_recall, and memory_search"
+                )
             ns_name = ctx.namespaces.resolve_name(namespace)
             ns = ctx.namespaces.get_or_create(ns_name)
             similar = (
