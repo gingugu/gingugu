@@ -592,7 +592,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | Tool | Purpose |
 |------|---------|
 | `memory_store` | Save a new memory |
-| `memory_recall` | Search + retrieve (ranked by relevance × freshness) |
+| `memory_recall` | Search + retrieve (ranked by relevance × freshness; one or many namespaces) |
 | `memory_context` | Auto-surface relevant memories (one or many namespaces, deduped; optional compact mode) |
 | `memory_update` | Update content, confidence, or metadata |
 | `memory_relate` | Create relationships between memories |
@@ -602,7 +602,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_export` | Export memories + tags + relations to portable JSON |
 | `memory_import` | Restore a JSON export (skip or replace on conflict) |
 | `memory_stats` | Health overview (dormancy, counts, coverage, review sweep) |
-| `memory_search` | Advanced filtered search (type, tags, confidence, dates) |
+| `memory_search` | Advanced filtered search (type, tags, confidence, dates; one or many namespaces) |
 | `credential_store` | Store/update a service credential bundle |
 | `credential_get` | Retrieve credentials (secrets from OS Keychain) |
 | `credential_list` | List services + expiry status (no secrets shown) |
