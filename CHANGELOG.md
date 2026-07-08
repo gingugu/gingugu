@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Multi-namespace `memory_recall` and `memory_search`.** The `namespace`
+  parameter now accepts a comma-separated list (e.g. `"crow,my-project"`),
+  searched in one ranked pass at the SQL layer. Unlike `memory_context`
+  (per-namespace limit), `limit` caps the **total** merged result list. A
+  multi-namespace response carries `namespaces`; single-namespace responses
+  keep their historical shape. Every memory returned by recall/search is now
+  stamped with its home `namespace` name, matching `memory_context`. Closes
+  the observed failure where an agent generalized the CSV form from
+  `memory_context` and got `namespace 'a,b' not found`.
+- **Comma-aware namespace errors.** Tools that take exactly one namespace
+  (`memory_stats`, `memory_export`, `memory_consolidate` suggest-mode,
+  `memory_namespaces update`) now explain, when handed a comma-separated
+  value, that CSV lists are only supported by `memory_context`,
+  `memory_recall`, and `memory_search`.
+- **`memory_store` junk-namespace guard.** Storing with a comma-separated
+  `namespace` now fails fast instead of silently minting a namespace literally
+  named `"a,b"` and storing into it.
 - **Gingugu logo in the Memory Explorer header.** The repo logo now sits to the
   left of the brain icon in the UI header (`ui/public/logo.svg`).
 

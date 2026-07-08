@@ -8,7 +8,15 @@ from .. import search as search_mod
 from .. import stats as stats_mod
 from ..models import Confidence, MemoryType
 from . import ServerContext
-from .helpers import _attach_review_hints, _err, _memory_summary
+from .helpers import (
+    _attach_review_hints,
+    _err,
+    _memory_summary,
+    _resolve_namespaces,
+    _single_namespace_not_found,
+    _split_csv,
+    _stamp_namespace_names,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +43,10 @@ def register(mcp, ctx: ServerContext) -> None:
         natural-language query and want the best-matching scored results.
 
         All parameters are optional — omitting all returns all memories up to limit.
+        ``namespace`` accepts a single name, a comma-separated list (e.g.
+        "crow,my-project"), or None to search every namespace; ``limit`` is always the
+        total result cap. A multi-namespace response carries ``namespaces`` and stamps
+        each memory with its source ``namespace``.
         ``tags`` is comma-separated; all provided tags must match. ``sort_by`` is one of:
         relevance, created, accessed, decay_score. ``confidence`` sets a minimum
         confidence threshold (verified > inferred > stale > deprecated). ``created_after``
@@ -56,18 +68,21 @@ def register(mcp, ctx: ServerContext) -> None:
                 except ValueError:
                     return _err(f"invalid confidence {confidence!r}")
 
-            ns_id = None
-            if namespace is not None:
-                ns = ctx.namespaces.get(namespace)
-                if ns is None:
-                    return _err(f"namespace {namespace!r} not found")
-                ns_id = ns.id
+            requested = list(dict.fromkeys(_split_csv(namespace)))
+            ns_scope: str | list[str] | None = None
+            resolved: dict = {}
+            if requested:
+                resolved, error = _resolve_namespaces(ctx, requested)
+                if error is not None:
+                    return error
+                ns_ids = [ns.id for ns in resolved.values()]
+                ns_scope = ns_ids[0] if len(ns_ids) == 1 else ns_ids
 
             tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
             results = search_mod.advanced_search(
                 ctx.conn,
                 query=query,
-                namespace_id=ns_id,
+                namespace_id=ns_scope,
                 type=type,
                 min_confidence=min_conf,
                 created_after=created_after,
@@ -87,11 +102,17 @@ def register(mcp, ctx: ServerContext) -> None:
             # activation neighbours are intentionally not credited here —
             # search has no relation traversal.
             ctx.store.record_accesses([m.id for m in results])
-            return {
+            # Every read surface stamps a readable per-memory namespace
+            # (matches memory_context).
+            _stamp_namespace_names(ctx, summaries)
+            payload: dict = {
                 "ok": True,
                 "count": len(results),
                 "memories": summaries,
             }
+            if len(resolved) > 1:
+                payload["namespaces"] = list(resolved)
+            return payload
         except Exception as exc:
             logger.exception("memory_search failed")
             return _err(f"memory_search failed: {exc}")
@@ -115,7 +136,7 @@ def register(mcp, ctx: ServerContext) -> None:
             if namespace is not None:
                 ns = ctx.namespaces.get(namespace)
                 if ns is None:
-                    return _err(f"namespace {namespace!r} not found")
+                    return _single_namespace_not_found(namespace)
                 ns_id = ns.id
             data = stats_mod.compute_stats(ctx.conn, namespace_id=ns_id)
             return {"ok": True, "flagged_stale": 0, "stats": data}
