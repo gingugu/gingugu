@@ -4,8 +4,9 @@ _Last updated: 2026-07-08_
 
 ## Shipped / Working
 
-- **v0.5.0 on PyPI** — released via Trusted Publishing (OIDC) on tag; GitHub
-  Release auto-cut from CHANGELOG. Latest: `gingugu init` repo bootstrap.
+- **v0.6.0 on PyPI** — released via Trusted Publishing (OIDC) on tag; GitHub
+  Release auto-cut from CHANGELOG. Latest: multi-namespace + compact
+  recall/search, comma-aware namespace guards.
 - **Two-layer memory** — `crow` (global identity) + per-project namespaces, live.
 - **Never-forget model** — dormancy + spreading activation replaced time-based
   decay; nothing is auto-forgotten.
