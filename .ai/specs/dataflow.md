@@ -25,6 +25,9 @@ memory_recall(query, namespace | "ns1,ns2,…", filters)
   → blend with recency + confidence + access frequency
   → if include_related: spreading activation pulls linked memories (via_relation=true)
   → ranked list; every memory stamped with its home namespace
+    (compact=true: title + ~200-char summary instead of full content,
+    related extras compacted too - keeps broad recalls under MCP clients'
+    tool-result token caps; access is still credited)
 ```
 
 `memory_search` takes the same namespace forms (single, CSV, or omitted =

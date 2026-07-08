@@ -20,6 +20,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stamped with its home `namespace` name, matching `memory_context`. Closes
   the observed failure where an agent generalized the CSV form from
   `memory_context` and got `namespace 'a,b' not found`.
+- **`compact` mode on `memory_recall` and `memory_search`.** Same payload diet
+  `memory_context` got in 0.4.0: title + a ~200-char `summary` excerpt instead
+  of full content, bookkeeping fields dropped, `include_related` extras
+  compacted too. Fixes broad recalls blowing past MCP clients' tool-result
+  token caps (Claude Code dumps oversized results to a file the agent must
+  chunk-read back). Compact recalls still credit access — only the payload
+  changes, not the semantics. Flow: compact sweep to see the landscape, then a
+  targeted follow-up for the memory that matters. Compact summaries now also
+  carry `namespace_id` (identity, not bookkeeping) so namespace stamping works
+  uniformly across all read surfaces.
 - **Comma-aware namespace errors.** Tools that take exactly one namespace
   (`memory_stats`, `memory_export`, `memory_consolidate` suggest-mode,
   `memory_namespaces update`) now explain, when handed a comma-separated
