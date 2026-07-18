@@ -62,6 +62,12 @@
 | `portability.py` | Export / import a namespace |
 | `handlers/` | MCP tool handlers: `memory.py` (store/update/forget), `recall.py` (recall/context), `search.py`, `relations.py`, `admin.py`, `credentials.py`, `helpers.py` |
 
+Dev-only tooling at the repo root (never shipped in the wheel): **`bench/`** —
+golden-set retrieval benchmark (Recall@K, MRR, precision, token cost;
+deterministic, no LLM-as-judge). Committed synthetic fixture for CI regression;
+real-brain golden sets + baseline reports live in gitignored `bench/local/`.
+Run: `uv run python -m bench [--db <real-brain.db>]`.
+
 ---
 
 ## MCP Tool Surface

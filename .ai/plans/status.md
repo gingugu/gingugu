@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-07-08_
+_Last updated: 2026-07-18_
 
 ## Shipped / Working
 
@@ -23,6 +23,23 @@ _Last updated: 2026-07-08_
 
 ## In Progress
 
+- **Phase 5.75 "The Sextant" — measured retrieval** (branch
+  `feature/retrieval-benchmark`, kicked off 2026-07-18 after the temporal-KG
+  peer review). Shipped so far: dev-only `bench/` package — golden-set
+  benchmark runner (Recall@K, MRR, precision, token cost; deterministic, no
+  LLM-as-judge), committed synthetic fixture for CI regression, real-brain
+  mode (read-only DB open, gitignored `bench/local/` golden sets).
+  **Baseline captured 2026-07-18** (30 self-labeled questions, ~623 memories):
+  recall@5 = 1.000 on every question in both hybrid and BM25-only modes —
+  candidate retrieval is not the failure mode; the gap is rank-1 quality
+  (hybrid MRR 0.811 / recall@1 0.578; BM25-only 0.740 / 0.467). Next: true
+  hybrid retrieval (independent BM25 + vector pools → RRF) and hub dampening
+  in spreading activation, measured against that baseline on MRR/recall@1
+  (recall@k has no headroom left to prove anything). Parked until
+  data argues for it: any temporal/entity graph work (2026-07-18 decision).
+  Note: Phase 5.5 Stage 3's "local LLM judge" for conflict detection needs
+  reconciling with the new design law (truth status hard-calculated, never
+  LLM-derived) — advisory-only proposing may comply, needs a call.
 - **v0.4.0 released** (2026-07-07): serve, promote Stage 1, multi-namespace
   context + compact, review hints, suggest mode, save hook, timeline chart
   fix. Remaining: dogfood the new context loading after client restart; the
