@@ -200,16 +200,24 @@ destroys trust or retrievability. A memory left untouched goes *dormant*
    memory's confidence. Memories are only ever deprecated/deleted by explicit
    `memory_forget`.
 
-### Step 1 — Normalize BM25
+### Step 1 — Hybrid relevance (BM25 ⊕ semantic, RRF-fused)
 
-SQLite's `bm25()` returns a **negative** score where **more negative = better**
-match. We invert and squash to `[0, 1]` so it composes cleanly with the other
-factors:
+Two candidate pools are pulled **independently** for a query:
 
-```python
-raw = bm25(memories_fts)            # e.g. -8.3 (great) ... -0.1 (weak)
-relevance = 1.0 / (1.0 + max(0.0, -raw))   # great → ~0.89, weak → ~0.09
-```
+- **Lexical:** FTS5 BM25, top `4 × limit` candidates.
+- **Semantic:** cosine similarity over stored embeddings for the same
+  filtered corpus. Every BM25 candidate with an embedding keeps a semantic
+  rank (never displaced), and up to `limit / 2` additional memories with
+  **no** BM25 match join when their similarity clears a `0.55` floor — so a
+  memory matching the query's *meaning* surfaces even when it shares no
+  keywords with it, while weak lookalikes can't crowd out keyword matches.
+  Both knobs are tuned against the retrieval benchmark (`bench/`).
+
+The two rankings are fused with **Reciprocal Rank Fusion** (`k = 60`) over
+their union and normalized to `[0, 1]` — rank 1 in both pools maps to `1.0`.
+Rank-based fusion avoids the score-compression problem of normalizing raw
+BM25 values. Without embeddings, relevance falls back to rank-based BM25
+alone.
 
 For non-search retrieval (e.g. `memory_context`), `relevance` defaults to
 `0.5` so freshness/confidence drive ordering.
@@ -244,7 +252,7 @@ logs a warning.
 
 | Component | Formula | Range | Notes |
 |-----------|---------|-------|-------|
-| `relevance`  | `1 / (1 + |bm25|)` or `0.5` if no query | `[0, 1]` | See Step 1 |
+| `relevance`  | RRF-fused hybrid rank, or `0.5` if no query | `[0, 1]` | See Step 1 |
 | `freshness`  | `floor + (1-floor)·exp(-λ × days_since_confirmed)` | `[0.35, 1]` | floor `0.35`; λ in **days⁻¹**, default `0.01` |
 | `access`     | `min(1.0, log(access_count + 1) / log(50))` | `[0, 1]` | Saturates at ~50 accesses |
 | `confidence` | `verified=1.0, inferred=0.7, stale=0.3, deprecated=0.0` | `[0, 1]` | Hard floor at 0 |
@@ -775,7 +783,9 @@ src/gingugu/
 ├── models.py             # Pydantic models / data schemas
 ├── database.py           # SQLite connection, migrations, FTS5 setup
 ├── storage.py            # CRUD operations for memories
-├── search.py             # FTS5 search + BM25 ranking
+├── search.py             # True hybrid engine: BM25 + semantic pools, RRF fusion
+├── search_common.py      # Shared SQL columns + WHERE-fragment builders
+├── search_filters.py     # advanced_search: filtered search + metadata listing
 ├── relations.py          # Relationship management
 ├── decay.py              # Decay scoring + staleness detection
 ├── consolidation.py      # Merge/summarize/deduplicate logic
