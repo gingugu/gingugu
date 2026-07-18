@@ -160,48 +160,46 @@ def _attach_review_hints(summary: dict, mem: Memory) -> dict:
 
 
 def _collect_related(ctx: ServerContext, seed_ids: list[str], compact: bool = False) -> list[dict]:
-    """Fetch memories directly related to the seeds, excluding the seeds.
+    """Fetch the hub-dampened related neighbourhood of the seeds.
 
-    ``compact`` mirrors the caller's payload mode — related extras are part of
-    the same response and must not reinflate a compact read.
+    Traversal budgets live in ``RelationManager.dampened_neighbour_ids`` —
+    each seed contributes its few most trusted, most specific neighbours
+    instead of its whole cluster, so one highly-connected hub can't flood
+    the payload. ``compact`` mirrors the caller's payload mode — related
+    extras are part of the same response and must not reinflate a compact
+    read.
     """
     relations = RelationManager(ctx.conn)
-    seen = set(seed_ids)
     extra: list[dict] = []
-    for sid in seed_ids:
-        for other_id in relations.related_ids(sid):
-            if other_id in seen:
-                continue
-            seen.add(other_id)
-            mem = ctx.store.get(other_id, record_access=False)
-            if mem is None:
-                continue
-            summary = _compact_summary(mem) if compact else _memory_summary(mem)
-            summary["via_relation"] = True
-            extra.append(summary)
+    for other_id in relations.dampened_neighbour_ids(seed_ids):
+        mem = ctx.store.get(other_id, record_access=False)
+        if mem is None:
+            continue
+        summary = _compact_summary(mem) if compact else _memory_summary(mem)
+        summary["via_relation"] = True
+        extra.append(summary)
     return extra
 
 
 def _spread_activation(ctx: ServerContext, seed_ids: list[str]) -> int:
-    """Reactivate memories related to the recalled seeds (1 hop).
+    """Reactivate the hub-dampened neighbourhood of the recalled seeds (1 hop).
 
-    Recalling a memory stirs the cluster around it: each seed's relation
-    neighbours have their dormancy clock reset (``last_accessed`` refreshed)
-    without inflating their access counts. This is how a dormant memory wakes
-    when a *different* memory sparks it — the core of the never-forget model.
+    Recalling a memory stirs the cluster around it: the seeds' most trusted,
+    most specific neighbours have their dormancy clock reset
+    (``last_accessed`` refreshed) without inflating their access counts. This
+    is how a dormant memory wakes when a *different* memory sparks it — the
+    core of the never-forget model. The same dampened set that surfaces as
+    ``via_relation`` extras is what wakes: budgets in
+    ``RelationManager.dampened_neighbour_ids`` keep one highly-connected hub
+    from resetting the dormancy clock of its entire neighbourhood (which
+    would also flood ``memory_context``'s recently-active bucket).
     Best-effort: any failure is swallowed so retrieval never breaks.
     """
     if not seed_ids:
         return 0
     try:
         relations = RelationManager(ctx.conn)
-        seeds = set(seed_ids)
-        neighbours: list[str] = []
-        for sid in seed_ids:
-            for other_id in relations.related_ids(sid):
-                if other_id not in seeds:
-                    neighbours.append(other_id)
-        return ctx.store.touch_many(neighbours)
+        return ctx.store.touch_many(relations.dampened_neighbour_ids(seed_ids))
     except Exception:  # never break a read on a best-effort reactivation
         logger.warning("spreading activation failed", exc_info=True)
         return 0

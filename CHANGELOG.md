@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Hub-dampened relation traversal.** `include_related` extras and
+  spreading activation now share one budgeted neighbourhood
+  (`RelationManager.dampened_neighbour_ids`): each seed contributes its 3
+  most trusted, most specific neighbours (confidence rank, then low
+  relation degree, then recency — fully deterministic), capped at 10
+  total, so one highly-connected "hub" memory can't drag its whole
+  cluster into every recall or reset its neighbourhood's dormancy clocks.
+  Measured on a real brain (30-question golden set, 10 seeds each):
+  mean extras 18.9 → 9.9, mean extra payload ~9.4k → ~4.8k tokens, worst
+  case 29 → 10. Seed retrieval is untouched.
+
 - **True hybrid retrieval.** `memory_recall` / `memory_search` now pull the
   BM25 (FTS5) and semantic (cosine-over-embeddings) candidate pools
   **independently** and fuse them with Reciprocal Rank Fusion over their
