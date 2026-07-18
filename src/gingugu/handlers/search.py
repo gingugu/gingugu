@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from .. import search as search_mod
+from .. import search_filters as search_mod
 from .. import stats as stats_mod
 from ..models import Confidence, MemoryType
 from . import ServerContext

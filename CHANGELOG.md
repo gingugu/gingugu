@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **True hybrid retrieval.** `memory_recall` / `memory_search` now pull the
+  BM25 (FTS5) and semantic (cosine-over-embeddings) candidate pools
+  **independently** and fuse them with Reciprocal Rank Fusion over their
+  union — a memory that matches the query's meaning surfaces even when it
+  shares no keywords with it. BM25 candidates always keep their semantic
+  rank; semantic-only entrants join above a 0.55 similarity floor (at most
+  `limit/2` of them), so weak lookalikes can't crowd out keyword matches.
+  Benchmarked on a real brain (30 labeled questions): MRR 0.811 → 0.828,
+  recall@1 0.578 → 0.611, recall@10 1.000 held. `search.py` split into
+  `search.py` (hybrid engine), `search_common.py` (shared SQL fragments),
+  and `search_filters.py` (`advanced_search` + metadata listing).
+
 ### Added
 
 - **Retrieval benchmark toolset (`bench/`, dev-only — not shipped in the

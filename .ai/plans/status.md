@@ -32,10 +32,16 @@ _Last updated: 2026-07-18_
   **Baseline captured 2026-07-18** (30 self-labeled questions, ~623 memories):
   recall@5 = 1.000 on every question in both hybrid and BM25-only modes —
   candidate retrieval is not the failure mode; the gap is rank-1 quality
-  (hybrid MRR 0.811 / recall@1 0.578; BM25-only 0.740 / 0.467). Next: true
-  hybrid retrieval (independent BM25 + vector pools → RRF) and hub dampening
-  in spreading activation, measured against that baseline on MRR/recall@1
-  (recall@k has no headroom left to prove anything). Parked until
+  (hybrid MRR 0.811 / recall@1 0.578; BM25-only 0.740 / 0.467).
+  **True hybrid retrieval shipped 2026-07-18** (branch
+  `feature/true-rrf-hybrid`, stacked on the benchmark PR #22): independent
+  BM25 + semantic candidate pools, RRF over the union, semantic-only
+  entrants gated by a benchmark-tuned 0.55 cosine floor (≤ limit/2), BM25
+  candidates never displaced. Result vs baseline: MRR 0.828 (+0.017),
+  recall@1 0.611 (+0.033), recall@10 1.000 held; known trade: one
+  multi-memory question's secondary hit at rank 6–10 (recall@5 0.983) —
+  flagged for review. Next: hub dampening in spreading activation,
+  measured the same way. Parked until
   data argues for it: any temporal/entity graph work (2026-07-18 decision).
   Note: Phase 5.5 Stage 3's "local LLM judge" for conflict detection needs
   reconciling with the new design law (truth status hard-calculated, never
