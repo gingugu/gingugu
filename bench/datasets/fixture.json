@@ -1,0 +1,184 @@
+{
+  "version": 1,
+  "name": "synthetic-devops-fixture",
+  "description": "Committed CI regression corpus. Entirely synthetic (checkout-api theme); includes near-miss distractors sharing vocabulary with the golden answers so questions are not gimmes. Labels are hand-written, deterministic ground truth.",
+  "memories": [
+    {
+      "key": "redis-incident",
+      "namespace": "checkout-service",
+      "type": "bug",
+      "title": "Incident: elasticache-prod connection exhaustion took down checkout",
+      "content": "2025-11-03 outage: checkout-api exhausted Redis connections on elasticache-prod during the flash sale. Root cause: no connection pooling, each request opened a fresh client. Resolved by introducing a shared connection pool (max 50) in the redis client wrapper.",
+      "tags": ["incident", "redis", "production"]
+    },
+    {
+      "key": "pool-config-fix",
+      "namespace": "checkout-service",
+      "type": "decision",
+      "title": "Connection pool configuration for redis clients",
+      "content": "After the elasticache-prod incident we standardized redis connection pooling: max 50 connections, 5s acquire timeout, health-check on checkout. Introduced in commit a81f2c. This configuration was later reused by customer-api when they hit the same symptom.",
+      "tags": ["redis", "configuration", "pooling"]
+    },
+    {
+      "key": "customer-api-reuse",
+      "namespace": "checkout-service",
+      "type": "pattern",
+      "title": "customer-api adopted the checkout redis pool settings",
+      "content": "customer-api saw rising redis latency in staging and adopted the pool configuration from commit a81f2c wholesale (max 50, 5s acquire timeout). Same fix, second service. Pattern: connection exhaustion symptoms should always be checked against pool limits first.",
+      "tags": ["redis", "pooling", "reuse"]
+    },
+    {
+      "key": "session-storage",
+      "namespace": "checkout-service",
+      "type": "architecture",
+      "title": "checkout-api session storage lives in Redis, app data in PostgreSQL",
+      "content": "checkout-api stores user sessions in Redis (elasticache-prod) and application data in PostgreSQL (rds-checkout-prod). These are complementary, not redundant: sessions need TTL semantics, orders need transactions.",
+      "tags": ["architecture", "redis", "postgresql"]
+    },
+    {
+      "key": "port-config",
+      "namespace": "checkout-service",
+      "type": "fact",
+      "title": "checkout-api listens on port 8080 behind the ALB",
+      "content": "checkout-api serves HTTP on port 8080; the ALB terminates TLS and forwards to the target group on that port. Health check path is /healthz on the same port.",
+      "tags": ["configuration", "networking"]
+    },
+    {
+      "key": "deploy-migration",
+      "namespace": "checkout-service",
+      "type": "workflow",
+      "title": "Deploys moved from Jenkins pipelines to GitHub Actions",
+      "content": "The old Jenkins deploy pipeline for checkout-api was retired in favor of GitHub Actions with OIDC into AWS. The Jenkinsfile is gone; deploys are now .github/workflows/deploy.yml triggered on tag push. Rollback is re-running the workflow with the previous tag.",
+      "tags": ["deploy", "ci", "migration"]
+    },
+    {
+      "key": "python-version",
+      "namespace": "checkout-service",
+      "type": "fact",
+      "title": "checkout-api requires Python 3.12",
+      "content": "checkout-api pins Python 3.12 in pyproject.toml; 3.11 fails on the tomllib usage in config loading. CI matrix runs 3.12 only.",
+      "tags": ["python", "configuration"]
+    },
+    {
+      "key": "distractor-redis-cache",
+      "namespace": "checkout-service",
+      "type": "context",
+      "title": "Evaluated Redis as a response cache and rejected it",
+      "content": "We considered caching rendered cart responses in Redis but rejected it: invalidation complexity outweighed the latency win at current traffic. Revisit if p99 exceeds 400ms. No connection to the incident work - this was a separate evaluation.",
+      "tags": ["redis", "cache", "rejected"]
+    },
+    {
+      "key": "distractor-postgres-pool",
+      "namespace": "checkout-service",
+      "type": "context",
+      "title": "PostgreSQL connection pool sizing via pgbouncer",
+      "content": "rds-checkout-prod sits behind pgbouncer in transaction mode, default pool 20. This is unrelated to the redis pool work; postgres never had an exhaustion incident.",
+      "tags": ["postgresql", "pooling"]
+    },
+    {
+      "key": "distractor-alb-timeout",
+      "namespace": "checkout-service",
+      "type": "fact",
+      "title": "ALB idle timeout raised to 120s for report downloads",
+      "content": "The ALB idle timeout for checkout-api was raised from 60s to 120s because large report downloads were being cut off. Unrelated to port or health-check configuration.",
+      "tags": ["networking", "configuration"]
+    },
+    {
+      "key": "wisdom-verify-tags",
+      "namespace": "platform-wisdom",
+      "type": "preference",
+      "title": "Always verify an image tag exists before committing a manifest",
+      "content": "Hard rule: before any commit that sets a container image tag or Helm chart tag, verify the artifact exists in the registry (docker manifest inspect). Learned from a prod outage caused by a typoed tag.",
+      "tags": ["rule", "deploy", "verification"]
+    },
+    {
+      "key": "wisdom-pypi-readme",
+      "namespace": "platform-wisdom",
+      "type": "pattern",
+      "title": "PyPI READMEs must use absolute URLs",
+      "content": "PyPI renders the README standalone, so relative links (LICENSE, docs/foo.md) 404. Always use absolute GitHub URLs in anything published to PyPI.",
+      "tags": ["packaging", "pypi", "gotcha"]
+    },
+    {
+      "key": "wisdom-ci-publish-root",
+      "namespace": "platform-wisdom",
+      "type": "pattern",
+      "title": "CI that publishes the repo root must exclude tooling dirs",
+      "content": "Before committing dev tooling (.claude/, hooks, logs) to a repo, check how it publishes. If CI mirrors the repo root to a public target (S3, gh-pages), tooling leaks publicly unless excluded.",
+      "tags": ["ci", "publishing", "gotcha"]
+    },
+    {
+      "key": "distractor-wisdom-terraform",
+      "namespace": "platform-wisdom",
+      "type": "pattern",
+      "title": "Terraform S3 backend bootstrap is a chicken-and-egg",
+      "content": "Terraform cannot manage its own remote state bucket; create the bucket with the CLI before terraform init. Standard bootstrap sequence documented in the platform runbook.",
+      "tags": ["terraform", "aws", "bootstrap"]
+    }
+  ],
+  "questions": [
+    {
+      "id": "q-incident-cause",
+      "query": "which incident caused the redis connection pool configuration",
+      "namespaces": ["checkout-service"],
+      "relevant": ["redis-incident", "pool-config-fix"],
+      "kind": "multi",
+      "notes": "Cause chain: incident -> pool config. Both memories needed to answer why the config exists."
+    },
+    {
+      "id": "q-fix-reuse",
+      "query": "where else did we reuse the connection pool fix from checkout",
+      "namespaces": ["checkout-service"],
+      "relevant": ["customer-api-reuse", "pool-config-fix"],
+      "kind": "multi",
+      "notes": "Reuse question: must surface the adopting service and the origin config."
+    },
+    {
+      "id": "q-session-storage",
+      "query": "where does checkout-api store user sessions",
+      "namespaces": ["checkout-service"],
+      "relevant": ["session-storage"],
+      "kind": "single",
+      "notes": "Distractors distractor-redis-cache and distractor-postgres-pool share redis/postgres vocabulary."
+    },
+    {
+      "id": "q-port",
+      "query": "what port does checkout-api listen on",
+      "namespaces": ["checkout-service"],
+      "relevant": ["port-config"],
+      "kind": "single",
+      "notes": "distractor-alb-timeout shares ALB/networking vocabulary."
+    },
+    {
+      "id": "q-deploy-before",
+      "query": "what did we use for deploys before github actions",
+      "namespaces": ["checkout-service"],
+      "relevant": ["deploy-migration"],
+      "kind": "single",
+      "notes": "Temporal what-was-true-before question answerable from one memory."
+    },
+    {
+      "id": "q-python",
+      "query": "which python version does checkout-api require and why",
+      "namespaces": ["checkout-service"],
+      "relevant": ["python-version"],
+      "kind": "single"
+    },
+    {
+      "id": "q-publish-leak",
+      "query": "what should I check before committing claude tooling to a repo that deploys to s3",
+      "namespaces": ["platform-wisdom"],
+      "relevant": ["wisdom-ci-publish-root"],
+      "kind": "single",
+      "notes": "Cross-cutting wisdom retrieval; distractor-wisdom-terraform shares s3/aws vocabulary."
+    },
+    {
+      "id": "q-cross-ns-deploy-rules",
+      "query": "rules to verify before a deploy commit with an image tag",
+      "namespaces": ["platform-wisdom", "checkout-service"],
+      "relevant": ["wisdom-verify-tags"],
+      "kind": "single",
+      "notes": "Multi-namespace search: deploy-migration and distractors share deploy vocabulary."
+    }
+  ]
+}

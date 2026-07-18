@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Retrieval benchmark toolset (`bench/`, dev-only — not shipped in the
+  package).** Golden-set benchmark measuring recall quality with deterministic
+  metrics (Recall@K, MRR, precision@K, context-token cost) — no LLM-as-judge,
+  ever. Two tiers: a committed synthetic fixture runs as a CI regression
+  floor (`uv run python -m bench`), and `--db` mode scores a real brain
+  (opened strictly read-only) against gitignored golden sets under
+  `bench/local/`. The runner mirrors the live `memory_recall` path but never
+  mutates ranking signals. Ranking/scoring changes are validated against a
+  recorded baseline.
+
 ---
 
 ## [0.6.0] - 2026-07-08
