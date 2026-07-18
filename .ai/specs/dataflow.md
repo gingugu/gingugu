@@ -25,7 +25,8 @@ memory_recall(query, namespace | "ns1,ns2,…", filters)
   → multi-namespace: one ranked SQL pass over all listed namespaces
     (IN clause); limit caps the TOTAL list (unlike context's per-namespace limit)
   → blend with recency + confidence + access frequency
-  → if include_related: spreading activation pulls linked memories (via_relation=true)
+  → if include_related: hub-dampened neighbourhood appended (via_relation=true) —
+    ≤3 neighbours per seed (confidence, then low degree, then recency), ≤10 total
   → ranked list; every memory stamped with its home namespace
     (compact=true: title + ~200-char summary instead of full content,
     related extras compacted too - keeps broad recalls under MCP clients'
@@ -65,6 +66,12 @@ memory_relate(source_id, target_id, relation_type)
 
 Edges are the load-bearing structure: recall quality scales with how aggressively
 they are built. Store-then-relate is the expected loop.
+
+Traversal is hub-dampened (`RelationManager.dampened_neighbour_ids`): the same
+budgeted set powers `include_related` extras and spreading activation, so a
+highly-connected "generic hub" memory contributes its few best neighbours
+instead of its entire cluster. Budgets (3 per seed, 10 total) are tuned against
+the real-brain benchmark.
 
 ## Lifecycle
 

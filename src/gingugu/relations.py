@@ -12,9 +12,15 @@ import logging
 import sqlite3
 import uuid
 
-from .models import RelationType, utcnow_iso
+from .models import CONFIDENCE_RANK, RelationType, utcnow_iso
 
 logger = logging.getLogger(__name__)
+
+# Hub-dampening budgets for 1-hop traversal (include_related extras and
+# spreading activation share them). Benchmark-tuned on a real brain — see
+# ``RelationManager.dampened_neighbour_ids``.
+SPREAD_PER_SEED = 3
+SPREAD_TOTAL = 10
 
 
 class RelationManager:
@@ -85,6 +91,61 @@ class RelationManager:
     def related_ids(self, memory_id: str) -> list[str]:
         """Neighbour memory ids (both directions), de-duplicated, order-stable."""
         return list(dict.fromkeys(rel["other_id"] for rel in self.get_relations(memory_id)))
+
+    def dampened_neighbour_ids(
+        self,
+        seed_ids: list[str],
+        *,
+        per_seed: int = SPREAD_PER_SEED,
+        total: int = SPREAD_TOTAL,
+    ) -> list[str]:
+        """Hub-dampened 1-hop neighbourhood of the seeds.
+
+        Each seed contributes at most ``per_seed`` neighbours, chosen by
+        confidence rank (desc), then **low** relation degree (a
+        highly-connected "generic hub" memory carries less specific signal
+        than a focused one), then recency, then id for full determinism.
+        ``total`` caps the whole set, filled in seed order so the
+        highest-ranked seeds' clusters win. Seeds are never included.
+        Budgets are tuned against the real-brain benchmark (bench/):
+        unbounded traversal averaged ~19 extras (~9.4k tokens) per
+        10-seed recall on a ~530-memory brain; dampened ≤ 10.
+        """
+        seen = set(seed_ids)
+        out: list[str] = []
+        for sid in seed_ids:
+            if len(out) >= total:
+                break
+            rows = self._conn.execute(
+                "SELECT m.id, m.confidence, "
+                "COALESCE(m.last_confirmed, m.updated_at, m.created_at) AS ts, "
+                "(SELECT COUNT(*) FROM relations d "
+                " WHERE d.source_id = m.id OR d.target_id = m.id) AS degree "
+                "FROM relations r "
+                "JOIN memories m ON m.id = "
+                "  CASE WHEN r.source_id = ? THEN r.target_id ELSE r.source_id END "
+                "WHERE r.source_id = ? OR r.target_id = ?",
+                (sid, sid, sid),
+            ).fetchall()
+            candidates = sorted(
+                (
+                    (
+                        CONFIDENCE_RANK.get(row["confidence"], 0),
+                        -row["degree"],
+                        row["ts"],
+                        row["id"],
+                    )
+                    for row in rows
+                    if row["id"] not in seen
+                ),
+                reverse=True,
+            )
+            for _, _, _, other_id in candidates[:per_seed]:
+                if len(out) >= total:
+                    break
+                seen.add(other_id)
+                out.append(other_id)
+        return out
 
     def delete_relation(
         self, *, source_id: str, target_id: str, relation_type: RelationType
