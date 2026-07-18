@@ -161,6 +161,33 @@ their head. Cold-crawl breadth is the seed; promoted organic gold is the moat.
 
 ---
 
+## Phase 5.75: The Sextant — Measured Retrieval ⚖️
+
+Retrieval quality is tracked as a measured number. Prompted by the
+2026-07-17 temporal-knowledge-graph peer review: before any graph work is even
+considered, measure where current recall stands — on real data, with
+hard math. **Design law: truth status and quality scores are hard-calculated,
+never LLM-derived. No LLM-as-judge, ever.**
+
+| Task | Status | Notes |
+|------|--------|-------|
+| Golden-set benchmark toolset (`bench/`, dev-only, not shipped in the wheel) | ✅ | Questions → labeled relevant memory IDs; deterministic runner computing Recall@K, MRR, precision, context-token cost. Two tiers: committed synthetic fixture for CI regression + local run against the real brain (gitignored golden set under `bench/local/`) for ground truth |
+| Real-brain golden set (self-labeled) | ✅ | 30 questions (7 multi-memory) labeled by the brain's owner (Beepboop) against ~623 real memories; human spot-checks a sample. Lives in gitignored `bench/local/` |
+| Baseline report on current recall | ✅ | 2026-07-18, real brain: **recall@5 = 1.000 on all 30 questions** (both hybrid and BM25-only) — candidate retrieval is not the failure mode at this brain size. The gap is rank-1 precision: hybrid MRR 0.811 / recall@1 0.578 vs BM25-only MRR 0.740 / recall@1 0.467. Embeddings buy +0.07 MRR on singles but slightly hurt multi-memory ranking. Targets for RRF + hub-dampening work: MRR and recall@1, not recall@k |
+| True hybrid retrieval (independent BM25 + vector candidate pools → RRF over union) | ⬜ | Promoted from Phase 6 — unblocked once the benchmark exists. Today semantic only reranks within the BM25-gated pool |
+| Hub dampening in spreading activation | ⬜ | Penalize highly-connected "generic hub" memories (e.g. session-end summaries with 12 edges) so one hub can't drag its whole neighborhood into every recall |
+
+**Milestone:** Every ranking change ships with before/after benchmark numbers.
+The graph question ("would an entity graph improve recall?") is answerable
+with data.
+
+**Explicitly parked** (per the 2026-07-17 peer review): temporal/entity
+knowledge graph, assertions, `knowledge_*` tools, bi-temporal modeling. Stays
+in the architecture conversation, not on the roadmap, until benchmark data
+argues for it.
+
+---
+
 ## Phase 6: Cognitive Runtime (The Captain's Chair) 🧭
 
 > *Vision detailed in [`docs/future-architecture.md`](future-architecture.md).*
@@ -171,7 +198,7 @@ for agents." Crystallized after an external architectural review on
 
 | Task | Status | Notes |
 |------|--------|-------|
-| **True hybrid retrieval** (independent BM25 + vector candidates → RRF) | ⬜ | Today's pipeline gates semantic on the BM25 candidate pool. Real fix runs both retrievals independently and fuses the union |
+| **True hybrid retrieval** (independent BM25 + vector candidates → RRF) | ↗ | Moved to Phase 5.75 |
 | **Migration auto-backup** (`memories.db.bak-before-vN`) | ✅ | Shipped in v0.3.2 |
 | **Access-weight reinforcement-loop fix** (log-scale or cap) | ✅ | Already in place — audited in v0.3.2 (log-scaled with saturation at 50; spreading activation does not increment access_count) |
 | **Typed JSON metadata validation** | ✅ | Shipped in v0.3.2 |
@@ -181,7 +208,7 @@ for agents." Crystallized after an external architectural review on
 | **Memory packet recall format** | ⬜ | Returns `{claims, hypotheses, procedures, warnings}`, not flat list |
 | **Embedded runtime SDK** (`brain.run(model, message, ...)`) | ⬜ | Auto recall + capture around model invocation; MCP becomes one adapter |
 | **Property-based + failure-injection tests** | ⬜ | Hypothesis for adversarial inputs; chaos for keyring/disk/migrations |
-| **Retrieval evaluation corpus** (Recall@K, MRR) | ⬜ | Currently tuning weights by intuition |
+| **Retrieval evaluation corpus** (Recall@K, MRR) | ↗ | Moved to Phase 5.75 — the golden-set benchmark toolset |
 | **Credential vault per-service policy** + interactive approval | ⬜ | Closes the agent-mediated retrieval gap documented in `SECURITY.md` |
 | **Convergence with ForgeSmith** (epistemic + execution loop) | ⬜ | The bigger product story |
 
@@ -211,6 +238,8 @@ for agents." Crystallized after an external architectural review on
 | 2026-05-02 | Handlers register via `ServerContext` DI | Avoids module-global singletons; keeps handler modules testable + under 300 lines |
 | 2026-06-04 | Rebrand to **Gingugu** | Unique, memorable, available everywhere (GitHub/PyPI/NPM/.com) |
 | 2026-06-04 | Drop migration shims pre-launch | Dead code for every public install |
+| 2026-07-18 | **Benchmark before graph** — no temporal/entity graph work until golden-set data argues for it | Temporal-KG peer review (2026-07-17): graph-improves-recall unproven (5/10), 75% bloat risk if rushed; prove retrieval value first, then earn the complexity |
+| 2026-07-18 | **Design law: truth status is hard-calculated math, never LLM-derived** | Confidence, ranking, decay, contradiction, and benchmark grading stay deterministic. No LLM-as-judge; AI assumption is not math |
 
 ---
 
@@ -230,8 +259,8 @@ for agents." Crystallized after an external architectural review on
 
 ---
 
-*Next action: Phase 5.5 Stages 2-4 (consolidation with contributors, conflict
-detection, wiring promotion to the real local brain). In parallel from Phase 6:
-true hybrid retrieval (RRF over independent BM25 + vector candidate pools),
-backed by a retrieval evaluation corpus (Recall@K / MRR) so ranking changes are
-measured, not eyeballed. Gingugu is public, self-hosting, and shipping.*
+*Next action: Phase 5.75 (The Sextant) — golden-set benchmark toolset, baseline
+report on current recall, then cash in true hybrid retrieval and hub dampening
+against measured numbers. Phase 5.5 Stages 2-4 (consolidation with contributors,
+conflict detection, wiring promotion to the real local brain) continue in
+parallel. Gingugu is public, self-hosting, and shipping.*

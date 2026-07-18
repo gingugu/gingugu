@@ -47,6 +47,9 @@ coverage.xml
 .pyre/
 .pytype/
 
+# Benchmark golden sets labeled against a real brain (private data)
+bench/local/
+
 # Gingugu local data (never commit DB files)
 *.db
 *.db-journal
@@ -90,3 +93,5 @@ secrets/
 credentials/
 
 *.zip
+
+Gingugu_Temporal_Knowledge_Graph_Peer_Review.docx

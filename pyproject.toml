@@ -57,4 +57,7 @@ select = ["E", "F", "I", "W", "UP", "B"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# Repo root on the path so tests can import the dev-only bench/ package
+# (src/gingugu installs normally; bench/ is never shipped).
+pythonpath = ["."]
 addopts = "-ra -q"

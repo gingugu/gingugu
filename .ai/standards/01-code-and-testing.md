@@ -29,6 +29,10 @@
 - Run `uv run pytest -v` green before opening a PR.
 - CI matrix: ubuntu/macos/windows × Python 3.11–3.13 — cross-platform claims must
   be backed by green CI on all three OSes, not just local.
+- **Ranking/scoring changes ship with benchmark evidence:** run
+  `uv run python -m bench` (fixture floor) and a real-brain run against the
+  recorded baseline (see `docs/roadmap.md` Phase 5.75). Grading is
+  deterministic math only — never LLM-as-judge (design law, 2026-07-18).
 
 ## Docs in lockstep
 
