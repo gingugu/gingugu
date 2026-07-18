@@ -4,10 +4,10 @@
 
 ---
 
-## Current Status: **Phase 5.5 (The Crow's Nest) In Flight — Stage 1 Shipped** ⛵
+## Current Status: **Phase 5.75 (The Sextant) Complete — Phase 5.5 Stages 2-4 Next** ⛵
 
-> Shipped and public: **v0.5.0 on PyPI**, **16 MCP
-> tools** live, **254 tests passing** (ruff + black clean), CI green on
+> Shipped and public: **v0.6.0 on PyPI**, **16 MCP
+> tools** live, **289 tests passing** (ruff + black clean), CI green on
 > ubuntu/macos/windows × 3.11–3.13. Phases 1-4 (storage, intelligence,
 > relations, integration) are done and battle-tested. Phase 5 landed the big
 > upgrades: local semantic embeddings (fastembed ONNX + Ollama backend), RRF
@@ -16,7 +16,11 @@
 > auto-context + compact mode, review hints, suggest-mode dupe scanning,
 > save-discipline hook). Phase 5.5 is turning gingugu into a **networked
 > brain**: `gingugu serve` (streamable HTTP + Bearer auth) and promotion
-> Stage 1 (`gingugu promote`) are live. The repo **dogfoods itself**.
+> Stage 1 (`gingugu promote`) are live. Phase 5.75 made retrieval quality a
+> **measured number**: golden-set benchmark toolset (`bench/`), a recorded
+> real-brain baseline, true hybrid retrieval (independent BM25 + semantic
+> pools, RRF-fused), and hub-dampened relation traversal. The repo
+> **dogfoods itself**.
 
 ---
 
@@ -175,11 +179,14 @@ never LLM-derived. No LLM-as-judge, ever.**
 | Real-brain golden set (self-labeled) | ✅ | 30 questions (7 multi-memory) labeled by the brain's owner (Beepboop) against ~623 real memories; human spot-checks a sample. Lives in gitignored `bench/local/` |
 | Baseline report on current recall | ✅ | 2026-07-18, real brain: **recall@5 = 1.000 on all 30 questions** (both hybrid and BM25-only) — candidate retrieval is not the failure mode at this brain size. The gap is rank-1 precision: hybrid MRR 0.811 / recall@1 0.578 vs BM25-only MRR 0.740 / recall@1 0.467. Embeddings buy +0.07 MRR on singles but slightly hurt multi-memory ranking. Targets for RRF + hub-dampening work: MRR and recall@1, not recall@k |
 | True hybrid retrieval (independent BM25 + vector candidate pools → RRF over union) | ✅ | 2026-07-18: semantic pool pulled independently over the filtered corpus; BM25 candidates never displaced; semantic-only entrants join above a benchmark-tuned 0.55 cosine floor (≤ limit/2). Real-brain result vs baseline: MRR 0.811 → **0.828**, recall@1 0.578 → **0.611**, recall@10 1.000 held; one multi-memory question's secondary hit now sits at rank 6–10 (recall@5 0.983). `search.py` split into engine + `search_common` + `search_filters` |
-| Hub dampening in spreading activation | ⬜ | Penalize highly-connected "generic hub" memories (e.g. session-end summaries with 12 edges) so one hub can't drag its whole neighborhood into every recall |
+| Hub dampening in spreading activation | ✅ | 2026-07-18: `include_related` extras + spreading activation share one budgeted neighbourhood (`dampened_neighbour_ids`): ≤3 neighbours per seed by confidence → low degree → recency (deterministic), ≤10 total. Real-brain measurement (30 golden questions, 10 seeds each): mean extras 18.9 → 9.9, extra payload ~9.4k → ~4.8k tokens, worst case 29 → 10. Seed retrieval untouched |
 
 **Milestone:** Every ranking change ships with before/after benchmark numbers.
 The graph question ("would an entity graph improve recall?") is answerable
-with data.
+with data. — **Done: all Phase 5.75 rows complete (2026-07-18).** Baseline
+recall@5 hit 1.000 on every golden question; true hybrid lifted MRR
+0.811 → 0.828 and recall@1 0.578 → 0.611; hub dampening halved the
+`include_related` payload.
 
 **Explicitly parked** (per the 2026-07-17 peer review): temporal/entity
 knowledge graph, assertions, `knowledge_*` tools, bi-temporal modeling. Stays
@@ -259,8 +266,8 @@ for agents." Crystallized after an external architectural review on
 
 ---
 
-*Next action: Phase 5.75 (The Sextant) — golden-set benchmark toolset, baseline
-report on current recall, then cash in true hybrid retrieval and hub dampening
-against measured numbers. Phase 5.5 Stages 2-4 (consolidation with contributors,
-conflict detection, wiring promotion to the real local brain) continue in
-parallel. Gingugu is public, self-hosting, and shipping.*
+*Next action: cut the next release (CHANGELOG [Unreleased] holds the benchmark
+toolset, true hybrid retrieval, and hub dampening), then Phase 5.5 Stages 2-4
+(consolidation with contributors, conflict detection — pending the design-law
+reconciliation for the Stage 3 judge — and wiring promotion to the real local
+brain). Gingugu is public, self-hosting, and shipping.*
