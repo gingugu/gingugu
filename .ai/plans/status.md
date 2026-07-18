@@ -23,29 +23,15 @@ _Last updated: 2026-07-18_
 
 ## In Progress
 
-- **Phase 5.75 "The Sextant" — measured retrieval** (branch
-  `feature/retrieval-benchmark`, kicked off 2026-07-18 after the temporal-KG
-  peer review). Shipped so far: dev-only `bench/` package — golden-set
-  benchmark runner (Recall@K, MRR, precision, token cost; deterministic, no
-  LLM-as-judge), committed synthetic fixture for CI regression, real-brain
-  mode (read-only DB open, gitignored `bench/local/` golden sets).
-  **Baseline captured 2026-07-18** (30 self-labeled questions, ~623 memories):
-  recall@5 = 1.000 on every question in both hybrid and BM25-only modes —
-  candidate retrieval is not the failure mode; the gap is rank-1 quality
-  (hybrid MRR 0.811 / recall@1 0.578; BM25-only 0.740 / 0.467).
-  **True hybrid retrieval shipped 2026-07-18** (branch
-  `feature/true-rrf-hybrid`, stacked on the benchmark PR #22): independent
-  BM25 + semantic candidate pools, RRF over the union, semantic-only
-  entrants gated by a benchmark-tuned 0.55 cosine floor (≤ limit/2), BM25
-  candidates never displaced. Result vs baseline: MRR 0.828 (+0.017),
-  recall@1 0.611 (+0.033), recall@10 1.000 held; known trade: one
-  multi-memory question's secondary hit at rank 6–10 (recall@5 0.983) —
-  flagged for review. Next: hub dampening in spreading activation,
-  measured the same way. Parked until
-  data argues for it: any temporal/entity graph work (2026-07-18 decision).
-  Note: Phase 5.5 Stage 3's "local LLM judge" for conflict detection needs
-  reconciling with the new design law (truth status hard-calculated, never
-  LLM-derived) — advisory-only proposing may comply, needs a call.
+- **Next release ready to cut.** CHANGELOG `[Unreleased]` holds the Phase
+  5.75 haul: benchmark toolset, true hybrid retrieval, hub-dampened
+  traversal. Version bump + tag whenever Brian gives the word.
+- **Design-law reconciliation pending:** Phase 5.5 Stage 3's "local LLM
+  judge" for conflict detection needs reconciling with the design law
+  (truth status hard-calculated, never LLM-derived) — advisory-only
+  proposing may comply, needs a call before Stage 3 is built.
+- **Parked until data argues for it:** any temporal/entity graph work
+  (2026-07-18 decision — benchmark-before-graph).
 - **v0.4.0 released** (2026-07-07): serve, promote Stage 1, multi-namespace
   context + compact, review hints, suggest mode, save hook, timeline chart
   fix. Remaining: dogfood the new context loading after client restart; the
@@ -70,6 +56,22 @@ _Last updated: 2026-07-18_
 
 ## Recently Completed
 
+- **2026-07-18** - **Phase 5.75 "The Sextant" complete** (PRs #22, #23 +
+  hub-dampening PR). Retrieval quality is now a measured number: (1)
+  dev-only `bench/` golden-set benchmark toolset (Recall@K, MRR, precision,
+  token cost; deterministic, no LLM-as-judge; synthetic CI fixture +
+  read-only real-brain mode with gitignored `bench/local/` golden sets);
+  (2) recorded real-brain baseline — recall@5 = 1.000 on all 30 questions
+  in both modes, rank-1 identified as the target (hybrid MRR 0.811 /
+  recall@1 0.578); (3) true hybrid retrieval — independent BM25 + semantic
+  pools, RRF over the union, entrants gated by a benchmark-tuned 0.55
+  cosine floor (≤ limit/2), BM25 candidates never displaced: MRR → 0.828,
+  recall@1 → 0.611, recall@10 held 1.000 (accepted trade: one multi
+  question's secondary hit at rank 6–10); (4) hub-dampened relation
+  traversal — `include_related` extras + spreading activation share one
+  budgeted neighbourhood (≤3/seed by confidence → low degree → recency,
+  ≤10 total): mean extras 18.9 → 9.9, extra payload ~9.4k → ~4.8k tokens.
+  `search.py` split into engine + `search_common` + `search_filters`.
 - **2026-07-08** - Multi-namespace `memory_recall`/`memory_search`: `namespace`
   accepts a CSV list, searched in one ranked SQL pass (`limit` = total cap,
   unlike context's per-namespace limit); multi responses carry `namespaces[]`;

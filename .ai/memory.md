@@ -54,7 +54,7 @@
 | `search_filters.py` | `advanced_search`: filtered search + metadata-only listing |
 | `embeddings.py` | Semantic vector generation |
 | `context.py` | Session priming (`memory_context`) + spreading activation |
-| `relations.py` | Typed graph edges between memories |
+| `relations.py` | Typed graph edges + hub-dampened 1-hop traversal (`dampened_neighbour_ids`) |
 | `consolidation.py` | merge / summarize / deduplicate clusters |
 | `decay.py` | Dormancy as a resting signal — never auto-forgets |
 | `stats.py` | Health stats (counts, confidence, dormancy, hygiene, review sweep) |
