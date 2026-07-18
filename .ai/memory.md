@@ -49,7 +49,9 @@
 | `database.py` | Connection, schema, WAL, migrations (`PRAGMA user_version`), FTS5 triggers |
 | `models.py` | Memory / namespace / relation data models |
 | `storage.py` | Memory CRUD (store, update, forget) |
-| `search.py` | Hybrid BM25 (FTS5) + semantic ranking |
+| `search.py` | True hybrid engine: independent BM25 + semantic pools, RRF fusion |
+| `search_common.py` | Shared SQL columns + WHERE-fragment builders |
+| `search_filters.py` | `advanced_search`: filtered search + metadata-only listing |
 | `embeddings.py` | Semantic vector generation |
 | `context.py` | Session priming (`memory_context`) + spreading activation |
 | `relations.py` | Typed graph edges between memories |

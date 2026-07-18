@@ -19,7 +19,9 @@ memory_store(content, title, type, namespace, tags, confidence)
 
 ```
 memory_recall(query, namespace | "ns1,ns2,…", filters)
-  → search.py: BM25 (FTS5) lexical score  ⊕  semantic similarity (embeddings)
+  → search.py: independent BM25 (FTS5) + semantic (cosine) candidate pools,
+    RRF-fused over their union; semantic-only matches join above a 0.55
+    similarity floor (≤ limit/2 entrants), BM25 candidates never displaced
   → multi-namespace: one ranked SQL pass over all listed namespaces
     (IN clause); limit caps the TOTAL list (unlike context's per-namespace limit)
   → blend with recency + confidence + access frequency

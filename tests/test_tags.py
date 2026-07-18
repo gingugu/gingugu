@@ -5,6 +5,7 @@ from __future__ import annotations
 from gingugu import search as search_mod
 from gingugu.models import MemoryType, normalize_tag
 from gingugu.namespaces import NamespaceManager
+from gingugu.search_filters import advanced_search
 from gingugu.storage import MemoryStore
 
 WEIGHTS = {"relevance": 0.45, "freshness": 0.25, "access": 0.10, "confidence": 0.20}
@@ -105,7 +106,7 @@ def test_advanced_search_tag_filter_no_query(
         namespace_id=ns_id, type=MemoryType.FACT, title="tagged", content="c", tags=["keep"]
     )
     store.create(namespace_id=ns_id, type=MemoryType.FACT, title="untagged", content="c")
-    results = search_mod.advanced_search(
+    results = advanced_search(
         store.conn, namespace_id=ns_id, weights=WEIGHTS, tags=["keep"], sort_by="created"
     )
     assert {m.title for m in results} == {"tagged"}

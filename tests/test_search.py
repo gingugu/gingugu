@@ -6,6 +6,7 @@ from gingugu import search as search_mod
 from gingugu.models import Confidence, MemoryType
 from gingugu.namespaces import NamespaceManager
 from gingugu.search import build_match_query
+from gingugu.search_filters import advanced_search
 from gingugu.storage import MemoryStore
 
 
@@ -128,7 +129,7 @@ def test_advanced_search_date_filter_applies_before_limit(
     store.conn.commit()
     store.create(namespace_id=ns_id, type=MemoryType.FACT, title="recent", content="findme common")
 
-    results = search_mod.advanced_search(
+    results = advanced_search(
         store.conn,
         query="findme",
         namespace_id=ns_id,
@@ -138,7 +139,7 @@ def test_advanced_search_date_filter_applies_before_limit(
     assert [m.title for m in results] == ["recent"]
 
     # Same guarantee on the no-query listing path.
-    listed = search_mod.advanced_search(
+    listed = advanced_search(
         store.conn,
         namespace_id=ns_id,
         created_after="2025-01-01",
