@@ -17,6 +17,10 @@ def _payload(result) -> dict:
 def server(tmp_path, monkeypatch):
     monkeypatch.setenv("MEMORY_DB_PATH", str(tmp_path / "e2e.db"))
     monkeypatch.setenv("MEMORY_NAMESPACE", "e2e")
+    # Deterministic BM25-only retrieval: these tests assert the
+    # via_relation plumbing, which requires the neighbour NOT to
+    # surface as a seed via the semantic pool.
+    monkeypatch.setenv("MEMORY_EMBEDDINGS_ENABLED", "false")
     from gingugu.server import build_server
 
     return build_server()
