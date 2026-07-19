@@ -6,7 +6,7 @@
 
 ## Current Status: **Phase 5.75 (The Sextant) Complete — Phase 5.5 Stages 2-4 Next** ⛵
 
-> Shipped and public: **v0.6.0 on PyPI**, **16 MCP
+> Shipped and public: **v0.7.0 on PyPI**, **16 MCP
 > tools** live, **289 tests passing** (ruff + black clean), CI green on
 > ubuntu/macos/windows × 3.11–3.13. Phases 1-4 (storage, intelligence,
 > relations, integration) are done and battle-tested. Phase 5 landed the big
