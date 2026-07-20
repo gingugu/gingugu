@@ -1,12 +1,13 @@
 # Project Status
 
-_Last updated: 2026-07-18_
+_Last updated: 2026-07-20_
 
 ## Shipped / Working
 
-- **v0.6.0 on PyPI** — released via Trusted Publishing (OIDC) on tag; GitHub
-  Release auto-cut from CHANGELOG. Latest: multi-namespace + compact
-  recall/search, comma-aware namespace guards.
+- **v0.7.0 on PyPI** (2026-07-18) — released via Trusted Publishing (OIDC) on
+  tag; GitHub Release auto-cut from CHANGELOG. Latest: benchmark toolset,
+  true hybrid retrieval (independent BM25 + semantic pools, RRF-fused),
+  hub-dampened relation traversal.
 - **Two-layer memory** — `crow` (global identity) + per-project namespaces, live.
 - **Never-forget model** — dormancy + spreading activation replaced time-based
   decay; nothing is auto-forgotten.
@@ -23,9 +24,18 @@ _Last updated: 2026-07-18_
 
 ## In Progress
 
-- **Next release ready to cut.** CHANGELOG `[Unreleased]` holds the Phase
-  5.75 haul: benchmark toolset, true hybrid retrieval, hub-dampened
-  traversal. Version bump + tag whenever Brian gives the word.
+- **Review-sweep workflow (branch `feature/review-sweep-tools`).** Born from
+  QA-ing a real session transcript against v0.7.0: `memory_search` gained
+  `ids` (precise fetch-by-ID, deprecated included, `missing` reported),
+  `memory_stats` gained `review_limit` (enumerate all flagged memories, max
+  100), and gated review hints no longer fire on timeless types
+  (`pattern`/`preference`) — killed 3 of 6 real false positives in crow.
+  300 tests green; PR pending.
+- **Known retrieval gap (not yet addressed):** a memory at BM25 rank 1 AND
+  semantic rank 1 can lose the composite top spots to high-`access_count`
+  neighbours because RRF rank compression flattens relevance deltas
+  (~0.7%/rank) below the access weight's reach (~3%). Reproduced empirically
+  2026-07-20. Any fix goes through `bench/` first (benchmark-before-tuning).
 - **Design-law reconciliation pending:** Phase 5.5 Stage 3's "local LLM
   judge" for conflict detection needs reconciling with the design law
   (truth status hard-calculated, never LLM-derived) — advisory-only

@@ -16,6 +16,25 @@ from .search import _CANDIDATE_MULTIPLIER, search
 from .search_common import BASE_COLUMNS, build_filters
 
 
+def fetch_by_ids(conn: sqlite3.Connection, ids: list[str]) -> tuple[list[Memory], list[str]]:
+    """Fetch memories by exact ID, preserving the requested order.
+
+    An ID fetch is an explicit read — the caller named the memory — so
+    deprecated memories are returned too (a reconciliation sweep must be able
+    to inspect what it is reconciling). Returns ``(found, missing_ids)``.
+    """
+    if not ids:
+        return [], []
+    placeholders = ", ".join("?" for _ in ids)
+    rows = conn.execute(
+        f"SELECT {BASE_COLUMNS} FROM memories WHERE id IN ({placeholders})", ids
+    ).fetchall()
+    by_id = {row["id"]: Memory(**dict(row)) for row in rows}
+    found = [by_id[mid] for mid in ids if mid in by_id]
+    missing = [mid for mid in ids if mid not in by_id]
+    return found, missing
+
+
 def advanced_search(
     conn: sqlite3.Connection,
     *,

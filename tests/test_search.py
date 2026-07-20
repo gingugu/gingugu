@@ -186,3 +186,43 @@ def test_update_reindexes(store: MemoryStore, namespaces: NamespaceManager) -> N
     store.update(mem.id, content="replaced trio term")
     assert search_mod.search(store.conn, query="gather", namespace_id=ns_id) == []
     assert len(search_mod.search(store.conn, query="trio", namespace_id=ns_id)) == 1
+
+
+# --- fetch_by_ids (memory_search ids= precise-fetch path) ---------------------
+
+
+def test_fetch_by_ids_preserves_order_and_reports_missing(
+    store: MemoryStore, namespaces: NamespaceManager
+) -> None:
+    from gingugu.search_filters import fetch_by_ids
+
+    ns_id = namespaces.get_or_create("test-ns").id
+    a = store.create(namespace_id=ns_id, type=MemoryType.FACT, title="a", content="x")
+    b = store.create(namespace_id=ns_id, type=MemoryType.FACT, title="b", content="y")
+    found, missing = fetch_by_ids(store.conn, [b.id, "no-such-id", a.id])
+    assert [m.id for m in found] == [b.id, a.id]
+    assert missing == ["no-such-id"]
+
+
+def test_fetch_by_ids_returns_deprecated(store: MemoryStore, namespaces: NamespaceManager) -> None:
+    """An ID fetch is an explicit read — a reconciliation sweep must be able
+    to inspect deprecated memories it was handed IDs for."""
+    from gingugu.search_filters import fetch_by_ids
+
+    ns_id = namespaces.get_or_create("test-ns").id
+    dep = store.create(
+        namespace_id=ns_id,
+        type=MemoryType.FACT,
+        title="old",
+        content="z",
+        confidence=Confidence.DEPRECATED,
+    )
+    found, missing = fetch_by_ids(store.conn, [dep.id])
+    assert [m.id for m in found] == [dep.id]
+    assert missing == []
+
+
+def test_fetch_by_ids_empty_input(store: MemoryStore) -> None:
+    from gingugu.search_filters import fetch_by_ids
+
+    assert fetch_by_ids(store.conn, []) == ([], [])
