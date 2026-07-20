@@ -24,13 +24,6 @@ _Last updated: 2026-07-20_
 
 ## In Progress
 
-- **Review-sweep workflow (branch `feature/review-sweep-tools`).** Born from
-  QA-ing a real session transcript against v0.7.0: `memory_search` gained
-  `ids` (precise fetch-by-ID, deprecated included, `missing` reported),
-  `memory_stats` gained `review_limit` (enumerate all flagged memories, max
-  100), and gated review hints no longer fire on timeless types
-  (`pattern`/`preference`) — killed 3 of 6 real false positives in crow.
-  300 tests green; PR pending.
 - **Known retrieval gap (not yet addressed):** a memory at BM25 rank 1 AND
   semantic rank 1 can lose the composite top spots to high-`access_count`
   neighbours because RRF rank compression flattens relevance deltas
@@ -65,6 +58,16 @@ _Last updated: 2026-07-20_
 - _None tracked._
 
 ## Recently Completed
+
+- **2026-07-20** - **v0.8.0 released; review-sweep workflow merged (PR #25).**
+  `memory_search` gained `ids` (precise fetch-by-ID: requested order,
+  deprecated included, `missing` reported), `memory_stats` gained
+  `review_limit` (enumerate all flagged memories, max 100), and gated review
+  hints skip timeless types (`pattern`/`preference`) - eliminated the
+  observed false positives on a real corpus. Sweep flow:
+  `memory_stats(review_limit=100)` -> `memory_search(ids=...)` ->
+  `memory_update`/`memory_forget`. 300 tests; benchmarked code-vs-code on a
+  frozen corpus: zero retrieval delta.
 
 - **2026-07-18** - **Phase 5.75 "The Sextant" complete** (PRs #22, #23 +
   hub-dampening PR). Retrieval quality is now a measured number: (1)
