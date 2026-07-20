@@ -62,7 +62,9 @@ AI client (Claude Code / Cursor / Windsurf / …)
   the dormancy clock but don't count as accesses - `access_count` is a pure
   recall/search usage signal.
 - `memory_search` is the precision path: explicit filters (tags, type, date,
-  confidence) and sort order.
+  confidence), sort order, and exact fetch-by-`ids` (requested order,
+  deprecated included, `missing` reported) - the companion to
+  `memory_stats(review_limit=...)` for review sweeps.
 
 ## Key Decisions
 
