@@ -324,15 +324,20 @@ Two signal classes (all regex-based, case-insensitive):
   confirmed for `REVIEW_HINT_AFTER_DAYS` (14): `open-pr-reference` (a PR/MR
   number near open/waiting/pending/unmerged wording, either order),
   `waiting-on` (waiting on/for, awaiting, blocked on/by), `unmerged-branch`.
-- **Ungated** - the content names its own clock and fires immediately:
-  `expired-date` (`expires <YYYY-MM-DD>` in the past), `stale-as-of-date`
-  (`as of <YYYY-MM-DD>` older than the gate window).
+  Gated signals never fire on the timeless types (`pattern`, `preference`) -
+  a pattern saying "apps blocked on disk I/O" is reference material, not a
+  status note.
+- **Ungated** - the content names its own clock and fires immediately, on
+  every type: `expired-date` (`expires <YYYY-MM-DD>` in the past),
+  `stale-as-of-date` (`as of <YYYY-MM-DD>` older than the gate window).
 
 Surfaced in two places: each `memory_context` result may carry
 `review_hints: [...]`, and `memory_stats` returns a `review` block
-(`review_suggested` count + up to 5 sample entries) for a namespace-wide
-audit. The expected reaction is `memory_update` (reconfirm or correct) or
-`memory_forget` - the caller's judgment, never the server's.
+(`review_suggested` count + a sample of entries, 5 by default) for a
+namespace-wide audit. For a full reconciliation sweep, raise the sample cap
+with `memory_stats(review_limit=…)` and pull the flagged bodies with
+`memory_search(ids=…)`. The expected reaction is `memory_update` (reconfirm
+or correct) or `memory_forget` - the caller's judgment, never the server's.
 
 ---
 
@@ -536,14 +541,20 @@ Get health overview of the memory system.
   never mutate confidence.
 
 The response includes a `review` block - `review_suggested` (count of active
-memories tripping a review signal; see *Review Hints* above) plus up to 5
-sample entries (`id`, `title`, `signals`). Advisory only.
+memories tripping a review signal; see *Review Hints* above) plus sample
+entries (`id`, `title`, `signals`) - 5 by default, raise with
+`review_limit` (max 100) to enumerate every flagged memory for a sweep.
+Advisory only.
 
 ### `memory_search`
-Advanced search with full filter support.
+Advanced search with full filter support, plus a precise fetch-by-ID path.
 
 **Parameters:**
 - `query` (optional) — text search query
+- `ids` (optional) — comma-separated memory IDs (e.g. from a `memory_stats`
+  review sample). When given, every other filter is ignored: results return
+  in the requested order, deprecated memories included, and a `missing` list
+  reports any ID not found.
 - `namespace` (optional) — a single name, a comma-separated list (same
   semantics as `memory_recall`: `limit` is the total cap, unknown names are
   an error, multi responses carry `namespaces`), or omitted to search every

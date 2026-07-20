@@ -69,7 +69,12 @@ def _count(conn: sqlite3.Connection, sql: str, params: tuple = ()) -> int:
     return conn.execute(sql, params).fetchone()[0]
 
 
-def compute_stats(conn: sqlite3.Connection, *, namespace_id: str | None = None) -> dict:
+def compute_stats(
+    conn: sqlite3.Connection,
+    *,
+    namespace_id: str | None = None,
+    review_limit: int | None = None,
+) -> dict:
     """Health overview: counts, staleness, and per-type/confidence breakdowns."""
     prune_access_log(conn)
 
@@ -130,16 +135,23 @@ def compute_stats(conn: sqlite3.Connection, *, namespace_id: str | None = None) 
         "access_log_rows": _count(conn, "SELECT COUNT(*) FROM access_log"),
         "credentials": _credential_health(conn),
         "hygiene": compute_hygiene(conn, namespace_id=namespace_id),
-        "review": compute_review(conn, namespace_id=namespace_id),
+        "review": compute_review(conn, namespace_id=namespace_id, sample_limit=review_limit),
     }
 
 
-# Cap on how many review-flagged memories we list in the stats sample; the
-# full count is always reported.
+# Default cap on how many review-flagged memories we list in the stats sample;
+# the full count is always reported. Callers raise it (up to the max) to
+# enumerate every flagged memory for a reconciliation sweep.
 _REVIEW_SAMPLE_LIMIT = 5
+_REVIEW_SAMPLE_MAX = 100
 
 
-def compute_review(conn: sqlite3.Connection, *, namespace_id: str | None = None) -> dict:
+def compute_review(
+    conn: sqlite3.Connection,
+    *,
+    namespace_id: str | None = None,
+    sample_limit: int | None = None,
+) -> dict:
     """Advisory review sweep: point-in-time memories that may have gone stale.
 
     Runs the ``staleness.review_signals`` detector over the *eligible* active
@@ -153,11 +165,13 @@ def compute_review(conn: sqlite3.Connection, *, namespace_id: str | None = None)
     "expire"/"as of" — so recently-confirmed memories without those markers
     are excluded before any content leaves SQLite.
     """
+    limit = _REVIEW_SAMPLE_LIMIT if sample_limit is None else sample_limit
+    limit = max(1, min(limit, _REVIEW_SAMPLE_MAX))
     and_ns = " AND namespace_id = ?" if namespace_id else ""
     ns_params: tuple = (namespace_id,) if namespace_id else ()
     cutoff = _cutoff_iso(REVIEW_HINT_AFTER_DAYS)
     rows = conn.execute(
-        "SELECT id, title, content, last_confirmed, updated_at, created_at "
+        "SELECT id, type, title, content, last_confirmed, updated_at, created_at "
         "FROM memories WHERE confidence != 'deprecated'" + and_ns + " "
         "AND (COALESCE(last_confirmed, updated_at, created_at) < ? "
         "OR content LIKE '%expire%' OR content LIKE '%as of%')",
@@ -168,6 +182,7 @@ def compute_review(conn: sqlite3.Connection, *, namespace_id: str | None = None)
     for row in rows:
         signals = review_signals(
             row["content"],
+            memory_type=row["type"],
             last_confirmed=row["last_confirmed"],
             updated_at=row["updated_at"],
             created_at=row["created_at"],
@@ -177,7 +192,7 @@ def compute_review(conn: sqlite3.Connection, *, namespace_id: str | None = None)
 
     return {
         "review_suggested": len(flagged),
-        "sample": flagged[:_REVIEW_SAMPLE_LIMIT],
+        "sample": flagged[:limit],
     }
 
 
