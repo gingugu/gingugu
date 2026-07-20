@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Fetch memories by ID.** `memory_search` accepts `ids` (comma-separated) —
+  the precise-fetch path for IDs handed out elsewhere (e.g. a `memory_stats`
+  review sample). Results return in the requested order, deprecated memories
+  included, with a `missing` list for any ID not found.
+- **Enumerable review sweeps.** `memory_stats` accepts `review_limit`
+  (default 5, max 100) to raise the `review.sample` cap, so a reconciliation
+  sweep can list every flagged memory instead of the top 5 — pair with
+  `memory_search(ids=…)` to pull the full bodies.
+
+### Fixed
+
+- **Review-hint false positives on timeless types.** Gated review signals
+  (`waiting-on`, `open-pr-reference`, `unmerged-branch`) no longer fire on
+  `pattern`/`preference` memories, whose prose is reference material — "apps
+  blocked on disk I/O" in a diagnostic pattern is not an in-flight status
+  note. Ungated date signals still apply to every type.
+
 ---
 
 ## [0.7.0] - 2026-07-18

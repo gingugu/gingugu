@@ -118,6 +118,51 @@ def test_anchor_falls_back_to_created_at() -> None:
     assert "waiting-on" in sig
 
 
+# --- timeless-type exemption --------------------------------------------------
+
+
+def test_timeless_types_skip_gated_signals() -> None:
+    # A pattern's technical prose ("blocked on disk I/O") is reference
+    # material, not in-flight state — real-corpus false-positive regression.
+    assert (
+        review_signals(
+            "apps blocked on disk I/O can't drain sockets",
+            memory_type="pattern",
+            last_confirmed=_OLD,
+            now=_NOW,
+        )
+        == []
+    )
+    # A preference quoting status phrasing as an example is timeless too.
+    assert (
+        review_signals(
+            'records like "PR #947 open, waiting on Joe" go silently stale',
+            memory_type="preference",
+            last_confirmed=_OLD,
+            now=_NOW,
+        )
+        == []
+    )
+
+
+def test_point_in_time_types_still_flag() -> None:
+    sig = review_signals(
+        "waiting on Joe to approve", memory_type="workflow", last_confirmed=_OLD, now=_NOW
+    )
+    assert "waiting-on" in sig
+
+
+def test_timeless_types_still_get_ungated_signals() -> None:
+    # Dates carry their own clock — a pattern with a passed expiry still flags.
+    sig = review_signals(
+        "rotate the key, it expires 2026-06-29",
+        memory_type="pattern",
+        last_confirmed=_FRESH,
+        now=_NOW,
+    )
+    assert "expired-date" in sig
+
+
 # --- tool-surface wiring -----------------------------------------------------
 
 

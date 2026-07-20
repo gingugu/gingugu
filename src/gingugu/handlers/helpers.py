@@ -150,6 +150,7 @@ def _attach_review_hints(summary: dict, mem: Memory) -> dict:
     """
     hints = staleness.review_signals(
         mem.content,
+        memory_type=mem.type.value,
         last_confirmed=mem.last_confirmed,
         updated_at=mem.updated_at,
         created_at=mem.created_at,

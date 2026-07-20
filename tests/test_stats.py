@@ -216,3 +216,62 @@ def test_hygiene_namespace_scoped_skips_ghost_list(
     store.create(namespace_id=ns_a, type=MemoryType.FACT, title="t", content="x")
     result = stats.compute_stats(store.conn, namespace_id=ns_a)
     assert result["hygiene"]["ghost_namespaces"] == []
+
+
+def _age_confirmation(store: MemoryStore, memory_id: str, days: int = 30) -> None:
+    old = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+    store.conn.execute(
+        "UPDATE memories SET last_confirmed = ?, updated_at = ?, created_at = ? WHERE id = ?",
+        (old, old, old, memory_id),
+    )
+    store.conn.commit()
+
+
+def test_review_sample_respects_review_limit(
+    store: MemoryStore, namespaces: NamespaceManager
+) -> None:
+    """The full flagged count is always reported; review_limit un-caps the
+    sample so a reconciliation sweep can enumerate every flagged memory."""
+    ns_id = namespaces.get_or_create("test-ns").id
+    for i in range(7):
+        mem = store.create(
+            namespace_id=ns_id,
+            type=MemoryType.WORKFLOW,
+            title=f"status {i}",
+            content=f"task {i} is waiting on Joe to approve",
+        )
+        _age_confirmation(store, mem.id)
+
+    default = stats.compute_stats(store.conn)["review"]
+    assert default["review_suggested"] == 7
+    assert len(default["sample"]) == 5
+
+    raised = stats.compute_stats(store.conn, review_limit=100)["review"]
+    assert len(raised["sample"]) == 7
+
+    clamped = stats.compute_stats(store.conn, review_limit=0)["review"]
+    assert len(clamped["sample"]) == 1
+
+
+def test_review_skips_timeless_types(store: MemoryStore, namespaces: NamespaceManager) -> None:
+    """Gated in-flight signals don't fire on pattern/preference memories —
+    their prose is reference material (real-corpus false-positive regression)."""
+    ns_id = namespaces.get_or_create("test-ns").id
+    pattern = store.create(
+        namespace_id=ns_id,
+        type=MemoryType.PATTERN,
+        title="ebs signature",
+        content="apps blocked on disk I/O can't drain sockets",
+    )
+    workflow = store.create(
+        namespace_id=ns_id,
+        type=MemoryType.WORKFLOW,
+        title="bamboo key",
+        content="waiting on the Bamboo API key",
+    )
+    _age_confirmation(store, pattern.id)
+    _age_confirmation(store, workflow.id)
+
+    review = stats.compute_stats(store.conn)["review"]
+    assert review["review_suggested"] == 1
+    assert review["sample"][0]["id"] == workflow.id
