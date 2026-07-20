@@ -38,11 +38,18 @@ def register(mcp, ctx: ServerContext) -> None:
         include_deprecated: bool = False,
         limit: int = 10,
         compact: bool = False,
+        ids: str | None = None,
     ) -> dict:
         """Advanced filtered search across memories with full control over filters and
         sort order. Use when you need to filter by type, date range, confidence level, or
         sort by something other than relevance. Prefer memory_recall when you just have a
         natural-language query and want the best-matching scored results.
+
+        ``ids`` fetches memories by exact ID (comma-separated, e.g. from a
+        memory_stats review sample) — the precise-fetch path. When given, every
+        other filter is ignored: results come back in the requested order,
+        deprecated memories included (you named them), with a ``missing`` list
+        for any ID not found.
 
         All parameters are optional — omitting all returns all memories up to limit.
         ``namespace`` accepts a single name, a comma-separated list (e.g.
@@ -58,6 +65,18 @@ def register(mcp, ctx: ServerContext) -> None:
         full content — the right mode for broad sweeps where full bodies would flood
         the client's tool-result budget; pull full bodies with a targeted follow-up."""
         try:
+            id_list = _split_csv(ids)
+            if id_list:
+                results, missing = search_mod.fetch_by_ids(ctx.conn, id_list)
+                ctx.store.load_tags(results)
+                summarize = _compact_summary if compact else _memory_summary
+                summaries = [_attach_review_hints(summarize(m), m) for m in results]
+                ctx.store.record_accesses([m.id for m in results])
+                _stamp_namespace_names(ctx, summaries)
+                payload = {"ok": True, "count": len(results), "memories": summaries}
+                if missing:
+                    payload["missing"] = missing
+                return payload
             if sort_by not in _VALID_SORTS:
                 return _err(f"invalid sort_by {sort_by!r}; expected one of {sorted(_VALID_SORTS)}")
             if type is not None:
@@ -123,7 +142,11 @@ def register(mcp, ctx: ServerContext) -> None:
             return _err(f"memory_search failed: {exc}")
 
     @mcp.tool()
-    def memory_stats(namespace: str | None = None, flag_stale: bool = False) -> dict:
+    def memory_stats(
+        namespace: str | None = None,
+        flag_stale: bool = False,
+        review_limit: int | None = None,
+    ) -> dict:
         """Return health statistics for the memory store. Use to monitor memory growth,
         identify dormant memories, and get a per-namespace breakdown of counts and
         confidence distribution. Call at session start alongside memory_context to assess
@@ -132,6 +155,10 @@ def register(mcp, ctx: ServerContext) -> None:
         ``stats.dormant_count`` reports memories untouched for 90+ days — a resting
         signal only, never a confidence change. Dormant memories wake automatically on
         recall via spreading activation. Memory is never auto-forgotten.
+
+        ``review_limit`` raises the ``review.sample`` cap (default 5, max 100) so a
+        reconciliation sweep can enumerate every flagged memory — pair with
+        memory_search's ``ids`` parameter to pull the full bodies.
 
         ``flag_stale`` is deprecated and ignored — auto-demotion to stale contradicted
         the never-forget model and has been removed. Retained so existing callers do not
@@ -143,7 +170,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 if ns is None:
                     return _single_namespace_not_found(namespace)
                 ns_id = ns.id
-            data = stats_mod.compute_stats(ctx.conn, namespace_id=ns_id)
+            data = stats_mod.compute_stats(ctx.conn, namespace_id=ns_id, review_limit=review_limit)
             return {"ok": True, "flagged_stale": 0, "stats": data}
         except Exception as exc:
             logger.exception("memory_stats failed")

@@ -10,7 +10,9 @@ Detection is regex-based over content. Two classes of signal:
 
 * **Gated** signals (open-PR references, waiting-on/blocked-on phrasing,
   unmerged branches) only fire once the memory hasn't been confirmed for
-  ``REVIEW_HINT_AFTER_DAYS`` — fresh in-flight notes are fine.
+  ``REVIEW_HINT_AFTER_DAYS`` — fresh in-flight notes are fine — and never
+  on timeless types (``_TIMELESS_TYPES``), whose prose is reference
+  material, not status.
 * **Ungated** signals carry their own clock: an ``expires 2026-06-29`` whose
   date has passed is flagged immediately.
 
@@ -29,6 +31,13 @@ from .decay import days_between, reference_timestamp
 # A gated signal only fires when the memory hasn't been confirmed for this
 # many days — in-flight state is expected to be in flight for a sprint or so.
 REVIEW_HINT_AFTER_DAYS = 14
+
+# Distilled-wisdom types never carry in-flight state: a pattern that says
+# "apps blocked on disk I/O" or a preference quoting "waiting on Joe" as an
+# example is timeless prose, not a status note. Gated signals skip these
+# types; ungated ones (expired/as-of dates) still apply — a date is a date.
+# Mirrors the cross-namespace wisdom bucket in context.py.
+_TIMELESS_TYPES = frozenset({"pattern", "preference"})
 
 # Leading \b keeps the alternation from matching inside longer words ("GDPR").
 _PR_REF = r"\b(?:PR|MR|pull request|merge request)\s*[#!]?\d+"
@@ -78,6 +87,7 @@ def _latest_date(pattern: re.Pattern[str], content: str) -> datetime | None:
 def review_signals(
     content: str,
     *,
+    memory_type: str | None = None,
     last_confirmed: str | None = None,
     updated_at: str | None = None,
     created_at: str | None = None,
@@ -101,7 +111,10 @@ def review_signals(
     if observed is not None and (now - observed).days >= REVIEW_HINT_AFTER_DAYS:
         signals.append("stale-as-of-date")
 
-    # Gated: in-flight-state phrasing, only once the confirmation clock is old.
+    # Gated: in-flight-state phrasing, only once the confirmation clock is old
+    # — and never on timeless types, where the phrasing is reference material.
+    if memory_type in _TIMELESS_TYPES:
+        return signals
     anchor = reference_timestamp(last_confirmed, updated_at, created_at)
     if days_between(anchor, now) >= REVIEW_HINT_AFTER_DAYS:
         for label, pattern in _GATED_PATTERNS.items():
