@@ -4,6 +4,13 @@ _Last updated: 2026-07-21_
 
 ## Shipped / Working
 
+- **`gingugu ui` (v0.9.0, PR #28)** — one command launches the Memory Explorer.
+  Prod mode serves the built React bundle + a live `/api/export` on one port (no
+  Node); the bundle ships in the wheel, added by a hatch build hook
+  (`hatch_build.py`) only when `ui/dist` exists so CI builds without it. `--dev`
+  runs the API backend + Vite hot reload. Also shipped: `pre_tool_use.py` rm-guard
+  narrowed to block only catastrophic targets, not every `rm -rf <dir>`.
+
 - **v0.7.0 on PyPI** (2026-07-18) — released via Trusted Publishing (OIDC) on
   tag; GitHub Release auto-cut from CHANGELOG. Latest: benchmark toolset,
   true hybrid retrieval (independent BM25 + semantic pools, RRF-fused),
@@ -24,14 +31,6 @@ _Last updated: 2026-07-21_
 
 ## In Progress
 
-- **`gingugu ui` (v0.9.0, built, NOT released):** one command launches the
-  Memory Explorer. Prod mode serves the built React bundle + live `/api/export`
-  on one port (no Node); the bundle ships in the wheel via hatch `force-include`
-  (`ui/dist` → `gingugu/_ui_dist`), built in `release.yml` before `uv build`.
-  `--dev` runs the API backend + Vite hot-reload. On branch `feature/gingugu-ui`;
-  324 tests green, ruff+black clean. Awaiting Mr. Boomtastic's manual test before
-  PR + release. Also on the branch: `pre_tool_use.py` rm-guard narrowed to only
-  block catastrophic targets (`/ ~ .. . *`), not every `rm -rf <dir>`.
 - **Known retrieval gap (not yet addressed):** a memory at BM25 rank 1 AND
   semantic rank 1 can lose the composite top spots to high-`access_count`
   neighbours because RRF rank compression flattens relevance deltas
