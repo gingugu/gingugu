@@ -72,6 +72,7 @@ Usage:
   gingugu serve                Run over streamable HTTP for a remote/central brain.
   gingugu promote [options]    Promote local gold memories up to a central brain.
   gingugu init [options]       Bootstrap a repo so an AI assistant uses Gingugu.
+  gingugu ui [options]         Launch the Memory Explorer web UI in a browser.
 
 Options:
   -h, --help                   Show this help and exit.
@@ -89,6 +90,7 @@ def main() -> None:
     ``gingugu serve``   → run over streamable HTTP for a remote/central brain.
     ``gingugu promote`` → promote local gold memories up to a central brain.
     ``gingugu init``    → bootstrap a repo's Claude Code hooks / rules file.
+    ``gingugu ui``      → launch the Memory Explorer web UI in a browser.
     """
     import sys
 
@@ -116,6 +118,10 @@ def main() -> None:
         from .bootstrap import main as init_main
 
         raise SystemExit(init_main(sys.argv[2:]))
+    if cmd == ["ui"]:
+        from .webui import main as ui_main
+
+        raise SystemExit(ui_main(sys.argv[2:]))
     # Bare `gingugu` → stdio server (the MCP client transport; takes no CLI
     # args — namespace comes from the environment). Any leftover token is a
     # typo, not an MCP handshake — fail loudly instead of silently blocking
