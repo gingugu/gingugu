@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.9.0] - 2026-07-21
+
 ### Added
 
 - **`gingugu ui` command.** Launch the Memory Explorer web UI with one command.
