@@ -1,6 +1,6 @@
 [project]
 name = "gingugu"
-version = "0.8.1"
+version = "0.9.0"
 description = "A local, persistent memory system for AI coding assistants — an MCP server with a real long-term brain."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -37,6 +37,14 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/gingugu"]
+
+# Ship the pre-built Memory Explorer UI inside the wheel so `gingugu ui` works
+# for pip-installed users (no repo checkout, no Node). ui/dist is gitignored and
+# built fresh in CI (release.yml runs `npm run build` before `uv build`). This
+# is force-include (not default inclusion) because ui/dist lives OUTSIDE the
+# package dir - mapping it to gingugu/_ui_dist, where webui.find_dist() reads it.
+[tool.hatch.build.targets.wheel.force-include]
+"ui/dist" = "gingugu/_ui_dist"
 
 [tool.black]
 line-length = 100

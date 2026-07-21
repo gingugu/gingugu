@@ -17,7 +17,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
         ▼                                        ▼
   config.py (DB path)                    SQLite (memories + FTS5 + relations)
                                                  ▲
-                              ui/api.py ──────────┘  (read-mostly Memory Explorer)
+                              webui.py ───────────┘  (read-mostly Memory Explorer; `gingugu ui`)
 ```
 
 ## Layers
@@ -91,6 +91,14 @@ AI client (Claude Code / Cursor / Windsurf / …)
   (`theme.py`, degrades to monochrome off-TTY). Other clients (`--client`) get a
   rules file. This closes the gap where the repo's own hook-based install
   outperformed the copy-paste setup shipped to users.
+- **The UI ships in the wheel.** `gingugu ui` (`webui.py`) serves the pre-built
+  React bundle *and* a live `/api/export` read from one process on one port, so
+  pip-installed users get the Memory Explorer with no repo checkout and no Node.
+  The bundle is bundled via hatch `force-include` (`ui/dist` → `gingugu/_ui_dist`,
+  built in `release.yml` before `uv build`); `webui.find_dist()` falls back to
+  `ui/dist` in a source checkout. `--dev` spawns the Vite dev server for hot
+  reload. Same-origin serving means the prod path needs no CORS. Static serving
+  guards against path traversal and falls back to `index.html` (SPA routing).
 - **Never-forget over decay.** Biological-style decay was removed because the
   product promise is "your AI never forgets"; dormancy + spreading activation
   preserves recall quality without deleting history.

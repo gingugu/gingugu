@@ -515,25 +515,26 @@ Use `confidence="inferred"` for conclusions you drew.
 
 ## Memory Explorer UI
 
-A React-based visualization dashboard lives in `ui/` for exploring your memory
-data interactively. It runs as two processes — a Python API server and the Vite
-dev server — so use two terminals.
-
-**Prerequisite:** Node.js 18+ and npm (for the frontend). The API server uses
-the same Python environment as gingugu.
+A React-based visualization dashboard for exploring your memory data
+interactively. The built UI ships inside the package, so one command runs it:
 
 ```bash
-# Terminal 1 - API server (reads live from your DB)
-uv run python ui/api.py
+gingugu ui
 ```
+
+That serves the Explorer and a live read of your database from a single process
+on http://127.0.0.1:5174 and opens your browser. No Node.js required. Flags:
+`--port`, `--host`, `--no-browser`.
+
+**Working on the UI itself?** Use dev mode for Vite hot reload (needs a repo
+checkout + Node.js 18+ and npm):
 
 ```bash
-# Terminal 2 - frontend dev server
-cd ui && npm install && npm run dev
+cd ui && npm install   # first time only
+gingugu ui --dev       # runs the API backend + Vite (:5173) together
 ```
 
-Open http://localhost:5173 - the UI connects to the API server and shows a
-green **LIVE** badge when pulling from your database. Features:
+The UI shows a green **LIVE** badge when pulling from your database. Features:
 
 - **Knowledge Graph** - interactive force-directed graph of memories and relationships
 - **Dashboard** - stats, charts by type/namespace/confidence, tag cloud, timeline
