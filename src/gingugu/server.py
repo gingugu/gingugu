@@ -63,6 +63,25 @@ def build_server() -> FastMCP:
     return mcp
 
 
+USAGE = """\
+gingugu — persistent long-term memory for AI coding assistants (MCP server)
+
+Usage:
+  gingugu                      Run the MCP server over stdio (default transport
+                               for local clients like Claude Code / Cursor).
+  gingugu serve                Run over streamable HTTP for a remote/central brain.
+  gingugu promote [options]    Promote local gold memories up to a central brain.
+  gingugu init [options]       Bootstrap a repo so an AI assistant uses Gingugu.
+
+Options:
+  -h, --help                   Show this help and exit.
+  -V, --version                Show the version and exit.
+
+Run a subcommand with --help for its own options, e.g. `gingugu init --help`.
+The active namespace is set via the MEMORY_NAMESPACE environment variable.
+"""
+
+
 def main() -> None:
     """Console-script entry point.
 
@@ -73,20 +92,38 @@ def main() -> None:
     """
     import sys
 
-    if sys.argv[1:2] == ["serve"]:
+    from . import __version__
+
+    cmd = sys.argv[1:2]
+
+    if cmd in (["-h"], ["--help"], ["help"]):
+        print(USAGE)
+        return
+    if cmd in (["-V"], ["--version"], ["version"]):
+        print(f"gingugu {__version__}")
+        return
+    if cmd == ["serve"]:
         from .serve import serve
 
         serve()
         return
-    if sys.argv[1:2] == ["promote"]:
+    if cmd == ["promote"]:
         from .promote import main as promote_main
 
         promote_main(sys.argv[2:])
         return
-    if sys.argv[1:2] == ["init"]:
+    if cmd == ["init"]:
         from .bootstrap import main as init_main
 
         raise SystemExit(init_main(sys.argv[2:]))
+    # Bare `gingugu` → stdio server (the MCP client transport; takes no CLI
+    # args — namespace comes from the environment). Any leftover token is a
+    # typo, not an MCP handshake — fail loudly instead of silently blocking
+    # on stdin.
+    if cmd:
+        print(f"gingugu: unknown command '{cmd[0]}'\n", file=sys.stderr)
+        print(USAGE, file=sys.stderr)
+        raise SystemExit(2)
     build_server().run()
 
 
