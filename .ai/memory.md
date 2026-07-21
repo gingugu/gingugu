@@ -32,7 +32,7 @@
 - **SQLite + FTS5** (WAL mode); semantic embeddings for hybrid retrieval
 - **platformdirs** for the cross-platform DB path
 - **uv**-managed; `ruff` + `black`; `pytest` + `pytest-asyncio`
-- **UI:** React + Vite + Tailwind (`ui/`), `ui/api.py` backend
+- **UI:** React + Vite + Tailwind (`ui/`); served by `gingugu ui` (`webui.py`), built bundle ships in the wheel; `ui/api.py` is a thin dev shim
 - Released to **PyPI** via Trusted Publishing (OIDC) on git tag
 
 ---
@@ -41,8 +41,9 @@
 
 | Module | Responsibility |
 |---|---|
-| `server.py` | MCP server entrypoint; `gingugu` (stdio) / `serve` / `promote` / `init` dispatch; tool registration; must never crash |
+| `server.py` | MCP server entrypoint; `gingugu` (stdio) / `serve` / `promote` / `init` / `ui` dispatch; tool registration; must never crash |
 | `serve.py` | `gingugu serve`: streamable-HTTP transport + Bearer-token auth + `/healthz` |
+| `webui.py` | `gingugu ui`: serves the built Memory Explorer bundle + live `/api/export` on one port (prod, no Node), or spawns the Vite dev server (`--dev`); assets ship in the wheel at `gingugu/_ui_dist` |
 | `promote.py` | `gingugu promote`: MCP client that promotes local "gold" to a central brain (filter + provenance + idempotent store) — not part of the server |
 | `bootstrap/` | `gingugu init`: copies packaged hook/command/rules templates into a target repo (Claude Code hooks + non-destructive settings merge, or a `--client` rules file) — not part of the server |
 | `config.py` | Config + cross-platform DB path (platformdirs); transport + credentials-flag settings |
@@ -103,6 +104,6 @@ candidates, score ≥ 0.5) and `suggested_relations` (link candidates, score ≥
 
 ## Release State
 
-- Current version: **0.8.1** (PyPI). Public repo `gingugu/gingugu`.
+- Current version: **0.9.0** (pending release; adds `gingugu ui`). Public repo `gingugu/gingugu`.
 - Two-layer namespace convention (`crow` + project) is live.
 - See `.ai/plans/status.md` for in-flight work and carry-overs.

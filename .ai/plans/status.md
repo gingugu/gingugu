@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-07-20_
+_Last updated: 2026-07-21_
 
 ## Shipped / Working
 
@@ -24,6 +24,14 @@ _Last updated: 2026-07-20_
 
 ## In Progress
 
+- **`gingugu ui` (v0.9.0, built, NOT released):** one command launches the
+  Memory Explorer. Prod mode serves the built React bundle + live `/api/export`
+  on one port (no Node); the bundle ships in the wheel via hatch `force-include`
+  (`ui/dist` → `gingugu/_ui_dist`), built in `release.yml` before `uv build`.
+  `--dev` runs the API backend + Vite hot-reload. On branch `feature/gingugu-ui`;
+  324 tests green, ruff+black clean. Awaiting Mr. Boomtastic's manual test before
+  PR + release. Also on the branch: `pre_tool_use.py` rm-guard narrowed to only
+  block catastrophic targets (`/ ~ .. . *`), not every `rm -rf <dir>`.
 - **Known retrieval gap (not yet addressed):** a memory at BM25 rank 1 AND
   semantic rank 1 can lose the composite top spots to high-`access_count`
   neighbours because RRF rank compression flattens relevance deltas

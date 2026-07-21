@@ -41,41 +41,34 @@ def append_to_log(log_name: str, input_data: dict) -> None:
 
 
 def is_dangerous_rm_command(command):
-    """
-    Comprehensive detection of dangerous rm commands.
-    Matches various forms of rm -rf and similar destructive patterns.
-    """
-    normalized = " ".join(command.lower().split())
+    """Block only *catastrophic* recursive deletes, not every ``rm -rf``.
 
-    patterns = [
-        r"\brm\s+.*-[a-z]*r[a-z]*f",
-        r"\brm\s+.*-[a-z]*f[a-z]*r",
-        r"\brm\s+--recursive\s+--force",
-        r"\brm\s+--force\s+--recursive",
-        r"\brm\s+-r\s+.*-f",
-        r"\brm\s+-f\s+.*-r",
-    ]
+    A recursive rm is dangerous when its target is the filesystem root, the
+    home dir, the parent/current dir, or a bare wildcard. Named targets like
+    ``rm -rf dist`` / ``rm -rf build node_modules`` are ordinary cleanup and
+    pass through. Non-recursive ``rm`` is never blocked here.
+    """
+    normalized = " ".join(command.split())
 
-    for pattern in patterns:
-        if re.search(pattern, normalized):
+    # Only recursive rm is in scope (matches -r, -rf, -fr, -R, --recursive).
+    if not re.search(r"\brm\s+(-\S*[rR]\S*|--recursive)\b", normalized):
+        return False
+
+    # Exact operands that must never be recursively deleted.
+    catastrophic = {
+        "/", "/*",
+        "~", "~/", "~/*",
+        "$HOME", "$HOME/", "$HOME/*", "${HOME}", "${HOME}/*",
+        "..", "../", "../*",
+        ".", "./", "./*",
+        "*",
+    }
+
+    for tok in normalized.split():
+        if tok.startswith("-") or tok == "rm" or tok.endswith("/rm"):
+            continue
+        if tok in catastrophic:
             return True
-
-    dangerous_paths = [
-        r"/",
-        r"/\*",
-        r"~",
-        r"~/",
-        r"\$HOME",
-        r"\.\.",
-        r"\*",
-        r"\.",
-        r"\.\s*$",
-    ]
-
-    if re.search(r"\brm\s+.*-[a-z]*r", normalized):
-        for path in dangerous_paths:
-            if re.search(path, normalized):
-                return True
 
     return False
 

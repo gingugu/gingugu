@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`gingugu ui` command.** Launch the Memory Explorer web UI with one command.
+  In the default (prod) mode a single process serves the pre-built React bundle
+  plus a live `/api/export` read of your database on one port
+  (http://127.0.0.1:5174) and opens your browser - no Node.js required, because
+  the built UI now ships inside the wheel. Flags: `--host`, `--port`,
+  `--no-browser`. `gingugu ui --dev` runs the API backend and the Vite dev
+  server together for hot-reload UI development (repo checkout + Node required),
+  replacing the old two-terminal workflow.
+
+### Changed
+
+- The Memory Explorer serving logic moved into the package (`gingugu.webui`) so
+  it can ship in the wheel and back `gingugu ui`. `ui/api.py` remains as a thin
+  shim for the `uv run python ui/api.py` dev workflow. The release build now
+  compiles the UI (`npm run build`) before packaging so the wheel carries it.
+
 ---
 
 ## [0.8.1] - 2026-07-20
