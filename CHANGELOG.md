@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.1] - 2026-07-20
+
+### Fixed
+
+- **CLI front door.** `gingugu` now handles `-h`/`--help`/`help` (usage) and
+  `-V`/`--version`/`version` (version) instead of silently falling through to
+  the stdio server. An unknown subcommand prints an error plus usage to stderr
+  and exits `2` rather than blocking on stdin. Bare `gingugu` still runs the
+  MCP stdio server, and `serve`/`promote`/`init` keep their own `--help`.
+
+---
+
 ## [0.8.0] - 2026-07-20
 
 ### Added

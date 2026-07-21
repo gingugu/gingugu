@@ -59,6 +59,12 @@ _Last updated: 2026-07-20_
 
 ## Recently Completed
 
+- **2026-07-20** - **v0.8.1: CLI front door.** `gingugu` now answers
+  `-h`/`--help`/`help` (usage) and `-V`/`--version`/`version` (version), and an
+  unknown subcommand errors to stderr with exit `2` instead of silently booting
+  the stdio server and blocking on stdin. Bare `gingugu` and the
+  `serve`/`promote`/`init` subcommands are unchanged. `tests/test_cli.py` (11
+  cases) covers every dispatch path. No MCP tool-surface change.
 - **2026-07-20** - **v0.8.0 released; review-sweep workflow merged (PR #25).**
   `memory_search` gained `ids` (precise fetch-by-ID: requested order,
   deprecated included, `missing` reported), `memory_stats` gained
