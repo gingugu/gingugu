@@ -131,19 +131,27 @@ def register(mcp, ctx: ServerContext) -> None:
         memory_id: str,
         title: str | None = None,
         content: str | None = None,
+        type: str | None = None,
         confidence: str | None = None,
         metadata: str | dict | None = None,
         tags: str | None = None,
         relation_check: bool = True,
     ) -> dict:
         """Update one or more fields of an existing memory. Use to correct outdated
-        information, promote confidence after confirming an inference, or add/replace
-        tags. Do not create a new memory when the right action is to update an existing
-        one — find the id first with memory_recall.
+        information, promote confidence after confirming an inference, retype a
+        misfiled memory, or add/replace tags. Do not create a new memory when the
+        right action is to update an existing one — find the id first with
+        memory_recall.
 
         All fields are optional; only provided fields are changed. ``tags``
         (comma-separated) replaces the full tag set when provided — omit to leave tags
         unchanged. Pass ``metadata=""`` to clear metadata; omit to leave it unchanged.
+
+        ``type`` retypes the memory (same values as memory_store). Retyping is the
+        right fix when a memory was filed under the wrong kind — e.g. durable
+        reference material saved as ``workflow`` picks up point-in-time review
+        hints, because ``pattern``/``preference`` are the types exempt from them.
+        Retyping does not re-embed: the vector derives from title + content only.
 
         When ``relation_check`` is True (default) and ``title`` or ``content`` was
         provided, the response includes a ``suggested_relations`` list of up to 3
@@ -157,10 +165,20 @@ def register(mcp, ctx: ServerContext) -> None:
                     conf = Confidence(confidence)
                 except ValueError:
                     return _err(f"invalid confidence {confidence!r}")
+            mem_type = None
+            if type is not None:
+                try:
+                    mem_type = MemoryType(type)
+                except ValueError:
+                    return _err(
+                        f"invalid type {type!r}; expected one of "
+                        f"{[t.value for t in MemoryType]}"
+                    )
             mem = ctx.store.update(
                 memory_id,
                 title=title,
                 content=content,
+                type=mem_type,
                 confidence=conf,
                 metadata=_coerce_metadata(metadata),
             )

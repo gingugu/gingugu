@@ -75,7 +75,9 @@ the real-brain benchmark.
 
 ## Lifecycle
 
-- `memory_update` — mutate an existing memory (re-runs hint checks on title/content change).
+- `memory_update` — mutate an existing memory (re-runs hint checks on title/content
+  change). Also retypes: `type` is the fix for a misfiled memory, since `pattern`
+  and `preference` are exempt from gated review hints. Retyping does not re-embed.
 - `memory_forget` — the ONLY removal path (deprecate or hard-delete). Nothing is
   auto-forgotten.
 - `memory_consolidate` - merge / summarize / deduplicate a cluster; without

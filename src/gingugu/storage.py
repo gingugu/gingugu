@@ -135,6 +135,7 @@ class MemoryStore:
         *,
         title: str | None = None,
         content: str | None = None,
+        type: MemoryType | None = None,
         confidence: Confidence | None = None,
         metadata: str | None = None,
     ) -> Memory | None:
@@ -142,6 +143,7 @@ class MemoryStore:
         if existing is None:
             return None
         now = utcnow_iso()
+        new_type = type or existing.type
         new_confidence = confidence or existing.confidence
         last_confirmed = existing.last_confirmed
         if confidence == Confidence.VERIFIED:
@@ -157,11 +159,12 @@ class MemoryStore:
         new_title = title if title is not None else existing.title
         new_content = content if content is not None else existing.content
         self._conn.execute(
-            "UPDATE memories SET title=?, content=?, confidence=?, metadata=?, "
+            "UPDATE memories SET title=?, content=?, type=?, confidence=?, metadata=?, "
             "updated_at=?, last_confirmed=? WHERE id=?",
             (
                 new_title,
                 new_content,
+                new_type.value,
                 new_confidence.value,
                 new_metadata,
                 now,

@@ -12,6 +12,9 @@ from gingugu.staleness import REVIEW_HINT_AFTER_DAYS, review_signals
 _NOW = datetime(2026, 7, 7, 12, 0, 0, tzinfo=UTC)
 _OLD = (_NOW - timedelta(days=REVIEW_HINT_AFTER_DAYS + 7)).isoformat()
 _FRESH = (_NOW - timedelta(days=1)).isoformat()
+# Confirmed before the 2026-06-29 expiry the date-signal tests use, so the
+# "already reconciled" suppression does not apply.
+_BEFORE_EXPIRY = datetime(2026, 6, 20, 12, 0, 0, tzinfo=UTC).isoformat()
 
 
 def _signals(content: str, *, confirmed: str = _OLD) -> list[str]:
@@ -69,13 +72,52 @@ def test_past_tense_blocked_on_is_not_flagged() -> None:
 # --- ungated signals (carry their own clock) --------------------------------
 
 
-def test_expired_date_fires_even_when_fresh() -> None:
+def test_expired_date_fires_when_not_reconfirmed_since() -> None:
+    # Confirmed BEFORE the expiry passed — nobody has looked at it since.
     sig = review_signals(
         "RollCall key expires 2026-06-29, rotate before then",
-        last_confirmed=_FRESH,
+        last_confirmed=_BEFORE_EXPIRY,
         now=_NOW,
     )
     assert "expired-date" in sig
+
+
+def test_expired_date_suppressed_when_reconfirmed_after_the_date() -> None:
+    """Real-corpus regression: "RollCall key - EXPIRED unused, no renewal".
+
+    The memory names 2026-06-29 and was reconfirmed 2026-07-20 with the
+    resolved outcome written into the body. Re-flagging it forever asks the
+    caller to reconcile something already reconciled.
+    """
+    sig = review_signals(
+        "Decision: let it expire 2026-06-29 rather than renew. OUTCOME: it did.",
+        last_confirmed=_FRESH,
+        now=_NOW,
+    )
+    assert "expired-date" not in sig
+
+
+def test_same_day_confirmation_does_not_suppress_its_own_date() -> None:
+    """A memory written on day X saying "as of day X" must still flag later.
+
+    A bare YYYY-MM-DD parses to midnight, so comparing a same-day confirmation
+    directly against it would make every such memory silence itself at birth.
+    """
+    same_day = datetime(2026, 6, 1, 18, 30, tzinfo=UTC).isoformat()
+    sig = review_signals(
+        "as of 2026-06-01 there are two replicas", last_confirmed=same_day, now=_NOW
+    )
+    assert "stale-as-of-date" in sig
+
+
+def test_quoted_expiry_does_not_fire() -> None:
+    """A bug report *citing* an expiry is describing the phrase, not claiming it."""
+    sig = review_signals(
+        'the detector wrongly flags memories that quote "expire 2026-06-29" in prose',
+        last_confirmed=_BEFORE_EXPIRY,
+        now=_NOW,
+    )
+    assert "expired-date" not in sig
 
 
 def test_future_expiry_does_not_fire() -> None:
@@ -102,7 +144,10 @@ def test_renewed_as_of_uses_latest_date() -> None:
 
 
 def test_old_as_of_date_fires() -> None:
-    sig = review_signals("as of 2026-06-01 there are two replicas", last_confirmed=_FRESH, now=_NOW)
+    confirmed = datetime(2026, 5, 20, 12, 0, 0, tzinfo=UTC).isoformat()
+    sig = review_signals(
+        "as of 2026-06-01 there are two replicas", last_confirmed=confirmed, now=_NOW
+    )
     assert "stale-as-of-date" in sig
 
 
@@ -114,7 +159,7 @@ def test_recent_as_of_date_does_not_fire() -> None:
 
 
 def test_anchor_falls_back_to_created_at() -> None:
-    sig = review_signals("waiting on the vendor", created_at=_OLD, now=_NOW)
+    sig = review_signals("waiting on Joe to merge it", created_at=_OLD, now=_NOW)
     assert "waiting-on" in sig
 
 
@@ -157,10 +202,44 @@ def test_timeless_types_still_get_ungated_signals() -> None:
     sig = review_signals(
         "rotate the key, it expires 2026-06-29",
         memory_type="pattern",
-        last_confirmed=_FRESH,
+        last_confirmed=_BEFORE_EXPIRY,
         now=_NOW,
     )
     assert "expired-date" in sig
+
+
+# --- waiting-on needs a named agent, and nothing counts inside quotes --------
+
+
+def test_waiting_on_technical_event_does_not_fire() -> None:
+    """Real-corpus regressions. Both of these are mechanism descriptions, not
+    status claims, and both flagged forever until this gate existed."""
+    assert "waiting-on" not in _signals("the pipe mode blocks forever waiting for EOF")
+    assert "waiting-on" not in _signals(
+        "PodInitializing in all init containers = waiting for first init container image pull"
+    )
+
+
+def test_waiting_on_still_fires_for_a_named_agent() -> None:
+    assert "waiting-on" in _signals("blocked on Joseph to finish the tofu cleanup")
+    assert "waiting-on" in _signals("awaiting PR #947 before the flip")
+    assert "waiting-on" in _signals("blocked on DESI-52 sign-off")
+
+
+def test_quoted_waiting_phrase_does_not_fire() -> None:
+    """Narrating that a doc *said* "awaiting merge" is not a claim that it is."""
+    assert "waiting-on" not in _signals(
+        'fixed drift: PR #6 was still listed "In Progress / awaiting merge" though it merged'
+    )
+
+
+def test_apostrophes_are_not_quote_delimiters() -> None:
+    """Regression: possessives and contractions must not read as quoting.
+
+    "NOT yet committed/PR'd - awaiting Mr. Boomtastic's go" was silenced
+    because PR'd and Boomtastic's were paired up as if they delimited a quote.
+    """
+    assert "waiting-on" in _signals("NOT yet committed/PR'd - awaiting Mr. Boomtastic's go")
 
 
 # --- tool-surface wiring -----------------------------------------------------
@@ -240,3 +319,96 @@ async def test_recall_and_search_also_carry_review_hints(server) -> None:
     srch = _payload(await server.call_tool("memory_search", {}))
     srch_hit = next(m for m in srch["memories"] if m["id"] == fid)
     assert "expired-date" in srch_hit["review_hints"]
+
+
+@pytest.mark.asyncio
+async def test_deprecated_memories_carry_no_review_hints(server) -> None:
+    """A deprecation IS the reconciliation, so re-flagging it is asking for
+    work that is already done.
+
+    ``stats.compute_review`` has always excluded deprecated memories, but the
+    read surfaces did not — so ``memory_stats`` would refuse to count a memory
+    that ``memory_search(include_deprecated=True)`` still stamped a hint onto.
+    Real cost: a corpus sweep counted 12 already-reconciled memories as live
+    staleness and overstated the backlog by ~46%.
+    """
+    stored = _payload(
+        await server.call_tool(
+            "memory_store",
+            {
+                "content": "the vault token expires 2026-06-29, rotate it",
+                "title": "vault token expiry",
+                "type": "fact",
+            },
+        )
+    )
+    mid = stored["memory"]["id"]
+
+    srch = _payload(await server.call_tool("memory_search", {"ids": mid}))
+    assert "expired-date" in srch["memories"][0]["review_hints"]
+
+    forgotten = _payload(await server.call_tool("memory_forget", {"memory_id": mid}))
+    assert forgotten["ok"]
+
+    after = _payload(await server.call_tool("memory_search", {"ids": mid}))
+    assert "review_hints" not in after["memories"][0]
+
+    stats = _payload(await server.call_tool("memory_stats", {}))
+    assert stats["stats"]["review"]["review_suggested"] == 0
+
+
+@pytest.mark.asyncio
+async def test_retyping_clears_a_false_positive_hint(server) -> None:
+    """The remedy agreed 2026-07-20 but impossible until now: memory_update
+    had no `type` param, so an agent could not retype a misfiled memory and
+    instead reworded the prose until the flag went away — silencing the signal
+    while leaving the record degraded.
+
+    Retyping to a timeless type is what clears a gated false positive; that the
+    exemption works is covered by ``test_timeless_types_skip_gated_signals``.
+    A gated signal needs a 14-day-old anchor, which a freshly stored memory
+    cannot have, so this test proves the retype itself lands and is lossless.
+    """
+    content = "jira-cli hangs: with no TTY it blocks forever waiting for Joe's input"
+    stored = _payload(
+        await server.call_tool(
+            "memory_store",
+            {"content": content, "title": "jira-cli TTY hang", "type": "workflow"},
+        )
+    )
+    mid = stored["memory"]["id"]
+    assert stored["memory"]["type"] == "workflow"
+
+    retyped = _payload(
+        await server.call_tool("memory_update", {"memory_id": mid, "type": "pattern"})
+    )
+    assert retyped["ok"]
+    assert retyped["memory"]["type"] == "pattern"
+
+    # The retyped memory is now exempt from gated signals at any anchor age.
+    assert review_signals(content, memory_type="pattern", last_confirmed=_OLD, now=_NOW) == []
+    assert "waiting-on" in review_signals(
+        content, memory_type="workflow", last_confirmed=_OLD, now=_NOW
+    )
+
+    after = _payload(await server.call_tool("memory_search", {"ids": mid}))
+    assert "review_hints" not in after["memories"][0]
+    # The content is untouched — the fix was the filing, not the prose.
+    assert "waiting for Joe's input" in after["memories"][0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_memory_update_rejects_an_invalid_type(server) -> None:
+    stored = _payload(
+        await server.call_tool(
+            "memory_store",
+            {"content": "body", "title": "t", "type": "fact"},
+        )
+    )
+    bad = _payload(
+        await server.call_tool(
+            "memory_update", {"memory_id": stored["memory"]["id"], "type": "journal"}
+        )
+    )
+    assert not bad.get("ok")
+    assert "invalid type" in bad["error"]
