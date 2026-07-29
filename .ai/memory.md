@@ -87,6 +87,11 @@ Run: `uv run python -m bench [--db <real-brain.db>]`.
 `memory_store` / `memory_update` return non-blocking `similar_memories` (merge
 candidates, score ≥ 0.5) and `suggested_relations` (link candidates, score ≥ 0.3) hints.
 
+`memory_update` accepts `type`, so a misfiled memory can be retyped instead of
+reworded — retyping to `pattern`/`preference` is the sanctioned way to clear a
+gated review-hint false positive, and it does not re-embed (the vector derives
+from title + content only).
+
 ---
 
 ## Storage Model

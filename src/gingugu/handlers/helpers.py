@@ -7,7 +7,7 @@ import logging
 
 from .. import search as search_mod
 from .. import staleness
-from ..models import Memory, Namespace
+from ..models import Confidence, Memory, Namespace
 from ..relations import RelationManager
 from . import ServerContext
 
@@ -147,7 +147,15 @@ def _attach_review_hints(summary: dict, mem: Memory) -> dict:
 
     Shared by every read surface (context, recall, search) so hint absence
     means the same thing everywhere: no staleness signal detected.
+
+    Deprecated memories are skipped, matching ``stats.compute_review`` — a
+    deprecation IS the reconciliation, so re-flagging it asks the caller to
+    redo work that is already done. Without this the surfaces disagree:
+    ``memory_stats`` would refuse to count a memory that ``memory_search``
+    (with ``include_deprecated``/``ids``) still stamped a hint onto.
     """
+    if mem.confidence is Confidence.DEPRECATED:
+        return summary
     hints = staleness.review_signals(
         mem.content,
         memory_type=mem.type.value,

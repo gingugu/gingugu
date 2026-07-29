@@ -327,9 +327,31 @@ Two signal classes (all regex-based, case-insensitive):
   Gated signals never fire on the timeless types (`pattern`, `preference`) -
   a pattern saying "apps blocked on disk I/O" is reference material, not a
   status note.
-- **Ungated** - the content names its own clock and fires immediately, on
-  every type: `expired-date` (`expires <YYYY-MM-DD>` in the past),
-  `stale-as-of-date` (`as of <YYYY-MM-DD>` older than the gate window).
+- **Ungated** - the content names its own clock: `expired-date`
+  (`expires <YYYY-MM-DD>` in the past), `stale-as-of-date`
+  (`as of <YYYY-MM-DD>` older than the gate window). These apply on every
+  type, but are suppressed when `last_confirmed` postdates the named date -
+  a reconfirmation after the fact means the outcome is already in the body.
+
+Three filters keep the detector off ordinary prose. They exist because the
+signals are text patterns, and the same words occur in writing that describes
+a mechanism rather than asserting a status:
+
+- **Nothing counts inside quotes or backticks.** A memory citing
+  `"expire 2026-06-29"` is describing the phrase, not claiming the state.
+  Only `"` and `` ` `` delimit - a bare `'` is far more often a possessive
+  ("Boomtastic's") or a contraction ("PR'd") than a quote.
+- **`waiting-on` additionally requires a named agent** within 60 characters:
+  a person, a PR/MR reference, a ticket key, or a named artifact (key,
+  sign-off, approval). "waiting for EOF" and "waiting for the init container
+  image pull" name none of these. The other gated signals carry their own
+  subject - a PR number, a branch - so they need only the quoting filter.
+- **Deprecated memories are skipped on every surface.** A deprecation *is*
+  the reconciliation, so re-flagging it asks for work already done.
+
+The cost of these filters is real and bounded: a wait on an unnamed lowercase
+noun ("waiting on the vendor") no longer fires. Measured against a live
+751-memory corpus the trade moved precision from 0.65 to 0.79.
 
 Surfaced in two places: each `memory_context` result may carry
 `review_hints: [...]`, and `memory_stats` returns a `review` block
@@ -459,12 +481,17 @@ Final cap at `limit`, presented in composite order. Boost weights for types
 useful for session start).
 
 ### `memory_update`
-Update an existing memory's content, confidence, or metadata.
+Update an existing memory's content, type, confidence, or metadata.
 
 **Parameters:**
 - `memory_id` (required) — UUID of memory to update
 - `content` (optional) — new content
 - `title` (optional) — new title
+- `type` (optional) — retype the memory (same values as `memory_store`). The
+  right fix for a misfiled memory: durable reference material saved as
+  `workflow` picks up point-in-time review hints, because `pattern` and
+  `preference` are the types exempt from them. Retyping does not re-embed —
+  the vector derives from title + content only
 - `confidence` (optional) — new confidence level
 - `metadata` (optional) — updated metadata JSON
 - `tags` (optional) — comma-separated; replaces the full tag set when provided

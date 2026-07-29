@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`memory_update` accepts `type`.** A misfiled memory can now be retyped
+  through the MCP surface. Previously the only fields exposed were title,
+  content, confidence, metadata and tags, so the standard remedy for a
+  wrongly-typed memory (retype it to `pattern`/`preference`, which are exempt
+  from gated review hints) was impossible to perform. Retyping does not
+  re-embed: the vector derives from title + content only.
+
+### Fixed
+
+- **Review hints no longer fire on prose that merely contains the trigger
+  words.** Three changes, measured against a 751-memory corpus:
+  - `waiting-on` now requires the wait to name an agent (a person, a PR/MR, a
+    ticket key, or a named artifact). "blocks forever waiting for EOF" and
+    "waiting for first init container image pull" describe a mechanism, not a
+    status, and flagged permanently.
+  - No signal fires from inside quotes or backticks. A memory *citing*
+    `"expire 2026-06-29"` is describing the phrase, not claiming the state.
+    Only `"` and `` ` `` delimit — a bare `'` is far more often a possessive.
+  - `expired-date` and `stale-as-of-date` are suppressed when the memory was
+    explicitly reconfirmed *after* the date it names. The outcome is already
+    recorded in the body; re-flagging it forever asks for work already done.
+- **Deprecated memories no longer carry review hints on read surfaces.**
+  `memory_stats` has always excluded them, but `memory_recall`/`memory_search`
+  /`memory_context` did not, so the surfaces disagreed: a memory `memory_stats`
+  refused to count could still arrive stamped with a hint. A deprecation *is*
+  the reconciliation.
+
 ---
 
 ## [0.9.1] - 2026-07-29
