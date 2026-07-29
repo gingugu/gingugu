@@ -595,7 +595,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_store` | Save a new memory |
 | `memory_recall` | Search + retrieve (ranked by relevance × freshness; one or many namespaces; optional compact mode) |
 | `memory_context` | Auto-surface relevant memories (one or many namespaces, deduped; optional compact mode) |
-| `memory_update` | Update content, confidence, or metadata |
+| `memory_update` | Update content, type, confidence, or metadata (retyping a misfiled memory is the fix for a false review hint) |
 | `memory_relate` | Create relationships between memories |
 | `memory_consolidate` | Merge/summarize/deduplicate; call without ids for a read-only near-dupe scan |
 | `memory_forget` | Deprecate or remove a memory |

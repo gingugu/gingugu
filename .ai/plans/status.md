@@ -4,6 +4,19 @@ _Last updated: 2026-07-29_
 
 ## Shipped / Working
 
+- **Review-hint precision pass (2026-07-29, unreleased)** — the detector fired
+  on prose that merely contained the trigger words. Measured against the live
+  751-memory corpus: precision 0.65 → 0.79. `waiting-on` now requires a named
+  agent; no signal fires inside quotes or backticks; date signals defer to a
+  `last_confirmed` that postdates them; deprecated memories are skipped on the
+  read surfaces (they always were in `memory_stats` — the surfaces disagreed).
+  `memory_update` gained a `type` param, which unblocks retyping a misfiled
+  memory — the remedy agreed 2026-07-20 and impossible until now.
+  **Method note:** the first benchmark counted deprecated memories and
+  overstated the backlog by ~46%; a dated-snapshot exemption looked attractive
+  until scoring showed it destroyed 17 true positives to remove 7 false ones,
+  and was dropped. Score candidate rules against the corpus before building.
+
 - **v0.9.1 (2026-07-29)** — hotfix: the 0.9.0 wheel shipped _without_ the bundled
   Memory Explorer, so `gingugu ui` was broken for PyPI installs. Plain `uv build`
   builds the wheel from the sdist, and `ui/dist` is gitignored so it never enters
