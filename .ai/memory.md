@@ -104,6 +104,6 @@ candidates, score ≥ 0.5) and `suggested_relations` (link candidates, score ≥
 
 ## Release State
 
-- Current version: **0.9.0** (PyPI; adds `gingugu ui`). Public repo `gingugu/gingugu`.
+- Current version: **0.9.1** (PyPI; adds `gingugu ui`; 0.9.0 wheel shipped without the bundled UI - fixed). Public repo `gingugu/gingugu`.
 - Two-layer namespace convention (`crow` + project) is live.
 - See `.ai/plans/status.md` for in-flight work and carry-overs.

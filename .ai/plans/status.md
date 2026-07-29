@@ -1,8 +1,16 @@
 # Project Status
 
-_Last updated: 2026-07-21_
+_Last updated: 2026-07-29_
 
 ## Shipped / Working
+
+- **v0.9.1 (2026-07-29)** — hotfix: the 0.9.0 wheel shipped _without_ the bundled
+  Memory Explorer, so `gingugu ui` was broken for PyPI installs. Plain `uv build`
+  builds the wheel from the sdist, and `ui/dist` is gitignored so it never enters
+  the sdist — the freshly-compiled UI was dropped even though CI had just run
+  `npm run build`. `release.yml` now runs `uv build --sdist` and `uv build --wheel`
+  separately so the wheel is built from the working tree. Verified by reproduction:
+  plain `uv build` → 0 `_ui_dist` files in the wheel, `uv build --wheel` → 4.
 
 - **`gingugu ui` (v0.9.0, PR #28)** — one command launches the Memory Explorer.
   Prod mode serves the built React bundle + a live `/api/export` on one port (no

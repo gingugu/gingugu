@@ -59,8 +59,15 @@ jobs:
           npm ci
           npm run build
 
-      - name: Build sdist + wheel
-        run: uv build
+      # Build the wheel DIRECTLY from source (not from the sdist). ui/dist is
+      # gitignored so it never enters the sdist; plain `uv build` builds the
+      # wheel from that sdist and would drop the bundled UI. `uv build --wheel`
+      # builds from the working tree, where the UI was just compiled.
+      - name: Build sdist (source only)
+        run: uv build --sdist
+
+      - name: Build wheel (bundles the built UI)
+        run: uv build --wheel
 
       - name: Publish to PyPI (Trusted Publishing)
         uses: pypa/gh-action-pypi-publish@release/v1
