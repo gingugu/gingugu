@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.9.1] - 2026-07-29
+
+### Fixed
+
+- **`gingugu ui` now includes the bundled UI when installed from PyPI.** The
+  0.9.0 wheel was built from the sdist, which does not carry the (gitignored)
+  built `ui/dist`, so the Memory Explorer assets were missing. The release now
+  builds the wheel directly from source so `gingugu/_ui_dist` is bundled.
+
+---
+
 ## [0.9.0] - 2026-07-21
 
 ### Added
