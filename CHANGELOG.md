@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **State claims: a memory's PR/MR references are now tracked as data, so a
+  claim can go stale without its prose being edited.** A memory that said
+  "PR #10 open" was correct when written; the text is history and stays put.
+  New `memory_claims` table (schema v5) records what each memory *asserts*,
+  with resolution stored in separate columns beside it.
+  - `memory_store` / `memory_update` return **`contradicted_memories`** when a
+    write resolves a ref that another memory in the same namespace still calls
+    open. That is the cheapest moment to reconcile — the caller is already
+    thinking about that exact PR. The key is omitted, not empty, when there is
+    nothing to report.
+  - `memory_stats` gains a **`claims`** block: `open`, `resolved`, and
+    `contradicted` counts plus a `review_limit`-capped sample.
+  - `memory_update` gains **`resolve_claims`** (comma-separated refs, or
+    `"all"`), which records a resolution and leaves the memory body
+    byte-identical. Use `content` only when a memory asserts something that was
+    never true.
+  - Refs are repo-qualified (`gingugu#10`) by URL, then by a repo named beside
+    them, then by the namespace name. Unqualifiable refs are dropped rather
+    than guessed, and contradiction detection is namespace-scoped.
+  - No new MCP tool: the loop is `memory_stats` → `memory_search(ids=…)` →
+    `memory_update(resolve_claims=…)`, reusing the existing sweep.
+
 - **`memory_update` accepts `type`.** A misfiled memory can now be retyped
   through the MCP surface. Previously the only fields exposed were title,
   content, confidence, metadata and tags, so the standard remedy for a
