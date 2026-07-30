@@ -4,6 +4,29 @@ _Last updated: 2026-07-29_
 
 ## Shipped / Working
 
+- **State claims + write-time contradiction detection (2026-07-29, unreleased)** —
+  the structural answer to memories going stale. A memory that said "PR #10 open"
+  was correct when written, so its prose is history; claims are extracted into
+  `memory_claims` (schema v5) and resolution is recorded beside them instead.
+  `memory_store`/`memory_update` return `contradicted_memories` at write time;
+  `memory_stats` carries a `claims` backlog; `memory_update(resolve_claims=…)`
+  reconciles with the body left byte-identical. No new MCP tool — the loop reuses
+  the v0.8.0 fetch-by-ids sweep.
+  **Origin:** Mr. Boomtastic rejected a plan to hand-edit 16 memories with
+  `=== STATUS ===` banners as "a manual half ass workaround to make the header
+  look a certain way." He was right — the corpus had 160 distinct banner styles
+  across 37 memories precisely because the primitive was missing.
+  **Measured before building:** an extractor prototype was scored against the
+  live 764-memory corpus first. 10 of the stale PR claims already had their
+  resolution sitting in the brain, written later and never linked — one pair on
+  the same day. Live backlog: 30 open / 118 resolved / 12 contradicted.
+  **Method note:** four bugs were caught by tests or re-measurement rather than
+  shipped — a quote scanner that aligned on the wrong parity (matching the
+  `", "` separators between quoted items), `"NOT merged yet"` reading as
+  _resolved_ and inverting the claim, `shipped`/`superseded` being too ambiguous
+  to sit in the resolved vocabulary, and a best-effort `try/except` that
+  swallowed a total extraction outage into a log warning after a refactor.
+
 - **Review-hint precision pass (2026-07-29, unreleased)** — the detector fired
   on prose that merely contained the trigger words. Measured against the live
   751-memory corpus: precision 0.65 → 0.79. `waiting-on` now requires a named

@@ -8,12 +8,40 @@ memory_store(content, title, type, namespace, tags, confidence)
   → storage.py inserts into `memories`
   → FTS5 trigger mirrors the row into the full-text index
   → embeddings.py computes the semantic vector
-  → dedupe/relation check → returns { ok, memory, similar_memories[], suggested_relations[] }
+  → claim_sync.sync() derives state claims from title+content into `memory_claims`
+  → dedupe/relation check → returns { ok, memory, similar_memories[],
+                                      suggested_relations[], contradicted_memories[]? }
 ```
 
 `similar_memories` (score ≥ 0.5) = merge candidates. `suggested_relations`
 (score ≥ 0.3, excludes self + already-linked + items already in
 `similar_memories`) = link candidates. Both are hints; neither blocks the write.
+
+`contradicted_memories` is the write-time reconciliation hook: when this write
+records a ref as resolved, every memory in the same namespace still asserting it
+open is returned. **Omitted rather than empty** when there is nothing to report —
+an always-present empty list is noise in every response, and this hint has to
+stay cheap to ignore. Claim extraction is best-effort: a failure logs and is
+swallowed so it can never break a write.
+
+Claims are derived from text, so `memory_update` re-syncs them whenever title or
+content changes — but NOT on a confidence/tag/type-only update, matching the
+embedding re-encode condition.
+
+## Reconcile
+
+```
+memory_stats(review_limit=100)     → claims { open, resolved, contradicted, sample[] }
+memory_search(ids="…")             → full bodies of the flagged memories
+memory_update(resolve_claims="…")  → marks claims resolved; PROSE UNTOUCHED
+```
+
+`resolve_claims` takes comma-separated refs or `"all"`. It writes
+`resolved_state`/`resolved_by`/`resolved_at` on the claim row and leaves the
+memory body byte-identical, because a dated record that said "PR #10 open" was
+accurate when written. Use `content` only when a memory asserts something that
+was never true. No new tool was added for this loop — it reuses the v0.8.0
+fetch-by-ids sweep.
 
 ## Recall
 

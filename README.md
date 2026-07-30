@@ -595,14 +595,14 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_store` | Save a new memory |
 | `memory_recall` | Search + retrieve (ranked by relevance × freshness; one or many namespaces; optional compact mode) |
 | `memory_context` | Auto-surface relevant memories (one or many namespaces, deduped; optional compact mode) |
-| `memory_update` | Update content, type, confidence, or metadata (retyping a misfiled memory is the fix for a false review hint) |
+| `memory_update` | Update content, type, confidence, or metadata; `resolve_claims` reconciles a stale PR/MR claim without editing the prose |
 | `memory_relate` | Create relationships between memories |
 | `memory_consolidate` | Merge/summarize/deduplicate; call without ids for a read-only near-dupe scan |
 | `memory_forget` | Deprecate or remove a memory |
 | `memory_namespaces` | List/create/update/delete namespaces |
 | `memory_export` | Export memories + tags + relations to portable JSON |
 | `memory_import` | Restore a JSON export (skip or replace on conflict) |
-| `memory_stats` | Health overview (dormancy, counts, coverage, review sweep — `review_limit` enumerates every flagged memory) |
+| `memory_stats` | Health overview (dormancy, counts, coverage, review sweep, and the `claims` contradiction backlog — `review_limit` enumerates every flagged memory) |
 | `memory_search` | Advanced filtered search (type, tags, confidence, dates; one or many namespaces; optional compact mode; fetch by exact `ids`) |
 | `credential_store` | Store/update a service credential bundle |
 | `credential_get` | Retrieve credentials (secrets from OS Keychain) |
