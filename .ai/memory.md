@@ -127,6 +127,8 @@ The loop needs no new tool: stats → `memory_search(ids=…)` → `resolve_clai
 
 ## Release State
 
-- Current version: **0.9.1** (PyPI; adds `gingugu ui`; 0.9.0 wheel shipped without the bundled UI - fixed). Public repo `gingugu/gingugu`.
+- Current version: **0.10.0** (PyPI; state claims + write-time contradiction
+  detection, review-hint precision pass, `memory_update` gains `type` and
+  `resolve_claims`). Public repo `gingugu/gingugu`.
 - Two-layer namespace convention (`crow` + project) is live.
 - See `.ai/plans/status.md` for in-flight work and carry-overs.
