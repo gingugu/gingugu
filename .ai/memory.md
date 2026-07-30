@@ -120,8 +120,10 @@ The loop needs no new tool: stats → `memory_search(ids=…)` → `resolve_clai
   memory ASSERTS and is never rewritten; resolution lives in `resolved_state` /
   `resolved_by` / `resolved_at` beside it, so a claim can go stale without the
   prose being edited. Derived from text, so re-synced on any title/content change.
-- Schema versioned via `PRAGMA user_version` (**currently 5**); migrations
-  additive by default.
+- Schema versioned via `PRAGMA user_version` (**currently 6**); migrations
+  additive by default. Migration 006 adds no schema — it re-runs the claims
+  backfill to repair DBs that reached v5 from pre-fix code and so can never
+  run 005 again.
 
 ---
 

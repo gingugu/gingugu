@@ -1,8 +1,30 @@
 # Project Status
 
-_Last updated: 2026-07-29_
+_Last updated: 2026-07-30_
 
 ## Shipped / Working
+
+- **Migration 006: claims-backfill repair (2026-07-30)** — the v0.10.0 backfill
+  could never reach the dogfooding brain. Migration 005 originally only created
+  `memory_claims`; the backfill landed a few commits later (6285739), but the
+  live DB had already been stamped v5 on 2026-07-29 by the unmerged feature
+  branch running against it. `migrate()` selects pending work with
+  `current < target`, so 005 was permanently unreachable there and the table
+  stayed empty — verified on the live file: `user_version` 5, 0 claim rows,
+  776 memories. Migration 006 re-runs the backfill; it adds no schema.
+  **Blast radius was one machine**: PyPI 0.10.0 shipped _with_ the backfill, so
+  every real v4 → v5 upgrade populated correctly. This was self-inflicted by
+  dogfooding branch code against the real brain.
+  **Verified by rehearsal on a copy of the live DB**: 0 → 151 claims in 190ms
+  (30 open / 121 resolved / 12 contradicted), re-run 0.0ms, 777 memories intact
+  — matching the 30 / 118 / 12 predicted from copies before release.
+  **Design note:** unconditional, not guarded on an empty table. A stranded DB
+  that has since stored one memory with a ref is no longer empty, and an
+  emptiness guard would skip it for good. Idempotence comes from
+  `INSERT OR IGNORE` against `UNIQUE (memory_id, kind, ref)`, which also
+  preserves any `resolved_*` state the user had already reconciled.
+  **Standard written** into `.ai/standards/02-database.md`: a shipped migration
+  can never be fixed in place, and dev instances must never point at a live DB.
 
 - **State claims + write-time contradiction detection (v0.10.0, 2026-07-30)** —
   the structural answer to memories going stale. A memory that said "PR #10 open"
