@@ -294,3 +294,50 @@ async def test_editing_text_re_derives_claims(server) -> None:
         )
     )
     assert updated["ok"]
+
+
+# --- regressions found by re-measuring against the real corpus --------------
+
+
+def test_ref_inside_a_list_of_quoted_strings_is_quoted() -> None:
+    """The quote scanner used to align on the wrong parity.
+
+    Sliding a window over a comma-separated list of quoted items starts on a
+    CLOSING quote, so a span matcher pairs up the `", "` separators BETWEEN
+    items instead of the items themselves — and every ref read as unquoted.
+    Real case: a bug report citing several stale claims side by side.
+    """
+    content = (
+        'the stale ones were "PR #13 open: staleness review hints", '
+        '"Reconciled docs/roadmap.md ... NOT yet merged/pushed", '
+        '"awesome-mcp-servers PR #8072 open", "BLOCKED: waiting on Joseph".'
+    )
+    assert cm.extract_claims("", content, namespace_default="gingugu") == []
+
+
+def test_superseded_pending_a_decision_is_still_open() -> None:
+    """Real corpus case: "MR !4 appears redundant/superseded; needs a decision
+    (close, or rebase)" describes the situation, not a closed MR.
+
+    The requirement is only that it must not read as RESOLVED, since that
+    would wrongly reconcile a still-open MR. Asserting nothing at all is the
+    safer outcome and is what happens here - no state word survives.
+    """
+    claims = cm.extract_claims(
+        "",
+        "MR !4 now appears redundant/superseded; needs a decision (close, or rebase)",
+        namespace_default="keycloakify",
+    )
+    assert all(c.state != cm.STATE_RESOLVED for c in claims)
+
+
+def test_not_merged_yet_is_open_not_resolved() -> None:
+    """Inverting a claim is the worst available failure: "NOT merged yet"
+    contains the word `merged`, and resolved is tested before open."""
+    for phrasing in (
+        "PR #10, open, NOT merged yet",
+        "PR #10 was never merged",
+        "PR #10 is not yet merged",
+    ):
+        (claim,) = cm.extract_claims("", phrasing, namespace_default="gingugu")
+        assert claim.state == cm.STATE_OPEN, phrasing

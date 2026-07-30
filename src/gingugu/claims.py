@@ -62,13 +62,17 @@ _REF = re.compile(
 # merged yet" contains the word "merged" and would otherwise read as resolved,
 # inverting the claim. Resolved is tested before open, so this is the only
 # place that negation can be caught.
+# ``superseded`` is excluded for the same reason as ``shipped``: measured on the
+# real corpus it mis-read "MR !4 appears redundant/superseded; needs a decision
+# (close, or rebase)" as resolved, when that MR is explicitly still open.
 _RESOLVED = re.compile(
     r"(?<!not )(?<!not yet )(?<!never )(?<!isn't )(?<!wasn't )"
-    r"\b(?:merged|landed|released|closed|abandoned|superseded|deleted)\b",
+    r"\b(?:merged|landed|released|closed|abandoned|deleted)\b",
     re.I,
 )
 _OPEN = re.compile(
-    r"\b(?:open|opened|awaiting|pending|unmerged|not\s+(?:yet\s+)?merged|"
+    r"\b(?:open|opened|awaiting|pending|unmerged|"
+    r"(?:not\s+(?:yet\s+)?|never\s+)merged|"
     r"held|in\s+review|needs\s+(?:review|merge)|still\s+open)\b",
     re.I,
 )
@@ -122,16 +126,16 @@ def _is_quoted(text: str, match: re.Match[str]) -> bool:
     contraction far more often than a quote, and treating it as one makes
     ordinary prose look like a citation.
     """
-    lo = max(0, match.start() - _QUOTE_WINDOW)
-    window = text[lo : match.end() + _QUOTE_WINDOW]
-    # Position matters: it is not enough that SOME quoted span in the window
-    # contains this text. A title's bare `PR #30` must not read as quoted just
-    # because a later `"PR #30 open"` citation sits within 90 characters.
-    start, end = match.start() - lo, match.end() - lo
-    for span in re.finditer(r"[\"`][^\"`\n]{0,160}[\"`]", window):
-        if span.start() < start and end <= span.end():
-            return True
-    return False
+    # Parity, counted from the start of the LINE - not span-matching over a
+    # sliding window. A window that begins mid-string starts on a CLOSING
+    # quote, so opening and closing delimiters align on the wrong parity and
+    # the scanner ends up matching the `", "` separators BETWEEN quoted items
+    # instead of the items themselves. Counting from a known boundary avoids
+    # guessing, and a line start is a safe boundary because a quoted span
+    # cannot cross a newline.
+    line_start = text.rfind("\n", 0, match.start()) + 1
+    before = text[line_start : match.start()]
+    return any(before.count(delim) % 2 == 1 for delim in ('"', "`"))
 
 
 def _normalize_kind(raw: str) -> str:
