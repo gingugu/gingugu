@@ -7,6 +7,7 @@ import logging
 import sqlite3
 import uuid
 
+from . import claim_sync
 from . import embeddings as emb
 from .embeddings import EmbeddingProvider, NullEmbeddingProvider
 from .models import Confidence, Memory, MemoryType, normalize_tag, utcnow_iso
@@ -111,11 +112,27 @@ class MemoryStore:
         )
         if tags:
             self.set_tags(mem.id, tags, commit=False)
+        claim_sync.sync(self._conn, mem, now)
         self._conn.commit()
         mem.tags = self.get_tags(mem.id)
         self._persist_embedding(mem.id, mem.title, mem.content)
         logger.info("Stored memory %s (%s)", mem.id, mem.title)
         return mem
+
+    def contradicted_memories(self, mem: Memory) -> list[dict]:
+        """Older memories whose open state claim ``mem`` has just resolved.
+
+        Advisory only — nothing is mutated. See ``claim_sync.contradicted``.
+        """
+        return claim_sync.contradicted(self._conn, mem)
+
+    def resolve_claims(
+        self, memory_id: str, refs: list[str], *, resolved_by: str | None = None
+    ) -> list[str]:
+        """Mark open claims resolved without touching the memory's prose."""
+        return claim_sync.resolve(
+            self._conn, memory_id=memory_id, refs=refs, resolved_by=resolved_by
+        )
 
     def get(self, memory_id: str, *, record_access: bool = True) -> Memory | None:
         row = self._conn.execute(
@@ -172,12 +189,18 @@ class MemoryStore:
                 memory_id,
             ),
         )
+        # Claims are derived from the text, so they only need re-deriving when
+        # the text moved. Done before the commit so both land atomically.
+        text_changed = (title is not None and title != existing.title) or (
+            content is not None and content != existing.content
+        )
+        if text_changed:
+            existing.title, existing.content = new_title, new_content
+            claim_sync.sync(self._conn, existing, now)
         self._conn.commit()
         # Re-encode only when the text the embedding was derived from actually
         # changed — confidence/metadata updates don't invalidate the vector.
-        if (title is not None and title != existing.title) or (
-            content is not None and content != existing.content
-        ):
+        if text_changed:
             self._persist_embedding(memory_id, new_title, new_content)
         return self.get(memory_id, record_access=False)
 

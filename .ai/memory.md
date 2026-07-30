@@ -60,6 +60,8 @@
 | `decay.py` | Dormancy as a resting signal — never auto-forgets |
 | `stats.py` | Health stats (counts, confidence, dormancy, hygiene, review sweep) |
 | `staleness.py` | Advisory review hints for point-in-time memories |
+| `claims.py` | Extracts checkable state claims (repo-qualified PR/MR refs) from prose |
+| `claim_sync.py` | Claim persistence, contradiction lookup, stats, and the storage bridge |
 | `namespaces.py` | Namespace CRUD |
 | `credentials.py` | OS-keychain credential vault |
 | `portability.py` | Export / import a namespace |
@@ -92,6 +94,16 @@ reworded — retyping to `pattern`/`preference` is the sanctioned way to clear a
 gated review-hint false positive, and it does not re-embed (the vector derives
 from title + content only).
 
+**State claims and the reconciliation loop.** `memory_store` / `memory_update`
+also return `contradicted_memories` when the write resolves a ref another
+memory still calls open — omitted, not empty, when there is nothing to report.
+`memory_stats` carries a `claims` block (`open` / `resolved` / `contradicted`
+plus a `review_limit`-capped sample). Reconcile with
+`memory_update(resolve_claims="<ref>"|"all")`, which records the resolution and
+leaves the body **byte-identical** — a dated log that said "PR #10 open" was
+correct when written, so `content` is only for claims that were never true.
+The loop needs no new tool: stats → `memory_search(ids=…)` → `resolve_claims`.
+
 ---
 
 ## Storage Model
@@ -103,7 +115,13 @@ from title + content only).
   access count, content/title.
 - Relations table: directed typed edges (`supersedes`, `related_to`, `caused_by`,
   `contradicts`, `parent_of`, `child_of`).
-- Schema versioned via `PRAGMA user_version`; migrations additive by default.
+- `memory_claims` table (migration 005): one row per repo-qualified state claim a
+  memory makes (`kind`, `ref` like `gingugu#10`, `state`). `state` is what the
+  memory ASSERTS and is never rewritten; resolution lives in `resolved_state` /
+  `resolved_by` / `resolved_at` beside it, so a claim can go stale without the
+  prose being edited. Derived from text, so re-synced on any title/content change.
+- Schema versioned via `PRAGMA user_version` (**currently 5**); migrations
+  additive by default.
 
 ---
 

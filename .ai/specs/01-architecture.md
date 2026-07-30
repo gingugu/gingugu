@@ -50,6 +50,17 @@ AI client (Claude Code / Cursor / Windsurf / …)
 - **Never-forget:** `decay.py` tracks dormancy (untouched ≥ 90 days) as a
   *resting signal* only. Nothing is auto-demoted or auto-deleted; only explicit
   `memory_forget` removes a memory.
+- **State claims:** `claims.py` extracts repo-qualified PR/MR references and the
+  state a memory asserts about them into `memory_claims` (migration 005).
+  The prose is immutable history — a memory that said "PR #10 open" was correct
+  when written — so resolution is recorded in the claim row rather than by
+  editing the text. This is the primitive whose absence produced 160 distinct
+  ad-hoc `=== STATUS ===` banner styles across the dogfooding corpus.
+
+  Refs are qualified by URL, then a repo named beside them, then the
+  namespace's own name (the one-namespace-per-repo convention). Unqualifiable
+  refs are dropped rather than guessed, and contradiction detection is
+  namespace-scoped so a bare-ref mis-key cannot reach across namespaces.
 
 ## Retrieval
 

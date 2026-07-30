@@ -62,7 +62,19 @@ def register(mcp, ctx: ServerContext) -> None:
         ``suggested_relations`` list of up to 3 memories with moderate topical
         overlap that aren't already linked — a nudge to call ``memory_relate``
         and grow the knowledge graph. Distinct from ``similar_memories``: those
-        are merge candidates, these are link candidates."""
+        are merge candidates, these are link candidates.
+
+        The response may also carry ``contradicted_memories``: older memories
+        whose state claim THIS memory just resolved. Recording "PR #10 merged"
+        makes every memory still asserting "PR #10 open" knowably wrong, and
+        now is when fixing it is cheapest. Each entry gives the stale memory's
+        ``id``, ``title``, the ``ref`` at issue, what it ``asserts``, and both
+        sides' evidence.
+
+        Reconcile by correcting the stale claim — the claim is now genuinely
+        false, so the text should change. That is the opposite of rewording
+        prose to silence a hint while the claim stays wrong. Advisory only:
+        nothing was mutated."""
         try:
             try:
                 mem_type = MemoryType(type)
@@ -115,13 +127,17 @@ def register(mcp, ctx: ServerContext) -> None:
                 if relation_check
                 else []
             )
-            return {
+            response = {
                 "ok": True,
                 "memory": _memory_summary(mem),
                 "namespace": ns_name,
                 "similar_memories": similar,
                 "suggested_relations": relations,
             }
+            contradicted = ctx.store.contradicted_memories(mem)
+            if contradicted:
+                response["contradicted_memories"] = contradicted
+            return response
         except Exception as exc:  # never crash the MCP loop
             logger.exception("memory_store failed")
             return _err(f"memory_store failed: {exc}")
@@ -135,6 +151,7 @@ def register(mcp, ctx: ServerContext) -> None:
         confidence: str | None = None,
         metadata: str | dict | None = None,
         tags: str | None = None,
+        resolve_claims: str | None = None,
         relation_check: bool = True,
     ) -> dict:
         """Update one or more fields of an existing memory. Use to correct outdated
@@ -152,6 +169,15 @@ def register(mcp, ctx: ServerContext) -> None:
         reference material saved as ``workflow`` picks up point-in-time review
         hints, because ``pattern``/``preference`` are the types exempt from them.
         Retyping does not re-embed: the vector derives from title + content only.
+
+        ``resolve_claims`` reconciles a stale state claim WITHOUT EDITING THE
+        PROSE — comma-separated refs (e.g. "gingugu#10"), or "all" for every
+        open claim on this memory. Use it when the text is accurate history: a
+        session log that said "PR #10 open" was correct on the day it was
+        written, and rewriting it to stay current destroys the record. The
+        memory body is left byte-identical; only the claim's resolution is
+        recorded. Reach for ``content`` instead only when the memory asserts
+        something that was never true.
 
         When ``relation_check`` is True (default) and ``title`` or ``content`` was
         provided, the response includes a ``suggested_relations`` list of up to 3
@@ -188,6 +214,10 @@ def register(mcp, ctx: ServerContext) -> None:
                 ctx.store.set_tags(memory_id, _split_csv(tags))
             mem.tags = ctx.store.get_tags(memory_id)
             response: dict = {"ok": True, "memory": _memory_summary(mem)}
+            if resolve_claims is not None:
+                response["resolved_claims"] = ctx.store.resolve_claims(
+                    memory_id, _split_csv(resolve_claims)
+                )
             if relation_check and (title is not None or content is not None):
                 response["suggested_relations"] = _suggest_relations(
                     ctx,
@@ -196,6 +226,12 @@ def register(mcp, ctx: ServerContext) -> None:
                     title=mem.title,
                     content=mem.content,
                 )
+            # Correcting a memory to say "merged" is exactly when the OTHER
+            # memories still saying "open" are worth surfacing.
+            if title is not None or content is not None:
+                contradicted = ctx.store.contradicted_memories(mem)
+                if contradicted:
+                    response["contradicted_memories"] = contradicted
             return response
         except Exception as exc:
             logger.exception("memory_update failed")

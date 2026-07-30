@@ -361,6 +361,58 @@ with `memory_stats(review_limit=…)` and pull the flagged bodies with
 `memory_search(ids=…)`. The expected reaction is `memory_update` (reconfirm
 or correct) or `memory_forget` - the caller's judgment, never the server's.
 
+### State Claims
+
+Review hints are a heuristic over prose. **State claims** are the structural
+version, and they answer a different question: not "does this look stale?" but
+"has this specific assertion been resolved?"
+
+A memory saying "PR #10 is open" makes a *claim*. It was true when written, so
+the prose is honest history and must never be edited to track the world moving
+on. `claims.py` extracts the claim into `memory_claims` (migration 005) where
+`state` records what the memory **asserts** and never changes; resolution lands
+in `resolved_state` / `resolved_by` / `resolved_at` beside it.
+
+That separation is the point. Without it, the only way to record "PR #10 has
+since merged" was to rewrite the memory or bolt on a `=== STATUS ===` banner -
+and the dogfooding corpus grew **160 distinct banner styles across 37 memories**
+because the primitive was missing.
+
+Two things the extractor has to get right, both measured against a live
+764-memory corpus before the module was written:
+
+- **Refs are not globally unique.** `gingugu#12` and `VersatermTechPlatform#12`
+  are different objects, and memories routinely cite another repo's PRs.
+  Qualification is URL, then a repo named beside the ref, then the namespace's
+  own name (the one-namespace-per-repo convention). Unqualifiable refs are
+  dropped rather than guessed. That namespace default is load-bearing:
+  in-text qualification alone yields 26 claims and **zero** usable
+  contradictions, versus 145 and 10 with it - people write "PR #20" in their own
+  repo's namespace. Contradiction detection is namespace-scoped so a bare-ref
+  mis-key cannot leak across namespaces.
+- **State is not a clean binary.** "merge HELD" holds both words; "doc shipped
+  PR #168" means *created* while "PR #65 SHIPPED" means *merged*. `shipped` and
+  `superseded` are therefore excluded from the resolved vocabulary, and negation
+  lookbehinds stop "NOT merged yet" from reading as resolved - which would
+  invert the claim, the worst available failure. Nothing counts inside quotes or
+  backticks: a memory citing `"PR #30 open"` is describing the phrase.
+
+**The write-time hook.** `memory_store` / `memory_update` return
+`contradicted_memories` when the write resolves a ref another memory still calls
+open. That is the cheapest moment to reconcile - the caller is already thinking
+about that exact PR - and it needs no sweep and no protocol. The key is omitted
+rather than empty when there is nothing to report, so the hint stays cheap to
+ignore. Extraction is best-effort throughout: a failure logs and is swallowed,
+never breaking a write.
+
+**The reconciliation loop**, reusing existing tools only:
+
+```text
+memory_stats(review_limit=100)     -> claims { open, resolved, contradicted, sample[] }
+memory_search(ids="…")             -> the flagged bodies
+memory_update(resolve_claims="…")  -> resolution recorded, PROSE UNTOUCHED
+```
+
 ---
 
 ## MCP Tools Specification
@@ -492,6 +544,12 @@ Update an existing memory's content, type, confidence, or metadata.
   `workflow` picks up point-in-time review hints, because `pattern` and
   `preference` are the types exempt from them. Retyping does not re-embed —
   the vector derives from title + content only
+- `resolve_claims` (optional) — comma-separated refs (e.g. `gingugu#10`), or
+  `all`, to mark this memory's open state claims resolved **without editing its
+  prose**. A dated record that said "PR #10 open" was accurate when written, so
+  the body is left byte-identical and only the claim's resolution is recorded.
+  Returns `resolved_claims` listing what actually changed. Use `content`
+  instead only when a memory asserts something that was never true
 - `confidence` (optional) — new confidence level
 - `metadata` (optional) — updated metadata JSON
 - `tags` (optional) — comma-separated; replaces the full tag set when provided
