@@ -378,18 +378,32 @@ since merged" was to rewrite the memory or bolt on a `=== STATUS ===` banner -
 and the dogfooding corpus grew **160 distinct banner styles across 37 memories**
 because the primitive was missing.
 
-Two things the extractor has to get right, both measured against a live
-764-memory corpus before the module was written:
+Three things the extractor has to get right, all measured against a live corpus
+before the code was written:
 
 - **Refs are not globally unique.** `gingugu#12` and `VersatermTechPlatform#12`
   are different objects, and memories routinely cite another repo's PRs.
   Qualification is URL, then a repo named beside the ref, then the namespace's
-  own name (the one-namespace-per-repo convention). Unqualifiable refs are
-  dropped rather than guessed. That namespace default is load-bearing:
-  in-text qualification alone yields 26 claims and **zero** usable
-  contradictions, versus 145 and 10 with it - people write "PR #20" in their own
-  repo's namespace. Contradiction detection is namespace-scoped so a bare-ref
-  mis-key cannot leak across namespaces.
+  `default_repo`. Unqualifiable refs are dropped rather than guessed. That
+  namespace default is load-bearing: in-text qualification alone yields 26
+  claims and **zero** usable contradictions, versus 145 and 10 with it - people
+  write "PR #20" in their own repo's namespace. Contradiction detection is
+  namespace-scoped so a bare-ref mis-key cannot leak across namespaces.
+
+  But not every namespace is a repo. An identity or notes namespace would key
+  a bare ref to `crow#32`, a repo that cannot exist - 20 such claims in the
+  reference corpus. `memory_namespaces(default_repo="")` declares a namespace
+  non-repo so its bare refs are dropped; `crow` and `default` are seeded that
+  way by migration 007.
+- **A citation is not an assertion.** `[[PR #10 open: the promotion bridge]]`
+  is a link to a memory *named* that, not this memory's claim about PR #10 -
+  and titles are exactly where "PR #N open" phrasing lives, so any memory
+  linking to a claim-bearing memory inherited its claim. Measured: 11 wrong
+  claims, **8 of them in a namespace whose default repo was correct**, so
+  namespace scoping never contained this one. Wiki-link spans are blanked
+  before extraction, length-preservingly so no other ref's state window
+  shifts. Nothing is lost - when a claim's only state evidence sits inside a
+  link, the linked memory already holds that claim, correctly keyed.
 - **State is not a clean binary.** "merge HELD" holds both words; "doc shipped
   PR #168" means *created* while "PR #65 SHIPPED" means *merged*. `shipped` and
   `superseded` are therefore excluded from the resolved vocabulary, and negation
@@ -614,6 +628,12 @@ List and manage namespaces.
 - `name` (optional) — namespace name
 - `path` (optional) — filesystem path for the namespace
 - `description` (optional) — namespace description
+- `default_repo` (optional) — what a bare "PR #12" means in this namespace.
+  Leave unset and the namespace's own name is used (the one-namespace-per-repo
+  convention). Pass a repo slug when the namespace is named differently from
+  its repo. Pass `""` to declare the namespace is **not** a repo — identity,
+  notes, scratch — so bare refs are dropped instead of keyed to a repo that
+  cannot exist. `crow` and `default` are seeded `""` by migration 007.
 
 ### `memory_stats`
 Get health overview of the memory system.

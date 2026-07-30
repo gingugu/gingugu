@@ -53,6 +53,72 @@ def test_merge_request_is_its_own_kind() -> None:
     assert (claim.kind, claim.ref) == ("mr", "keycloakify#9")
 
 
+# --- extraction: a citation is not an assertion -----------------------------
+
+
+def test_ref_inside_a_wikilink_asserts_nothing() -> None:
+    """``[[PR #32 open: ...]]`` names another memory; it does not claim."""
+    assert (
+        cm.extract_claims(
+            "",
+            "Detail lives in [[PR #32 open: migration 006 repairs the backfill]].",
+            namespace_default="gingugu",
+        )
+        == []
+    )
+
+
+def test_a_memory_titled_resolved_does_not_inherit_an_open_claim_from_a_link() -> None:
+    """The worst real case, from the live corpus.
+
+    A memory titled "RESOLVED: internal gateway crashloop" was asserting
+    ``#155 open`` purely because it linked to a memory whose title said so.
+    That is a wrong claim in a namespace whose default repo was correct, so
+    namespace containment never covered it.
+    """
+    claims = cm.extract_claims(
+        "RESOLVED: internal gateway crashloop was the burstable RDS",
+        "The guardrail PR #155 can now be re-pointed to k8s/internal and tested here. "
+        "See [[DESI-52 guardrails: PR #155 OPEN, merge HELD until DESI-58 tests it]].",
+        namespace_default="devex-ai-gateway",
+    )
+    assert claims == []
+
+
+def test_a_real_claim_survives_alongside_a_wikilink() -> None:
+    """Blanking links must not cost the memory's own assertion."""
+    (claim,) = cm.extract_claims(
+        "",
+        "PR #20 is still open. Background in [[PR #12 merged: context efficiency]].",
+        namespace_default="gingugu",
+    )
+    assert (claim.ref, claim.state) == ("gingugu#20", cm.STATE_OPEN)
+
+
+def test_blanking_a_wikilink_does_not_shift_a_later_refs_state_window() -> None:
+    """Length preservation is load-bearing, not tidiness.
+
+    The state window and the line-start quote parity both index into the same
+    string. Collapsing a link instead of blanking it would drag later refs into
+    a different window and silently re-scope their claims.
+    """
+    link = "[[" + "x" * 200 + "]]"
+    (claim,) = cm.extract_claims(
+        "", f"{link} PR #20 was merged last week", namespace_default="gingugu"
+    )
+    assert (claim.ref, claim.state) == ("gingugu#20", cm.STATE_RESOLVED)
+
+
+def test_a_multiline_wikilink_is_blanked_without_losing_line_boundaries() -> None:
+    """Newlines survive blanking so quote parity keeps its line anchor."""
+    claims = cm.extract_claims(
+        "",
+        'He said "quoted" here.\n[[PR #99 open:\na title that wrapped]]\nPR #20 open',
+        namespace_default="gingugu",
+    )
+    assert [(c.ref, c.state) for c in claims] == [("gingugu#20", cm.STATE_OPEN)]
+
+
 # --- extraction: state vocabulary -------------------------------------------
 
 
@@ -144,6 +210,32 @@ def _mem(conn: sqlite3.Connection, mid: str, ns: str, title: str, content: str) 
         "VALUES (?,?,?,?,?,?,?,?,?,0)",
         (mid, ns, "workflow", title, content, "verified", now, now, now),
     )
+
+
+# --- what a bare ref means in a namespace -----------------------------------
+
+
+def test_unset_default_repo_falls_back_to_the_namespace_name(conn) -> None:
+    """The one-namespace-per-repo convention, and the right default: measured
+    over 764 memories it is the difference between 145 claims and 26."""
+    assert cs.namespace_default_repo(conn, "ns1") == "gingugu"
+
+
+def test_empty_default_repo_declares_the_namespace_is_not_a_repo(conn) -> None:
+    """``crow`` is an identity namespace. There is no repo called crow, so a
+    bare "PR #32" there must be dropped, not keyed to ``crow#32``."""
+    conn.execute("UPDATE namespaces SET default_repo = '' WHERE id = 'ns1'")
+    assert cs.namespace_default_repo(conn, "ns1") is None
+
+
+def test_explicit_default_repo_wins_over_the_namespace_name(conn) -> None:
+    """Lets a namespace named differently from its repo slug key bare refs."""
+    conn.execute("UPDATE namespaces SET default_repo = 'litellm' WHERE id = 'ns1'")
+    assert cs.namespace_default_repo(conn, "ns1") == "litellm"
+
+
+def test_a_missing_namespace_drops_bare_refs(conn) -> None:
+    assert cs.namespace_default_repo(conn, "nope") is None
 
 
 def test_sync_claims_replaces_previous_rows(conn: sqlite3.Connection) -> None:

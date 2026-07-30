@@ -11,6 +11,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.11.0] - 2026-07-30
+
+### Fixed
+
+- **Refs inside `[[wiki-links]]` no longer create claims.** A link to a memory
+  titled `PR #10 open: the promotion bridge` is a *citation*, not this
+  memory's assertion about PR #10 — but the extractor read the two the same
+  way. Because titles are exactly where "PR #N open" phrasing lives, every
+  memory linking to a claim-bearing memory inherited its claim, and the effect
+  compounded as the graph got more linked.
+
+  Measured on a 785-memory corpus: 11 wrong claims, **8 of them in a namespace
+  whose default repo was perfectly correct** — so the existing
+  namespace-containment guarantee never covered this. In the worst case a
+  memory titled `RESOLVED: internal gateway crashloop` was asserting
+  `#155 open`, purely because of what it linked to.
+
+  Nothing is lost by dropping them: when a claim's only state evidence sits
+  inside a link, the *linked* memory already holds that claim, correctly keyed.
+
+### Added
+
+- **`memory_namespaces` gains `default_repo`**, controlling what a bare
+  "PR #12" means in a namespace:
+
+  | `default_repo` | Behavior |
+  | --- | --- |
+  | unset (default) | Falls back to the namespace's own name — the one-namespace-per-repo convention. |
+  | a repo slug | Uses that slug. For namespaces named differently from their repo. |
+  | `""` | The namespace is **not** a repo. Bare refs are dropped instead of mis-keyed. |
+
+  Previously every namespace was assumed to be a repo, so a bare ref in an
+  identity or notes namespace keyed to a repo that cannot exist (`crow#32`).
+  Measured: 20 such claims, all inert — contradiction detection is
+  namespace-scoped, so they could only ever collide with each other.
+
+  The unset default is deliberate and load-bearing: measured over 764
+  memories it is the difference between 145 claims and 26.
+
+### Changed
+
+- **Migration 007** adds `namespaces.default_repo`, seeds `crow` and `default`
+  as non-repo namespaces, and re-derives every claim under the corrected
+  extractor. On the reference corpus this pruned 158 claims to 130 in ~200ms
+  and added none.
+
+  Resolution state survives. The re-derive deliberately does **not** go
+  through `claim_sync.sync_claims`, which drops `resolved_*` by design because
+  it runs when a memory's *prose* changed. Here the prose is untouched and only
+  the extractor improved, so discarding resolutions would destroy manual
+  reconciliation work that cannot be recovered.
+
+  If you keep memories in a namespace that is not a repo, declare it after
+  upgrading: `memory_namespaces(action="update", name="notes", default_repo="")`.
+  A user who genuinely has a repo named `crow` restores it the same way.
+
+---
+
 ## [0.10.1] - 2026-07-30
 
 ### Fixed

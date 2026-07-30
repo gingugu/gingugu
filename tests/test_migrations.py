@@ -69,8 +69,8 @@ def test_v2_to_v3_upgrade_preserves_data(tmp_path: Path) -> None:
 
     # Upgrade.
     final = migrate(conn)
-    assert final == 6
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 6
+    assert final == 7
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 7
 
     # New tables exist.
     tables = {
@@ -93,9 +93,9 @@ def test_migrate_is_idempotent_when_current(tmp_path: Path) -> None:
     path = tmp_path / "legacy.db"
     conn = _open_v2(path)
     _seed_v2(conn)
-    assert migrate(conn) == 6
+    assert migrate(conn) == 7
     # Running again is a no-op (no error, stays at the current version).
-    assert migrate(conn) == 6
+    assert migrate(conn) == 7
     conn.close()
 
 
@@ -135,7 +135,7 @@ def test_v5_backfills_claims_for_existing_memories() -> None:
             ),
         )
 
-    assert migrate(conn) == 6
+    assert migrate(conn) == 7
 
     rows = conn.execute(
         "SELECT memory_id, ref, state FROM memory_claims ORDER BY memory_id"
@@ -176,7 +176,7 @@ def test_v5_backfill_runs_exactly_once() -> None:
 
 def test_v5_on_a_fresh_database_is_a_no_op() -> None:
     conn = sqlite3.connect(":memory:")
-    assert migrate(conn) == 6
+    assert migrate(conn) == 7
     assert conn.execute("SELECT COUNT(*) FROM memory_claims").fetchone()[0] == 0
 
 
@@ -239,7 +239,7 @@ def test_v6_repairs_a_db_stranded_at_v5_with_an_empty_claims_table() -> None:
     )
     assert conn.execute("SELECT COUNT(*) FROM memory_claims").fetchone()[0] == 0
 
-    assert migrate(conn) == 6
+    assert migrate(conn) == 7
 
     rows = conn.execute("SELECT memory_id, ref, state FROM memory_claims ORDER BY memory_id")
     assert [tuple(r) for r in rows] == [
@@ -270,7 +270,7 @@ def test_v6_repairs_a_stranded_db_that_is_no_longer_empty() -> None:
     )
     conn.commit()
 
-    assert migrate(conn) == 6
+    assert migrate(conn) == 7
 
     refs = {r[0] for r in conn.execute("SELECT ref FROM memory_claims")}
     assert refs == {"gingugu#10", "gingugu#22"}
@@ -293,7 +293,7 @@ def test_v6_preserves_existing_resolution_state() -> None:
     )
     conn.commit()
 
-    assert migrate(conn) == 6
+    assert migrate(conn) == 7
 
     rows = conn.execute("SELECT resolved_state, resolved_at FROM memory_claims").fetchall()
     assert rows == [("resolved", "2026-02-01")]
@@ -306,5 +306,119 @@ def test_v6_does_not_resurrect_a_ref_edited_out_of_a_memory() -> None:
     _seed_claim_memories(conn, (("m1", "no refs anymore", "the PR reference was edited out"),))
     conn.commit()
 
-    assert migrate(conn) == 6
+    assert migrate(conn) == 7
     assert conn.execute("SELECT COUNT(*) FROM memory_claims").fetchone()[0] == 0
+
+
+# --- migration 007: claim-extraction precision ------------------------------
+
+
+def _rename_namespace(conn: sqlite3.Connection, name: str) -> None:
+    conn.execute("UPDATE namespaces SET name = ? WHERE id = 'ns1'", (name,))
+    conn.commit()
+
+
+def test_v7_adds_default_repo_and_seeds_the_non_repo_namespaces() -> None:
+    """``crow`` and ``default`` are gingugu's own non-repo namespaces."""
+    conn = sqlite3.connect(":memory:")
+    _apply_through(conn, 6)
+    for ns_id, name in (("nsA", "crow"), ("nsB", "gingugu")):
+        conn.execute(
+            "INSERT OR IGNORE INTO namespaces(id, name, created_at, updated_at) VALUES (?,?,?,?)",
+            (ns_id, name, "2026-01-01", "2026-01-01"),
+        )
+    conn.commit()
+
+    assert migrate(conn) == 7
+
+    seeded = dict(conn.execute("SELECT name, default_repo FROM namespaces").fetchall())
+    assert seeded["crow"] == ""
+    assert seeded["gingugu"] is None  # unset: still falls back to its own name
+
+
+def test_v7_prunes_a_phantom_claim_that_came_from_a_wikilink() -> None:
+    """The defect that shipped in 0.10.0.
+
+    The phantom row is seeded directly because 005's backfill now runs the
+    *fixed* extractor and would never create one. This is what a real 0.10.x
+    database looks like on disk.
+    """
+    conn = sqlite3.connect(":memory:")
+    _apply_through(conn, 6)
+    _seed_claim_memories(
+        conn, (("m1", "RESOLVED: the crashloop", "See [[PR #155 OPEN, merge HELD]]."),)
+    )
+    conn.execute(
+        "INSERT INTO memory_claims (id, memory_id, kind, ref, state, created_at) "
+        "VALUES ('c1','m1','pr','gingugu#155','open','2026-01-01')"
+    )
+    conn.commit()
+
+    assert migrate(conn) == 7
+    assert conn.execute("SELECT COUNT(*) FROM memory_claims").fetchone()[0] == 0
+
+
+def test_v7_drops_bare_refs_in_a_namespace_that_is_not_a_repo() -> None:
+    conn = sqlite3.connect(":memory:")
+    _apply_through(conn, 5)
+    _seed_claim_memories(conn, (("m1", "Reflection", "PR #167 is still open"),))
+    _rename_namespace(conn, "crow")
+
+    assert migrate(conn) == 7
+    assert conn.execute("SELECT COUNT(*) FROM memory_claims").fetchone()[0] == 0
+
+
+def test_v7_keeps_bare_refs_in_a_real_repo_namespace() -> None:
+    """The namespace default is load-bearing — 007 must not weaken it."""
+    conn = sqlite3.connect(":memory:")
+    _apply_through(conn, 5)
+    _seed_claim_memories(conn, (("m1", "PR #20 open", "PR #20 is still open"),))
+    conn.commit()
+
+    assert migrate(conn) == 7
+    assert [tuple(r) for r in conn.execute("SELECT ref, state FROM memory_claims")] == [
+        ("gingugu#20", "open")
+    ]
+
+
+def test_v7_preserves_resolution_on_a_claim_it_keeps() -> None:
+    """The reason 007 does not go through ``claim_sync.sync_claims``.
+
+    That path drops resolution deliberately, because it runs when the *prose*
+    changed. Here the prose is untouched and only the extractor improved, so
+    discarding resolution would destroy manual reconciliation work that cannot
+    be recovered.
+    """
+    conn = sqlite3.connect(":memory:")
+    _apply_through(conn, 5)
+    _seed_claim_memories(conn, (("m1", "PR #20 open", "PR #20 is still open"),))
+    conn.execute(
+        "INSERT INTO memory_claims (id, memory_id, kind, ref, state, resolved_state, "
+        "resolved_at, created_at) VALUES "
+        "('c1','m1','pr','gingugu#20','open','resolved','2026-02-01','2026-01-01')"
+    )
+    conn.commit()
+
+    assert migrate(conn) == 7
+
+    rows = conn.execute("SELECT resolved_state, resolved_at FROM memory_claims").fetchall()
+    assert [tuple(r) for r in rows] == [("resolved", "2026-02-01")]
+
+
+def test_v7_rederive_is_idempotent() -> None:
+    """Re-running prunes nothing the second time."""
+    from gingugu import claim_rederive
+
+    conn = sqlite3.connect(":memory:")
+    _apply_through(conn, 6)
+    _seed_claim_memories(
+        conn,
+        (
+            ("m1", "PR #20 open", "PR #20 is still open"),
+            ("m2", "a link", "see [[PR #99 open: something]]"),
+        ),
+    )
+    migrate(conn)
+
+    pruned, written = claim_rederive.rederive_claims(conn)
+    assert (pruned, written) == (0, 1)

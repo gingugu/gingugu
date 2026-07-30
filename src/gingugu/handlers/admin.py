@@ -22,6 +22,7 @@ def _namespace_summary(ns) -> dict:
         "name": ns.name,
         "path": ns.path,
         "description": ns.description,
+        "default_repo": ns.default_repo,
         "created_at": ns.created_at,
         "updated_at": ns.updated_at,
     }
@@ -34,15 +35,24 @@ def register(mcp, ctx: ServerContext) -> None:
         name: str | None = None,
         path: str | None = None,
         description: str | None = None,
+        default_repo: str | None = None,
         cascade: bool = False,
     ) -> dict:
         """Manage namespaces. ``action`` is one of: list, create, update, delete.
 
         - ``list`` — all namespaces with their memory counts.
         - ``create`` — create (or fetch) ``name`` with optional path/description.
-        - ``update`` — update ``name``'s path/description (only provided fields).
+        - ``update`` — update ``name``'s path/description/default_repo (only
+          provided fields).
         - ``delete`` — remove ``name``; the ``default`` namespace is protected and
           a non-empty namespace requires ``cascade=True`` (deletes its memories).
+
+        ``default_repo`` controls what a bare "PR #12" in this namespace means.
+        Leave it unset and the namespace's own name is used — the
+        one-namespace-per-repo convention, and the right default. Pass a repo
+        slug when the namespace is named differently from its repo. Pass ``""``
+        to declare the namespace is **not** a repo (identity, notes, scratch),
+        so bare refs are dropped rather than keyed to a repo that cannot exist.
         """
         try:
             if action not in _NS_ACTIONS:
@@ -59,11 +69,15 @@ def register(mcp, ctx: ServerContext) -> None:
                 return _err(f"action {action!r} requires a 'name'")
 
             if action == "create":
-                ns = ctx.namespaces.get_or_create(name, path=path, description=description)
+                ns = ctx.namespaces.get_or_create(
+                    name, path=path, description=description, default_repo=default_repo
+                )
                 return {"ok": True, "action": "created", "namespace": _namespace_summary(ns)}
 
             if action == "update":
-                ns = ctx.namespaces.update(name, path=path, description=description)
+                ns = ctx.namespaces.update(
+                    name, path=path, description=description, default_repo=default_repo
+                )
                 if ns is None:
                     return _single_namespace_not_found(name)
                 return {"ok": True, "action": "updated", "namespace": _namespace_summary(ns)}

@@ -38,6 +38,29 @@ The SQLite database is the product's durable state. Treat it with care.
   rescan the whole corpus on every boot forever. Embeddings can use it only
   because every memory should have exactly one.
 
+### Re-deriving is not the same as backfilling
+
+When a migration changes **how** derived data is computed rather than adding
+it, it must re-derive — and it must state explicitly what happens to state a
+user layered on top.
+
+Backfills are additive and can be idempotent for free (`INSERT OR IGNORE`
+against a UNIQUE constraint). A re-derive **removes** rows, so it needs to
+answer: what about the rows carrying user-supplied state?
+
+The dividing question is *what changed*:
+
+| What changed | Correct behavior |
+| --- | --- |
+| The memory's **prose** | Drop user state. What the text asserts may have changed with it, and a stale resolution pointer is worse than none. (`claim_sync.sync_claims`) |
+| The **extractor** | Preserve user state. The text is unchanged, so any reconciliation recorded against it still holds. (`claim_rederive.rederive_claims`) |
+
+Migration 007 got this wrong in draft: reusing `sync_claims` would have run
+green through the whole test suite while silently reopening every claim the
+user had reconciled by hand — work that is manual, unlogged, and unrecoverable.
+**Before reusing an existing sync path inside a migration, check what it
+deletes.** A test that only asserts the new behavior will not catch it.
+
 ## A shipped migration can never be fixed in place
 
 `migrate()` selects pending work with `current < target`. Once a DB is stamped
@@ -63,6 +86,26 @@ developing on. Point dev instances at a throwaway copy (`MEMORY_DB_PATH`), and
 check `PRAGMA user_version` on the live file *before* declaring a migration
 path verified — validating against DB copies proves nothing about a live file
 that has already moved on.
+
+### Copy a WAL database with the backup API, never `shutil.copy`
+
+Rehearsing on a copy of the real DB is the right discipline, but the copy has
+to be of the *current* state. Gingugu runs SQLite in **WAL mode**, so recent
+commits live in `memories.db-wal` until a checkpoint folds them in.
+`shutil.copy` takes only `memories.db` and silently produces a stale snapshot.
+
+```python
+src = sqlite3.connect(f"file:{LIVE}?mode=ro", uri=True)  # read-only: cannot touch the real brain
+dst = sqlite3.connect(COPY)
+src.backup(dst)                                          # checkpoints WAL content for us
+```
+
+Delete any stale `COPY-wal` / `COPY-shm` first, or the new copy inherits them.
+
+This bit during the migration 007 rehearsal: the stale copy reported that the
+migration was wiping ten hand-reconciled claims. It was not — the copy predated
+the reconciliation. **When a rehearsal contradicts work you did minutes ago,
+suspect the harness before the code.**
 
 ## FTS5 in lockstep
 
