@@ -4,6 +4,35 @@ _Last updated: 2026-07-30_
 
 ## In Flight
 
+- **Hook arg robustness + `default_repo` actually applying (v0.11.1, branch
+  `fix/hook-arg-robustness-and-default-repo`)** — three shipped defects.
+
+  1. **`Stop` hook crashed on foreign flags.** `parse_args()` makes argparse
+     `sys.exit(2)` on anything unrecognized. That is a `SystemExit`, a
+     `BaseException`, so the script's own `except Exception` never caught it —
+     the try/except looked like protection and was not. Claude Code reads the
+     non-zero exit as a blocked stop, so every session in an affected repo
+     broke. Repos whose `settings.json` was written by other tooling append
+     their own flags to the `Stop` hook routinely. Fixed with
+     `parse_known_args()`, in the shipped template **and** this repo's own
+     `.claude/hooks/stop.py`. Reproduced at exit code 2 before the fix.
+  2. **`init` called incompatible wiring "already wired".** `_has_command`
+     matched the bare filename `stop.py`, so a command pointing at another
+     tool's same-named script counted as configured. Now inspects the flags in
+     that command against the ones our script accepts and warns instead.
+  3. **`init --force` silently clobbered a foreign `stop.py`.** Now backs it up
+     to `stop.py.bak` and warns that the `settings.json` command may also need
+     updating.
+
+  Plus the 0.11.0 miss: **`default_repo` was inert.** Setting it changed the
+  column and nothing else, and no supported path existed to apply it —
+  `claim_rederive` was migration-side only, and `storage.update` re-syncs
+  claims only when the prose actually changed. `memory_namespaces` update now
+  re-derives that namespace's claims when the value changes, preserving
+  resolution. `claim_rederive.rederive_claims` gained a `namespace_id` filter.
+
+  393 tests, ruff + black clean.
+
 - **Claim-extraction precision (v0.11.0, branch `fix/claim-extraction-precision`)** —
   two defects that shipped in v0.10.0, both found by dogfooding and both
   measured against the live 785-memory corpus before a line was written.
