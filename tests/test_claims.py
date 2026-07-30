@@ -238,6 +238,77 @@ def test_a_missing_namespace_drops_bare_refs(conn) -> None:
     assert cs.namespace_default_repo(conn, "nope") is None
 
 
+def test_declaring_a_namespace_non_repo_clears_its_existing_claims() -> None:
+    """A declaration that changes nothing already stored is not a feature.
+
+    Claims are stored rows and ``default_repo`` is only read at extraction
+    time, so without a re-derive on update the flag is inert — and there is no
+    other supported way to apply it, since storage.update only re-syncs when
+    the prose actually changed. Shipped inert in v0.11.0.
+    """
+    from gingugu.namespaces import NamespaceManager
+
+    c = sqlite3.connect(":memory:")
+    c.row_factory = sqlite3.Row
+    migrate(c)
+    manager = NamespaceManager(c, None)
+    ns = manager.get_or_create("bspeagle")
+    _mem(c, "m1", ns.id, "Reflection", "PR #166 is still open")
+    c.commit()
+    from gingugu import claim_rederive
+
+    claim_rederive.rederive_claims(c)
+    c.commit()
+    assert [r[0] for r in c.execute("SELECT ref FROM memory_claims")] == ["bspeagle#166"]
+
+    manager.update("bspeagle", default_repo="")
+
+    assert c.execute("SELECT COUNT(*) FROM memory_claims").fetchone()[0] == 0
+
+
+def test_setting_an_explicit_default_repo_rekeys_existing_claims() -> None:
+    from gingugu.namespaces import NamespaceManager
+
+    c = sqlite3.connect(":memory:")
+    c.row_factory = sqlite3.Row
+    migrate(c)
+    manager = NamespaceManager(c, None)
+    ns = manager.get_or_create("devex")
+    _mem(c, "m1", ns.id, "Notes", "PR #166 is still open")
+    c.commit()
+    from gingugu import claim_rederive
+
+    claim_rederive.rederive_claims(c)
+    c.commit()
+
+    manager.update("devex", default_repo="devex-ai-gateway")
+
+    assert [r[0] for r in c.execute("SELECT ref FROM memory_claims")] == ["devex-ai-gateway#166"]
+
+
+def test_a_namespace_update_that_leaves_default_repo_alone_does_not_touch_claims() -> None:
+    """Resolution state must survive a description edit."""
+    from gingugu.namespaces import NamespaceManager
+
+    c = sqlite3.connect(":memory:")
+    c.row_factory = sqlite3.Row
+    migrate(c)
+    manager = NamespaceManager(c, None)
+    ns = manager.get_or_create("gingugu")
+    _mem(c, "m1", ns.id, "Notes", "PR #20 is still open")
+    c.commit()
+    from gingugu import claim_rederive
+
+    claim_rederive.rederive_claims(c)
+    c.execute("UPDATE memory_claims SET resolved_at = '2026-02-01'")
+    c.commit()
+
+    manager.update("gingugu", description="unrelated edit")
+
+    rows = c.execute("SELECT ref, resolved_at FROM memory_claims").fetchall()
+    assert [tuple(r) for r in rows] == [("gingugu#20", "2026-02-01")]
+
+
 def test_sync_claims_replaces_previous_rows(conn: sqlite3.Connection) -> None:
     _mem(conn, "m1", "ns1", "t", "PR #10 open")
     now = utcnow_iso()
