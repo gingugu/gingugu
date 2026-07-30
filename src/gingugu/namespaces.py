@@ -113,20 +113,49 @@ class NamespaceManager:
         if existing is None:
             return None
         now = utcnow_iso()
+        new_default = default_repo if default_repo is not None else existing.default_repo
         self._conn.execute(
             "UPDATE namespaces SET path = ?, description = ?, default_repo = ?, "
             "updated_at = ? WHERE id = ?",
             (
                 path if path is not None else existing.path,
                 description if description is not None else existing.description,
-                default_repo if default_repo is not None else existing.default_repo,
+                new_default,
                 now,
                 existing.id,
             ),
         )
+        if new_default != existing.default_repo:
+            self._rederive_claims(existing.id, name)
         self._conn.commit()
         logger.info("Updated namespace %r", name)
         return self.get(name)
+
+    def _rederive_claims(self, namespace_id: str, name: str) -> None:
+        """Re-key this namespace's claims after ``default_repo`` changed.
+
+        Without this the declaration is inert: claims are stored rows and the
+        default repo is only read at extraction time, so every already-derived
+        ref keeps whatever key it was given. A user declaring a namespace
+        non-repo would watch nothing happen, with no supported way to apply it
+        short of editing prose — the exact dodge the claims design exists to
+        make unnecessary.
+
+        Best-effort, like every other claim path: a namespace update must not
+        fail over a hint.
+        """
+        from . import claim_rederive
+
+        try:
+            pruned, written = claim_rederive.rederive_claims(self._conn, namespace_id=namespace_id)
+            logger.info(
+                "default_repo changed for %r: re-derived claims (%d pruned, %d written)",
+                name,
+                pruned,
+                written,
+            )
+        except Exception:  # noqa: BLE001 - never fail an update over a hint
+            logger.warning("claim re-derive failed for namespace %r", name, exc_info=True)
 
     def delete(self, name: str, *, cascade: bool = False) -> int:
         """Delete a namespace. Returns the number of memories removed.

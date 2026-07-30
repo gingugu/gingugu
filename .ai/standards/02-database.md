@@ -87,6 +87,28 @@ check `PRAGMA user_version` on the live file *before* declaring a migration
 path verified — validating against DB copies proves nothing about a live file
 that has already moved on.
 
+### A setting that changes only future behavior is inert
+
+Derived data is *stored*. A config value consulted at derivation time changes
+nothing that already exists, so a setting shipped without a path to re-derive
+is a setting that does nothing the user can see.
+
+`default_repo` shipped that way in 0.11.0: setting it updated the column and
+left every already-derived claim on its old key, with no supported way to apply
+it — the re-derive was migration-side only, and `storage.update` re-syncs claims
+only when the prose actually changed. The only remaining route was editing
+memory text, which is the exact dodge the claims design exists to eliminate.
+
+**Before shipping a setting that feeds a derivation, answer: what happens to
+rows derived before it was set?** "Nothing" is a valid answer only if you say so
+in the docs. Otherwise the write path that changes the setting owns the
+re-derive.
+
+It also means the test that would have caught it is the one nobody writes: the
+migration path was covered because migration 007 re-derives inside its own
+body, so the seeded namespaces worked. The *user* path — set the value on an
+already-populated namespace afterwards — never ran end to end.
+
 ### Copy a WAL database with the backup API, never `shutil.copy`
 
 Rehearsing on a copy of the real DB is the right discipline, but the copy has

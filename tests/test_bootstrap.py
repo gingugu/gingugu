@@ -187,14 +187,87 @@ def test_rules_file_client_does_not_touch_gitignore(tmp_path):
     assert not (tmp_path / ".gitignore").exists()
 
 
+# --- hooks must survive flags they do not own ---------------------------------
+
+
+def test_stop_hook_ignores_flags_it_does_not_own(tmp_path):
+    """The failure this makes impossible rather than merely detected.
+
+    A repo's settings.json is routinely written by other tooling that appends
+    its own flags to the Stop hook. ``parse_args`` would sys.exit(2) on an
+    unrecognized one — and SystemExit is a BaseException, so the script's own
+    ``except Exception`` cannot catch it. Claude Code reads the non-zero exit
+    as a blocked stop, and the session breaks.
+    """
+    import subprocess
+    import sys
+
+    main(["--path", str(tmp_path)])
+    stop = tmp_path / ".claude" / "hooks" / "stop.py"
+
+    result = subprocess.run(
+        [sys.executable, str(stop), "--check-memory-saves", "--notify", "--chat"],
+        input='{"session_id": "abc"}',
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_init_backs_up_and_warns_on_a_stop_py_it_did_not_write(tmp_path):
+    """--force must not silently clobber another tool's hook of the same name."""
+    hooks = tmp_path / ".claude" / "hooks"
+    hooks.mkdir(parents=True)
+    foreign = hooks / "stop.py"
+    foreign.write_text("# written by some other kit\nprint('not ours')\n")
+
+    main(["--path", str(tmp_path), "--force"])
+
+    assert (hooks / "stop.py.bak").read_text().startswith("# written by some other kit")
+    assert "gingugu" in foreign.read_text()
+
+
 # --- merge_settings unit ------------------------------------------------------
 
 
 def test_merge_settings_reports_added_events():
-    settings, added = merge_settings({})
+    settings, added, warnings = merge_settings({})
     assert set(added) == {"SessionStart", "Stop"}
-    _, added_again = merge_settings(settings)
+    assert warnings == []
+    _, added_again, _ = merge_settings(settings)
     assert added_again == []
+
+
+def _stop_wired(command: str) -> dict:
+    return {
+        "hooks": {"Stop": [{"matcher": "", "hooks": [{"type": "command", "command": command}]}]}
+    }
+
+
+def test_merge_settings_warns_when_an_existing_command_carries_foreign_flags():
+    """The misleading case: matching a bare filename is not "already wired".
+
+    A repo bootstrapped by other tooling points at a same-named stop.py with
+    its own flags. Reporting "already wired (no change)" tells the user their
+    setup is fine when the wiring belongs to a different script entirely.
+    """
+    settings = _stop_wired("uv run $CLAUDE_PROJECT_DIR/.claude/hooks/stop.py --notify --chat")
+    _, added, warnings = merge_settings(settings)
+
+    assert "Stop" not in added
+    assert len(warnings) == 1
+    assert "--notify" in warnings[0]
+    assert "--chat" in warnings[0]
+
+
+def test_merge_settings_stays_quiet_when_existing_flags_are_ours():
+    settings = _stop_wired(
+        "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/stop.py --check-memory-saves --min-tool-calls=5"
+    )
+    _, added, warnings = merge_settings(settings)
+
+    assert "Stop" not in added
+    assert warnings == []
 
 
 # --- theme ---------------------------------------------------------------------
