@@ -135,6 +135,12 @@ exactly-once); migration 004 backfills embeddings at *startup* instead because
 encoding needs a model download and must stay lazy. See
 `.ai/standards/02-database.md` for which strategy applies when.
 
+Exactly-once cuts both ways: pending work is selected with `current < target`,
+so a migration can never re-run on a DB that already passed it, and a bug fixed
+in place reaches only DBs that have not got there yet. Repairing the rest needs
+a **new** version number — migration 006 exists solely to re-run the claims
+backfill for DBs stamped v5 by a build whose 005 did not have one.
+
 ## Credentials
 
 ```

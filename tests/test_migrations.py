@@ -69,8 +69,8 @@ def test_v2_to_v3_upgrade_preserves_data(tmp_path: Path) -> None:
 
     # Upgrade.
     final = migrate(conn)
-    assert final == 5
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 5
+    assert final == 6
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 6
 
     # New tables exist.
     tables = {
@@ -93,9 +93,9 @@ def test_migrate_is_idempotent_when_current(tmp_path: Path) -> None:
     path = tmp_path / "legacy.db"
     conn = _open_v2(path)
     _seed_v2(conn)
-    assert migrate(conn) == 5
-    # Running again is a no-op (no error, stays at v4).
-    assert migrate(conn) == 5
+    assert migrate(conn) == 6
+    # Running again is a no-op (no error, stays at the current version).
+    assert migrate(conn) == 6
     conn.close()
 
 
@@ -135,7 +135,7 @@ def test_v5_backfills_claims_for_existing_memories() -> None:
             ),
         )
 
-    assert migrate(conn) == 5
+    assert migrate(conn) == 6
 
     rows = conn.execute(
         "SELECT memory_id, ref, state FROM memory_claims ORDER BY memory_id"
@@ -170,11 +170,141 @@ def test_v5_backfill_runs_exactly_once() -> None:
     )
     migrate(conn)
     before = conn.execute("SELECT COUNT(*) FROM memory_claims").fetchone()[0]
-    migrate(conn)  # user_version is already 5 - must not duplicate
+    migrate(conn)  # user_version is already current - must not duplicate
     assert conn.execute("SELECT COUNT(*) FROM memory_claims").fetchone()[0] == before == 1
 
 
 def test_v5_on_a_fresh_database_is_a_no_op() -> None:
     conn = sqlite3.connect(":memory:")
-    assert migrate(conn) == 5
+    assert migrate(conn) == 6
+    assert conn.execute("SELECT COUNT(*) FROM memory_claims").fetchone()[0] == 0
+
+
+# --- migration 006: repairing DBs stranded at v5 with an empty claims table ---
+
+
+def _strand_at_v5(conn: sqlite3.Connection) -> None:
+    """Reproduce a DB that reached v5 *before* 005 learned to backfill.
+
+    That is what pre-fix branch code did to a live DB: created the table and
+    stamped the version, leaving nothing to trigger the backfill ever again.
+    """
+    from gingugu.database import _SCHEMA_V5
+
+    _apply_through(conn, 4)
+    conn.executescript(_SCHEMA_V5)
+    conn.execute("PRAGMA user_version = 5")
+    conn.commit()
+
+
+def _seed_claim_memories(conn: sqlite3.Connection, rows: tuple[tuple[str, str, str], ...]) -> None:
+    conn.execute(
+        "INSERT OR IGNORE INTO namespaces(id, name, created_at, updated_at) VALUES (?,?,?,?)",
+        ("ns1", "gingugu", "2026-01-01", "2026-01-01"),
+    )
+    for mid, title, content in rows:
+        conn.execute(
+            "INSERT INTO memories(id, namespace_id, type, title, content, confidence, "
+            "created_at, updated_at, last_accessed, access_count) VALUES (?,?,?,?,?,?,?,?,?,0)",
+            (
+                mid,
+                "ns1",
+                "workflow",
+                title,
+                content,
+                "verified",
+                "2026-01-01",
+                "2026-01-01",
+                "2026-01-01",
+            ),
+        )
+    conn.commit()
+
+
+def test_v6_repairs_a_db_stranded_at_v5_with_an_empty_claims_table() -> None:
+    """The whole reason 006 exists.
+
+    migrate() picks pending work with ``current < target``, so a DB already
+    stamped 5 can never re-run 005 no matter how many times it reconnects.
+    Only a new version number reaches it.
+    """
+    conn = sqlite3.connect(":memory:")  # deliberately NO row_factory
+    _strand_at_v5(conn)
+    _seed_claim_memories(
+        conn,
+        (
+            ("m1", "PR #10 open", "PR #10, open, NOT merged yet"),
+            ("m2", "released", "PR #10 merged to main"),
+        ),
+    )
+    assert conn.execute("SELECT COUNT(*) FROM memory_claims").fetchone()[0] == 0
+
+    assert migrate(conn) == 6
+
+    rows = conn.execute("SELECT memory_id, ref, state FROM memory_claims ORDER BY memory_id")
+    assert [tuple(r) for r in rows] == [
+        ("m1", "gingugu#10", "open"),
+        ("m2", "gingugu#10", "resolved"),
+    ]
+
+
+def test_v6_repairs_a_stranded_db_that_is_no_longer_empty() -> None:
+    """Why 006 is unconditional instead of guarded on an empty table.
+
+    A stranded DB that has since stored one memory containing a ref has a
+    non-empty claims table while the rest of the corpus is still unprocessed.
+    An emptiness guard would skip it permanently.
+    """
+    conn = sqlite3.connect(":memory:")
+    _strand_at_v5(conn)
+    _seed_claim_memories(
+        conn,
+        (
+            ("old", "pre-existing, never processed", "PR #10 open"),
+            ("new", "stored after stranding", "PR #22 open"),
+        ),
+    )
+    conn.execute(
+        "INSERT INTO memory_claims (id, memory_id, kind, ref, state, created_at) "
+        "VALUES ('c1', 'new', 'pr', 'gingugu#22', 'open', '2026-01-02')"
+    )
+    conn.commit()
+
+    assert migrate(conn) == 6
+
+    refs = {r[0] for r in conn.execute("SELECT ref FROM memory_claims")}
+    assert refs == {"gingugu#10", "gingugu#22"}
+
+
+def test_v6_preserves_existing_resolution_state() -> None:
+    """Idempotence must not cost a reconciliation.
+
+    ``INSERT OR IGNORE`` against UNIQUE (memory_id, kind, ref) leaves an
+    already-resolved claim alone. Clobbering resolved_* here would silently
+    reopen every claim a user had reconciled.
+    """
+    conn = sqlite3.connect(":memory:")
+    _apply_through(conn, 5)
+    _seed_claim_memories(conn, (("m1", "PR #10 open", "PR #10 open"),))
+    conn.execute(
+        "INSERT INTO memory_claims (id, memory_id, kind, ref, state, resolved_state, "
+        "resolved_by, resolved_at, created_at) VALUES "
+        "('c1', 'm1', 'pr', 'gingugu#10', 'open', 'resolved', NULL, '2026-02-01', '2026-01-01')"
+    )
+    conn.commit()
+
+    assert migrate(conn) == 6
+
+    rows = conn.execute("SELECT resolved_state, resolved_at FROM memory_claims").fetchall()
+    assert rows == [("resolved", "2026-02-01")]
+
+
+def test_v6_does_not_resurrect_a_ref_edited_out_of_a_memory() -> None:
+    """Claims are re-derived from CURRENT text, so a removed ref stays removed."""
+    conn = sqlite3.connect(":memory:")
+    _apply_through(conn, 5)
+    _seed_claim_memories(conn, (("m1", "no refs anymore", "the PR reference was edited out"),))
+    conn.commit()
+
+    assert migrate(conn) == 6
     assert conn.execute("SELECT COUNT(*) FROM memory_claims").fetchone()[0] == 0

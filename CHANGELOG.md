@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.10.1] - 2026-07-30
+
+### Fixed
+
+- **Databases upgraded to schema v5 by a pre-release build have their state
+  claims backfilled by a new migration 006.** Migration 005 shipped in two
+  forms: an early one that created `memory_claims` empty, and the released one
+  that also backfills it. Migrations are selected with `current < target`, so
+  any database already stamped v5 by the earlier form could never run 005
+  again — it was left with an empty claims table permanently, and no reinstall
+  or restart could fix it. Migration 006 re-runs the backfill. It adds no
+  schema.
+
+  This only affects databases upgraded from a pre-release build; every
+  0.10.0 install from PyPI backfilled correctly on its v4 → v5 upgrade.
+
+  The repair is idempotent (`INSERT OR IGNORE` against
+  `UNIQUE (memory_id, kind, ref)`), so it is a few hundred milliseconds of
+  no-ops on an already-populated database and leaves existing resolution state
+  untouched. Claims are re-derived from each memory's current text, so a
+  reference edited out of a memory is not resurrected.
+
+---
+
 ## [0.10.0] - 2026-07-30
 
 ### Added

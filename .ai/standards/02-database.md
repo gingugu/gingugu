@@ -38,6 +38,32 @@ The SQLite database is the product's durable state. Treat it with care.
   rescan the whole corpus on every boot forever. Embeddings can use it only
   because every memory should have exactly one.
 
+## A shipped migration can never be fixed in place
+
+`migrate()` selects pending work with `current < target`. Once a DB is stamped
+version N, migration N will **never run again on that DB** — so editing
+migration N to fix a bug reaches only DBs that have not yet passed it. Every
+DB already at N is stranded, permanently, and no reinstall or restart helps.
+
+**Fixing a migration that any real DB has already applied requires a NEW
+version number.** Write the repair as migration N+1 (see 006, which re-runs
+the claims backfill for DBs that reached v5 from pre-fix code). Make the
+repair idempotent — `INSERT OR IGNORE` against a UNIQUE constraint, never a
+DELETE-then-reinsert, which would clobber state the user has since changed —
+and run it **unconditionally** rather than guarding on "looks unprocessed". A
+stranded DB accumulates partial data through normal use, so a guard like "the
+table is empty" stops recognising it.
+
+### The rule that prevents this
+
+**Never point in-development schema code at a live database.** A dev server or
+an ad-hoc script running an unmerged migration stamps `user_version` for real,
+and the fix you write afterwards is then unreachable on the machine you are
+developing on. Point dev instances at a throwaway copy (`MEMORY_DB_PATH`), and
+check `PRAGMA user_version` on the live file *before* declaring a migration
+path verified — validating against DB copies proves nothing about a live file
+that has already moved on.
+
 ## FTS5 in lockstep
 
 - The `memories` table is mirrored into an **FTS5** virtual table by sync

@@ -51,7 +51,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
   *resting signal* only. Nothing is auto-demoted or auto-deleted; only explicit
   `memory_forget` removes a memory.
 - **State claims:** `claims.py` extracts repo-qualified PR/MR references and the
-  state a memory asserts about them into `memory_claims` (migration 005).
+  state a memory asserts about them into `memory_claims` (migration 005;
+  migration 006 re-runs the backfill for DBs stranded at v5).
   The prose is immutable history — a memory that said "PR #10 open" was correct
   when written — so resolution is recorded in the claim row rather than by
   editing the text. This is the primitive whose absence produced 160 distinct
