@@ -2,7 +2,54 @@
 
 _Last updated: 2026-07-30_
 
+## In Flight
+
+- **Claim-extraction precision (v0.11.0, branch `fix/claim-extraction-precision`)** —
+  two defects that shipped in v0.10.0, both found by dogfooding and both
+  measured against the live 785-memory corpus before a line was written.
+
+  1. **Refs inside `[[wiki-links]]` were read as assertions.** A link to a
+     memory titled `PR #10 open: …` is a citation, not a claim. 11 wrong
+     claims, **8 of them in `devex-ai-gateway`** — a namespace whose default
+     repo was perfectly correct, so the existing namespace-containment
+     guarantee never covered this one. Worst case: a memory titled
+     `RESOLVED: internal gateway crashloop` asserting `#155 open`.
+     All 11 drops were hand-checked against their source text; none were
+     legitimate. When a claim's only state evidence sits inside a link, the
+     linked memory already holds that claim, correctly keyed.
+  2. **Every namespace was assumed to be a repo.** Bare refs in `crow` keyed to
+     `crow#N`, a repo that cannot exist — 20 claims, all inert (contradiction
+     detection is namespace-scoped, so they could only collide with each
+     other). Fixed with `namespaces.default_repo`: unset falls back to the
+     namespace name, a slug overrides, `""` means "not a repo".
+     The `path` column was evaluated and **rejected** as a discriminator: 13 of
+     17 namespaces have it NULL, including `gingugu` itself.
+
+  **Migration 007** adds the column, seeds `crow`/`default`, and re-derives all
+  claims. It goes through the new `claim_rederive.py` rather than
+  `claim_sync.sync_claims` **because the latter drops `resolved_*` by design** —
+  correct when prose changed, catastrophic here, where the prose is untouched
+  and discarding resolutions would destroy unrecoverable manual reconciliation.
+  **Rehearsed on a WAL-correct copy of the live brain**: 158 → 130 claims in
+  ~200ms, 786 memories intact, re-run prunes 0. The single resolution lost is
+  `crow#32`, a phantom row being deleted outright.
+  386 tests, ruff + black clean.
+
+  **Post-upgrade note:** namespaces that are not repos need declaring by hand —
+  `bspeagle` still carries 2 mis-keyed claims because migration 007 seeds only
+  gingugu's own conventions (`crow`, `default`), not user namespaces.
+
 ## Shipped / Working
+
+- **Reconciliation backlog cleared (2026-07-30)** — the 10 claims that
+  materialized when migration 006 ran against the live brain were resolved with
+  `memory_update(resolve_claims=…)`, prose byte-identical: `devex-ai-gateway`
+  #151/#166/#168, `gingugu` #11/#12(×2)/#13/#16/#20, `gingugu.com#1`. Open
+  claims 30 → 20, contradicted 12 → 2. Every PR was verified merged with `gh`
+  first — and three were nearly resolved against the **wrong repo**, since
+  `Versaterm-Public-Safety/VersatermTechPlatform` also has merged PRs
+  #151/#166/#168 for entirely different work. The namespace name is not the
+  repo slug; check the PR title matches the memory.
 
 - **Migration 006: claims-backfill repair (2026-07-30)** — the v0.10.0 backfill
   could never reach the dogfooding brain. Migration 005 originally only created
