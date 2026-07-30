@@ -599,7 +599,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_relate` | Create relationships between memories |
 | `memory_consolidate` | Merge/summarize/deduplicate; call without ids for a read-only near-dupe scan |
 | `memory_forget` | Deprecate or remove a memory |
-| `memory_namespaces` | List/create/update/delete namespaces |
+| `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo) |
 | `memory_export` | Export memories + tags + relations to portable JSON |
 | `memory_import` | Restore a JSON export (skip or replace on conflict) |
 | `memory_stats` | Health overview (dormancy, counts, coverage, review sweep, and the `claims` contradiction backlog — `review_limit` enumerates every flagged memory) |

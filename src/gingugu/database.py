@@ -21,6 +21,8 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
+from . import claim_rederive
+
 logger = logging.getLogger(__name__)
 
 # --- Migration 001: initial schema -----------------------------------------
@@ -303,6 +305,50 @@ def _migration_006_repair_claims_backfill(conn: sqlite3.Connection) -> None:
     _backfill_claims(conn)
 
 
+# --- Migration 007: claim-extraction precision ------------------------------
+
+# Namespaces gingugu itself defines as *not* repos, seeded so bare refs there
+# stop keying to a repo that cannot exist. ``default`` is the fallback
+# namespace; ``crow`` is the documented global identity namespace. A user who
+# genuinely has a repo by either name restores it with
+# ``memory_namespaces(action="update", name=..., default_repo=<name>)``.
+_NON_REPO_NAMESPACES = ("crow", "default")
+
+_SCHEMA_V7 = """
+ALTER TABLE namespaces ADD COLUMN default_repo TEXT;
+"""
+
+
+def _migration_007_claim_precision(conn: sqlite3.Connection) -> None:
+    """Add ``namespaces.default_repo`` and re-derive every claim.
+
+    Two extraction defects shipped in v0.10.0, both measured against a real
+    785-memory corpus before this was written:
+
+    1. Refs inside ``[[wiki-links]]`` were read as assertions — 11 wrong
+       claims, 8 of them in a namespace whose default repo was correct, so
+       namespace containment never covered this one.
+    2. Every namespace was assumed to be a repo, so bare refs in ``crow``
+       keyed to a nonexistent ``crow#N`` — 20 inert but meaningless claims.
+
+    Both fixes only *remove* claims (measured: 156 -> 128, zero gained), so the
+    re-derive prunes rather than backfills. It runs through
+    ``claim_rederive`` rather than ``claim_sync.sync_claims`` precisely because
+    the latter discards resolution state — correct when prose changed, wrong
+    here, where the prose is untouched and only the extractor improved.
+    Discarding it would destroy manual reconciliation work that cannot be
+    recovered.
+    """
+    conn.executescript(_SCHEMA_V7)
+    now = datetime.now(UTC).isoformat()
+    for name in _NON_REPO_NAMESPACES:
+        conn.execute(
+            "UPDATE namespaces SET default_repo = '', updated_at = ? WHERE name = ?",
+            (now, name),
+        )
+    claim_rederive.rederive_claims(conn)
+
+
 # (target_version, migration_callable) — applied in order when current < target.
 MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
     (1, _migration_001_initial_schema),
@@ -311,6 +357,7 @@ MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
     (4, _migration_004_embeddings),
     (5, _migration_005_claims),
     (6, _migration_006_repair_claims_backfill),
+    (7, _migration_007_claim_precision),
 ]
 
 

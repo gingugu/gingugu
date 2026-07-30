@@ -33,7 +33,7 @@ Gingugu instance serves Windsurf and Claude Code against one DB.
 | `memory_relate` | Build typed graph edges | ✅ Shipped |
 | `memory_consolidate` | merge / summarize / deduplicate + read-only near-dupe suggest scan | ✅ Shipped |
 | `memory_export` / `memory_import` | Back up / transfer a namespace | ✅ Shipped |
-| `memory_namespaces` | Namespace CRUD | ✅ Shipped |
+| `memory_namespaces` | Namespace CRUD + `default_repo` (what a bare "PR #12" means here; `""` = not a repo) | ✅ Shipped |
 | `credential_*` | OS-keychain secret vault | ✅ Shipped |
 | `suggested_relations` hint | Nudge edge creation at store time | ✅ Shipped (v0.3.8) |
 | Memory Explorer UI | Browse graph + dashboard | ✅ Shipped |

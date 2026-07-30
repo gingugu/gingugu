@@ -34,6 +34,18 @@ resolved word; "doc shipped PR #168" means the PR was *created*, while
 "PR #65 SHIPPED" means it merged. ``shipped`` is therefore excluded from the
 resolved vocabulary: a missed claim is silent and harmless, a wrong one
 teaches the reader to ignore claims entirely.
+
+**A citation is not an assertion.** ``[[PR #10 open: the promotion bridge]]``
+is a *link* to a memory named that, not this memory's claim about PR #10.
+Measured on a 785-memory corpus, 11 claims came from inside wiki-links and
+every one was wrong — 8 of them in a namespace whose default repo was
+perfectly correct, so namespace containment does not help here. The worst
+case had a memory titled "RESOLVED: internal gateway crashloop" asserting
+``#155 open``, purely because it linked to a memory whose title said so.
+Wiki-link spans are therefore blanked before extraction, the same instinct as
+``_is_quoted``. Nothing is lost by dropping them: when a claim's only state
+evidence sits inside a link, the *linked* memory already holds that claim,
+correctly keyed.
 """
 
 from __future__ import annotations
@@ -74,6 +86,10 @@ _OPEN = re.compile(
     r"held|in\s+review|needs\s+(?:review|merge)|still\s+open)\b",
     re.I,
 )
+
+# ``[[wiki-link]]`` spans — a pointer to another memory by title, not a claim.
+# Spans a newline (``re.S``) because titles wrap in stored prose.
+_WIKI = re.compile(r"\[\[.*?\]\]", re.S)
 
 # How far after a ref to look for a state word, and around it for quoting.
 _STATE_WINDOW = 90
@@ -117,6 +133,18 @@ _KNOWN_REPO_ALIASES: dict[str, str] = {
 }
 
 
+def _blank_wikilinks(text: str) -> str:
+    """Replace ``[[...]]`` spans with blanks, preserving length and newlines.
+
+    Length is preserved so every *other* ref keeps its offsets: the state
+    window and the line-start quote parity both index into this same string,
+    and shifting them would silently re-scope unrelated claims. Newlines
+    survive for the same reason — ``_is_quoted`` counts delimiter parity from
+    the start of the line, so collapsing one would move that boundary.
+    """
+    return _WIKI.sub(lambda m: "".join(c if c == "\n" else " " for c in m.group(0)), text)
+
+
 def _is_quoted(text: str, match: re.Match[str]) -> bool:
     """True when the ref sits inside quotes or backticks — cited, not claimed.
 
@@ -151,8 +179,10 @@ def extract_claims(
     ``namespace_default`` is the repo a bare ref most likely means in this
     memory's namespace. Pass None for cross-project namespaces so bare refs
     are dropped rather than mis-keyed.
+
+    Refs inside ``[[wiki-links]]`` are ignored — see the module docs.
     """
-    text = f"{title}\n{content}"
+    text = _blank_wikilinks(f"{title}\n{content}")
     best: dict[tuple[str, str], Claim] = {}
     for match in _REF.finditer(text):
         repo = _qualify(text, match, namespace_default)

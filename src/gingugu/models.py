@@ -65,6 +65,10 @@ class Namespace(BaseModel):
     name: str
     path: str | None = None
     description: str | None = None
+    # The repo a bare "PR #12" means here. None falls back to ``name`` (the
+    # one-namespace-per-repo convention); "" declares this namespace is not a
+    # repo at all, so bare refs are dropped instead of mis-keyed.
+    default_repo: str | None = None
     created_at: str
     updated_at: str
 

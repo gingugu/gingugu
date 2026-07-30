@@ -60,8 +60,9 @@
 | `decay.py` | Dormancy as a resting signal — never auto-forgets |
 | `stats.py` | Health stats (counts, confidence, dormancy, hygiene, review sweep) |
 | `staleness.py` | Advisory review hints for point-in-time memories |
-| `claims.py` | Extracts checkable state claims (repo-qualified PR/MR refs) from prose |
-| `claim_sync.py` | Claim persistence, contradiction lookup, stats, and the storage bridge |
+| `claims.py` | Extracts checkable state claims (repo-qualified PR/MR refs) from prose; ignores refs inside `[[wiki-links]]` |
+| `claim_sync.py` | Claim persistence, contradiction lookup, stats, and the storage bridge; resolves a namespace's default repo |
+| `claim_rederive.py` | Corpus-wide claim re-derivation that **preserves** resolution state (migration-side; `claim_sync.sync_claims` drops it by design) |
 | `namespaces.py` | Namespace CRUD |
 | `credentials.py` | OS-keychain credential vault |
 | `portability.py` | Export / import a namespace |
@@ -120,17 +121,25 @@ The loop needs no new tool: stats → `memory_search(ids=…)` → `resolve_clai
   memory ASSERTS and is never rewritten; resolution lives in `resolved_state` /
   `resolved_by` / `resolved_at` beside it, so a claim can go stale without the
   prose being edited. Derived from text, so re-synced on any title/content change.
-- Schema versioned via `PRAGMA user_version` (**currently 6**); migrations
+  Refs inside `[[wiki-links]]` are ignored — a citation is not an assertion.
+- `namespaces.default_repo` (migration 007): what a bare "PR #12" means in a
+  namespace. Unset falls back to the namespace's own name (the
+  one-namespace-per-repo convention, load-bearing: 145 claims vs 26 without it);
+  a slug overrides it; `""` declares the namespace is not a repo at all, so bare
+  refs are dropped rather than mis-keyed. `crow` and `default` are seeded `""`.
+- Schema versioned via `PRAGMA user_version` (**currently 7**); migrations
   additive by default. Migration 006 adds no schema — it re-runs the claims
   backfill to repair DBs that reached v5 from pre-fix code and so can never
-  run 005 again.
+  run 005 again. Migration 007 adds `default_repo` and re-derives every claim
+  under the corrected extractor, **preserving resolution state**.
 
 ---
 
 ## Release State
 
-- Current version: **0.10.0** (PyPI; state claims + write-time contradiction
-  detection, review-hint precision pass, `memory_update` gains `type` and
-  `resolve_claims`). Public repo `gingugu/gingugu`.
+- Current version: **0.10.1** (PyPI; migration 006 repairs DBs stranded at v5).
+  **0.11.0 in flight**: claim-extraction precision — wiki-link refs no longer
+  claim, `memory_namespaces` gains `default_repo`, migration 007.
+  Public repo `gingugu/gingugu`.
 - Two-layer namespace convention (`crow` + project) is live.
 - See `.ai/plans/status.md` for in-flight work and carry-overs.

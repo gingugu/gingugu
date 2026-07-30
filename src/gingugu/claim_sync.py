@@ -22,14 +22,32 @@ logger = logging.getLogger(__name__)
 
 
 def namespace_default_repo(conn: sqlite3.Connection, namespace_id: str) -> str | None:
-    """The repo a bare "PR #12" means in this namespace.
+    """The repo a bare "PR #12" means in this namespace, or None to drop it.
 
-    The one-namespace-per-repo convention makes that the namespace's own name.
-    Returns None when the namespace is missing so bare refs get dropped rather
-    than mis-keyed — see ``claims`` for why dropping beats guessing.
+    Three states, because the one-namespace-per-repo convention is a good
+    default and a bad law:
+
+    - ``default_repo`` unset (NULL) — fall back to the namespace's own name.
+      That default is load-bearing: measured over 764 memories it is the
+      difference between 145 claims and 26.
+    - ``default_repo`` empty — this namespace is *not* a repo. Bare refs are
+      dropped rather than keyed to a repo that does not exist. ``crow`` and
+      ``default`` are seeded this way by migration 007.
+    - ``default_repo`` set — use it. Lets a namespace whose name differs from
+      its repo slug key bare refs correctly.
+
+    Returns None when the namespace is missing, for the same reason: dropping
+    beats guessing. See ``claims`` for the full argument.
     """
-    row = conn.execute("SELECT name FROM namespaces WHERE id = ?", (namespace_id,)).fetchone()
-    return row["name"] if row else None
+    row = conn.execute(
+        "SELECT name, default_repo FROM namespaces WHERE id = ?", (namespace_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    declared = row["default_repo"]
+    if declared is None:
+        return row["name"]
+    return declared or None
 
 
 def sync(conn: sqlite3.Connection, mem: Memory, now: str) -> None:

@@ -52,16 +52,29 @@ AI client (Claude Code / Cursor / Windsurf / …)
   `memory_forget` removes a memory.
 - **State claims:** `claims.py` extracts repo-qualified PR/MR references and the
   state a memory asserts about them into `memory_claims` (migration 005;
-  migration 006 re-runs the backfill for DBs stranded at v5).
+  migration 006 re-runs the backfill for DBs stranded at v5; migration 007
+  re-derives everything under the corrected extractor).
   The prose is immutable history — a memory that said "PR #10 open" was correct
   when written — so resolution is recorded in the claim row rather than by
   editing the text. This is the primitive whose absence produced 160 distinct
   ad-hoc `=== STATUS ===` banner styles across the dogfooding corpus.
 
   Refs are qualified by URL, then a repo named beside them, then the
-  namespace's own name (the one-namespace-per-repo convention). Unqualifiable
-  refs are dropped rather than guessed, and contradiction detection is
-  namespace-scoped so a bare-ref mis-key cannot reach across namespaces.
+  namespace's `default_repo` — unset means the namespace's own name (the
+  one-namespace-per-repo convention), `""` means the namespace is not a repo
+  at all. Unqualifiable refs are dropped rather than guessed, and contradiction
+  detection is namespace-scoped so a bare-ref mis-key cannot reach across
+  namespaces.
+
+  Refs inside `[[wiki-links]]` are ignored: a link to a memory *titled*
+  "PR #10 open" is a citation, not this memory's assertion. Namespace scoping
+  does **not** contain this one — it produced wrong claims in namespaces whose
+  default repo was correct — which is why it is handled in the extractor.
+
+  `claim_rederive.py` re-derives the whole corpus when the *extractor* changes,
+  preserving `resolved_*`. That is the opposite of `claim_sync.sync_claims`,
+  which drops resolution because it runs when a memory's *prose* changed and a
+  stale resolution pointer would be worse than none.
 
 ## Retrieval
 

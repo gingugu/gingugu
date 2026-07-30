@@ -135,6 +135,14 @@ exactly-once); migration 004 backfills embeddings at *startup* instead because
 encoding needs a model download and must stay lazy. See
 `.ai/standards/02-database.md` for which strategy applies when.
 
+A migration that changes how derived data is **computed** must re-derive it,
+and must decide explicitly what happens to state a user added on top. Migration
+007 re-derives every claim through `claim_rederive.py`, which prunes claims the
+corrected extractor no longer produces while preserving `resolved_*` — because
+the prose did not change, only the extractor improved, and reconciliation work
+is manual and unrecoverable. Reusing `claim_sync.sync_claims` here would have
+silently reopened every claim the user had reconciled.
+
 Exactly-once cuts both ways: pending work is selected with `current < target`,
 so a migration can never re-run on a DB that already passed it, and a bug fixed
 in place reaches only DBs that have not got there yet. Repairing the rest needs
