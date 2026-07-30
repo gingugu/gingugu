@@ -126,6 +126,14 @@ class MemoryStore:
         """
         return claim_sync.contradicted(self._conn, mem)
 
+    def resolve_claims(
+        self, memory_id: str, refs: list[str], *, resolved_by: str | None = None
+    ) -> list[str]:
+        """Mark open claims resolved without touching the memory's prose."""
+        return claim_sync.resolve(
+            self._conn, memory_id=memory_id, refs=refs, resolved_by=resolved_by
+        )
+
     def get(self, memory_id: str, *, record_access: bool = True) -> Memory | None:
         row = self._conn.execute(
             f"SELECT {_COLUMNS} FROM memories WHERE id = ?", (memory_id,)

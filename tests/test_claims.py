@@ -12,6 +12,7 @@ import sqlite3
 
 import pytest
 
+from gingugu import claim_sync as cs
 from gingugu import claims as cm
 from gingugu.database import migrate
 from gingugu.models import utcnow_iso
@@ -149,14 +150,14 @@ def test_sync_claims_replaces_previous_rows(conn: sqlite3.Connection) -> None:
     _mem(conn, "m1", "ns1", "t", "PR #10 open")
     now = utcnow_iso()
     assert (
-        cm.sync_claims(
+        cs.sync_claims(
             conn, "m1", cm.extract_claims("t", "PR #10 open", namespace_default="gingugu"), now=now
         )
         == 1
     )
     # the text changed: the old claim must not linger
     assert (
-        cm.sync_claims(
+        cs.sync_claims(
             conn, "m1", cm.extract_claims("t", "PR #99 open", namespace_default="gingugu"), now=now
         )
         == 1
@@ -168,7 +169,7 @@ def test_sync_claims_replaces_previous_rows(conn: sqlite3.Connection) -> None:
 def test_find_contradicted_pairs_open_with_resolved(conn: sqlite3.Connection) -> None:
     _mem(conn, "old", "ns1", "PR #10 open: serve transport", "PR #10, open, NOT merged yet")
     now = utcnow_iso()
-    cm.sync_claims(
+    cs.sync_claims(
         conn,
         "old",
         cm.extract_claims(
@@ -179,7 +180,7 @@ def test_find_contradicted_pairs_open_with_resolved(conn: sqlite3.Connection) ->
         now=now,
     )
     incoming = cm.extract_claims("", "PR #10 merged to main", namespace_default="gingugu")
-    hits = cm.find_contradicted(conn, namespace_id="ns1", claims=incoming)
+    hits = cs.find_contradicted(conn, namespace_id="ns1", claims=incoming)
     assert [h["id"] for h in hits] == ["old"]
     assert hits[0]["ref"] == "gingugu#10"
 
@@ -187,26 +188,26 @@ def test_find_contradicted_pairs_open_with_resolved(conn: sqlite3.Connection) ->
 def test_contradiction_does_not_cross_namespaces(conn: sqlite3.Connection) -> None:
     """A bare-ref mis-key in one namespace must not reach into another."""
     _mem(conn, "old", "ns2", "PR #10 open", "PR #10, open")
-    cm.sync_claims(
+    cs.sync_claims(
         conn,
         "old",
         cm.extract_claims("PR #10 open", "PR #10, open", namespace_default="other"),
         now=utcnow_iso(),
     )
     incoming = cm.extract_claims("", "PR #10 merged", namespace_default="gingugu")
-    assert cm.find_contradicted(conn, namespace_id="ns1", claims=incoming) == []
+    assert cs.find_contradicted(conn, namespace_id="ns1", claims=incoming) == []
 
 
 def test_an_open_claim_alone_contradicts_nothing(conn: sqlite3.Connection) -> None:
     _mem(conn, "old", "ns1", "PR #10 open", "PR #10, open")
-    cm.sync_claims(
+    cs.sync_claims(
         conn,
         "old",
         cm.extract_claims("PR #10 open", "PR #10, open", namespace_default="gingugu"),
         now=utcnow_iso(),
     )
     incoming = cm.extract_claims("", "PR #10 still open", namespace_default="gingugu")
-    assert cm.find_contradicted(conn, namespace_id="ns1", claims=incoming) == []
+    assert cs.find_contradicted(conn, namespace_id="ns1", claims=incoming) == []
 
 
 def test_mark_resolved_never_touches_the_prose(conn: sqlite3.Connection) -> None:
@@ -214,12 +215,12 @@ def test_mark_resolved_never_touches_the_prose(conn: sqlite3.Connection) -> None
     true when written. Resolution is recorded beside it, not by rewriting it."""
     prose = "PR #10, open, NOT merged yet"
     _mem(conn, "old", "ns1", "t", prose)
-    cm.sync_claims(
+    cs.sync_claims(
         conn, "old", cm.extract_claims("t", prose, namespace_default="gingugu"), now=utcnow_iso()
     )
     _mem(conn, "new", "ns1", "t2", "PR #10 merged")
 
-    assert cm.mark_resolved(
+    assert cs.mark_resolved(
         conn, memory_id="old", ref="gingugu#10", resolved_by="new", now=utcnow_iso()
     )
     row = conn.execute("SELECT content FROM memories WHERE id='old'").fetchone()
@@ -232,12 +233,12 @@ def test_mark_resolved_never_touches_the_prose(conn: sqlite3.Connection) -> None
 
     # and it stops being reported as contradicted
     incoming = cm.extract_claims("", "PR #10 merged", namespace_default="gingugu")
-    assert cm.find_contradicted(conn, namespace_id="ns1", claims=incoming) == []
+    assert cs.find_contradicted(conn, namespace_id="ns1", claims=incoming) == []
 
 
 def test_claims_are_deleted_with_their_memory(conn: sqlite3.Connection) -> None:
     _mem(conn, "m1", "ns1", "t", "PR #10 open")
-    cm.sync_claims(
+    cs.sync_claims(
         conn,
         "m1",
         cm.extract_claims("t", "PR #10 open", namespace_default="gingugu"),
@@ -416,3 +417,88 @@ async def test_no_contradiction_key_when_nothing_is_stale(server) -> None:
         )
     )
     assert "contradicted_memories" not in plain
+
+
+# --- the reconciliation loop, via existing tools only -----------------------
+
+
+@pytest.mark.asyncio
+async def test_stats_reports_the_contradiction_backlog(server) -> None:
+    await server.call_tool(
+        "memory_store",
+        {"title": "PR #10 open", "content": "PR #10, open, NOT merged yet", "type": "decision"},
+    )
+    stats = _payload(await server.call_tool("memory_stats", {}))
+    assert stats["stats"]["claims"]["contradicted"] == 0  # nothing disagrees yet
+
+    await server.call_tool(
+        "memory_store", {"title": "released", "content": "PR #10 merged", "type": "workflow"}
+    )
+    claims = _payload(await server.call_tool("memory_stats", {}))["stats"]["claims"]
+    assert claims["contradicted"] == 1
+    assert claims["sample"][0]["ref"] == "gingugu#10"
+    assert claims["open"] >= 1 and claims["resolved"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_reconcile_without_editing_prose(server) -> None:
+    """The whole point. A dated record that said "PR #10 open" was CORRECT on
+    the day it was written. Rewriting it to stay current destroys the record,
+    so resolution is recorded beside it and the body stays byte-identical."""
+    prose = "Session Jun 15: PR #10, open, NOT merged yet. Waiting on Joe."
+    stale = _payload(
+        await server.call_tool(
+            "memory_store", {"title": "session log", "content": prose, "type": "workflow"}
+        )
+    )
+    mid = stale["memory"]["id"]
+    await server.call_tool(
+        "memory_store", {"title": "released", "content": "PR #10 merged", "type": "workflow"}
+    )
+    assert (
+        _payload(await server.call_tool("memory_stats", {}))["stats"]["claims"]["contradicted"] == 1
+    )
+
+    resolved = _payload(
+        await server.call_tool("memory_update", {"memory_id": mid, "resolve_claims": "gingugu#10"})
+    )
+    assert resolved["resolved_claims"] == ["gingugu#10"]
+    assert resolved["memory"]["content"] == prose  # byte-identical
+
+    after = _payload(await server.call_tool("memory_stats", {}))["stats"]["claims"]
+    assert after["contradicted"] == 0
+
+
+@pytest.mark.asyncio
+async def test_resolve_claims_all(server) -> None:
+    stale = _payload(
+        await server.call_tool(
+            "memory_store",
+            {
+                "title": "resume",
+                "content": "PR #10 open. PR #20 awaiting review. PR #30 not yet merged.",
+                "type": "workflow",
+            },
+        )
+    )
+    out = _payload(
+        await server.call_tool(
+            "memory_update", {"memory_id": stale["memory"]["id"], "resolve_claims": "all"}
+        )
+    )
+    assert sorted(out["resolved_claims"]) == ["gingugu#10", "gingugu#20", "gingugu#30"]
+
+
+@pytest.mark.asyncio
+async def test_resolving_an_unknown_ref_reports_nothing_changed(server) -> None:
+    stored = _payload(
+        await server.call_tool(
+            "memory_store", {"title": "t", "content": "PR #10 open", "type": "workflow"}
+        )
+    )
+    out = _payload(
+        await server.call_tool(
+            "memory_update", {"memory_id": stored["memory"]["id"], "resolve_claims": "gingugu#999"}
+        )
+    )
+    assert out["resolved_claims"] == []
