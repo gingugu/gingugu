@@ -4,7 +4,7 @@ _Last updated: 2026-07-29_
 
 ## Shipped / Working
 
-- **State claims + write-time contradiction detection (2026-07-29, unreleased)** —
+- **State claims + write-time contradiction detection (v0.10.0, 2026-07-30)** —
   the structural answer to memories going stale. A memory that said "PR #10 open"
   was correct when written, so its prose is history; claims are extracted into
   `memory_claims` (schema v5) and resolution is recorded beside them instead.
@@ -27,7 +27,7 @@ _Last updated: 2026-07-29_
   to sit in the resolved vocabulary, and a best-effort `try/except` that
   swallowed a total extraction outage into a log warning after a refactor.
 
-- **Review-hint precision pass (2026-07-29, unreleased)** — the detector fired
+- **Review-hint precision pass (v0.10.0, 2026-07-30)** — the detector fired
   on prose that merely contained the trigger words. Measured against the live
   751-memory corpus: precision 0.65 → 0.79. `waiting-on` now requires a named
   agent; no signal fires inside quotes or backticks; date signals defer to a
