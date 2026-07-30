@@ -128,6 +128,13 @@ database.py on startup:
 A schema change to `memories` MUST update the FTS5 triggers in the same change,
 or full-text search silently drifts out of sync.
 
+A migration that adds **derived** data must also populate it, or the feature
+ships inert for everyone who already has memories. Migration 005 backfills
+claims inline (pure regex, ~210ms for 735 memories, and `user_version` makes it
+exactly-once); migration 004 backfills embeddings at *startup* instead because
+encoding needs a model download and must stay lazy. See
+`.ai/standards/02-database.md` for which strategy applies when.
+
 ## Credentials
 
 ```

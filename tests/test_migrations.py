@@ -18,6 +18,18 @@ from gingugu.database import (
 from gingugu.models import utcnow_iso
 
 
+def _apply_through(conn: sqlite3.Connection, version: int) -> None:
+    """Bring a bare connection up to `version` without running later migrations."""
+    from gingugu.database import MIGRATIONS
+
+    for target, fn in MIGRATIONS:
+        if target > version:
+            break
+        fn(conn)
+        conn.execute(f"PRAGMA user_version = {target}")
+    conn.commit()
+
+
 def _open_v2(path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
@@ -85,3 +97,84 @@ def test_migrate_is_idempotent_when_current(tmp_path: Path) -> None:
     # Running again is a no-op (no error, stays at v4).
     assert migrate(conn) == 5
     conn.close()
+
+
+def test_v5_backfills_claims_for_existing_memories() -> None:
+    """Migration 005 must POPULATE, not just create the table.
+
+    Claims are otherwise written only on store/update, so every existing user
+    would upgrade into an empty table and the feature would do nothing until
+    they happened to edit a memory. Migration 004 solves the same shape with a
+    startup backfill; claim extraction is pure regex (~210ms for 735 memories)
+    so it belongs in the migration, where user_version guarantees exactly one run.
+    """
+    conn = sqlite3.connect(":memory:")  # deliberately NO row_factory
+    _apply_through(conn, 4)
+    conn.execute(
+        "INSERT INTO namespaces(id, name, created_at, updated_at) VALUES (?,?,?,?)",
+        ("ns1", "gingugu", "2026-01-01", "2026-01-01"),
+    )
+    for mid, title, content in (
+        ("m1", "PR #10 open", "PR #10, open, NOT merged yet"),
+        ("m2", "released", "PR #10 merged to main"),
+        ("m3", "no refs", "just some prose about tuning"),
+    ):
+        conn.execute(
+            "INSERT INTO memories(id, namespace_id, type, title, content, confidence, "
+            "created_at, updated_at, last_accessed, access_count) VALUES (?,?,?,?,?,?,?,?,?,0)",
+            (
+                mid,
+                "ns1",
+                "workflow",
+                title,
+                content,
+                "verified",
+                "2026-01-01",
+                "2026-01-01",
+                "2026-01-01",
+            ),
+        )
+
+    assert migrate(conn) == 5
+
+    rows = conn.execute(
+        "SELECT memory_id, ref, state FROM memory_claims ORDER BY memory_id"
+    ).fetchall()
+    assert [(r[0], r[1], r[2]) for r in rows] == [
+        ("m1", "gingugu#10", "open"),
+        ("m2", "gingugu#10", "resolved"),
+    ]  # m3 has no refs, so no rows - and that is not the same as "unprocessed"
+
+
+def test_v5_backfill_runs_exactly_once() -> None:
+    conn = sqlite3.connect(":memory:")
+    _apply_through(conn, 4)
+    conn.execute(
+        "INSERT INTO namespaces(id, name, created_at, updated_at) VALUES (?,?,?,?)",
+        ("ns1", "gingugu", "2026-01-01", "2026-01-01"),
+    )
+    conn.execute(
+        "INSERT INTO memories(id, namespace_id, type, title, content, confidence, "
+        "created_at, updated_at, last_accessed, access_count) VALUES (?,?,?,?,?,?,?,?,?,0)",
+        (
+            "m1",
+            "ns1",
+            "workflow",
+            "t",
+            "PR #10 open",
+            "verified",
+            "2026-01-01",
+            "2026-01-01",
+            "2026-01-01",
+        ),
+    )
+    migrate(conn)
+    before = conn.execute("SELECT COUNT(*) FROM memory_claims").fetchone()[0]
+    migrate(conn)  # user_version is already 5 - must not duplicate
+    assert conn.execute("SELECT COUNT(*) FROM memory_claims").fetchone()[0] == before == 1
+
+
+def test_v5_on_a_fresh_database_is_a_no_op() -> None:
+    conn = sqlite3.connect(":memory:")
+    assert migrate(conn) == 5
+    assert conn.execute("SELECT COUNT(*) FROM memory_claims").fetchone()[0] == 0

@@ -19,6 +19,24 @@ The SQLite database is the product's durable state. Treat it with care.
   `database.py` on startup, in order.
 - **Additive by default.** Destructive migrations (dropping/renaming columns,
   deleting rows) require explicit user approval.
+- **A migration that adds derived data MUST populate it.** If the new table or
+  column is derived from data that already exists, creating it empty ships a
+  feature that does nothing until the user happens to rewrite every row. State
+  the backfill strategy in the PR body — "none needed" is a valid answer, but
+  it has to be a stated one.
+
+  Two valid strategies, and the choice is about **cost**, not preference:
+
+  | | Where | When to use |
+  |---|---|---|
+  | In the migration | `_migration_00N()` | Cheap, pure, no I/O. `user_version` guarantees exactly one run. Example: claims (regex over existing text, ~210ms for 735 memories). |
+  | At startup | `server.py` after `MemoryStore` | Expensive or failure-prone — needs batching, network, or a model. Example: embeddings (~80MB model download, so it must stay lazy). |
+
+  A startup backfill needs a reliable "already processed" marker. "Row has no
+  child records" is **not** one when a row can legitimately produce zero — most
+  memories contain no PR reference, so a claims backfill keyed that way would
+  rescan the whole corpus on every boot forever. Embeddings can use it only
+  because every memory should have exactly one.
 
 ## FTS5 in lockstep
 

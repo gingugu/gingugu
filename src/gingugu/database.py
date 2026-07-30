@@ -16,7 +16,9 @@ from __future__ import annotations
 import logging
 import shutil
 import sqlite3
+import uuid
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -222,6 +224,59 @@ CREATE INDEX idx_claims_open ON memory_claims(kind, ref, state)
 
 def _migration_005_claims(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA_V5)
+    _backfill_claims(conn)
+
+
+def _backfill_claims(conn: sqlite3.Connection) -> int:
+    """Derive claims for memories that already exist. Returns rows written.
+
+    Claims are only written on store/update, so without this the table would
+    stay empty for every existing user and the feature would do nothing until
+    they happened to edit a memory. Migration 004 (embeddings) has the same
+    shape and solves it with a *startup* backfill instead — correctly, because
+    encoding needs an ~80MB model download and must stay lazy and batched.
+
+    Claim extraction is pure regex over text already in the row (measured:
+    ~210ms for 735 memories, no I/O), so it belongs in the migration, where
+    ``PRAGMA user_version`` guarantees it runs exactly once. A startup pass
+    would be wrong here for a subtler reason: most memories legitimately have
+    *zero* claims, so "has no claim rows" cannot distinguish never-processed
+    from processed-and-empty, and every boot would rescan the whole corpus.
+
+    Positional row access throughout — callers may hand us a connection with
+    no ``row_factory`` set.
+    """
+    from . import claims as claims_mod  # stdlib-only module; no import cycle
+
+    rows = conn.execute(
+        "SELECT m.id, m.title, m.content, n.name FROM memories m "
+        "JOIN namespaces n ON n.id = m.namespace_id "
+        "WHERE m.confidence != 'deprecated'"
+    ).fetchall()
+    now = datetime.now(UTC).isoformat()
+    written = 0
+    for memory_id, title, content, namespace in rows:
+        for claim in claims_mod.extract_claims(
+            title or "", content or "", namespace_default=namespace
+        ):
+            conn.execute(
+                "INSERT OR IGNORE INTO memory_claims "
+                "(id, memory_id, kind, ref, state, evidence, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    str(uuid.uuid4()),
+                    memory_id,
+                    claim.kind,
+                    claim.ref,
+                    claim.state,
+                    claim.evidence,
+                    now,
+                ),
+            )
+            written += 1
+    if written:
+        logger.info("Backfilled %d state claims across %d memories", written, len(rows))
+    return written
 
 
 # (target_version, migration_callable) — applied in order when current < target.

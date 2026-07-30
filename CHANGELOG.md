@@ -32,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     than guessed, and contradiction detection is namespace-scoped.
   - No new MCP tool: the loop is `memory_stats` → `memory_search(ids=…)` →
     `memory_update(resolve_claims=…)`, reusing the existing sweep.
+  - **Upgrading populates claims for memories you already have.** Migration 005
+    backfills from existing text (~210ms for 735 memories) rather than creating
+    an empty table, so the feature works on first restart instead of waiting
+    until you happen to edit each memory.
 
 - **`memory_update` accepts `type`.** A misfiled memory can now be retyped
   through the MCP surface. Previously the only fields exposed were title,
