@@ -109,7 +109,15 @@ def main() -> None:
         parser = argparse.ArgumentParser()
         parser.add_argument("--check-memory-saves", action="store_true")
         parser.add_argument("--min-tool-calls", type=int, default=DEFAULT_MIN_TOOL_CALLS)
-        args = parser.parse_args()
+        # parse_known_args, NOT parse_args: this hook does not own the command
+        # line it is invoked with. A repo's settings.json is routinely written
+        # by other tooling that appends its own flags to the Stop hook, and an
+        # unrecognized flag makes argparse call sys.exit(2). That raises
+        # SystemExit, which is a BaseException — so the `except Exception`
+        # wrapping this function CANNOT catch it, and Claude Code reads the
+        # non-zero exit as a blocked stop. Ignoring flags we do not own turns a
+        # broken session into a no-op.
+        args, _unknown = parser.parse_known_args()
 
         input_data = json.load(sys.stdin)
 

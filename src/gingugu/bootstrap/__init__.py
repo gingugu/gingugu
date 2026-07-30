@@ -68,17 +68,43 @@ def _ensure_gitignore(target: Path, *, dry_run: bool, results: list[str]) -> Non
     results.append(f"  {verb} {path}  (+{len(missing)} ignore rule(s))")
 
 
+# Every hook template we ship carries this line. Its absence in a file we are
+# about to overwrite means the file belongs to somebody else's tooling.
+_TEMPLATE_SIGNATURE = "gingugu"
+
+
 def _write_file(
     path: Path, content: str, *, force: bool, dry_run: bool, results: list[str]
 ) -> None:
     if path.exists() and not force:
         results.append(f"  skip   {path}  (exists; use --force to overwrite)")
         return
+    foreign = (
+        path.exists()
+        and _TEMPLATE_SIGNATURE in content
+        and _TEMPLATE_SIGNATURE not in _safe_read(path)
+    )
+    if foreign and not dry_run:
+        (path.parent / f"{path.name}.bak").write_text(_safe_read(path))
     verb = "would write" if dry_run else ("overwrite" if path.exists() else "write")
     if not dry_run:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content)
     results.append(f"  {verb:<9} {path}")
+    if foreign:
+        results.append(
+            f"  WARNING: {path.name} did not look like a gingugu hook — it was "
+            f"written by other tooling. Backed up to {path.name}.bak. If your "
+            f"settings.json invokes it with flags gingugu's script does not "
+            f"accept, that command needs updating too."
+        )
+
+
+def _safe_read(path: Path) -> str:
+    try:
+        return path.read_text()
+    except OSError:
+        return ""
 
 
 def init_claude_code(target: Path, *, force: bool, dry_run: bool) -> list[str]:
@@ -110,7 +136,7 @@ def init_claude_code(target: Path, *, force: bool, dry_run: bool) -> list[str]:
 
     settings_path = target / ".claude" / "settings.json"
     raw = settings_path.read_text() if settings_path.exists() else None
-    settings, added = merge_settings(load_settings(settings_path))
+    settings, added, warnings = merge_settings(load_settings(settings_path))
     if added:
         if not dry_run:
             if raw is not None:
@@ -119,8 +145,12 @@ def init_claude_code(target: Path, *, force: bool, dry_run: bool) -> list[str]:
         note = " (backed up existing to settings.json.bak)" if raw is not None else ""
         verb = "would wire" if dry_run else "wired"
         results.append(f"  {verb} {', '.join(added)} in {settings_path}{note}")
-    else:
+    elif not warnings:
         results.append(f"  settings.json already wired (no change) {settings_path}")
+    else:
+        results.append(f"  settings.json left unchanged {settings_path}")
+    for warning in warnings:
+        results.append(f"  WARNING: {warning}")
 
     _ensure_gitignore(target, dry_run=dry_run, results=results)
 

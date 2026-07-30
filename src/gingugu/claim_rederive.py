@@ -35,19 +35,31 @@ def _default_repo(name: str, declared: str | None) -> str | None:
     return declared or None
 
 
-def rederive_claims(conn: sqlite3.Connection) -> tuple[int, int]:
-    """Re-derive every memory's claims. Returns ``(pruned, written)``.
+def rederive_claims(
+    conn: sqlite3.Connection, *, namespace_id: str | None = None
+) -> tuple[int, int]:
+    """Re-derive memories' claims. Returns ``(pruned, written)``.
 
     Idempotent: running it twice prunes nothing the second time and rewrites
     the same rows. Safe to call from any migration that changes extraction.
+
+    ``namespace_id`` scopes the sweep to one namespace. That is what makes a
+    ``default_repo`` change take effect: claims are stored rows and the default
+    is only consulted at extraction time, so without a re-derive the
+    declaration changes nothing that already exists.
     """
     from . import claims as claims_mod  # stdlib-only module; no import cycle
 
-    rows = conn.execute(
+    sql = (
         "SELECT m.id, m.title, m.content, n.name, n.default_repo FROM memories m "
         "JOIN namespaces n ON n.id = m.namespace_id "
         "WHERE m.confidence != 'deprecated'"
-    ).fetchall()
+    )
+    params: tuple = ()
+    if namespace_id is not None:
+        sql += " AND m.namespace_id = ?"
+        params = (namespace_id,)
+    rows = conn.execute(sql, params).fetchall()
     now = datetime.now(UTC).isoformat()
     pruned = written = 0
 

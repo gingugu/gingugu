@@ -20,15 +20,45 @@ _HOOKS = [
 ]
 
 
-def _has_command(groups: list, marker: str) -> bool:
-    """True if any hook group already wires a command containing ``marker``."""
+# Flags our own hook scripts accept. A command wired to one of our script
+# names but carrying anything else was written for a DIFFERENT script.
+_KNOWN_FLAGS = {
+    "session_start.py": set(),
+    "stop.py": {"--check-memory-saves", "--min-tool-calls"},
+}
+
+
+def _matching_commands(groups: list, marker: str) -> list[str]:
+    """Every wired command containing ``marker``."""
+    found: list[str] = []
     for group in groups:
         if not isinstance(group, dict):
             continue
         for hook in group.get("hooks", []):
             if isinstance(hook, dict) and marker in str(hook.get("command", "")):
-                return True
-    return False
+                found.append(str(hook.get("command", "")))
+    return found
+
+
+def _has_command(groups: list, marker: str) -> bool:
+    """True if any hook group already wires a command containing ``marker``."""
+    return bool(_matching_commands(groups, marker))
+
+
+def foreign_flags(command: str, marker: str) -> list[str]:
+    """Flags in ``command`` that our ``marker`` script does not accept.
+
+    Matching on a bare filename is not enough to call a hook "already wired".
+    A repo bootstrapped by other tooling may point at a same-named script with
+    its own flags; installing ours over it produces a command whose flags the
+    new script has never heard of. Reporting that beats claiming success.
+    """
+    known = _KNOWN_FLAGS.get(marker, set())
+    return [
+        token
+        for token in command.split()
+        if token.startswith("--") and token.split("=")[0] not in known
+    ]
 
 
 def _hook_group(command: str, timeout: int) -> dict:
@@ -38,22 +68,38 @@ def _hook_group(command: str, timeout: int) -> dict:
     }
 
 
-def merge_settings(settings: dict) -> tuple[dict, list[str]]:
-    """Return (updated settings, list of events that were added).
+def merge_settings(settings: dict) -> tuple[dict, list[str], list[str]]:
+    """Return (updated settings, events added, warnings about existing wiring).
 
     Mutates a copy-friendly nested structure; caller owns persistence.
+
+    A warning is emitted when an event is skipped because a command already
+    mentions our script name, but that command carries flags our script does
+    not accept. That is the case where "already wired" is actively misleading:
+    the wiring belongs to some other tool's script of the same name.
     """
     added: list[str] = []
+    warnings: list[str] = []
     hooks = settings.setdefault("hooks", {})
     for event, command, timeout, marker in _HOOKS:
         groups = hooks.setdefault(event, [])
         if not isinstance(groups, list):
             continue  # respect an unexpected shape rather than clobber it
-        if _has_command(groups, marker):
+        existing = _matching_commands(groups, marker)
+        if existing:
+            for wired in existing:
+                unknown = foreign_flags(wired, marker)
+                if unknown:
+                    warnings.append(
+                        f"{event}: existing command carries flag(s) "
+                        f"{' '.join(unknown)} that gingugu's {marker} does not "
+                        f"accept — it was written for a different script. "
+                        f"Left as-is; reconcile it by hand."
+                    )
             continue
         groups.append(_hook_group(command, timeout))
         added.append(event)
-    return settings, added
+    return settings, added, warnings
 
 
 def load_settings(path: Path) -> dict:

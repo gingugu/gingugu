@@ -248,7 +248,12 @@ def main():
             default=DEFAULT_MIN_TOOL_CALLS,
             help="Tool-call threshold below which the save check stays quiet",
         )
-        args = parser.parse_args()
+        # parse_known_args, NOT parse_args: this hook does not own its command
+        # line. Other tooling appends flags to the Stop hook in settings.json,
+        # and an unrecognized one makes argparse sys.exit(2) — a SystemExit,
+        # which the `except Exception` below cannot catch, so Claude Code sees
+        # a non-zero exit and treats the stop as blocked.
+        args, _unknown = parser.parse_known_args()
 
         input_data = json.load(sys.stdin)
 

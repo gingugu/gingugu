@@ -62,8 +62,8 @@
 | `staleness.py` | Advisory review hints for point-in-time memories |
 | `claims.py` | Extracts checkable state claims (repo-qualified PR/MR refs) from prose; ignores refs inside `[[wiki-links]]` |
 | `claim_sync.py` | Claim persistence, contradiction lookup, stats, and the storage bridge; resolves a namespace's default repo |
-| `claim_rederive.py` | Corpus-wide claim re-derivation that **preserves** resolution state (migration-side; `claim_sync.sync_claims` drops it by design) |
-| `namespaces.py` | Namespace CRUD |
+| `claim_rederive.py` | Claim re-derivation that **preserves** resolution state, whole-corpus or scoped to one `namespace_id` (`claim_sync.sync_claims` drops resolution by design) |
+| `namespaces.py` | Namespace CRUD; a `default_repo` change re-derives that namespace's claims (best-effort) so the declaration is not inert |
 | `credentials.py` | OS-keychain credential vault |
 | `portability.py` | Export / import a namespace |
 | `handlers/` | MCP tool handlers: `memory.py` (store/update/forget), `recall.py` (recall/context), `search.py`, `relations.py`, `admin.py`, `credentials.py`, `helpers.py` |
@@ -137,9 +137,11 @@ The loop needs no new tool: stats → `memory_search(ids=…)` → `resolve_clai
 
 ## Release State
 
-- Current version: **0.10.1** (PyPI; migration 006 repairs DBs stranded at v5).
-  **0.11.0 in flight**: claim-extraction precision — wiki-link refs no longer
-  claim, `memory_namespaces` gains `default_repo`, migration 007.
+- Current version: **0.11.0** (PyPI; claim-extraction precision — wiki-link
+  refs no longer claim, `memory_namespaces` gained `default_repo`, schema v7).
+  **0.11.1 in flight**: `Stop`-hook arg robustness (`parse_known_args`), `init`
+  honesty about foreign wiring, and `default_repo` actually re-deriving claims
+  — it shipped inert in 0.11.0.
   Public repo `gingugu/gingugu`.
 - Two-layer namespace convention (`crow` + project) is live.
 - See `.ai/plans/status.md` for in-flight work and carry-overs.

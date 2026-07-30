@@ -11,6 +11,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.11.1] - 2026-07-30
+
+### Fixed
+
+- **The `Stop` hook no longer crashes on flags it doesn't own.** It called
+  `parse_args()`, so any unrecognized flag made argparse `sys.exit(2)`. That
+  raises `SystemExit`, a `BaseException` — the script's own `except Exception`
+  could not catch it — and Claude Code reads the non-zero exit as a blocked
+  stop. A repo whose `settings.json` was written by other tooling (which
+  routinely appends its own flags to the `Stop` hook) had every session break.
+
+  Now `parse_known_args()`. Flags we don't own are ignored, which makes the
+  failure *impossible* rather than merely detected, and un-breaks affected
+  repos with no `settings.json` edits at all.
+
+- **`gingugu init` no longer reports incompatible wiring as "already wired".**
+  It detected an existing `Stop` hook by looking for the bare filename
+  `stop.py`, so a command pointing at a *different* tool's same-named script
+  counted as correctly configured. It now inspects the flags in that command
+  and warns when they are ones our script does not accept, instead of claiming
+  success.
+
+- **`gingugu init --force` no longer silently clobbers a hook it didn't
+  write.** A `stop.py` with no gingugu signature is backed up to `stop.py.bak`
+  and the overwrite is reported with a warning pointing at the `settings.json`
+  command that may also need updating.
+
+- **`default_repo` now actually takes effect.** Setting it changed the column
+  and nothing else: claims are stored rows and the default repo is only read
+  at extraction time, so every already-derived ref kept its old key. There was
+  no supported way to apply the declaration — no MCP tool exposes a re-derive,
+  and `storage.update` only re-syncs claims when the prose actually changed,
+  so the only remaining route was editing memory text, which is precisely the
+  dodge the claims design exists to make unnecessary.
+
+  `memory_namespaces(action="update", …, default_repo=…)` now re-derives that
+  namespace's claims when the value changes, preserving resolution state.
+  Shipped inert in 0.11.0; the upgrade note in that release did not work.
+
+---
+
 ## [0.11.0] - 2026-07-30
 
 ### Fixed
