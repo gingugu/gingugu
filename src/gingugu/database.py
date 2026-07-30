@@ -183,12 +183,54 @@ def _migration_004_embeddings(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA_V4)
 
 
+# --- Migration 005: extracted state claims ----------------------------------
+#
+# A memory that says "PR #10 is open" is making a CLAIM. That claim was true
+# when written and goes silently wrong the moment the PR merges — but the
+# prose is honest history and must never be edited to track it. So the claim
+# lives here as data instead, keyed to something checkable.
+#
+# ``ref`` is repo-qualified ("gingugu#10"), because "PR #12" is not a global
+# key — gingugu#12 and VersatermTechPlatform#12 are different objects. A ref
+# that cannot be qualified is NOT recorded: dropping beats guessing.
+#
+# ``state`` is what the memory ASSERTS, and is never rewritten. Resolution is
+# recorded separately in ``resolved_*``, so the pair reads as "this memory
+# claims X; we later learned Y" without touching a single character of prose.
+
+_SCHEMA_V5 = """
+CREATE TABLE memory_claims (
+    id             TEXT PRIMARY KEY,
+    memory_id      TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    kind           TEXT NOT NULL,
+    ref            TEXT NOT NULL,
+    state          TEXT NOT NULL,
+    evidence       TEXT,
+    resolved_state TEXT,
+    resolved_by    TEXT REFERENCES memories(id) ON DELETE SET NULL,
+    resolved_at    TEXT,
+    created_at     TEXT NOT NULL,
+    UNIQUE (memory_id, kind, ref)
+);
+
+CREATE INDEX idx_claims_ref ON memory_claims(kind, ref);
+CREATE INDEX idx_claims_memory ON memory_claims(memory_id);
+CREATE INDEX idx_claims_open ON memory_claims(kind, ref, state)
+    WHERE resolved_at IS NULL;
+"""
+
+
+def _migration_005_claims(conn: sqlite3.Connection) -> None:
+    conn.executescript(_SCHEMA_V5)
+
+
 # (target_version, migration_callable) — applied in order when current < target.
 MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
     (1, _migration_001_initial_schema),
     (2, _migration_002_credential_vault),
     (3, _migration_003_tags_relations),
     (4, _migration_004_embeddings),
+    (5, _migration_005_claims),
 ]
 
 

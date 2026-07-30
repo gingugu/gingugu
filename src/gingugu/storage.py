@@ -7,6 +7,7 @@ import logging
 import sqlite3
 import uuid
 
+from . import claims as claims_mod
 from . import embeddings as emb
 from .embeddings import EmbeddingProvider, NullEmbeddingProvider
 from .models import Confidence, Memory, MemoryType, normalize_tag, utcnow_iso
@@ -111,11 +112,37 @@ class MemoryStore:
         )
         if tags:
             self.set_tags(mem.id, tags, commit=False)
+        self._sync_claims(mem, now)
         self._conn.commit()
         mem.tags = self.get_tags(mem.id)
         self._persist_embedding(mem.id, mem.title, mem.content)
         logger.info("Stored memory %s (%s)", mem.id, mem.title)
         return mem
+
+    def _namespace_default_repo(self, namespace_id: str) -> str | None:
+        """The repo a bare "PR #12" means in this namespace.
+
+        The one-namespace-per-repo convention makes that the namespace's own
+        name. Returns None if the namespace is missing, so bare refs are
+        dropped rather than mis-keyed.
+        """
+        row = self._conn.execute(
+            "SELECT name FROM namespaces WHERE id = ?", (namespace_id,)
+        ).fetchone()
+        return row["name"] if row else None
+
+    def _sync_claims(self, mem: Memory, now: str) -> None:
+        """Re-derive this memory's state claims from its text. Best-effort:
+        a claim-extraction failure must never break a store or an update."""
+        try:
+            extracted = claims_mod.extract_claims(
+                mem.title,
+                mem.content,
+                namespace_default=self._namespace_default_repo(mem.namespace_id),
+            )
+            claims_mod.sync_claims(self._conn, mem.id, extracted, now=now)
+        except Exception:  # noqa: BLE001 - never fail a write over a hint
+            logger.warning("claim extraction failed for %s", mem.id, exc_info=True)
 
     def get(self, memory_id: str, *, record_access: bool = True) -> Memory | None:
         row = self._conn.execute(
@@ -172,12 +199,18 @@ class MemoryStore:
                 memory_id,
             ),
         )
+        # Claims are derived from the text, so they only need re-deriving when
+        # the text moved. Done before the commit so both land atomically.
+        text_changed = (title is not None and title != existing.title) or (
+            content is not None and content != existing.content
+        )
+        if text_changed:
+            existing.title, existing.content = new_title, new_content
+            self._sync_claims(existing, now)
         self._conn.commit()
         # Re-encode only when the text the embedding was derived from actually
         # changed — confidence/metadata updates don't invalidate the vector.
-        if (title is not None and title != existing.title) or (
-            content is not None and content != existing.content
-        ):
+        if text_changed:
             self._persist_embedding(memory_id, new_title, new_content)
         return self.get(memory_id, record_access=False)
 
