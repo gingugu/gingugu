@@ -279,6 +279,30 @@ def _backfill_claims(conn: sqlite3.Connection) -> int:
     return written
 
 
+# --- Migration 006: repair DBs stamped v5 before 005 learned to backfill -----
+
+
+def _migration_006_repair_claims_backfill(conn: sqlite3.Connection) -> None:
+    """Re-run the claim backfill for DBs that reached v5 without one.
+
+    Migration 005 originally only created the table; the backfill was added a
+    few commits later. ``migrate()`` selects pending work with ``current < t``,
+    so any DB already stamped 5 can never run 005 again — the fix is
+    permanently unreachable there and the table stays empty forever. No
+    reinstall or restart helps. Only a *new* version number can reach them.
+
+    Deliberately unconditional rather than guarded on an empty table. A
+    stranded DB that has since stored one memory containing a ref is no longer
+    empty, and an emptiness guard would skip it for good. ``_backfill_claims``
+    is idempotent — ``INSERT OR IGNORE`` against ``UNIQUE (memory_id, kind,
+    ref)`` — so on a healthy DB this is a few hundred milliseconds of no-ops,
+    once, and existing ``resolved_*`` state is preserved because nothing is
+    deleted. Claims are re-derived from each memory's *current* text, so a ref
+    edited out of a memory stays gone.
+    """
+    _backfill_claims(conn)
+
+
 # (target_version, migration_callable) — applied in order when current < target.
 MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
     (1, _migration_001_initial_schema),
@@ -286,6 +310,7 @@ MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
     (3, _migration_003_tags_relations),
     (4, _migration_004_embeddings),
     (5, _migration_005_claims),
+    (6, _migration_006_repair_claims_backfill),
 ]
 
 
