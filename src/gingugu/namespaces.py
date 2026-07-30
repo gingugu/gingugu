@@ -38,7 +38,11 @@ class NamespaceManager:
         return DEFAULT_NAMESPACE
 
     def get_or_create(
-        self, name: str, path: str | None = None, description: str | None = None
+        self,
+        name: str,
+        path: str | None = None,
+        description: str | None = None,
+        default_repo: str | None = None,
     ) -> Namespace:
         """Fetch a namespace by name, creating it if absent."""
         row = self._conn.execute("SELECT * FROM namespaces WHERE name = ?", (name,)).fetchone()
@@ -51,13 +55,23 @@ class NamespaceManager:
             name=name,
             path=path,
             description=description,
+            default_repo=default_repo,
             created_at=now,
             updated_at=now,
         )
         self._conn.execute(
-            "INSERT INTO namespaces(id, name, path, description, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (ns.id, ns.name, ns.path, ns.description, ns.created_at, ns.updated_at),
+            "INSERT INTO namespaces"
+            "(id, name, path, description, default_repo, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                ns.id,
+                ns.name,
+                ns.path,
+                ns.description,
+                ns.default_repo,
+                ns.created_at,
+                ns.updated_at,
+            ),
         )
         self._conn.commit()
         logger.info("Created namespace %r (%s)", name, ns.id)
@@ -79,21 +93,33 @@ class NamespaceManager:
         ).fetchone()[0]
 
     def update(
-        self, name: str, *, path: str | None = None, description: str | None = None
+        self,
+        name: str,
+        *,
+        path: str | None = None,
+        description: str | None = None,
+        default_repo: str | None = None,
     ) -> Namespace | None:
-        """Update a namespace's path/description. Returns None if it doesn't exist.
+        """Update a namespace's path/description/default_repo.
 
-        Only non-None arguments are applied (existing values are preserved).
+        Returns None if the namespace doesn't exist. Only non-None arguments
+        are applied (existing values are preserved).
+
+        ``default_repo=""`` is meaningful, not a no-op: it declares that this
+        namespace is not a repo, so bare "PR #12" refs are dropped instead of
+        keyed to a repo of the same name. See ``claim_sync``.
         """
         existing = self.get(name)
         if existing is None:
             return None
         now = utcnow_iso()
         self._conn.execute(
-            "UPDATE namespaces SET path = ?, description = ?, updated_at = ? WHERE id = ?",
+            "UPDATE namespaces SET path = ?, description = ?, default_repo = ?, "
+            "updated_at = ? WHERE id = ?",
             (
                 path if path is not None else existing.path,
                 description if description is not None else existing.description,
+                default_repo if default_repo is not None else existing.default_repo,
                 now,
                 existing.id,
             ),
