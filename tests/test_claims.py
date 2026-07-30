@@ -341,3 +341,78 @@ def test_not_merged_yet_is_open_not_resolved() -> None:
     ):
         (claim,) = cm.extract_claims("", phrasing, namespace_default="gingugu")
         assert claim.state == cm.STATE_OPEN, phrasing
+
+
+# --- the write-time hook on the tool surface --------------------------------
+
+
+@pytest.mark.asyncio
+async def test_store_surfaces_contradicted_memories(server) -> None:
+    """The payoff: recording a resolution makes stale claims knowable AT WRITE
+    TIME, when the caller is already thinking about that exact PR."""
+    stale = _payload(
+        await server.call_tool(
+            "memory_store",
+            {
+                "title": "SHIPPED (PR #10, open): serve transport",
+                "content": "Built on branch feature/serve-transport. PR #10, open, NOT merged yet.",
+                "type": "decision",
+            },
+        )
+    )
+    assert "contradicted_memories" not in stale  # nothing to contradict yet
+
+    resolving = _payload(
+        await server.call_tool(
+            "memory_store",
+            {
+                "title": "v0.4.0 released",
+                "content": "PR #10 merged to main, branch deleted.",
+                "type": "workflow",
+            },
+        )
+    )
+    hits = resolving["contradicted_memories"]
+    assert [h["id"] for h in hits] == [stale["memory"]["id"]]
+    assert hits[0]["ref"] == "gingugu#10"
+    assert (hits[0]["asserts"], hits[0]["now"]) == ("open", "resolved")
+
+
+@pytest.mark.asyncio
+async def test_update_to_a_resolution_surfaces_contradictions(server) -> None:
+    stale = _payload(
+        await server.call_tool(
+            "memory_store",
+            {
+                "title": "PR #20 open",
+                "content": "PR #20 is open, awaiting review",
+                "type": "workflow",
+            },
+        )
+    )
+    other = _payload(
+        await server.call_tool(
+            "memory_store",
+            {"title": "notes", "content": "no refs here", "type": "context"},
+        )
+    )
+    updated = _payload(
+        await server.call_tool(
+            "memory_update",
+            {"memory_id": other["memory"]["id"], "content": "PR #20 merged to main"},
+        )
+    )
+    assert [h["id"] for h in updated["contradicted_memories"]] == [stale["memory"]["id"]]
+
+
+@pytest.mark.asyncio
+async def test_no_contradiction_key_when_nothing_is_stale(server) -> None:
+    """The key is omitted rather than empty: an always-present empty list is
+    noise in every response, and this one has to stay cheap to ignore."""
+    plain = _payload(
+        await server.call_tool(
+            "memory_store",
+            {"title": "t", "content": "PR #99 merged to main", "type": "workflow"},
+        )
+    )
+    assert "contradicted_memories" not in plain
