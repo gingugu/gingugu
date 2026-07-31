@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Write-time hints are compact.** `memory_store`'s `similar_memories` and
+  `suggested_relations` (and `memory_update`'s `suggested_relations`) returned
+  each candidate's **full body**. A single store could attach six complete
+  memories to the response — measured against the live 821-memory corpus, a
+  median-sized candidate set cost ~11,300 characters (~2,800 tokens) of the
+  caller's context, on every write, unasked for and often larger than the
+  memory being saved.
+
+  They now use the same compact shape as `compact` reads: title plus a
+  ~200-char excerpt under `summary`, no bookkeeping fields. ~89% smaller. A
+  hint is a pointer, not a payload — it carries enough to decide whether to
+  merge, link, or move on, and `memory_recall` is one call away when a
+  candidate warrants a closer look.
+
+  The memory the caller just wrote is **unchanged** and still returns in full;
+  only the unsolicited extras were trimmed.
+
 ---
 
 ## [0.11.1] - 2026-07-30
