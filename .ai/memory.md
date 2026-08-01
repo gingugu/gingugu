@@ -141,11 +141,12 @@ The loop needs no new tool: stats → `memory_search(ids=…)` → `resolve_clai
 
 ## Release State
 
-- Current version: **0.11.0** (PyPI; claim-extraction precision — wiki-link
-  refs no longer claim, `memory_namespaces` gained `default_repo`, schema v7).
-  **0.11.1 in flight**: `Stop`-hook arg robustness (`parse_known_args`), `init`
-  honesty about foreign wiring, and `default_repo` actually re-deriving claims
-  — it shipped inert in 0.11.0.
+- Current version: **0.12.0** (PyPI; write-time hints are compact — the
+  `similar_memories` / `suggested_relations` entries carry a ~200-char
+  `summary` instead of full `content`, ~89% smaller per write). MINOR rather
+  than PATCH because a response field was **removed** from the tool surface.
+  Shipped alongside it, internal only: the test suite is offline and bounded
+  (no fastembed download, `pytest-timeout`, CI `timeout-minutes`).
   Public repo `gingugu/gingugu`.
 - Two-layer namespace convention (`crow` + project) is live.
 - See `.ai/plans/status.md` for in-flight work and carry-overs.
