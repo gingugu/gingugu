@@ -23,6 +23,13 @@
 
 - **`pytest` + `pytest-asyncio`** — MCP handlers are async.
 - **No PR without tests** for the changed surface.
+- **The suite is offline and bounded.** Two autouse fixtures in
+  `tests/conftest.py` enforce it: `fake_keyring` keeps tests off the OS
+  keychain, `offline_embeddings` keeps them off the network (the fastembed
+  backend otherwise downloads an ~80MB model on a cold cache, untimed). A test
+  needing a real external dependency must opt in explicitly. `timeout = 60`
+  (pytest-timeout) makes a hung test fail as a test rather than as a stalled
+  CI job, and CI carries `timeout-minutes: 15` as the outer guard.
 - **Unit tests** for storage, search, relations, context, decay, consolidation.
 - **Integration tests** for end-to-end MCP flows (store → recall → context;
   store → relate → recall include_related).

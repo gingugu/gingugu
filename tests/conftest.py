@@ -44,6 +44,25 @@ def fake_keyring():
     keyring.set_keyring(previous)
 
 
+@pytest.fixture(autouse=True)
+def offline_embeddings(monkeypatch: pytest.MonkeyPatch):
+    """Keep the suite off the network — the sibling of ``fake_keyring``.
+
+    ``embeddings_enabled`` defaults to True and the fastembed backend
+    lazy-loads an ~80MB ONNX model from HuggingFace on first encode, with no
+    timeout anywhere in the stack. Any test that builds a real server was
+    therefore doing a live download on a cold cache, which is how a CI job
+    hung for 10+ minutes on a step that takes under a second everywhere else.
+
+    No test *wants* the real model: ``test_embeddings`` says real loads are
+    not exercised, ``test_true_hybrid`` injects its own deterministic
+    embedder, and several files had already been patching this env var one at
+    a time. This makes that global, so the default is offline and a test that
+    needs real vectors has to say so.
+    """
+    monkeypatch.setenv("MEMORY_EMBEDDINGS_ENABLED", "false")
+
+
 @pytest.fixture
 def config() -> Config:
     from pathlib import Path

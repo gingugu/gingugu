@@ -4,7 +4,7 @@ _Last updated: 2026-07-31_
 
 ## In Flight
 
-- **Compact write-time hints (branch `fix/compact-store-hints`)** — a payload
+- **Compact write-time hints (PR #35, MERGED as `a8439e4`; unreleased)** — a payload
   bug, found by reading a `/sink-the-ship` transcript. `memory_store`'s
   `similar_memories` / `suggested_relations` and `memory_update`'s
   `suggested_relations` returned each candidate's **full body**, so one store
@@ -24,6 +24,31 @@ _Last updated: 2026-07-31_
   reverting the two call sites (4 of 5 fail). Relation-hint coverage is unit
   level with mocked scores, matching `test_suggest_relations.py` — real hybrid
   scores aren't deterministic enough to pin a positive hit at the tool surface.
+
+- **CI hang guards + offline test suite (branch `fix/ci-hang-guards`)** — found
+  when one matrix cell (ubuntu-latest / 3.12) sat in `Pytest` for 10+ minutes
+  on PR #35 while the other eight finished in 25s–1m23s. Same code, same
+  command; 3.12 passed on macOS and Windows, so it was never version-specific.
+
+  Root cause: `embeddings_enabled` defaults to **True** and the fastembed
+  backend lazy-loads an ~80MB ONNX model from HuggingFace on first encode
+  (`embeddings.py:117-120`), with **no timeout at any layer** — not the
+  download, not the pytest step, not the job. `tests/conftest.py` said nothing
+  about embeddings, so ~35 test files were doing a live network fetch on a cold
+  CI cache. One stalled fetch would have run to GitHub's 6-hour default.
+
+  Three guards, defence in depth:
+  1. `offline_embeddings` autouse fixture in `conftest.py`, sibling to the
+     existing `fake_keyring`. No test _wanted_ the real model — `test_embeddings`
+     says real loads aren't exercised, `test_true_hybrid` injects its own
+     deterministic embedder, and four files had already been patching this env
+     var one at a time. Now it's the default.
+  2. `timeout = 60` via `pytest-timeout` (new dev dep, 2.4.0 verified on PyPI) —
+     a hung test fails as a test. Proven to abort a real hang.
+  3. `timeout-minutes: 15` on the CI job as the outer guard.
+
+  Suite: 393 pass in **2.53s, down from 6.58s** — the real model was being
+  loaded and cost 60% of runtime while nothing asserted on it.
 
 - **Hook arg robustness + `default_repo` actually applying (v0.11.1, branch
   `fix/hook-arg-robustness-and-default-repo`)** — three shipped defects.
