@@ -1,10 +1,14 @@
 # Project Status
 
-_Last updated: 2026-07-31_
+_Last updated: 2026-08-01_
 
 ## In Flight
 
-- **Compact write-time hints (PR #35, MERGED as `a8439e4`; unreleased)** — a payload
+_Nothing in flight._ v0.12.0 shipped both items below.
+
+## Shipped in v0.12.0 (2026-08-01)
+
+- **Compact write-time hints (PR #35, merged `a8439e4`)** — a payload
   bug, found by reading a `/sink-the-ship` transcript. `memory_store`'s
   `similar_memories` / `suggested_relations` and `memory_update`'s
   `suggested_relations` returned each candidate's **full body**, so one store
@@ -25,7 +29,7 @@ _Last updated: 2026-07-31_
   level with mocked scores, matching `test_suggest_relations.py` — real hybrid
   scores aren't deterministic enough to pin a positive hit at the tool surface.
 
-- **CI hang guards + offline test suite (branch `fix/ci-hang-guards`)** — found
+- **CI hang guards + offline test suite (PR #36, merged `a8e1bea`)** — found
   when one matrix cell (ubuntu-latest / 3.12) sat in `Pytest` for 10+ minutes
   on PR #35 while the other eight finished in 25s–1m23s. Same code, same
   command; 3.12 passed on macOS and Windows, so it was never version-specific.
@@ -50,8 +54,10 @@ _Last updated: 2026-07-31_
   Suite: 393 pass in **2.53s, down from 6.58s** — the real model was being
   loaded and cost 60% of runtime while nothing asserted on it.
 
-- **Hook arg robustness + `default_repo` actually applying (v0.11.1, branch
-  `fix/hook-arg-robustness-and-default-repo`)** — three shipped defects.
+## Shipped in earlier releases
+
+- **Hook arg robustness + `default_repo` actually applying (v0.11.1)** — three
+  shipped defects.
 
   1. **`Stop` hook crashed on foreign flags.** `parse_args()` makes argparse
      `sys.exit(2)` on anything unrecognized. That is a `SystemExit`, a
@@ -79,7 +85,7 @@ _Last updated: 2026-07-31_
 
   393 tests, ruff + black clean.
 
-- **Claim-extraction precision (v0.11.0, branch `fix/claim-extraction-precision`)** —
+- **Claim-extraction precision (v0.11.0)** —
   two defects that shipped in v0.10.0, both found by dogfooding and both
   measured against the live 785-memory corpus before a line was written.
 
