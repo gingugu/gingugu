@@ -31,7 +31,8 @@
   (`gingugu serve`, via `starlette` + `uvicorn`)
 - **SQLite + FTS5** (WAL mode); semantic embeddings for hybrid retrieval
 - **platformdirs** for the cross-platform DB path
-- **uv**-managed; `ruff` + `black`; `pytest` + `pytest-asyncio`
+- **uv**-managed; `ruff` + `black`; `pytest` + `pytest-asyncio` + `pytest-timeout`
+  (suite is offline and bounded — see `.ai/standards/01-code-and-testing.md`)
 - **UI:** React + Vite + Tailwind (`ui/`); served by `gingugu ui` (`webui.py`), built bundle ships in the wheel; `ui/api.py` is a thin dev shim
 - Released to **PyPI** via Trusted Publishing (OIDC) on git tag
 
