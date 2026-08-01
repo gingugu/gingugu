@@ -8,6 +8,9 @@ on:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
+    # Without this a stalled step runs to GitHub's 6-hour default. Every cell
+    # finishes in under 90s, so this only ever fires on a genuine hang.
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
