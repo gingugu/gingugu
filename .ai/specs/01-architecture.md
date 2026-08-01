@@ -128,7 +128,10 @@ AI client (Claude Code / Cursor / Windsurf / …)
   product promise is "your AI never forgets"; dormancy + spreading activation
   preserves recall quality without deleting history.
 - **Hints, not gates.** `similar_memories` / `suggested_relations` nudge the
-  caller toward merges/edges but never block a write.
+  caller toward merges/edges but never block a write. They are also always
+  compact: an unsolicited extra attached to a write must not cost more context
+  than the write itself, so a hint carries a pointer (title + ~200-char
+  excerpt) and leaves the body to `memory_recall`.
 - **Server resilience over strictness.** Handlers fail soft (structured errors)
   so a bad call never takes down the client's memory layer.
 
