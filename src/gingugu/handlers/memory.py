@@ -64,6 +64,10 @@ def register(mcp, ctx: ServerContext) -> None:
         and grow the knowledge graph. Distinct from ``similar_memories``: those
         are merge candidates, these are link candidates.
 
+        Both hint lists are COMPACT: title plus a ~200-char ``summary``, never
+        full bodies. They are enough to decide whether to merge, link, or move
+        on; call ``memory_recall`` when a candidate warrants a closer look.
+
         The response may also carry ``contradicted_memories``: older memories
         whose state claim THIS memory just resolved. Recording "PR #10 merged"
         makes every memory still asserting "PR #10 open" knowably wrong, and
@@ -183,7 +187,8 @@ def register(mcp, ctx: ServerContext) -> None:
         provided, the response includes a ``suggested_relations`` list of up to 3
         existing memories worth linking that aren't already related. Tag-only or
         confidence-only updates skip the check since the matching surface didn't
-        change."""
+        change. Entries are compact (title + a ~200-char ``summary``), as in
+        ``memory_store``."""
         try:
             conf = None
             if confidence is not None:

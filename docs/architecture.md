@@ -458,6 +458,14 @@ always disjoint — a high-overlap match goes to `similar_memories`, leaving
 `suggested_relations` for genuinely complementary memories worth wiring up via
 `memory_relate`.
 
+**Hint payloads are always compact** — each entry is `id`, `type`, `title`,
+`confidence`, `tags`, `score`, and a ~200-char `summary`, never full `content`.
+There is no flag to inflate them. Hints are extras the caller did not ask for,
+attached to a write; a store could otherwise return six complete memories and
+cost more context than the memory being saved. Fetch a candidate's body with
+`memory_recall` when it warrants one. The `memory` object in the same response
+is *not* compacted — that is the payload the caller asked for.
+
 ### `memory_recall`
 Search and retrieve memories ranked by relevance × freshness.
 

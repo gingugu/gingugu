@@ -117,7 +117,10 @@ _COMPACT_CONTENT_CHARS = 200
 
 def _compact_summary(mem: Memory) -> dict:
     """Lightweight variant of ``_memory_summary`` for ``compact`` reads
-    (memory_context, memory_recall, memory_search).
+    (memory_context, memory_recall, memory_search) and for the write-time
+    hints (``_find_similar``, ``_suggest_relations``), which are always
+    compact regardless of any caller flag — they are unasked-for extras on a
+    write, so they must stay cheap.
 
     Full ``content`` is replaced by a whitespace-normalized excerpt under
     ``summary``; bookkeeping fields (timestamps, access_count) are dropped.
@@ -242,6 +245,9 @@ def _find_similar(
     Uses the existing hybrid BM25+semantic search over the namespace and keeps
     hits above ``_DEDUPE_MIN_SCORE``. Best-effort: any failure is swallowed so
     the store itself never breaks on a dedup-hint error.
+
+    Hits are ``_compact_summary`` — see that function and ``_suggest_relations``
+    for why hints never carry full bodies.
     """
     query = f"{title} {content}".strip()
     if not query:
@@ -257,7 +263,7 @@ def _find_similar(
     except Exception:  # never block a store on a hint failure
         logger.warning("dedupe hint search failed", exc_info=True)
         return []
-    return [_memory_summary(m) for m in hits if (m.score or 0.0) >= _DEDUPE_MIN_SCORE]
+    return [_compact_summary(m) for m in hits if (m.score or 0.0) >= _DEDUPE_MIN_SCORE]
 
 
 def _suggest_relations(
@@ -277,6 +283,13 @@ def _suggest_relations(
     ``memory_id`` via an existing relation (either direction). Keeps hits above
     ``_RELATION_MIN_SCORE``. Best-effort: any failure is swallowed so the store
     itself never breaks on a hint error.
+
+    Hits are ``_compact_summary``. A hint is a pointer, not a payload: the
+    caller only needs enough to decide whether to merge, link, or ignore, and
+    ``memory_recall`` is one call away when the answer is "look closer". Full
+    bodies here cost the caller its context budget on every single write —
+    six of them (three similar + three suggested) on a store that may itself
+    be one line long.
     """
     query = f"{title} {content}".strip()
     if not query:
@@ -308,7 +321,7 @@ def _suggest_relations(
             continue
         if (mem.score or 0.0) < _RELATION_MIN_SCORE:
             continue
-        out.append(_memory_summary(mem))
+        out.append(_compact_summary(mem))
         if len(out) >= _RELATION_LIMIT:
             break
     return out

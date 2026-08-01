@@ -17,6 +17,13 @@ memory_store(content, title, type, namespace, tags, confidence)
 (score ≥ 0.3, excludes self + already-linked + items already in
 `similar_memories`) = link candidates. Both are hints; neither blocks the write.
 
+Both are **always compact** (title + ~200-char `summary`), unlike the `memory`
+the caller just wrote, which returns in full. A hint is a pointer: enough to
+decide merge/link/ignore, with `memory_recall` one call away. Full bodies here
+charged up to six memories of context to every write — measured on an
+821-memory corpus, ~11,300 chars per store, frequently larger than the memory
+being saved.
+
 `contradicted_memories` is the write-time reconciliation hook: when this write
 records a ref as resolved, every memory in the same namespace still asserting it
 open is returned. **Omitted rather than empty** when there is nothing to report —

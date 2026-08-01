@@ -1,8 +1,29 @@
 # Project Status
 
-_Last updated: 2026-07-30_
+_Last updated: 2026-07-31_
 
 ## In Flight
+
+- **Compact write-time hints (branch `fix/compact-store-hints`)** — a payload
+  bug, found by reading a `/sink-the-ship` transcript. `memory_store`'s
+  `similar_memories` / `suggested_relations` and `memory_update`'s
+  `suggested_relations` returned each candidate's **full body**, so one store
+  could attach six complete memories to its response. Measured on the live
+  821-memory corpus (median body 1,891 chars): ~11,300 characters, ~2,800
+  tokens, charged to the caller on every write — routinely more than the
+  memory being saved, and never asked for.
+
+  `_compact_summary` already existed for `compact` reads; both hint paths in
+  `handlers/helpers.py` simply called `_memory_summary` instead. Hints are now
+  always compact, with no flag to inflate them — a hint is a pointer, and
+  `memory_recall` fetches the body when a candidate matters. ~89% smaller. The
+  `memory` object in the same response still returns in full; only the
+  unsolicited extras were trimmed.
+
+  398 tests (+5), ruff + black clean. The new tests were verified to bite by
+  reverting the two call sites (4 of 5 fail). Relation-hint coverage is unit
+  level with mocked scores, matching `test_suggest_relations.py` — real hybrid
+  scores aren't deterministic enough to pin a positive hit at the tool surface.
 
 - **Hook arg robustness + `default_repo` actually applying (v0.11.1, branch
   `fix/hook-arg-robustness-and-default-repo`)** — three shipped defects.
@@ -162,7 +183,7 @@ _Last updated: 2026-07-30_
   decay; nothing is auto-forgotten.
 - **Hybrid retrieval** — BM25 (FTS5) + semantic ranking on `memory_recall`.
 - **suggested_relations + similar_memories** — non-blocking hints on
-  `memory_store` / `memory_update` (link vs merge candidates).
+  `memory_store` / `memory_update` (link vs merge candidates), compact payload.
 - **Credential vault** — OS-keychain backed; `credential_*` tools.
 - **Memory Explorer UI** — React/Vite graph + dashboard under `ui/`.
 - **Cross-platform** — platformdirs DB path; CI green on ubuntu/macos/windows × 3.11–3.13.

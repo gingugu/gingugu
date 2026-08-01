@@ -89,6 +89,9 @@ Run: `uv run python -m bench [--db <real-brain.db>]`.
 
 `memory_store` / `memory_update` return non-blocking `similar_memories` (merge
 candidates, score ≥ 0.5) and `suggested_relations` (link candidates, score ≥ 0.3) hints.
+Both are **always compact** — title + a ~200-char `summary`, never full bodies,
+regardless of any caller flag. They are unsolicited extras on a write, so they
+stay cheap; `memory_recall` fetches the body when a candidate matters.
 
 `memory_update` accepts `type`, so a misfiled memory can be retyped instead of
 reworded — retyping to `pattern`/`preference` is the sanctioned way to clear a
