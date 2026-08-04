@@ -58,7 +58,7 @@
 | `context.py` | Session priming (`memory_context`) + spreading activation |
 | `relations.py` | Typed graph edges + hub-dampened 1-hop traversal (`dampened_neighbour_ids`) |
 | `consolidation.py` | merge / summarize / deduplicate clusters |
-| `decay.py` | Dormancy as a resting signal — never auto-forgets |
+| `decay.py` | Composite scoring, dormancy as a resting signal (never auto-forgets), and `relative_age()` — the derived-at-read `age` string |
 | `stats.py` | Health stats (counts, confidence, dormancy, hygiene, review sweep) |
 | `staleness.py` | Advisory review hints for point-in-time memories |
 | `claims.py` | Extracts checkable state claims (repo-qualified PR/MR refs) from prose; ignores refs inside `[[wiki-links]]` |
@@ -141,12 +141,13 @@ The loop needs no new tool: stats → `memory_search(ids=…)` → `resolve_clai
 
 ## Release State
 
-- Current version: **0.12.0** (PyPI; write-time hints are compact — the
-  `similar_memories` / `suggested_relations` entries carry a ~200-char
-  `summary` instead of full `content`, ~89% smaller per write). MINOR rather
-  than PATCH because a response field was **removed** from the tool surface.
-  Shipped alongside it, internal only: the test suite is offline and bounded
-  (no fastembed download, `pytest-timeout`, CI `timeout-minutes`).
+- Current version: **0.13.0** (PyPI; every memory payload now carries a
+  derived `age` string — `"2 days ago"` — computed at serialization from
+  `created_at` and **never persisted**, so compact reads stay time-aware).
+  MINOR: a field was added to the tool surface. Shipped alongside it, a fix to
+  the `gingugu init` startup contract, which had instructed the agent to infer
+  its workspace from Claude Code's "Additional working directories" permission
+  allowlist; existing installs need `gingugu init --force` to pick it up.
   Public repo `gingugu/gingugu`.
 - Two-layer namespace convention (`crow` + project) is live.
 - See `.ai/plans/status.md` for in-flight work and carry-overs.

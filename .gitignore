@@ -95,3 +95,11 @@ credentials/
 *.zip
 
 Gingugu_Temporal_Knowledge_Graph_Peer_Review.docx
+
+# Local-only: personal Pi deployment runbook (contains own LAN topology,
+# corpus counts, and accepted-risk decisions - not for a public repo)
+docs/pi-central-brain.md
+
+# Local-only: Pi deployment automation. Contains wifi PSK, password hashes,
+# and host details. NEVER commit - this repo is public.
+deploy/

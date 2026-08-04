@@ -459,7 +459,8 @@ always disjoint — a high-overlap match goes to `similar_memories`, leaving
 `memory_relate`.
 
 **Hint payloads are always compact** — each entry is `id`, `type`, `title`,
-`confidence`, `tags`, `score`, and a ~200-char `summary`, never full `content`.
+`confidence`, `tags`, `age`, `score`, and a ~200-char `summary`, never full
+`content`.
 There is no flag to inflate them. Hints are extras the caller did not ask for,
 attached to a write; a store could otherwise return six complete memories and
 cost more context than the memory being saved. Fetch a candidate's body with
@@ -513,8 +514,16 @@ Auto-surface relevant memories for the current workspace. Called on session star
   `MEMORY_AUTO_CONTEXT_LIMIT`, which defaults to 10)
 - `compact` (optional, default `false`) - return a lightweight payload:
   full `content` is replaced by a whitespace-normalized ~200-char `summary`
-  excerpt and bookkeeping fields (timestamps, `access_count`) are dropped.
+  excerpt and bookkeeping fields (raw timestamps, `access_count`) are dropped.
   Pull the full body with `memory_recall` when a memory matters.
+
+Every returned memory carries `age` — a human-readable interval such as
+`"2 days ago"`, derived from `created_at` at serialization time. It survives
+`compact` mode deliberately: the session protocol mandates `compact=true` at
+session start, so dropping every temporal signal left the agent unable to tell
+last night's RESUME memory from June's. **The string is never persisted** — a
+stored `"6 days ago"` would be wrong the moment the world moved on, which is
+the rot `memory_claims` and `review_hints` exist to catch.
 
 Each returned memory may carry `review_hints` - advisory signals that its
 content describes point-in-time state that may have gone stale (see *Review

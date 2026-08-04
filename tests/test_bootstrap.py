@@ -281,3 +281,22 @@ def test_theme_renders_banner_and_boot_text():
     assert "SYST3M 4RM3D" in out
     # Tests run without a TTY, so output must be plain (no ANSI escape codes).
     assert "\033[" not in out
+
+
+def test_startup_contract_does_not_invite_namespace_inference(tmp_path):
+    """The contract must not tell the agent to guess the workspace.
+
+    Regression for 2026-08-04: the old text said "Append any other workspace
+    repos to the list", but a SessionStart hook only ever receives ``cwd`` —
+    it has no workspace roster. The agent filled the gap from "Additional
+    working directories", a permission allowlist, and loaded five namespaces
+    at startup instead of two.
+    """
+    assert main(["--path", str(tmp_path)]) == 0
+    contract = _read(tmp_path / ".claude" / "hooks" / "session_start.py")
+
+    assert "Append any" not in contract
+    assert "other workspace repos" not in contract
+    # The floor is derived from cwd, and the allowlist is named as off-limits.
+    assert "is the floor, always" in contract
+    assert "permission allowlist, not the workspace" in contract
