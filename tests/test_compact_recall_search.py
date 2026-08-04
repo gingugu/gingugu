@@ -146,3 +146,43 @@ async def test_full_mode_shape_unchanged_by_default(server) -> None:
         for mem in out["memories"]:
             assert "content" in mem and "summary" not in mem
             assert "created_at" in mem and "access_count" in mem
+
+
+async def test_age_present_in_compact_and_full_payloads(server) -> None:
+    """The whole point of the field: compact mode must stay time-aware.
+
+    The session protocol mandates compact=true at session start, which is
+    exactly when the RESUME memory is read — so a compact payload with no
+    temporal signal is time-blind at the worst possible moment.
+    """
+    await _store(server, title="fresh resume note")
+
+    compact = _payload(
+        await server.call_tool("memory_recall", {"query": "argocd rollout", "compact": True})
+    )
+    assert compact["ok"]
+    assert compact["memories"], "expected at least one hit"
+    for mem in compact["memories"]:
+        assert mem["age"] == "just now"
+        # Raw bookkeeping timestamps stay dropped in compact mode.
+        assert "created_at" not in mem
+
+    full = _payload(await server.call_tool("memory_recall", {"query": "argocd rollout"}))
+    assert full["ok"]
+    for mem in full["memories"]:
+        assert mem["age"] == "just now"
+        assert mem["created_at"]  # full mode keeps the raw instant too
+
+
+async def test_age_is_never_persisted(server) -> None:
+    """`age` is derived at serialization; it must not reach the DB or export."""
+    mem_id = await _store(server, title="derived not stored")
+
+    exported = _payload(await server.call_tool("memory_export", {"namespace": "proj-x"}))
+    assert exported["ok"]
+    blob = json.dumps(exported)
+    assert '"age"' not in blob, "age leaked into the export payload"
+
+    stored = _payload(await server.call_tool("memory_recall", {"query": "derived not stored"}))
+    row = next(m for m in stored["memories"] if m["id"] == mem_id)
+    assert row["age"] == "just now"

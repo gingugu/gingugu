@@ -50,6 +50,12 @@ AI client (Claude Code / Cursor / Windsurf / …)
 - **Never-forget:** `decay.py` tracks dormancy (untouched ≥ 90 days) as a
   *resting signal* only. Nothing is auto-demoted or auto-deleted; only explicit
   `memory_forget` removes a memory.
+- **Derived time, never stored:** `decay.relative_age()` turns an instant into
+  `"2 days ago"` at serialization. Every read surface carries it; nothing
+  persists it. Storing a relative timestamp would reintroduce the exact rot
+  that `memory_claims` and `review_hints` exist to detect. Precedent:
+  `credentials.expiry_status()` and `staleness` classify at call time too — no
+  schema column anywhere holds a derived time value.
 - **State claims:** `claims.py` extracts repo-qualified PR/MR references and the
   state a memory asserts about them into `memory_claims` (migration 005;
   migration 006 re-runs the backfill for DBs stranded at v5; migration 007

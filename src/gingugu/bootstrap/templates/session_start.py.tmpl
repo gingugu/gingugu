@@ -30,13 +30,19 @@ def build_startup_contract(cwd: str) -> str:
         "Before responding to the first user message, run these in parallel as your\n"
         "opening action. Non-negotiable:\n"
         f'  - mcp__gingugu__memory_context(namespace="crow,{project}", task_hint=...)\n'
-        "    # ONE call: identity + project, deduped across namespaces. Append any\n"
-        '    # other workspace repos to the list ("crow,proj-a,proj-b"). Use\n'
-        "    # compact=true for a lighter payload; pull full bodies via memory_recall.\n"
+        "    # ONE call: identity + this repo, deduped. Use compact=true for a\n"
+        "    # lighter payload; pull full bodies via memory_recall.\n"
         '  - mcp__gingugu__memory_stats(namespace="crow")\n'
         f'  - mcp__gingugu__memory_stats(namespace="{project}")\n'
         "Before asking for ANY secret/token/credential: mcp__gingugu__credential_list()\n"
-        "Rules: do not skip; do not ask which repo (the workspace is the answer);\n"
+        f'NAMESPACES: crow + "{project}" is the floor, always - it is derived from\n'
+        "cwd, so it is never a guess. Load any OTHER namespace only when the work\n"
+        "actually reaches that repo, or when the user says the task spans it. Never\n"
+        'because a directory is mounted: "Additional working directories" is a\n'
+        "permission allowlist, not the workspace, and at startup nothing has\n"
+        "happened yet to justify a wider load. A later memory_context call costs\n"
+        "one call; a wrong one costs the session's whole orientation.\n"
+        "Rules: do not skip; do not ask which repo you are in (cwd is the answer);\n"
         'if a namespace is missing, create it with memory_namespaces(action="create", name=...).\n'
         "Check memory_recall before asking anything answered in a prior session.\n"
         "=== END CONTRACT ==="

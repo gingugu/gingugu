@@ -96,3 +96,49 @@ def test_is_stale_is_dormant_alias() -> None:
     # Backward-compat alias — same behaviour, no confidence implication.
     assert decay.is_stale is decay.is_dormant
     assert decay.is_stale(_iso(100)) is True
+
+
+def test_relative_age_buckets() -> None:
+    now = datetime(2026, 8, 4, 12, 0, tzinfo=UTC)
+
+    def age(**kw: float) -> str | None:
+        return decay.relative_age((now - timedelta(**kw)).isoformat(), now=now)
+
+    assert age(seconds=30) == "just now"
+    assert age(minutes=1) == "just now"
+    assert age(minutes=45) == "45 minutes ago"
+    assert age(hours=1) == "1 hour ago"
+    assert age(hours=8) == "8 hours ago"
+    assert age(days=1) == "1 day ago"
+    assert age(days=6) == "6 days ago"
+    assert age(days=8) == "1 week ago"
+    assert age(days=21) == "3 weeks ago"
+    assert age(days=90) == "3 months ago"
+    assert age(days=400) == "1 year ago"
+
+
+def test_relative_age_is_derived_not_stored() -> None:
+    # The same instant must read differently as `now` moves. This is the whole
+    # point: a persisted "1 day ago" would rot; a derived one cannot.
+    created = datetime(2026, 8, 1, 12, 0, tzinfo=UTC).isoformat()
+    day_after = decay.relative_age(created, now=datetime(2026, 8, 2, 12, 0, tzinfo=UTC))
+    week_later = decay.relative_age(created, now=datetime(2026, 8, 9, 12, 0, tzinfo=UTC))
+    assert day_after == "1 day ago"
+    assert week_later == "1 week ago"
+
+
+def test_relative_age_handles_missing_and_malformed() -> None:
+    assert decay.relative_age(None) is None
+    assert decay.relative_age("") is None
+    assert decay.relative_age("not-a-timestamp") is None
+
+
+def test_relative_age_naive_timestamp_treated_as_utc() -> None:
+    now = datetime(2026, 8, 4, 12, 0, tzinfo=UTC)
+    assert decay.relative_age("2026-08-03T12:00:00", now=now) == "1 day ago"
+
+
+def test_relative_age_future_instant_clamps_to_now() -> None:
+    now = datetime(2026, 8, 4, 12, 0, tzinfo=UTC)
+    future = (now + timedelta(days=3)).isoformat()
+    assert decay.relative_age(future, now=now) == "just now"

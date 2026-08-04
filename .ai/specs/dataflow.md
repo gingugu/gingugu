@@ -66,6 +66,9 @@ memory_recall(query, namespace | "ns1,ns2,…", filters)
     (compact=true: title + ~200-char summary instead of full content,
     related extras compacted too - keeps broad recalls under MCP clients'
     tool-result token caps; access is still credited)
+  → every memory carries a derived `age` ("2 days ago"), computed at
+    serialization from created_at and never stored - kept in compact mode
+    even though raw timestamps are dropped
 ```
 
 `memory_search` takes the same namespace forms (single, CSV, or omitted =
@@ -83,7 +86,10 @@ memory_context(namespace | "ns1,ns2,…", task_hint, limit, compact)
     each memory is stamped with its home namespace
   → spreading activation wakes related dormant memories
   → returns the working set the agent should hold for the session
-    (compact=true: title + ~200-char summary instead of full content)
+    (compact=true: title + ~200-char summary instead of full content,
+    plus the derived `age` - the protocol mandates compact here, so dropping
+    every temporal signal left the agent time-blind while reading the
+    RESUME memory)
 ```
 
 Context loads are protocol-driven reads: they refresh `last_accessed` (dormancy

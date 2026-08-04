@@ -36,6 +36,7 @@ Gingugu instance serves Windsurf and Claude Code against one DB.
 | `memory_namespaces` | Namespace CRUD + `default_repo` (what a bare "PR #12" means here; `""` = not a repo) | ✅ Shipped |
 | `credential_*` | OS-keychain secret vault | ✅ Shipped |
 | `suggested_relations` hint | Nudge edge creation at store time; compact payload (title + ~200-char summary) | ✅ Shipped (v0.3.8; compacted unreleased) |
+| `age` payload field | Derived-at-read relative age on every memory (full, compact, and write-time hints); never persisted | ✅ Shipped (v0.13.0) |
 | Memory Explorer UI | Browse graph + dashboard | ✅ Shipped |
 | `gingugu ui` (launcher) | One command serves the built UI + live `/api/export` on one port (no Node); `--dev` for Vite hot reload. Bundle ships in the wheel | 🔧 Built (v0.9.0, pending release) |
 | `gingugu serve` (transport) | Run over streamable HTTP + Bearer auth (hosted/central) | ✅ Shipped |

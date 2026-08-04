@@ -81,6 +81,8 @@ GitHub repo - use `gh`, not `glab`.
 - **Branches:** `feature/[name]`, `bugfix/[name]`, `fix/[name]`, `hotfix/[name]`, `docs/[name]`
 - **Commits:** `<type>: <what changed>` (feat, fix, docs, chore, refactor) - include what + why + impact
 - **PRs:** descriptive titles and bodies; use `/creating-pr` command
+- **Multiple PRs in one session: stack them.** Cut the second branch from the first and `gh pr create --base <first-branch>`. Every PR must add a `.ai/plans/status.md` entry at the same anchor, so two branches off `main` conflict on the second merge, every time. See step 0 of `/creating-pr`.
+- **Merging a stack:** never `--delete-branch` the parent - it closes child PRs and GitHub will not reopen them. Retarget children to `main` first.
 - Run `git status` before every commit
 - Never commit `*.db`, `.venv/`, `__pycache__/`, `.DS_Store`, `node_modules/`
 
