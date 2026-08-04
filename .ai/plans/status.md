@@ -1,10 +1,89 @@
 # Project Status
 
-_Last updated: 2026-08-01_
+_Last updated: 2026-08-04_
 
 ## In Flight
 
-_Nothing in flight._ v0.12.0 shipped both items below.
+_Nothing in flight._ v0.13.0 shipped both items below.
+
+## Blocked / Pending
+
+- **Retrieval ranking: superseded RESUME notes can outrank current ones —
+  WATCH ITEM, do not build, do not bench yet.** The freshness term is inert at
+  the timescale resume notes turn over: with `MEMORY_DECAY_LAMBDA = 0.01/day`
+  the half-life is ~69 days, so the weighted freshness swing across a whole
+  week is **0.0044** against a 0.45 relevance term. The scorer cannot separate
+  "written yesterday" from "written last week".
+
+  Observed once, in a session transcript, then **not reproducible** — the
+  captured queries were display-truncated and re-running them ranked the
+  current note first. An earlier diagnosis blaming `access_count` was wrong and
+  has been corrected: it is log-saturated and weighted 0.10, worth at most
+  0.078, against an observed 0.278 gap.
+
+  Deliberately parked. `age` (below) does not change ranking, but it makes a
+  ranking mistake _visible_ — which is the precondition for benching one
+  honestly. Tuning λ against a failure that cannot be replayed is the exact
+  error the 2026-07-31 measured-and-rejected result exists to prevent.
+  Re-open on a replayable case; capture the verbatim query, the ranked list
+  with scores and ages, and the ids. If picked up: bench demoting the targets
+  of a `supersedes` relation _before_ touching λ, which is global and would
+  flatten `pattern`/`preference` memories that should stay flat.
+
+- **Roll the new startup contract out to installed repos.** The template fix
+  below only reaches a repo when `gingugu init --force` runs there. Seven repos
+  carry the hook; `keycloakify` and `ogre` are also still on a pre-v0.11.1
+  `stop.py`.
+
+- **`gingugu ui --host` exposes an unauthenticated full-DB export.** Found
+  2026-08-03, still unfiled as an issue.
+
+- **Over the 300-line rule:** `database.py` (454), `claim_sync.py` (314),
+  `handlers/helpers.py` (327), `search.py` (404).
+
+## Shipped in v0.13.0 (2026-08-04)
+
+- **`age` derived into every memory payload** — `decay.relative_age()` returns
+  a human-readable interval (`"2 days ago"`) computed at serialization from
+  `created_at`, wired into both `_memory_summary` and `_compact_summary`.
+
+  The session protocol mandates `compact=true` at session start, and compact
+  drops all timestamps by design — so at the one moment temporal context
+  matters most, reading the RESUME memory, the agent could not tell last
+  night's note from June's. Raw ISO timestamps already ship in full mode and
+  still get misread, because the arithmetic is done unreliably or skipped;
+  deriving the interval removes it. ~4 tokens per memory.
+
+  **Never persisted.** Same lifecycle as `score` and
+  `credentials.expiry_status`. A stored `"6 days ago"` rots the moment the
+  world moves — the bug class `memory_claims` and `review_hints` exist to
+  catch. Two tests pin the contract: the same instant must read `"1 day ago"`
+  then `"1 week ago"` as `now` advances, and `age` must never appear in a
+  `memory_export` payload.
+
+  Placed in `decay.py`, not `helpers.py`, because the latter is already 327
+  lines and over the rule.
+
+  Verified live after an MCP restart: the first compact context load carried
+  `age` on every memory and immediately flagged one titled "PR #12 open" as
+  three weeks old. It also disambiguated two same-day RESUME notes whose titles
+  mislead — "3rd sail" (10 hours) is _newer_ than "end of day" (21 hours).
+
+- **Startup contract no longer asks the agent to infer the workspace** — the
+  contract said "Append any other workspace repos to the list", but a
+  SessionStart hook receives exactly one directory. Verified against 57 logged
+  payloads: the key set is `cwd`, `hook_event_name`, `session_id`, `source`,
+  `transcript_path`. No workspace roster exists in it.
+
+  The agent reached for the only workspace-shaped list in its context,
+  "Additional working directories" — a permission allowlist — and loaded five
+  namespaces at startup instead of two. Two of those paths were subdirectories
+  of one repo, one was `~/.claude`, one was `/tmp`.
+
+  Now states a floor and a rule: `crow` + the `cwd` repo always, other
+  namespaces only on demand. A config file or env var listing sibling
+  namespaces was considered and **rejected** — a hand-maintained list is the
+  same guess written somewhere worse.
 
 ## Shipped in v0.12.0 (2026-08-01)
 

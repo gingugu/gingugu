@@ -11,6 +11,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.13.0] - 2026-08-04
+
+### Added
+
+- **`age` on every memory payload.** Reads now carry a derived, human-readable
+  interval — `"age": "2 days ago"` — alongside the existing fields. It ships in
+  full reads, `compact` reads, and write-time hints.
+
+  `_compact_summary` drops timestamps by design, and the session protocol
+  mandates `compact=true` at session start. So at the one moment temporal
+  context matters most — reading the RESUME memory — the agent could not tell
+  last night's note from June's. Raw ISO timestamps already ship in full mode
+  and still get misread, because the date arithmetic is done unreliably or
+  skipped outright; deriving the interval removes the arithmetic. ~4 tokens
+  per memory.
+
+  **The value is never persisted.** `decay.relative_age()` computes it at
+  serialization time from `created_at`, the same lifecycle as `score` and
+  `credentials.expiry_status`. A stored `"6 days ago"` would be wrong the
+  moment the world moved on — exactly the bug class `memory_claims` and
+  `review_hints` exist to catch.
+
+### Fixed
+
+- **The startup contract no longer asks the agent to infer the workspace.**
+  `gingugu init`'s `session_start.py` told the agent to "Append any other
+  workspace repos to the list". A SessionStart hook receives exactly one
+  directory — `cwd`. There is no workspace roster in the payload, so the
+  contract was asking for an inference it had supplied no data for.
+
+  The agent reached for the only workspace-shaped list available to it,
+  Claude Code's "Additional working directories" — a *permission allowlist*,
+  not a workspace — and loaded five namespaces at startup instead of two.
+
+  The contract now states a floor and a rule instead of inviting a guess:
+  `crow` plus the `cwd` repo always, and any other namespace only when the work
+  actually reaches that repo. Multi-repo work is unaffected — namespaces load
+  on demand rather than speculatively. **Existing installs need
+  `gingugu init --force` to pick this up.**
+
+---
+
 ## [0.12.0] - 2026-08-01
 
 ### Changed
