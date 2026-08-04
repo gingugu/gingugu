@@ -59,10 +59,15 @@ def register(mcp, ctx: ServerContext) -> None:
         instead of accumulating near-duplicates. Disable for bulk imports.
 
         When ``relation_check`` is True (default), the response also includes a
-        ``suggested_relations`` list of up to 3 memories with moderate topical
-        overlap that aren't already linked — a nudge to call ``memory_relate``
-        and grow the knowledge graph. Distinct from ``similar_memories``: those
-        are merge candidates, these are link candidates.
+        ``suggested_relations`` list of up to 3 not-already-linked memories worth
+        EXAMINING for a relationship. Topical overlap is only how they were
+        found; it is not itself a reason to link. Ask whether one of them is the
+        memory this one *supersedes*, *contradicts*, was *caused_by*, or belongs
+        under - and if the honest answer is "they are just both about the same
+        area", link nothing. Search already surfaces topical neighbours, so a
+        `related_to` edge that says only "these are similar" adds no retrieval
+        signal and competes with the directional edges that do. Distinct from
+        ``similar_memories``: those are merge candidates.
 
         Both hint lists are COMPACT: title plus a ~200-char ``summary``, never
         full bodies. They are enough to decide whether to merge, link, or move
@@ -185,10 +190,12 @@ def register(mcp, ctx: ServerContext) -> None:
 
         When ``relation_check`` is True (default) and ``title`` or ``content`` was
         provided, the response includes a ``suggested_relations`` list of up to 3
-        existing memories worth linking that aren't already related. Tag-only or
-        confidence-only updates skip the check since the matching surface didn't
-        change. Entries are compact (title + a ~200-char ``summary``), as in
-        ``memory_store``."""
+        not-already-linked memories worth examining for a relationship - same
+        semantics as ``memory_store``: overlap is how they were found, and only a
+        directional fact (supersedes / contradicts / caused_by / parent_of /
+        child_of) justifies an edge. Tag-only or confidence-only updates skip the
+        check since the matching surface didn't change. Entries are compact
+        (title + a ~200-char ``summary``), as in ``memory_store``."""
         try:
             conf = None
             if confidence is not None:

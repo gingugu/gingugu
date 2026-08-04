@@ -45,7 +45,10 @@ This repo *is* Gingugu - dogfood it. See `AGENTS.md` for the full protocol. Key 
 - Check `memory_recall` before asking any question the user has already answered
 - Check `credential_list` before asking for any secret or API token
 - Save continuously - do not batch saves for end of session
-- Relate memories aggressively with `memory_relate` after every store
+- Relate memories *selectively* with `memory_relate` - an edge must record what
+  search cannot infer (`supersedes`, `contradicts`, `caused_by`,
+  `parent_of`/`child_of`). `related_to` is a fallback, never shorthand for
+  "similar topic"
 
 ## AI Knowledge Base Enforcement
 

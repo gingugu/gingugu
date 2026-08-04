@@ -133,11 +133,20 @@ AI client (Claude Code / Cursor / Windsurf / …)
 - **Never-forget over decay.** Biological-style decay was removed because the
   product promise is "your AI never forgets"; dormancy + spreading activation
   preserves recall quality without deleting history.
-- **Hints, not gates.** `similar_memories` / `suggested_relations` nudge the
-  caller toward merges/edges but never block a write. They are also always
-  compact: an unsolicited extra attached to a write must not cost more context
-  than the write itself, so a hint carries a pointer (title + ~200-char
+- **Hints, not gates.** `similar_memories` / `suggested_relations` point the
+  caller at merge and relation candidates but never block a write. They are also
+  always compact: an unsolicited extra attached to a write must not cost more
+  context than the write itself, so a hint carries a pointer (title + ~200-char
   excerpt) and leaves the body to `memory_recall`.
+- **An edge must encode what search cannot infer.** Recall ranks by hybrid
+  BM25 + semantic score, so topical adjacency is already free; relations exist
+  to record direction and time (`supersedes`, `contradicts`, `caused_by`,
+  `parent_of`/`child_of`). `related_to` is therefore a fallback, not a default,
+  and guidance is written to optimize edge quality rather than edge count.
+  Measured 2026-08-04, when the guidance still said "use liberally": 69% of a
+  real brain's 1369 edges were `related_to`, and since `dampened_neighbour_ids`
+  ignores `relation_type` those edges were out-competing high-signal ones for a
+  per-seed budget of 3.
 - **Server resilience over strictness.** Handlers fail soft (structured errors)
   so a bad call never takes down the client's memory layer.
 

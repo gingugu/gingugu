@@ -237,9 +237,17 @@ _DEDUPE_MIN_SCORE = 0.5
 _DEDUPE_LIMIT = 3
 
 # Minimum fused-relevance score for a memory to be surfaced as a relation
-# candidate. Softer than ``_DEDUPE_MIN_SCORE`` because suggesting a *relation*
-# is a weaker claim than flagging a *duplicate* — moderate topical overlap is
-# enough to be worth a `memory_relate` nudge.
+# candidate. Softer than ``_DEDUPE_MIN_SCORE`` because these are only
+# *candidates to examine*, not a claim that an edge exists.
+#
+# Similarity FINDS the candidate; it is never itself the reason to link. The
+# hybrid index already knows which memories are topically adjacent, so an edge
+# that encodes only "these two are similar" duplicates the index at the
+# caller's expense. What earns an edge is a directional fact similarity cannot
+# see: supersedes, contradicts, caused_by, parent_of/child_of. Measured
+# 2026-08-04, before this framing landed: 69% of a 1369-edge real brain was
+# `related_to`, and because spreading activation is type-blind those edges were
+# out-competing the 31% that carried real signal for a per-seed budget of 3.
 _RELATION_MIN_SCORE = 0.3
 _RELATION_LIMIT = 3
 
@@ -288,7 +296,15 @@ def _suggest_relations(
     exclude_ids: set[str] | None = None,
 ) -> list[dict]:
     """Return up to ``_RELATION_LIMIT`` existing memories in ``namespace_id``
-    that look like relation candidates for a (``title``, ``content``) payload.
+    worth EXAMINING for a directional relationship to a (``title``,
+    ``content``) payload.
+
+    These are candidates, not verdicts. Topical overlap is how they are found,
+    never a reason in itself to link them - see ``_RELATION_MIN_SCORE`` for why
+    a similarity-only edge is a net loss. The caller's job is to ask whether one
+    of these is the memory the new one *supersedes*, *contradicts*, was *caused
+    by*, or belongs under; if the honest answer is "no, they are just both about
+    deploys", the correct action is to link nothing.
 
     Excludes ``memory_id`` itself, any ids in ``exclude_ids`` (typically the
     already-surfaced ``similar_memories``), and any memory already linked to
