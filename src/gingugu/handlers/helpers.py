@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 import logging
 
+from .. import decay, staleness
 from .. import search as search_mod
-from .. import staleness
 from ..models import Confidence, Memory, Namespace
 from ..relations import RelationManager
 from . import ServerContext
@@ -104,6 +104,12 @@ def _memory_summary(mem: Memory) -> dict:
         "access_count": mem.access_count,
         "tags": mem.tags,
     }
+    # Derived per read, never stored — see decay.relative_age. Ships even in
+    # full mode: raw ISO timestamps are already here and still get misread,
+    # because the date arithmetic is done unreliably or skipped outright.
+    age = decay.relative_age(mem.created_at)
+    if age is not None:
+        data["age"] = age
     if mem.score is not None:
         data["score"] = round(mem.score, 4)
     return data
@@ -123,9 +129,12 @@ def _compact_summary(mem: Memory) -> dict:
     write, so they must stay cheap.
 
     Full ``content`` is replaced by a whitespace-normalized excerpt under
-    ``summary``; bookkeeping fields (timestamps, access_count) are dropped.
+    ``summary``; bookkeeping fields (raw timestamps, access_count) are dropped.
     ``namespace_id`` is identity, not bookkeeping — kept so namespace
-    stamping works uniformly across full and compact payloads.
+    stamping works uniformly across full and compact payloads. ``age`` is kept
+    too: the protocol mandates compact at session start, so dropping every
+    temporal signal left the agent time-blind exactly when reading the RESUME
+    memory — unable to tell last night's note from June's. It costs ~4 tokens.
     """
     excerpt = " ".join(mem.content.split())
     if len(excerpt) > _COMPACT_CONTENT_CHARS:
@@ -139,6 +148,9 @@ def _compact_summary(mem: Memory) -> dict:
         "namespace_id": mem.namespace_id,
         "tags": mem.tags,
     }
+    age = decay.relative_age(mem.created_at)
+    if age is not None:
+        data["age"] = age
     if mem.score is not None:
         data["score"] = round(mem.score, 4)
     return data

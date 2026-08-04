@@ -71,6 +71,41 @@ def reference_timestamp(
     return last_confirmed or updated_at or created_at
 
 
+def relative_age(instant: str | None, now: datetime | None = None) -> str | None:
+    """Human-readable interval since ``instant`` (ISO-8601), derived at call time.
+
+    STORE THE INSTANT, DERIVE THE INTERVAL. The result is **never** persisted:
+    a stored "6 days ago" is wrong the moment the world moves on, which is the
+    exact bug class ``memory_claims`` and ``review_hints`` exist to catch. Same
+    lifecycle as ``score`` and ``credentials.expiry_status`` — computed per read,
+    never written back. Returns ``None`` for an unparseable/missing instant.
+    """
+    start = _parse(instant)
+    if start is None:
+        return None
+    seconds = max(0.0, ((now or datetime.now(UTC)) - start).total_seconds())
+    minutes = seconds / 60.0
+    if minutes < 2:
+        return "just now"
+    if minutes < 60:
+        return f"{int(minutes)} minutes ago"
+    hours = minutes / 60.0
+    if hours < 24:
+        return _plural(int(hours), "hour")
+    days = hours / 24.0
+    if days < 7:
+        return _plural(int(days), "day")
+    if days < 60:
+        return _plural(int(days / 7), "week")
+    if days < 365:
+        return _plural(int(days / 30), "month")
+    return _plural(int(days / 365), "year")
+
+
+def _plural(value: int, unit: str) -> str:
+    return f"1 {unit} ago" if value == 1 else f"{value} {unit}s ago"
+
+
 def freshness(days_since: float, lambda_: float) -> float:
     """Floored exponential recency in [FRESHNESS_FLOOR, 1].
 
