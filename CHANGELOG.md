@@ -9,6 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`gingugu init` now manages the memory protocol in your user-level
+  `~/.claude/CLAUDE.md`.** Previously `init` only ever wrote inside a target
+  repo, so the one rules file loaded in _every_ session — including sessions
+  started in a directory with no project protocol installed — was hand-
+  maintained with no tooling behind it. It drifted exactly as you'd expect: it
+  was still telling agents to "build edges aggressively" long after the shipped
+  templates had moved on.
+
+  The protocol now lives in a marked block that `init` owns. It is strictly
+  additive outside those markers:
+
+  - missing file → created
+  - existing content, no markers → block **appended below it**, every prior byte
+    preserved
+  - managed block present → replaced **in place**; your prose before _and_ after
+    it survives, and an unchanged result is a no-op
+  - a memory protocol already there that `init` doesn't manage → **nothing is
+    written**; it warns and explains how to opt in. **No flag overrides this** —
+    `--force` authorizes overwriting the repo files `init` owns, and must not
+    also authorize appending a second set of rules to a hand-authored file
+  - a `.bak` is written only on the refresh path, since appending risks nothing
+
+  `init` now also prints the **resolved target directory** as its first line.
+  `--path` defaults to the process's cwd and wrappers move that out from under
+  you — `uv run --directory X gingugu init` runs in `X`, so it bootstraps `X`
+  rather than the directory you typed the command in. Naming the path up front
+  turns a silent wrong-repo write into something you catch immediately.
+
+  Re-running `gingugu init` after an upgrade is how you pick up protocol changes.
+  There is no `--global` flag: this is part of the Claude Code bootstrap in the
+  same way the hooks and the non-destructive `settings.json` merge are. Other
+  `--client` targets never touch it.
+
 ### Changed
 
 - **Relation guidance now optimizes edge _quality_, not edge count.** Every

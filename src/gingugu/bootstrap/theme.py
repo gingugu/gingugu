@@ -53,7 +53,7 @@ def _style_line(line: str) -> str:
         return _c(">>> " + s[:-1].upper(), _GREEN, bold=True)
     if low.startswith("would"):  # dry-run preview
         return _c("  [ >> ] ", _CYAN) + _c(s, _CYAN)
-    if low.startswith(("write", "overwrite", "wired", "updated")):
+    if low.startswith(("write", "overwrite", "wired", "updated", "appended", "refreshed")):
         return _c("  [ OK ] ", _GREEN) + _c(s, _GREEN)
     if low.startswith("skip") or "already" in low:
         return _c("  [SKIP] ", _YELLOW) + _c(s, _DIM)
