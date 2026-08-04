@@ -30,6 +30,60 @@ _Last updated: 2026-08-04_
      evidence)
   4. `memory_store` accepts `relations` inline; then a compound session-end tool
 
+- **`gingugu init` now manages the user-level rules file** (branch
+  `feature/init-global`, stacked on `docs/relate-discipline`). New
+  `bootstrap/global_rules.py` installs and refreshes the memory protocol inside a
+  marked block in `~/.claude/CLAUDE.md`.
+
+  **Why:** bootstrap previously only ever wrote under a target _repo_, so the
+  user-level file — loaded in **every** session, including directories with no
+  project protocol installed — was hand-maintained with no tooling behind it.
+  That is exactly why it drifted: it was still saying "build edges aggressively"
+  after the repo templates had moved on. Raised as a parking-lot item during the
+  relation-discipline work and built the same session.
+
+  **Design, deliberately not a whole-file write.** `init_rules_file` overwrites
+  gated on `--force`, which is fine for a file `init` created and owns. The
+  user-level file is hand-authored and carries identity/workflow rules unrelated
+  to memory, so it gets a marked-section merge instead:
+  - missing file → create
+  - existing prose, no markers → **append below it**, every prior byte preserved
+  - managed block present → replace **only between the markers** (prose before
+    and after survives); byte-identical result is a no-op
+  - unmanaged memory protocol present → **write nothing**, warn, and explain how
+    to opt in (wrap it in the markers). **No flag overrides this**
+  - `.bak` only on the refresh path, since appending risks nothing
+
+  **`--force` is deliberately not forwarded to the global step, and this was
+  learned the hard way mid-session.** A real `uv run --directory ~/GIT/gingugu
+  gingugu init --force` aimed at a repo's hooks appended a duplicate protocol to
+  a hand-authored `~/.claude/CLAUDE.md` — the exact outcome the guard existed to
+  prevent, delivered by one flag authorizing two decisions of very different
+  size. `merge_block` now takes no `force` parameter at all, so the bypass is
+  unreachable rather than merely discouraged; a test asserts passing one raises
+  `TypeError`, and an end-to-end test asserts `init --force` overwrites repo
+  files while leaving a hand-written global file byte-identical.
+
+  **Same run exposed a second footgun:** `--path` defaults to the process's cwd,
+  and `uv run --directory X` _moves_ that cwd, so the command bootstrapped the
+  gingugu repo instead of the directory it was typed in — `--force`-overwriting
+  this repo's own customized hooks (recovered from git). `init` now prints the
+  resolved `target` as its first output line. Also fixed: `theme._style_line`
+  had no prefix match for the new `appended`/`refreshed` statuses, so they
+  rendered without an `[ OK ]` marker.
+
+  **No `--global` flag.** The step is part of the Claude Code bootstrap, like the
+  hooks and the `settings.json` merge; making it opt-in would imply the protocol
+  is optional. Non-Claude `--client` paths never touch it (their user-level rules
+  location is not something this tool should guess at).
+
+  **Hazard closed:** an autouse `sandboxed_global_rules` fixture in
+  `tests/conftest.py` redirects the path for the whole suite. Without it every
+  test calling `bootstrap.main()` would append to the home directory of whoever
+  ran `pytest`. Verified: the real file's checksum is unchanged after a full run.
+
+  17 tests in `tests/test_global_rules.py`; 437 total pass.
+
 ## Blocked / Pending
 
 - **Retrieval ranking: superseded RESUME notes can outrank current ones —
@@ -79,18 +133,6 @@ _Last updated: 2026-08-04_
   `related_to` edges. Deleting a third of the graph is destructive and
   irreversible; fix the sort so they stop winning slots instead. Pruning returns
   to the table only if the bench says type-weighting is insufficient.
-
-- **No `gingugu init --global` to manage `~/.claude/CLAUDE.md`.** Bootstrap only
-  ever writes under a target _repo_ (`init_claude_code` / `init_rules_file` both
-  resolve paths from the CLI `--path` arg), so the user-level rules file — the
-  one loaded in **every** session, including sessions in repos that have no
-  project protocol installed — is hand-maintained and has no tooling behind it.
-  That is exactly why it drifted: it was still saying "build edges
-  aggressively" after this repo's guidance had moved on, and it is the loudest
-  voice in any session where no repo protocol loads.
-
-  Parked deliberately, not scoped. Raised 2026-08-04 during the relation-
-  discipline work (the global file was fixed by hand in that pass).
 
 - **`gingugu ui --host` exposes an unauthenticated full-DB export.** Found
   2026-08-03, still unfiled as an issue.

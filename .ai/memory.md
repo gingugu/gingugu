@@ -47,6 +47,8 @@
 | `webui.py` | `gingugu ui`: serves the built Memory Explorer bundle + live `/api/export` on one port (prod, no Node), or spawns the Vite dev server (`--dev`); assets ship in the wheel at `gingugu/_ui_dist` |
 | `promote.py` | `gingugu promote`: MCP client that promotes local "gold" to a central brain (filter + provenance + idempotent store) — not part of the server |
 | `bootstrap/` | `gingugu init`: copies packaged hook/command/rules templates into a target repo (Claude Code hooks + non-destructive settings merge, or a `--client` rules file) — not part of the server |
+| `bootstrap/global_rules.py` | Manages the memory protocol inside a marked block in the user-level `~/.claude/CLAUDE.md`. Append-only outside the markers; refreshes only its own block; refuses when an unmanaged protocol is already present |
+| `bootstrap/_files.py` | Shared `read_template` / `safe_read` helpers, split out so `global_rules` doesn't import the package `__init__` that imports it |
 | `config.py` | Config + cross-platform DB path (platformdirs); transport + credentials-flag settings |
 | `database.py` | Connection, schema, WAL, migrations (`PRAGMA user_version`), FTS5 triggers |
 | `models.py` | Memory / namespace / relation data models |
