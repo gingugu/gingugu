@@ -82,7 +82,34 @@ _Last updated: 2026-08-04_
   test calling `bootstrap.main()` would append to the home directory of whoever
   ran `pytest`. Verified: the real file's checksum is unchanged after a full run.
 
-  17 tests in `tests/test_global_rules.py`; 437 total pass.
+  19 tests in `tests/test_global_rules.py`.
+
+- **Bootstrap safety fixes found by that same accident** (same branch, separate
+  commit). Both are pre-existing bugs in shipped code, not new-feature fallout:
+
+  1. **`--force` destroyed a customized hook with no backup.**
+     `_TEMPLATE_SIGNATURE` was the bare word `gingugu`, which every
+     gingugu-aware hook contains (the MCP tool names are `mcp__gingugu__*`), so
+     `_write_file` classified a heavily customized local `stop.py` as ours and
+     overwrote it without a `.bak`. Only a clean git tree saved this repo. Every
+     shipped file now carries a `gingugu-init:managed-file` marker.
+  2. **The foreign-flag warning was a false positive.** `foreign_flags`
+     compared a wired command against a hardcoded list of our template's flags,
+     so this repo — whose own `stop.py` genuinely declares `--chat`/`--notify` —
+     was told its wiring "was written for a different script". It now reads
+     `add_argument` declarations from the script on disk (`declared_flags`),
+     falling back to the hardcoded set only when unreadable. It still fires on
+     genuinely orphaned flags, which matters because `parse_known_args` means
+     those are silently ignored at runtime rather than erroring.
+
+- **The shipped protocol template was enriched from a real hand-tuned global
+  file** (user's explicit go-ahead). Added: the credential vault
+  (`credential_list` before ever asking for a secret), `memory_forget` for wrong
+  information, namespace creation when a repo has none, and a concrete list of
+  save triggers instead of a bare "save often". Machine-specific names and
+  examples deliberately not carried over.
+
+  446 tests pass, ruff + black clean.
 
 ## Blocked / Pending
 

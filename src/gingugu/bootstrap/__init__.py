@@ -66,9 +66,16 @@ def _ensure_gitignore(target: Path, *, dry_run: bool, results: list[str]) -> Non
     results.append(f"  {verb} {path}  (+{len(missing)} ignore rule(s))")
 
 
-# Every hook template we ship carries this line. Its absence in a file we are
-# about to overwrite means the file belongs to somebody else's tooling.
-_TEMPLATE_SIGNATURE = "gingugu"
+# A distinctive marker every file we ship carries. Its absence in a file we are
+# about to overwrite means that file is NOT ours, so back it up first.
+#
+# This was the bare word "gingugu", which is useless as a signature: any hook
+# that merely mentions the tool matches, and every gingugu-aware hook does — the
+# MCP tool names are `mcp__gingugu__*`. A real, heavily-customized local hook was
+# therefore classified as ours and overwritten by `--force` with NO backup, and
+# only a clean git tree saved it. The marker has to be something only our
+# templates would ever contain.
+_TEMPLATE_SIGNATURE = "gingugu-init:managed-file"
 
 
 def _write_file(
@@ -91,10 +98,10 @@ def _write_file(
     results.append(f"  {verb:<9} {path}")
     if foreign:
         results.append(
-            f"  WARNING: {path.name} did not look like a gingugu hook — it was "
-            f"written by other tooling. Backed up to {path.name}.bak. If your "
-            f"settings.json invokes it with flags gingugu's script does not "
-            f"accept, that command needs updating too."
+            f"  WARNING: {path.name} was not written by this version of `gingugu "
+            f"init` — it may be your own or another tool's. Backed up to "
+            f"{path.name}.bak. If your settings.json invokes it with flags the "
+            f"replacement does not declare, that command needs updating too."
         )
 
 
@@ -132,7 +139,7 @@ def init_claude_code(target: Path, *, force: bool, dry_run: bool) -> list[str]:
 
     settings_path = target / ".claude" / "settings.json"
     raw = settings_path.read_text() if settings_path.exists() else None
-    settings, added, warnings = merge_settings(load_settings(settings_path))
+    settings, added, warnings = merge_settings(load_settings(settings_path), hooks_dir=hooks_dir)
     if added:
         if not dry_run:
             if raw is not None:

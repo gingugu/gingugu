@@ -44,7 +44,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same way the hooks and the non-destructive `settings.json` merge are. Other
   `--client` targets never touch it.
 
+### Fixed
+
+- **`gingugu init --force` no longer destroys a customized hook without a
+  backup.** The "is this file ours?" signature was the bare word `gingugu` —
+  which every gingugu-aware hook contains, because the MCP tool names are
+  `mcp__gingugu__*`. A heavily customized local `stop.py` was therefore
+  classified as ours and overwritten with **no `.bak`**; only a clean git tree
+  saved it. Every shipped file now carries a distinctive
+  `gingugu-init:managed-file` marker, and anything lacking it is backed up first.
+
+- **The foreign-flag warning no longer cries wolf.** It compared a wired hook
+  command's flags against a hardcoded list of _our template's_ flags, so a repo
+  running its own richer same-named hook — one that genuinely accepts `--chat`
+  and `--notify` — was reported as "written for a different script" when the
+  wiring was correct. It now reads the `add_argument` declarations from the
+  script actually installed on disk, so it stays quiet when the flags are
+  accepted and still fires when they are genuinely orphaned (which is the real
+  hazard: `parse_known_args` means orphaned flags are silently ignored at
+  runtime rather than erroring).
+
 ### Changed
+
+- **The shipped memory-protocol template covers more of the tool surface.**
+  Added the credential vault (`credential_list` first, before ever asking the
+  user for a secret), `memory_forget` for wrong information, namespace creation
+  when a repo has none, and a concrete list of save triggers rather than a bare
+  instruction to save often.
 
 - **Relation guidance now optimizes edge _quality_, not edge count.** Every
   guidance surface that drives relation-writing was reversed: the
