@@ -22,18 +22,32 @@ Gingugu is your long-term brain. Memory is split into **two layers**:
 2. `memory_stats(namespace="crow")` — global health.
 3. `memory_stats(namespace="<project>")` for each project namespace.
 
+If a repo has no project namespace yet, create it:
+`memory_namespaces(action="create", name="<project>")`.
+
 ### During the session
-**Default: save. Immediately.** Save with `memory_store` (project namespace)
-whenever you make a decision, hit or fix a bug, notice a pattern or constraint,
-see a config value/version/path that matters, or complete a task. Save to
-`crow` when you form an opinion about a tool, notice how the user works, or
-reach a conclusion that applies beyond this one project.
+**Default: save. Immediately.** Don't filter, and don't batch saves for the end
+of a session — save at the moment of observation, because that is the moment the
+detail still exists. Save whenever you:
+
+- read a file and understood what it does
+- ran a command and saw its output
+- hit an error, even one you fixed immediately
+- made any trade-off, or rejected an alternative
+- completed a task
+- formed an opinion about a tool or approach
+- noticed something about how the user works or decides
+
+Project namespace for anything naming a repo, file, commit, or decision; `crow`
+for opinions, working style, and conclusions that outlive this one project.
 
 **Before asking the user any question** — run `memory_recall` or `memory_search`
 first. If the answer is in memory, use it. Don't ask the same thing twice.
 
 Use `memory_update` when something changes. Set `confidence="verified"` when
-proven; `inferred` for conclusions.
+proven; `inferred` for conclusions. When something turns out to be **wrong**, use
+`memory_forget` — deprecate it, or hard-delete it if it was never true. A
+confidently wrong memory costs more than a missing one.
 
 **Relating memories — quality, not volume.** An edge is worth writing only when
 it records something search cannot infer. Recall already ranks by hybrid text +
@@ -44,6 +58,15 @@ semantic similarity, so "same topic" is knowledge the index has for free. Use
 as shorthand for "similar". Spreading activation surfaces at most 3 neighbours
 per memory and does not weight by type, so a vague edge crowds out a useful one.
 If you can't name the directional fact an edge records, don't create it.
+
+### Credentials
+Gingugu carries an OS-keychain vault, so secrets never belong in files or chat.
+
+- **`credential_list` FIRST**, before asking the user for any secret, token, or
+  API key — it may already be vaulted.
+- `credential_get` to retrieve one for use.
+- `credential_store` to vault a new one the moment you receive it.
+- `credential_delete` when one is revoked, then store the replacement.
 
 ### Memory types
 `fact`, `decision`, `architecture`, `bug`, `pattern`, `workflow`, `context`,
