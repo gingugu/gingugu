@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 _COLUMNS = (
     "id, namespace_id, type, title, content, confidence, source, "
-    "created_at, updated_at, last_accessed, last_confirmed, access_count, metadata"
+    "created_at, updated_at, last_accessed, last_confirmed, access_count, metadata, pinned"
 )
 
 
@@ -103,11 +103,15 @@ class MemoryStore:
         self._conn.execute(
             f"INSERT INTO memories({_COLUMNS}) "
             "VALUES (:id, :namespace_id, :type, :title, :content, :confidence, :source, "
-            ":created_at, :updated_at, :last_accessed, :last_confirmed, :access_count, :metadata)",
+            ":created_at, :updated_at, :last_accessed, :last_confirmed, :access_count, "
+            ":metadata, :pinned)",
             {
                 **mem.model_dump(exclude={"score", "tags"}),
                 "type": mem.type.value,
                 "confidence": mem.confidence.value,
+                # New memories are never born pinned: pinning is a deliberate,
+                # budgeted decision made after the fact, never a store-time default.
+                "pinned": 0,
             },
         )
         if tags:
@@ -155,6 +159,7 @@ class MemoryStore:
         type: MemoryType | None = None,
         confidence: Confidence | None = None,
         metadata: str | None = None,
+        pinned: bool | None = None,
     ) -> Memory | None:
         existing = self.get(memory_id, record_access=False)
         if existing is None:
@@ -184,15 +189,20 @@ class MemoryStore:
             # _normalize_metadata returns None for "" and validates JSON-object shape
             # for everything else (raising ValueError on bad input).
             new_metadata = _normalize_metadata(metadata)
+        # Pinning is a retrieval-priority decision, not a claim about truth, so
+        # it deliberately does not advance last_confirmed (same reasoning as a
+        # metadata-only edit above).
+        new_pinned = existing.pinned if pinned is None else pinned
         self._conn.execute(
             "UPDATE memories SET title=?, content=?, type=?, confidence=?, metadata=?, "
-            "updated_at=?, last_confirmed=? WHERE id=?",
+            "pinned=?, updated_at=?, last_confirmed=? WHERE id=?",
             (
                 new_title,
                 new_content,
                 new_type.value,
                 new_confidence.value,
                 new_metadata,
+                int(new_pinned),
                 now,
                 last_confirmed,
                 memory_id,
@@ -276,6 +286,17 @@ class MemoryStore:
         tag_id = str(uuid.uuid4())
         self._conn.execute("INSERT INTO tags(id, name) VALUES (?, ?)", (tag_id, name))
         return tag_id
+
+    def count_pinned(self, namespace_id: str) -> int:
+        """Active pins in a namespace. Mirrors the filter ``context._pinned``
+        loads with, so the cap is enforced against what actually surfaces —
+        deprecated pins are inert and must not consume the budget."""
+        row = self._conn.execute(
+            "SELECT COUNT(*) FROM memories "
+            "WHERE namespace_id = ? AND pinned = 1 AND confidence != 'deprecated'",
+            (namespace_id,),
+        ).fetchone()
+        return int(row[0]) if row else 0
 
     def set_tags(self, memory_id: str, tags: list[str], *, commit: bool = True) -> list[str]:
         """Replace all tags on a memory with the normalized, de-duplicated set."""

@@ -57,6 +57,35 @@ Gingugu is designed to be a **structured long-term brain** — not a junk drawer
 - **Auto-surfaces** relevant context when you start working
 - **Consolidates** duplicate and related knowledge on demand
 
+### The protocol ships with it
+
+Storage is the easy half. A memory server that an agent never writes to is an
+empty database, and an agent left to its own judgement will save almost
+nothing worth keeping — the failure mode isn't retrieval, it's discipline.
+
+So Gingugu ships the discipline too. `gingugu init` wires a repo in one
+command and installs a **SessionStart hook** that injects the memory protocol
+at the top of every session: load these namespaces, check memory before asking
+a question already answered, save at the moment of observation rather than
+batching to the end, build a relation only when it records something search
+cannot infer. There is no rules file to paste and nothing to remember to do —
+the harness runs it whether or not the agent feels like it. A **stop hook**
+then checks that a session with real work in it actually wrote something down.
+
+That is the part that makes the memory worth having, and it is in the box.
+
+### Retrieval quality
+
+Hybrid retrieval (BM25 over FTS5 + local embeddings, fused with Reciprocal
+Rank Fusion) measured with the in-repo [`bench/`](https://github.com/gingugu/gingugu/blob/main/bench)
+toolset — **MRR 0.828, recall@1 0.611, recall@5 0.983**.
+
+Measured over 30 labeled questions against a real working brain (~1,100
+memories), not a public benchmark suite, so read it as a regression baseline
+for this workload rather than a cross-product comparison. The runner is
+deterministic and committed, so you can point it at your own store and get
+your own numbers: `python -m bench --help`.
+
 Where this goes long-term — federated, org-wide agent memory — lives in
 [docs/enterprise-vision.md](https://github.com/gingugu/gingugu/blob/main/docs/enterprise-vision.md).
 
@@ -239,9 +268,61 @@ uv run gingugu  # or pip install -e .
 
 </details>
 
-> **Usable today.** 16 MCP tools live. 406 tests passing. Dogfooded daily in
+> **Usable today.** 16 MCP tools live. 486 tests passing. Dogfooded daily in
 > Claude Code and Windsurf — this repo's own memories live in a Gingugu
 > database. Early and seeking broader real-world validation.
+
+### Upgrading
+
+**1. Upgrade the package.**
+
+```bash
+uv tool upgrade gingugu     # if installed with uv
+pip install --upgrade gingugu   # if installed with pip
+```
+
+**2. Restart your MCP client.** The client spawns the server, so a running
+client keeps the old code until it restarts. Schema migrations apply
+automatically on the next start, and a one-shot backup of your database
+(`memories.db.bak-before-vN`) is taken before any migration runs. Your
+memories are never rewritten by an upgrade.
+
+**3. Re-run `gingugu init` in each repo** to pick up improvements to the
+hooks and the session protocol:
+
+```bash
+cd ~/code/my-repo && gingugu init --force
+```
+
+`--force` is what refreshes managed files that already exist; without it,
+`init` leaves them alone and you stay on the old hooks. Run `--dry-run` first
+if you want to see the changes before they land. Your `.claude/settings.json`
+is merged, not overwritten.
+
+<details>
+<summary><strong>If an upgrade doesn't seem to take effect</strong></summary>
+
+`gingugu` can be reachable through more than one install at once, and they
+version independently. The usual surprise is a repo virtualenv shadowing the
+tool install, so a fresh shell resolves to a different binary than the one you
+just upgraded:
+
+```bash
+which -a gingugu   # note the -a: a bare `which` shows only the winner
+```
+
+Check your MCP client config too. If it points at a source checkout (e.g.
+`uv --directory ~/code/gingugu run gingugu`), the client runs *that* tree and
+a package upgrade changes nothing for it — restart the client instead. And
+because it runs whatever is checked out, a source-backed client also follows
+you onto a feature branch.
+
+Version strings can't settle this on their own: an unreleased local checkout
+and the last published release report the same number until someone bumps it.
+When it matters, confirm with behaviour — run a command whose output you know
+changed in the new version.
+
+</details>
 
 ### Run as a remote server (optional)
 

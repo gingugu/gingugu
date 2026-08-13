@@ -101,7 +101,10 @@ AI client (Claude Code / Cursor / Windsurf / …)
   comma-separated namespace list (one call per session, de-duped across
   namespaces) and a `compact` mode (title + excerpt). Context loads refresh
   the dormancy clock but don't count as accesses - `access_count` is a pure
-  recall/search usage signal.
+  recall/search usage signal. **Pinned** memories (`memory_update(pinned=True)`)
+  load ahead of the ranked set and exempt from it, additive to `limit` and
+  capped at 20 per namespace - the tier for rules that must never be missing,
+  which is a different question from what ranking answers.
 - `memory_search` is the precision path: explicit filters (tags, type, date,
   confidence), sort order, and exact fetch-by-`ids` (requested order,
   deprecated included, `missing` reported) - the companion to

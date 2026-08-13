@@ -9,6 +9,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Pinned memories: a tier that always loads, exempt from ranking.**
+  `memory_update(pinned=True)` marks a memory as unconditionally loaded by
+  `memory_context` for its namespace.
+
+  Ranking answers "what is most relevant to this task?" It cannot answer "what
+  must never be missing?" Those are different questions, and every governing
+  rule was competing for a context slot against topical trivia on the same
+  axis — a hard-won "never do X" and a piece of packaging arcana ranked
+  identically, and which one surfaced came down to the task hint.
+
+  Pins are **additive to `limit`**, not a share of it. A tier that truncates
+  under contention recreates the exact failure it exists to fix, so the blast
+  radius is bounded by a per-namespace cap (20) instead: the write path refuses
+  a new pin past it and tells you to unpin rather than raising it. Re-pinning
+  an existing pin stays idempotent at the cap. Deprecation beats a pin — "no
+  longer true" outranks "never let me miss this" — and pinning never advances
+  `last_confirmed`, so it cannot silently suppress the review hints on the
+  memories where staleness would hurt most.
+
+  Schema v8 (`memories.pinned`, partial index). Existing stores gain the column
+  and change no behaviour until something is explicitly pinned.
+
+- **Relation-graph health in `memory_stats`.** A new `graph` block reports edge
+  count, edges per memory, the breakdown by relation type, orphan count and
+  ratio, and how many memories carry more edges than spreading activation will
+  ever visit.
+
+  The knowledge graph is the part plain search cannot replace, and nothing
+  measured it — so the signals that predict retrieval failure were invisible:
+  orphans reachable only by direct search, a graph dominated by the
+  `related_to` fallback that encodes little the text index doesn't already
+  infer, and edges stranded past the `SPREAD_PER_SEED` cap where they can never
+  fire. Read-only aggregates; no schema change.
+
+### Changed
+
+- `memory_context` excludes this namespace's pinned memories from the ranked
+  buckets in SQL rather than after the fact, so pins can't quietly consume the
+  discovery slots they were already guaranteed.
+- Tests assert against a derived `LATEST_SCHEMA_VERSION` instead of a hardcoded
+  number, so a migration no longer breaks twenty unrelated assertions.
+
+### Documentation
+
+- README leads with the shipped session protocol (`gingugu init`'s SessionStart
+  and save-discipline hooks), publishes the measured retrieval numbers (MRR
+  0.828, recall@1 0.611, recall@5 0.983 over the in-repo `bench/` golden set),
+  and adds an **Upgrading** section covering the package upgrade, the client
+  restart, `gingugu init --force` to refresh repo hooks, and how to diagnose an
+  upgrade that appears not to take.
+
+### Tests
+
+- End-to-end dormancy lifecycle coverage: a memory crossing
+  `DORMANT_AFTER_DAYS` is counted dormant, an ordinary `memory_recall` wakes a
+  dormant neighbour through its relation without inflating `access_count`, and
+  the accounting flips back. The 90-day threshold means this path could not
+  have run in production yet; it is now verified rather than assumed. Also
+  pins the deliberate behaviour that a `memory_context` load refreshes the
+  dormancy clock, so routinely surfaced memories never go dormant.
+
 ---
 
 ## [0.14.0] - 2026-08-13

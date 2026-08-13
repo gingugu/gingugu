@@ -7,6 +7,7 @@ import logging
 
 from .. import decay, staleness
 from .. import search as search_mod
+from ..context import PINNED_HARD_CAP
 from ..models import Confidence, Memory, Namespace
 from ..relations import RelationManager
 from . import ServerContext
@@ -104,6 +105,29 @@ def _age_field(mem: Memory) -> str | None:
     return decay.age_label(mem.created_at, anchor)
 
 
+def _check_pin_budget(ctx: ServerContext, memory_id: str) -> dict | None:
+    """Refuse a new pin that would exceed the per-namespace cap.
+
+    Returns an error dict to return to the caller, or ``None`` to proceed.
+    Only consulted when turning a pin ON, and a memory that is *already*
+    pinned always passes — so re-pinning stays idempotent instead of failing
+    once the tier is full.
+    """
+    existing = ctx.store.get(memory_id, record_access=False)
+    if existing is None:
+        return _err(f"memory {memory_id!r} not found")
+    if existing.pinned:
+        return None
+    in_use = ctx.store.count_pinned(existing.namespace_id)
+    if in_use >= PINNED_HARD_CAP:
+        return _err(
+            f"pin limit reached: {in_use}/{PINNED_HARD_CAP} in this namespace. "
+            "Pins bypass ranking entirely, so the cap is what keeps the tier "
+            "meaningful - unpin something less important instead of raising it."
+        )
+    return None
+
+
 def _memory_summary(mem: Memory) -> dict:
     data = {
         "id": mem.id,
@@ -117,6 +141,10 @@ def _memory_summary(mem: Memory) -> dict:
         "access_count": mem.access_count,
         "tags": mem.tags,
     }
+    # Only surfaced when true: an explicit "pinned": false on every ordinary
+    # memory would be noise on every single result.
+    if mem.pinned:
+        data["pinned"] = True
     age = _age_field(mem)
     if age is not None:
         data["age"] = age

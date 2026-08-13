@@ -1,9 +1,10 @@
 """Auto-context generation for session start (``memory_context``).
 
-The result set draws from three intent buckets, each ranked by its *own*
-native signal and given a guaranteed quota of the ``limit`` slots, so no one
-intent can be starved by the composite-score ranking (see
-docs/architecture.md → memory_context):
+Pinned memories load first and unconditionally (see below). Everything else
+draws from three intent buckets, each ranked by its *own* native signal and
+given a guaranteed quota of the ``limit`` slots, so no one intent can be
+starved by the composite-score ranking (see docs/architecture.md →
+memory_context):
 
 1. Task-relevant (if ``task_hint``) — FTS5 search scoped to namespace,
    ranked by composite relevance.
@@ -18,6 +19,15 @@ the guaranteed quotas are backfilled from the combined pool by composite score.
 
 Types ``architecture`` and ``decision`` get a +0.1 score boost (disproportionately
 useful at session start).
+
+**Pinned memories are additive to ``limit``, not a share of it.** Ranking
+answers "what is most relevant to this task?"; it cannot answer "what must
+never be missing?". A pin is the second question, so a pinned memory is exempt
+from scoring entirely and is never evicted by a quota. Making pins compete for
+a slice of ``limit`` would truncate them under contention — which recreates the
+exact failure the tier exists to fix, just with an extra step. The blast radius
+is bounded by ``PINNED_HARD_CAP`` instead: pin more than that and the tier
+stops being a constitution and starts being another pile.
 """
 
 from __future__ import annotations
@@ -40,9 +50,16 @@ _TASK_RATIO = 0.5
 _RECENT_RATIO = 0.3
 _CROSS_NS_QUOTA = 3
 
+# Hard ceiling on pinned memories loaded per namespace. Pins bypass ranking
+# entirely, so this is the only thing bounding their context cost — it is a
+# safety limit, not a target. A tier this size stays scannable at a glance;
+# past it, pinning has degraded into a second unranked pile and the right fix
+# is to unpin, not to raise the cap.
+PINNED_HARD_CAP = 20
+
 _COLUMNS = (
     "id, namespace_id, type, title, content, confidence, source, "
-    "created_at, updated_at, last_accessed, last_confirmed, access_count, metadata"
+    "created_at, updated_at, last_accessed, last_confirmed, access_count, metadata, pinned"
 )
 
 
@@ -61,10 +78,37 @@ def _score(mem: Memory, weights: dict[str, float], decay_lambda: float, relevanc
 
 
 def _recently_active(conn: sqlite3.Connection, namespace_id: str, limit: int) -> list[Memory]:
+    """Most recently touched memories, excluding this namespace's pins.
+
+    Pins are filtered in SQL rather than afterwards in Python because ``LIMIT``
+    applies first: fetching N rows and *then* dropping the pinned ones yields
+    fewer than N ranked candidates, so a full pin tier would quietly starve the
+    recency bucket it was supposed to sit alongside.
+    """
     rows = conn.execute(
         f"SELECT {_COLUMNS} FROM memories "
-        "WHERE namespace_id = ? AND confidence != 'deprecated' "
+        "WHERE namespace_id = ? AND confidence != 'deprecated' AND pinned = 0 "
         "ORDER BY last_accessed DESC LIMIT ?",
+        (namespace_id, limit),
+    ).fetchall()
+    return [Memory(**dict(r)) for r in rows]
+
+
+def _pinned(conn: sqlite3.Connection, namespace_id: str, limit: int) -> list[Memory]:
+    """Pinned memories for a namespace, newest-confirmed first.
+
+    Deprecated memories are excluded: a pin says "never let me miss this", and
+    deprecating a memory says "this is no longer true". The latter wins — the
+    pin is simply ignored until someone unpins or re-verifies it.
+
+    Ordering only decides who survives ``PINNED_HARD_CAP``, so it favours the
+    most recently reconfirmed. ``COALESCE`` keeps never-confirmed pins ordered
+    by creation instead of sorting them last under NULL.
+    """
+    rows = conn.execute(
+        f"SELECT {_COLUMNS} FROM memories "
+        "WHERE namespace_id = ? AND pinned = 1 AND confidence != 'deprecated' "
+        "ORDER BY COALESCE(last_confirmed, created_at) DESC LIMIT ?",
         (namespace_id, limit),
     ).fetchall()
     return [Memory(**dict(r)) for r in rows]
@@ -100,16 +144,27 @@ def build_context(
     off" signal can't be evicted by the relevance/access-dominated composite.
     Remaining slots are backfilled from the combined pool by composite score;
     the final list is presented in composite order.
+
+    Pinned memories are prepended to that result and are **additive to**
+    ``limit`` (up to ``PINNED_HARD_CAP``), so the caller may receive more than
+    ``limit`` memories. They are excluded from the ranked buckets so a pin
+    never consumes a discovery slot it was going to get for free.
     """
+    pinned = _pinned(conn, namespace_id, PINNED_HARD_CAP)
+    pinned_ids = {m.id for m in pinned}
+
     # Bucket 1: task-relevant, already composite-scored and ordered by search().
     task_bucket: list[Memory] = []
     if task_hint and task_hint.strip():
         task_n = max(1, math.ceil(limit * _TASK_RATIO))
+        # Over-fetch by the pin count so dropping pins below still leaves a full
+        # quota of ranked hits — search has no pinned filter of its own, and
+        # LIMIT would otherwise be spent on memories already guaranteed.
         task_bucket = search.search(
             conn,
             query=task_hint,
             namespace_id=namespace_id,
-            limit=task_n,
+            limit=task_n + len(pinned),
             weights=weights,
             decay_lambda=decay_lambda,
             embedder=embedder,
@@ -127,6 +182,14 @@ def build_context(
 
     # De-duplicate across buckets, keeping each memory's highest score (a task
     # hit that also shows up in the recency bucket keeps its richer relevance).
+    # Drop pins from the ranked buckets: they are already guaranteed, so
+    # leaving them in would spend a discovery slot on a memory the caller was
+    # getting for free. Filtered before de-dup so quota selection below can
+    # never pick an id that is missing from ``best``.
+    task_bucket = [m for m in task_bucket if m.id not in pinned_ids]
+    recent_bucket = [m for m in recent_bucket if m.id not in pinned_ids]
+    cross_bucket = [m for m in cross_bucket if m.id not in pinned_ids]
+
     best: dict[str, Memory] = {}
     for mem in (*task_bucket, *recent_bucket, *cross_bucket):
         current = best.get(mem.id)
@@ -174,6 +237,9 @@ def build_context(
             chosen.add(mem.id)
             selected.append(mem.id)
 
-    # Present the surfaced set in composite order.
+    # Present the surfaced set in composite order, pins first. Pins carry no
+    # score by design (they never entered the ranking), so they are prepended
+    # rather than sorted in — a scoreless memory would otherwise sink to the
+    # bottom of a score-ordered list, which is the opposite of what a pin means.
     ranked = sorted((best[mid] for mid in selected), key=lambda m: m.score or 0.0, reverse=True)
-    return ranked[:limit]
+    return [*pinned, *ranked[:limit]]
