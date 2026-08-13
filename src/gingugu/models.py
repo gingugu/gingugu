@@ -87,6 +87,9 @@ class Memory(BaseModel):
     last_confirmed: str | None = None
     access_count: int = 0
     metadata: str | None = None
+    # Pinned memories always load in memory_context, ahead of and exempt from
+    # ranking. Reserved for the handful of rules that must never be missing.
+    pinned: bool = False
     # Populated from memory_tags on read; not a column on `memories`.
     tags: list[str] = Field(default_factory=list)
     # Populated only on search/recall results; not stored.

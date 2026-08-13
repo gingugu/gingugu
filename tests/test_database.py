@@ -5,12 +5,12 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from gingugu.database import Database
+from gingugu.database import LATEST_SCHEMA_VERSION, Database
 
 
 def test_migration_sets_user_version(db: Database) -> None:
     version = db.conn.execute("PRAGMA user_version").fetchone()[0]
-    assert version == 7
+    assert version == LATEST_SCHEMA_VERSION
 
 
 def test_wal_and_foreign_keys_enabled(db: Database) -> None:
@@ -37,8 +37,8 @@ def test_fts_triggers_exist(db: Database) -> None:
 def test_migrate_is_idempotent(db: Database) -> None:
     from gingugu.database import migrate
 
-    assert migrate(db.conn) == 7
-    assert migrate(db.conn) == 7
+    assert migrate(db.conn) == LATEST_SCHEMA_VERSION
+    assert migrate(db.conn) == LATEST_SCHEMA_VERSION
 
 
 # --- migration backup tests ------------------------------------------------
@@ -79,7 +79,7 @@ def test_backup_taken_when_migrations_pending(tmp_path: Path) -> None:
     # Now reopen via Database — migrate() should see v3 < v4 and back up first.
     db = Database(db_path)
     db.connect()
-    assert db.conn.execute("PRAGMA user_version").fetchone()[0] == 7
+    assert db.conn.execute("PRAGMA user_version").fetchone()[0] == LATEST_SCHEMA_VERSION
     db.close()
 
     backup = db_path.with_name("stale.db.bak-before-v4")

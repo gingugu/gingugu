@@ -11,6 +11,7 @@ import uuid
 from pathlib import Path
 
 from gingugu.database import (
+    LATEST_SCHEMA_VERSION,
     _migration_001_initial_schema,
     _migration_002_credential_vault,
     migrate,
@@ -69,8 +70,8 @@ def test_v2_to_v3_upgrade_preserves_data(tmp_path: Path) -> None:
 
     # Upgrade.
     final = migrate(conn)
-    assert final == 7
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 7
+    assert final == LATEST_SCHEMA_VERSION
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == LATEST_SCHEMA_VERSION
 
     # New tables exist.
     tables = {
@@ -93,9 +94,9 @@ def test_migrate_is_idempotent_when_current(tmp_path: Path) -> None:
     path = tmp_path / "legacy.db"
     conn = _open_v2(path)
     _seed_v2(conn)
-    assert migrate(conn) == 7
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
     # Running again is a no-op (no error, stays at the current version).
-    assert migrate(conn) == 7
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
     conn.close()
 
 
@@ -135,7 +136,7 @@ def test_v5_backfills_claims_for_existing_memories() -> None:
             ),
         )
 
-    assert migrate(conn) == 7
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
 
     rows = conn.execute(
         "SELECT memory_id, ref, state FROM memory_claims ORDER BY memory_id"
@@ -176,7 +177,7 @@ def test_v5_backfill_runs_exactly_once() -> None:
 
 def test_v5_on_a_fresh_database_is_a_no_op() -> None:
     conn = sqlite3.connect(":memory:")
-    assert migrate(conn) == 7
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
     assert conn.execute("SELECT COUNT(*) FROM memory_claims").fetchone()[0] == 0
 
 
@@ -239,7 +240,7 @@ def test_v6_repairs_a_db_stranded_at_v5_with_an_empty_claims_table() -> None:
     )
     assert conn.execute("SELECT COUNT(*) FROM memory_claims").fetchone()[0] == 0
 
-    assert migrate(conn) == 7
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
 
     rows = conn.execute("SELECT memory_id, ref, state FROM memory_claims ORDER BY memory_id")
     assert [tuple(r) for r in rows] == [
@@ -270,7 +271,7 @@ def test_v6_repairs_a_stranded_db_that_is_no_longer_empty() -> None:
     )
     conn.commit()
 
-    assert migrate(conn) == 7
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
 
     refs = {r[0] for r in conn.execute("SELECT ref FROM memory_claims")}
     assert refs == {"gingugu#10", "gingugu#22"}
@@ -293,7 +294,7 @@ def test_v6_preserves_existing_resolution_state() -> None:
     )
     conn.commit()
 
-    assert migrate(conn) == 7
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
 
     rows = conn.execute("SELECT resolved_state, resolved_at FROM memory_claims").fetchall()
     assert rows == [("resolved", "2026-02-01")]
@@ -306,7 +307,7 @@ def test_v6_does_not_resurrect_a_ref_edited_out_of_a_memory() -> None:
     _seed_claim_memories(conn, (("m1", "no refs anymore", "the PR reference was edited out"),))
     conn.commit()
 
-    assert migrate(conn) == 7
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
     assert conn.execute("SELECT COUNT(*) FROM memory_claims").fetchone()[0] == 0
 
 
@@ -329,7 +330,7 @@ def test_v7_adds_default_repo_and_seeds_the_non_repo_namespaces() -> None:
         )
     conn.commit()
 
-    assert migrate(conn) == 7
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
 
     seeded = dict(conn.execute("SELECT name, default_repo FROM namespaces").fetchall())
     assert seeded["crow"] == ""
@@ -354,7 +355,7 @@ def test_v7_prunes_a_phantom_claim_that_came_from_a_wikilink() -> None:
     )
     conn.commit()
 
-    assert migrate(conn) == 7
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
     assert conn.execute("SELECT COUNT(*) FROM memory_claims").fetchone()[0] == 0
 
 
@@ -364,7 +365,7 @@ def test_v7_drops_bare_refs_in_a_namespace_that_is_not_a_repo() -> None:
     _seed_claim_memories(conn, (("m1", "Reflection", "PR #167 is still open"),))
     _rename_namespace(conn, "crow")
 
-    assert migrate(conn) == 7
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
     assert conn.execute("SELECT COUNT(*) FROM memory_claims").fetchone()[0] == 0
 
 
@@ -375,7 +376,7 @@ def test_v7_keeps_bare_refs_in_a_real_repo_namespace() -> None:
     _seed_claim_memories(conn, (("m1", "PR #20 open", "PR #20 is still open"),))
     conn.commit()
 
-    assert migrate(conn) == 7
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
     assert [tuple(r) for r in conn.execute("SELECT ref, state FROM memory_claims")] == [
         ("gingugu#20", "open")
     ]
@@ -399,7 +400,7 @@ def test_v7_preserves_resolution_on_a_claim_it_keeps() -> None:
     )
     conn.commit()
 
-    assert migrate(conn) == 7
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
 
     rows = conn.execute("SELECT resolved_state, resolved_at FROM memory_claims").fetchall()
     assert [tuple(r) for r in rows] == [("resolved", "2026-02-01")]
