@@ -160,3 +160,141 @@ class RelationManager:
         )
         self._conn.commit()
         return cur.rowcount > 0
+
+    def delete_edges(self, *, source_id: str, target_id: str) -> list[str]:
+        """Delete every edge in this direction, whatever its type. Returns the types removed."""
+        types = [
+            row["relation_type"]
+            for row in self._conn.execute(
+                "SELECT relation_type FROM relations WHERE source_id = ? AND target_id = ? "
+                "ORDER BY relation_type",
+                (source_id, target_id),
+            ).fetchall()
+        ]
+        if types:
+            self._conn.execute(
+                "DELETE FROM relations WHERE source_id = ? AND target_id = ?",
+                (source_id, target_id),
+            )
+            self._conn.commit()
+        return types
+
+    def retype_relation(
+        self,
+        *,
+        source_id: str,
+        target_id: str,
+        old_type: RelationType,
+        new_type: RelationType,
+    ) -> str:
+        """Relabel an existing edge in place, preserving direction and provenance.
+
+        The common repair is "right connection, wrong label", so the row is
+        UPDATEd rather than recreated: its id, ``created_at`` and ``metadata``
+        survive, and the graph keeps an honest record of when the link was
+        first drawn. Returns one of:
+
+        * ``retyped`` — the label was changed.
+        * ``merged`` — an edge of ``new_type`` already joined this pair, so the
+          old row was dropped into it. Reported distinctly because the edge
+          count falls by one; nothing is invented to keep the arithmetic tidy.
+        * ``unchanged`` — ``old_type`` and ``new_type`` are the same.
+        * ``not_found`` — no such edge to repair.
+        """
+        if old_type == new_type:
+            return "unchanged" if self._edge_exists(source_id, target_id, old_type) else "not_found"
+        if not self._edge_exists(source_id, target_id, old_type):
+            return "not_found"
+
+        if self._edge_exists(source_id, target_id, new_type):
+            self._conn.execute(
+                "DELETE FROM relations WHERE source_id = ? AND target_id = ? AND relation_type = ?",
+                (source_id, target_id, old_type.value),
+            )
+            self._conn.commit()
+            return "merged"
+
+        self._conn.execute(
+            "UPDATE relations SET relation_type = ? "
+            "WHERE source_id = ? AND target_id = ? AND relation_type = ?",
+            (new_type.value, source_id, target_id, old_type.value),
+        )
+        self._conn.commit()
+        return "retyped"
+
+    def _edge_exists(self, source_id: str, target_id: str, relation_type: RelationType) -> bool:
+        return (
+            self._conn.execute(
+                "SELECT 1 FROM relations "
+                "WHERE source_id = ? AND target_id = ? AND relation_type = ?",
+                (source_id, target_id, relation_type.value),
+            ).fetchone()
+            is not None
+        )
+
+    def list_edges(
+        self,
+        *,
+        namespace_id: str | None = None,
+        relation_type: RelationType | None = None,
+        memory_id: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict:
+        """Enumerate edges with both endpoints resolved to titles.
+
+        A graph you cannot read is a graph you cannot repair, and titles are what
+        make an edge judgeable without a second lookup per endpoint. Filtering by
+        ``namespace_id`` counts an edge if **either** endpoint lives there,
+        matching ``graph_stats.compute_graph`` — relations legitimately cross
+        namespaces and a source-only filter would hide half of them.
+
+        ``degree`` per endpoint is included because it decides whether an edge can
+        ever fire: past ``SPREAD_PER_SEED`` neighbours, spreading activation will
+        never visit it. Ordering is deterministic (source title, then target
+        title, then type) so a paged repair sweep sees each edge exactly once.
+        """
+        where: list[str] = []
+        params: list = []
+        if namespace_id:
+            where.append("(sm.namespace_id = ? OR tm.namespace_id = ?)")
+            params += [namespace_id, namespace_id]
+        if relation_type:
+            where.append("r.relation_type = ?")
+            params.append(relation_type.value)
+        if memory_id:
+            where.append("(r.source_id = ? OR r.target_id = ?)")
+            params += [memory_id, memory_id]
+        clause = f"WHERE {' AND '.join(where)}" if where else ""
+
+        joins = (
+            "FROM relations r "
+            "JOIN memories sm ON sm.id = r.source_id "
+            "JOIN memories tm ON tm.id = r.target_id "
+            "JOIN namespaces sns ON sns.id = sm.namespace_id "
+            "JOIN namespaces tns ON tns.id = tm.namespace_id "
+        )
+        total = int(
+            self._conn.execute(f"SELECT COUNT(*) {joins}{clause}", tuple(params)).fetchone()[0]
+        )
+
+        rows = self._conn.execute(
+            "SELECT r.source_id, r.target_id, r.relation_type, r.created_at, "
+            "sm.title AS source_title, tm.title AS target_title, "
+            "sns.name AS source_namespace, tns.name AS target_namespace, "
+            "(SELECT COUNT(*) FROM relations d "
+            " WHERE d.source_id = sm.id OR d.target_id = sm.id) AS source_degree, "
+            "(SELECT COUNT(*) FROM relations d "
+            " WHERE d.source_id = tm.id OR d.target_id = tm.id) AS target_degree "
+            f"{joins}{clause} "
+            "ORDER BY sm.title, tm.title, r.relation_type "
+            "LIMIT ? OFFSET ?",
+            (*params, limit, offset),
+        ).fetchall()
+
+        return {
+            "total": total,
+            "returned": len(rows),
+            "offset": offset,
+            "edges": [dict(row) for row in rows],
+        }

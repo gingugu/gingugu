@@ -11,6 +11,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`memory_unrelate`** — edge repair. Retype a mislabelled relation in place,
+  or remove one that should not exist. Retyping is an in-place UPDATE, so the
+  edge keeps its id, `created_at` and metadata: the usual repair is "right
+  connection, wrong label", and when the link was drawn stays true. Retyping
+  onto a type that already joins the pair collapses the two and reports
+  `merged` rather than `retyped`, because the edge count genuinely drops by
+  one. Deleting without a `relation_type` removes every edge between the pair;
+  memories are never touched.
+
+  Batches of up to 100 per-edge operations submit in one call, validated whole
+  before anything is written so a malformed op cannot leave the graph
+  half-repaired. `dry_run` previews a sweep. There is deliberately no
+  criteria-driven form: retyping exists because each edge deserves a different
+  type based on what it records, and a blanket relabel would manufacture
+  directional claims that were never true.
+
+  The relation surface was create-only, so an edge written in haste was
+  permanent for the life of both memories — and since spreading activation
+  visits at most 3 neighbours per seed without weighting by type, every wrong
+  edge kept competing for a slot against a right one. Precision was demanded,
+  errors were unfixable, and the cost was paid on every future recall.
+
+- **`memory_edges`** — read-only edge enumeration, the discovery half of the
+  same job. `memory_stats.graph` could report that a graph was 70%
+  `related_to`; nothing could say which edges those were, so repair meant
+  querying SQLite by hand. Rows carry both endpoints' ids, titles and
+  namespaces, the relation type, `created_at`, and each endpoint's degree —
+  degree being what decides whether an edge can ever fire. Filters by
+  namespace (either endpoint), relation type, or a single memory; paged with a
+  stable order.
+
 - **`memory_search(claims="open"|"contradicted")`** — the state-claim backlog as
   a first-class corpus. Returns full bodies of memories still asserting a PR/MR
   is open, or the subset a later memory in the same namespace already recorded

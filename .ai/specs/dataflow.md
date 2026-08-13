@@ -159,6 +159,9 @@ namespace at the write path instead. Deprecation beats a pin.
 memory_relate(source_id, target_id, relation_type)
   → relations.py writes a directed typed edge
   → later recall/context traverse edges so one hit surfaces its cluster
+
+memory_edges(namespace|relation_type|memory_id)     → read the graph
+memory_unrelate(... new_relation_type?) | edges[]   → repair it
 ```
 
 Edges are the load-bearing structure, but recall quality scales with edge
@@ -174,6 +177,24 @@ Measured on the live brain 2026-08-13 via the new `memory_stats.graph` block:
 61% of 1,570 edges are `related_to` and 339 memories carry more edges than
 traversal will ever visit - the cost of the older volume framing, still being
 worked off.
+
+Edges are repairable, which is what makes that precision demand fair: a surface
+that insists on picking a specific type and then makes every wrong pick
+permanent charges the full cost of an error on every future recall.
+`memory_edges` reads the graph (both endpoints resolved to titles, namespaces
+and degree, so an edge can be judged from the row) and `memory_unrelate`
+repairs it - retype in place, or delete. Retype UPDATEs the row rather than
+recreating it, so id, `created_at` and metadata survive: the usual repair is
+"right connection, wrong label", and when the link was drawn stays true.
+Retyping onto a type that already joins the pair collapses the two and reports
+`merged`, not `retyped` - the edge count genuinely drops by one.
+
+Batches are lists of per-edge decisions, deliberately **not** criteria-driven
+sweeps. There is no "retype every `related_to` here" option, because each edge
+deserves a different type based on what it records; a blanket relabel would
+manufacture directional claims that were never true, and a false `caused_by`
+retrieves worse than an honest `related_to`. The batch is validated whole before
+anything is written, so a bad op cannot leave the graph half-repaired.
 
 Traversal is hub-dampened (`RelationManager.dampened_neighbour_ids`): the same
 budgeted set powers `include_related` extras and spreading activation, so a

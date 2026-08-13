@@ -98,7 +98,7 @@ Where this goes long-term — federated, org-wide agent memory — lives in
 Those are great if you live in one tool. The moment you switch between
 Claude Code in the morning and Cursor in the afternoon, the memory is gone.
 Gingugu's memory follows you across every MCP client, lives on your machine,
-and is programmable (16 tools, structured types, relationships, confidence
+and is programmable (18 tools, structured types, relationships, confidence
 levels). The built-ins are convenience features. Gingugu is infrastructure.
 
 </details>
@@ -245,7 +245,7 @@ uv run gingugu  # or pip install -e .
 
 </details>
 
-> **Usable today.** 16 MCP tools live. 486 tests passing. Dogfooded daily in
+> **Usable today.** 18 MCP tools live. 532 tests passing. Dogfooded daily in
 > Claude Code and Windsurf — this repo's own memories live in a Gingugu
 > database. Early and seeking broader real-world validation.
 
@@ -671,6 +671,8 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_context` | Auto-surface relevant memories (one or many namespaces, deduped; optional compact mode) |
 | `memory_update` | Update content, type, confidence, or metadata; `resolve_claims` reconciles a stale PR/MR claim without editing the prose |
 | `memory_relate` | Create relationships between memories |
+| `memory_edges` | List edges with both endpoints' titles, namespaces, and degree; filter by namespace, type, or memory |
+| `memory_unrelate` | Retype an edge in place or remove it; one at a time or a batch, with `dry_run` |
 | `memory_consolidate` | Merge/summarize/deduplicate; call without ids for a read-only near-dupe scan |
 | `memory_forget` | Deprecate or remove a memory |
 | `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo) |
