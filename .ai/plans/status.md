@@ -4,7 +4,25 @@ _Last updated: 2026-08-13_
 
 ## In Flight
 
-- **Claims enumeration (`feature/claims-enumeration`)** — closes a product gap
+- **Comparison content retired from the public surface
+  (`docs/remove-comparison`)** — the README's `How It Compares` section and its
+  TOC entry are gone, and the matching `cat comparison.txt` block came out of
+  gingugu.com in the same pass (with its now-orphaned `.cmp-note` CSS).
+
+  The section had already shed its capability matrix on 2026-07-07; what remained
+  was a fair, hedged paragraph naming four other projects. Fairness was never
+  the problem. Naming them at all made the page partly about them, and it
+  committed the docs to tracking someone else's roadmap to stay accurate.
+  Positioning is now stated in absolute terms only.
+
+  Docs-only, no `src/` change. Two things left deliberately in place: the
+  CHANGELOG's historical entries about the old matrix (shipped history is a
+  record, not marketing copy), and the FAQ entry on editor built-ins (it exists
+  to explain what `gingugu init` gives you, not to rank a competitor).
+
+## Merged to `main`, awaiting release
+
+- **Claims enumeration (#47, squash `5b0a304`)** — closes a product gap
   found by dogfooding, not by a test: `memory_stats.claims.sample` reported a
   count of open claims and then listed only the _contradicted_ subset, so the
   2026-08-13 cleanup sweep could see "15 open" and had to query SQLite by hand
