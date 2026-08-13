@@ -9,42 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+---
 
-- **`age` no longer makes a maintained memory look stale.** The field shipped in
-  v0.13.0 for one job — at session start, under the `compact` mode the protocol
-  mandates, let the agent tell last night's RESUME note from June's. It was
-  derived from `created_at`, the one timestamp that never moves, so it was at
-  its most misleading for exactly the memories that get **maintained**: RESUME
-  notes, running lessons with several sightings, anything rewritten in place. A
-  memory stating today's truth could read as 7 weeks stale.
-
-  Three nested defects, fixed together:
-
-  - **`age` is anchored on the freshness anchor**, the same instant the scorer,
-    the spread-neighbour sort and staleness already use — so the payload no
-    longer disagrees with the ranking. Where the anchor differs from
-    `created_at`, `age` reports both halves: `"7 weeks ago (updated just now)"`.
-    That parenthetical costs ~4 tokens and appears only on maintained memories,
-    which is where the distinction carries information — "durable AND current"
-    is a stronger signal than either half.
-  - **The freshness anchor is a `MAX`, not a `COALESCE`.** It was documented as
-    a null-safe fallback, but `COALESCE` returns the first non-null: a content
-    edit made *after* the last confirmation was discarded outright, and the
-    memory was scored, spread-sorted and staleness-checked off the older
-    instant. Fixed in Python and in the two SQL call sites.
-  - **A rewrite is a confirmation.** `memory_update` now advances
-    `last_confirmed` when the title or content actually changed — someone
-    re-read the claim and restated it. Previously the clock only moved when a
-    caller explicitly passed `confidence="verified"`, so ordinary content
-    maintenance never registered and the freshness signal silently rotted.
-    Retypes, tag edits and metadata writes assert nothing about truth and still
-    leave it alone. Trade-off worth knowing: a one-word typo fix also resets the
-    staleness clock, suppressing `review_hints` and `suggests_deprecation` for
-    that memory.
-
-  Retrieval quality is unchanged: benchmarked A/B against a real 909-memory
-  brain, all metrics and every per-question score identical.
+## [0.14.0] - 2026-08-13
 
 ### Added
 
@@ -82,6 +49,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--client` targets never touch it.
 
 ### Fixed
+
+- **`age` no longer makes a maintained memory look stale.** The field shipped in
+  v0.13.0 for one job — at session start, under the `compact` mode the protocol
+  mandates, let the agent tell last night's RESUME note from June's. It was
+  derived from `created_at`, the one timestamp that never moves, so it was at
+  its most misleading for exactly the memories that get **maintained**: RESUME
+  notes, running lessons with several sightings, anything rewritten in place. A
+  memory stating today's truth could read as 7 weeks stale.
+
+  Three nested defects, fixed together:
+
+  - **`age` is anchored on the freshness anchor**, the same instant the scorer,
+    the spread-neighbour sort and staleness already use — so the payload no
+    longer disagrees with the ranking. Where the anchor differs from
+    `created_at`, `age` reports both halves: `"7 weeks ago (updated just now)"`.
+    That parenthetical costs ~4 tokens and appears only on maintained memories,
+    which is where the distinction carries information — "durable AND current"
+    is a stronger signal than either half.
+  - **The freshness anchor is a `MAX`, not a `COALESCE`.** It was documented as
+    a null-safe fallback, but `COALESCE` returns the first non-null: a content
+    edit made *after* the last confirmation was discarded outright, and the
+    memory was scored, spread-sorted and staleness-checked off the older
+    instant. Fixed in Python and in the two SQL call sites.
+  - **A rewrite is a confirmation.** `memory_update` now advances
+    `last_confirmed` when the title or content actually changed — someone
+    re-read the claim and restated it. Previously the clock only moved when a
+    caller explicitly passed `confidence="verified"`, so ordinary content
+    maintenance never registered and the freshness signal silently rotted.
+    Retypes, tag edits and metadata writes assert nothing about truth and still
+    leave it alone. Trade-off worth knowing: a one-word typo fix also resets the
+    staleness clock, suppressing `review_hints` and `suggests_deprecation` for
+    that memory.
+
+  Retrieval quality is unchanged: benchmarked A/B against a real 909-memory
+  brain, all metrics and every per-question score identical.
 
 - **`gingugu init --force` no longer destroys a customized hook without a
   backup.** The "is this file ours?" signature was the bare word `gingugu` —

@@ -146,13 +146,17 @@ The loop needs no new tool: stats → `memory_search(ids=…)` → `resolve_clai
 
 ## Release State
 
-- Current version: **0.13.0** (PyPI; every memory payload now carries a
-  derived `age` string — `"2 days ago"` — computed at serialization from
-  `created_at` and **never persisted**, so compact reads stay time-aware).
-  MINOR: a field was added to the tool surface. Shipped alongside it, a fix to
-  the `gingugu init` startup contract, which had instructed the agent to infer
-  its workspace from Claude Code's "Additional working directories" permission
-  allowlist; existing installs need `gingugu init --force` to pick it up.
-  Public repo `gingugu/gingugu`.
+- Current version: **0.14.0** (PyPI). MINOR: `gingugu init` gained user-level
+  rules management — the memory protocol now lives in a marked block in
+  `~/.claude/CLAUDE.md` that `init` owns, strictly additive outside its
+  markers. Shipped alongside it: the `age`/freshness-anchor fix (`age` is
+  anchored on `reference_timestamp` and elaborates to
+  `"7 weeks ago (updated just now)"`; the anchor became a MAX instead of a
+  COALESCE; a title/content rewrite now advances `last_confirmed`), the
+  relation-discipline guidance reversal, and two `gingugu init` bootstrap
+  fixes. Existing installs need `gingugu init --force` to pick up the template
+  changes. Public repo `gingugu/gingugu`.
+- Previous: **0.13.0** — introduced the derived `age` payload field and fixed
+  the startup contract's workspace inference.
 - Two-layer namespace convention (`crow` + project) is live.
 - See `.ai/plans/status.md` for in-flight work and carry-overs.
