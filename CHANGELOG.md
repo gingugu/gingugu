@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.15.0] - 2026-08-13
+
 ### Added
 
 - **Pinned memories: a tier that always loads, exempt from ranking.**
