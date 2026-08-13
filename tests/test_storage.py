@@ -84,6 +84,39 @@ def test_update_changes_fields(store: MemoryStore, namespaces: NamespaceManager)
     assert updated.last_confirmed is not None
 
 
+def test_update_text_rewrite_confirms(store: MemoryStore, namespaces: NamespaceManager) -> None:
+    """Rewriting title/content IS a confirmation — the freshness clock advances."""
+    ns_id = _ns_id(namespaces)
+    mem = store.create(namespace_id=ns_id, type=MemoryType.FACT, title="t", content="c")
+    assert mem.last_confirmed is None  # created as inferred
+
+    retitled = store.update(mem.id, title="t2")
+    assert retitled is not None and retitled.last_confirmed is not None
+
+    rewritten = store.update(mem.id, content="c2")
+    assert rewritten is not None
+    assert rewritten.last_confirmed is not None
+    assert rewritten.last_confirmed >= retitled.last_confirmed
+
+
+def test_update_without_text_change_does_not_confirm(
+    store: MemoryStore, namespaces: NamespaceManager
+) -> None:
+    """Retypes, metadata edits and no-op writes assert nothing about truth."""
+    ns_id = _ns_id(namespaces)
+    mem = store.create(namespace_id=ns_id, type=MemoryType.FACT, title="t", content="c")
+
+    retyped = store.update(mem.id, type=MemoryType.PATTERN)
+    assert retyped is not None and retyped.last_confirmed is None
+
+    meta_only = store.update(mem.id, metadata='{"k": 1}')
+    assert meta_only is not None and meta_only.last_confirmed is None
+
+    # Passing the same text back is not a rewrite.
+    noop = store.update(mem.id, title="t", content="c")
+    assert noop is not None and noop.last_confirmed is None
+
+
 def test_update_metadata_set_keep_clear(store: MemoryStore, namespaces: NamespaceManager) -> None:
     ns_id = _ns_id(namespaces)
     mem = store.create(

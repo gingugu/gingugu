@@ -177,7 +177,9 @@ def compute_review(
     rows = conn.execute(
         "SELECT id, type, title, content, last_confirmed, updated_at, created_at "
         "FROM memories WHERE confidence != 'deprecated'" + and_ns + " "
-        "AND (COALESCE(last_confirmed, updated_at, created_at) < ? "
+        # Freshness anchor — the LATEST of the three, matching
+        # decay.reference_timestamp (only last_confirmed is nullable).
+        "AND (MAX(COALESCE(last_confirmed, ''), updated_at, created_at) < ? "
         "OR content LIKE '%expire%' OR content LIKE '%as of%')",
         (*ns_params, cutoff),
     ).fetchall()

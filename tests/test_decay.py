@@ -41,10 +41,63 @@ def test_confidence_score_ordering() -> None:
     assert decay.confidence_score("deprecated") == 0.0
 
 
-def test_reference_timestamp_coalesce() -> None:
-    assert decay.reference_timestamp(None, None, "c") == "c"
-    assert decay.reference_timestamp(None, "u", "c") == "u"
-    assert decay.reference_timestamp("lc", "u", "c") == "lc"
+def test_reference_timestamp_null_safe() -> None:
+    c = "2026-06-16T14:25:49+00:00"
+    u = "2026-08-04T23:35:56+00:00"
+    assert decay.reference_timestamp(None, None, c) == c
+    assert decay.reference_timestamp(None, u, c) == u
+    assert decay.reference_timestamp(u, None, c) == u
+
+
+def test_reference_timestamp_is_max_not_coalesce() -> None:
+    """A content edit made after the last confirmation must win the anchor."""
+    created = "2026-06-16T14:25:49+00:00"
+    updated = "2026-08-04T23:35:56+00:00"
+    confirmed = "2026-07-29T15:27:51+00:00"
+    assert decay.reference_timestamp(confirmed, updated, created) == updated
+    # …and the confirmation still wins when it is the later of the two.
+    assert decay.reference_timestamp(updated, confirmed, created) == updated
+
+
+def test_reference_timestamp_skips_unparseable() -> None:
+    good = "2026-08-04T23:35:56+00:00"
+    assert decay.reference_timestamp("garbage", good, good) == good
+    # Nothing parses — fall back to first-non-null rather than returning None.
+    assert decay.reference_timestamp(None, "junk", "trash") == "junk"
+
+
+def test_age_label_plain_when_never_maintained() -> None:
+    now = datetime(2026, 8, 13, 12, 0, tzinfo=UTC)
+    created = "2026-06-16T12:00:00+00:00"
+    assert decay.age_label(created, created, now=now) == "8 weeks ago"
+    assert decay.age_label(created, None, now=now) == "8 weeks ago"
+
+
+def test_age_label_elaborates_when_maintained() -> None:
+    """The defect this fixes: a memory rewritten minutes ago read as 8 weeks stale."""
+    now = datetime(2026, 8, 13, 12, 0, tzinfo=UTC)
+    created = "2026-06-16T12:00:00+00:00"
+    anchor = "2026-08-13T11:59:30+00:00"
+    assert decay.age_label(created, anchor, now=now) == "8 weeks ago (updated just now)"
+
+
+def test_age_label_suppresses_identical_renderings() -> None:
+    """ "just now (updated just now)" is noise — a few seconds is not maintenance."""
+    now = datetime(2026, 8, 13, 12, 0, tzinfo=UTC)
+    created = "2026-08-13T11:59:00+00:00"
+    anchor = "2026-08-13T11:59:30+00:00"
+    assert decay.age_label(created, anchor, now=now) == "just now"
+
+
+def test_age_label_ignores_anchor_before_creation() -> None:
+    now = datetime(2026, 8, 13, 12, 0, tzinfo=UTC)
+    created = "2026-08-01T12:00:00+00:00"
+    assert decay.age_label(created, "2026-06-01T12:00:00+00:00", now=now) == "1 week ago"
+    assert decay.age_label(created, "garbage", now=now) == "1 week ago"
+
+
+def test_age_label_missing_created_at() -> None:
+    assert decay.age_label(None, "2026-08-13T12:00:00+00:00") is None
 
 
 def test_days_between_handles_none() -> None:
