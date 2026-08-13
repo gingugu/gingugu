@@ -56,6 +56,16 @@ AI client (Claude Code / Cursor / Windsurf / …)
   that `memory_claims` and `review_hints` exist to detect. Precedent:
   `credentials.expiry_status()` and `staleness` classify at call time too — no
   schema column anywhere holds a derived time value.
+- **One freshness anchor, and every consumer uses it.**
+  `decay.reference_timestamp()` returns the **latest** of `last_confirmed`,
+  `updated_at`, `created_at` — a `MAX`, not a `COALESCE`, so an edit made after
+  the last confirmation is not discarded. The scorer, the spread-neighbour sort,
+  staleness and the payload `age` (`decay.age_label()`) all read it; the two SQL
+  call sites mirror the same rule. Feeding it: **a rewrite is a confirmation** —
+  `storage.update` advances `last_confirmed` when the title or content actually
+  changed, reusing the "did the matching surface move?" test that already gates
+  claim re-sync and embedding re-encode. Retypes, tag edits and metadata writes
+  assert nothing about truth and leave the clock alone.
 - **State claims:** `claims.py` extracts repo-qualified PR/MR references and the
   state a memory asserts about them into `memory_claims` (migration 005;
   migration 006 re-runs the backfill for DBs stranded at v5; migration 007

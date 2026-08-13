@@ -61,7 +61,7 @@
 | `context.py` | Session priming (`memory_context`) + spreading activation |
 | `relations.py` | Typed graph edges + hub-dampened 1-hop traversal (`dampened_neighbour_ids`) |
 | `consolidation.py` | merge / summarize / deduplicate clusters |
-| `decay.py` | Composite scoring, dormancy as a resting signal (never auto-forgets), and `relative_age()` — the derived-at-read `age` string |
+| `decay.py` | Composite scoring, the `reference_timestamp()` freshness anchor (MAX, not COALESCE), dormancy as a resting signal (never auto-forgets), and `relative_age()`/`age_label()` — the derived-at-read `age` string |
 | `stats.py` | Health stats (counts, confidence, dormancy, hygiene, review sweep) |
 | `staleness.py` | Advisory review hints for point-in-time memories |
 | `claims.py` | Extracts checkable state claims (repo-qualified PR/MR refs) from prose; ignores refs inside `[[wiki-links]]` |
