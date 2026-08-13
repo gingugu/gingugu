@@ -162,8 +162,19 @@ class MemoryStore:
         now = utcnow_iso()
         new_type = type or existing.type
         new_confidence = confidence or existing.confidence
+        new_title = title if title is not None else existing.title
+        new_content = content if content is not None else existing.content
+        # Rewriting the title or content IS a confirmation: someone re-read the
+        # claim and restated it. Tag-only, retype-only, confidence-only and
+        # metadata-only edits assert nothing about truth and must not advance
+        # the clock — the same "did the matching surface move?" test
+        # memory_update already applies to relation hints. Without this, routine
+        # content maintenance never registered and the freshness signal rotted.
+        # Accepted trade: a one-word typo fix also resets the staleness clock,
+        # suppressing review hints and suggests_deprecation.
+        text_changed = new_title != existing.title or new_content != existing.content
         last_confirmed = existing.last_confirmed
-        if confidence == Confidence.VERIFIED:
+        if confidence == Confidence.VERIFIED or text_changed:
             last_confirmed = now
         # Empty string clears metadata to NULL (None means "leave unchanged" —
         # MCP optional params cannot distinguish absent from null).
@@ -173,8 +184,6 @@ class MemoryStore:
             # _normalize_metadata returns None for "" and validates JSON-object shape
             # for everything else (raising ValueError on bad input).
             new_metadata = _normalize_metadata(metadata)
-        new_title = title if title is not None else existing.title
-        new_content = content if content is not None else existing.content
         self._conn.execute(
             "UPDATE memories SET title=?, content=?, type=?, confidence=?, metadata=?, "
             "updated_at=?, last_confirmed=? WHERE id=?",
@@ -191,9 +200,6 @@ class MemoryStore:
         )
         # Claims are derived from the text, so they only need re-deriving when
         # the text moved. Done before the commit so both land atomically.
-        text_changed = (title is not None and title != existing.title) or (
-            content is not None and content != existing.content
-        )
         if text_changed:
             existing.title, existing.content = new_title, new_content
             claim_sync.sync(self._conn, existing, now)

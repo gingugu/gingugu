@@ -56,6 +56,16 @@ AI client (Claude Code / Cursor / Windsurf / …)
   that `memory_claims` and `review_hints` exist to detect. Precedent:
   `credentials.expiry_status()` and `staleness` classify at call time too — no
   schema column anywhere holds a derived time value.
+- **One freshness anchor, and every consumer uses it.**
+  `decay.reference_timestamp()` returns the **latest** of `last_confirmed`,
+  `updated_at`, `created_at` — a `MAX`, not a `COALESCE`, so an edit made after
+  the last confirmation is not discarded. The scorer, the spread-neighbour sort,
+  staleness and the payload `age` (`decay.age_label()`) all read it; the two SQL
+  call sites mirror the same rule. Feeding it: **a rewrite is a confirmation** —
+  `storage.update` advances `last_confirmed` when the title or content actually
+  changed, reusing the "did the matching surface move?" test that already gates
+  claim re-sync and embedding re-encode. Retypes, tag edits and metadata writes
+  assert nothing about truth and leave the clock alone.
 - **State claims:** `claims.py` extracts repo-qualified PR/MR references and the
   state a memory asserts about them into `memory_claims` (migration 005;
   migration 006 re-runs the backfill for DBs stranded at v5; migration 007
@@ -122,6 +132,19 @@ AI client (Claude Code / Cursor / Windsurf / …)
   (`theme.py`, degrades to monochrome off-TTY). Other clients (`--client`) get a
   rules file. This closes the gap where the repo's own hook-based install
   outperformed the copy-paste setup shipped to users.
+- **The user-level rules file is part of the bootstrap, and is merged, not
+  written.** `bootstrap/global_rules.py` manages the protocol inside a marked
+  block in `~/.claude/CLAUDE.md` — the file loaded in *every* session, including
+  directories with no project protocol installed. A repo rules file is created
+  and owned by `init`, so a `--force`-gated whole-file write is fine there; the
+  user-level file is hand-authored and carries identity/workflow rules unrelated
+  to memory, so the only bytes `init` may rewrite are the ones between its own
+  sentinels. Everything else appends. An unmanaged protocol already in the file
+  is a refusal plus instructions, never a silent second set of memory rules.
+  There is deliberately **no `--global` flag**: making the step opt-in would
+  imply the protocol is optional. It exists because that file drifted — it still
+  said "build edges aggressively" long after the templates had moved on, with no
+  tooling able to correct it.
 - **The UI ships in the wheel.** `gingugu ui` (`webui.py`) serves the pre-built
   React bundle *and* a live `/api/export` read from one process on one port, so
   pip-installed users get the Memory Explorer with no repo checkout and no Node.

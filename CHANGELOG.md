@@ -9,7 +9,105 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`age` no longer makes a maintained memory look stale.** The field shipped in
+  v0.13.0 for one job — at session start, under the `compact` mode the protocol
+  mandates, let the agent tell last night's RESUME note from June's. It was
+  derived from `created_at`, the one timestamp that never moves, so it was at
+  its most misleading for exactly the memories that get **maintained**: RESUME
+  notes, running lessons with several sightings, anything rewritten in place. A
+  memory stating today's truth could read as 7 weeks stale.
+
+  Three nested defects, fixed together:
+
+  - **`age` is anchored on the freshness anchor**, the same instant the scorer,
+    the spread-neighbour sort and staleness already use — so the payload no
+    longer disagrees with the ranking. Where the anchor differs from
+    `created_at`, `age` reports both halves: `"7 weeks ago (updated just now)"`.
+    That parenthetical costs ~4 tokens and appears only on maintained memories,
+    which is where the distinction carries information — "durable AND current"
+    is a stronger signal than either half.
+  - **The freshness anchor is a `MAX`, not a `COALESCE`.** It was documented as
+    a null-safe fallback, but `COALESCE` returns the first non-null: a content
+    edit made *after* the last confirmation was discarded outright, and the
+    memory was scored, spread-sorted and staleness-checked off the older
+    instant. Fixed in Python and in the two SQL call sites.
+  - **A rewrite is a confirmation.** `memory_update` now advances
+    `last_confirmed` when the title or content actually changed — someone
+    re-read the claim and restated it. Previously the clock only moved when a
+    caller explicitly passed `confidence="verified"`, so ordinary content
+    maintenance never registered and the freshness signal silently rotted.
+    Retypes, tag edits and metadata writes assert nothing about truth and still
+    leave it alone. Trade-off worth knowing: a one-word typo fix also resets the
+    staleness clock, suppressing `review_hints` and `suggests_deprecation` for
+    that memory.
+
+  Retrieval quality is unchanged: benchmarked A/B against a real 909-memory
+  brain, all metrics and every per-question score identical.
+
+### Added
+
+- **`gingugu init` now manages the memory protocol in your user-level
+  `~/.claude/CLAUDE.md`.** Previously `init` only ever wrote inside a target
+  repo, so the one rules file loaded in _every_ session — including sessions
+  started in a directory with no project protocol installed — was hand-
+  maintained with no tooling behind it. It drifted exactly as you'd expect: it
+  was still telling agents to "build edges aggressively" long after the shipped
+  templates had moved on.
+
+  The protocol now lives in a marked block that `init` owns. It is strictly
+  additive outside those markers:
+
+  - missing file → created
+  - existing content, no markers → block **appended below it**, every prior byte
+    preserved
+  - managed block present → replaced **in place**; your prose before _and_ after
+    it survives, and an unchanged result is a no-op
+  - a memory protocol already there that `init` doesn't manage → **nothing is
+    written**; it warns and explains how to opt in. **No flag overrides this** —
+    `--force` authorizes overwriting the repo files `init` owns, and must not
+    also authorize appending a second set of rules to a hand-authored file
+  - a `.bak` is written only on the refresh path, since appending risks nothing
+
+  `init` now also prints the **resolved target directory** as its first line.
+  `--path` defaults to the process's cwd and wrappers move that out from under
+  you — `uv run --directory X gingugu init` runs in `X`, so it bootstraps `X`
+  rather than the directory you typed the command in. Naming the path up front
+  turns a silent wrong-repo write into something you catch immediately.
+
+  Re-running `gingugu init` after an upgrade is how you pick up protocol changes.
+  There is no `--global` flag: this is part of the Claude Code bootstrap in the
+  same way the hooks and the non-destructive `settings.json` merge are. Other
+  `--client` targets never touch it.
+
+### Fixed
+
+- **`gingugu init --force` no longer destroys a customized hook without a
+  backup.** The "is this file ours?" signature was the bare word `gingugu` —
+  which every gingugu-aware hook contains, because the MCP tool names are
+  `mcp__gingugu__*`. A heavily customized local `stop.py` was therefore
+  classified as ours and overwritten with **no `.bak`**; only a clean git tree
+  saved it. Every shipped file now carries a distinctive
+  `gingugu-init:managed-file` marker, and anything lacking it is backed up first.
+
+- **The foreign-flag warning no longer cries wolf.** It compared a wired hook
+  command's flags against a hardcoded list of _our template's_ flags, so a repo
+  running its own richer same-named hook — one that genuinely accepts `--chat`
+  and `--notify` — was reported as "written for a different script" when the
+  wiring was correct. It now reads the `add_argument` declarations from the
+  script actually installed on disk, so it stays quiet when the flags are
+  accepted and still fires when they are genuinely orphaned (which is the real
+  hazard: `parse_known_args` means orphaned flags are silently ignored at
+  runtime rather than erroring).
+
 ### Changed
+
+- **The shipped memory-protocol template covers more of the tool surface.**
+  Added the credential vault (`credential_list` first, before ever asking the
+  user for a secret), `memory_forget` for wrong information, namespace creation
+  when a repo has none, and a concrete list of save triggers rather than a bare
+  instruction to save often.
 
 - **Relation guidance now optimizes edge _quality_, not edge count.** Every
   guidance surface that drives relation-writing was reversed: the

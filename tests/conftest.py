@@ -45,6 +45,23 @@ def fake_keyring():
 
 
 @pytest.fixture(autouse=True)
+def sandboxed_global_rules(monkeypatch: pytest.MonkeyPatch, tmp_path_factory):
+    """Keep the suite out of the developer's real ``~/.claude/CLAUDE.md``.
+
+    ``gingugu init`` manages the user-level rules file as part of the Claude Code
+    bootstrap, so every test that calls ``bootstrap.main()`` would otherwise
+    append a managed block to the home directory of whoever ran ``pytest``. That
+    file is hand-authored and loaded in every session — a test suite must never
+    reach it. Autouse, in the same spirit as ``fake_keyring``: the default is
+    sandboxed, and a test wanting a specific path passes one explicitly.
+    """
+    sandbox = tmp_path_factory.mktemp("global-rules") / ".claude" / "CLAUDE.md"
+    monkeypatch.setattr(
+        "gingugu.bootstrap.global_rules.global_claude_md", lambda: sandbox, raising=True
+    )
+
+
+@pytest.fixture(autouse=True)
 def offline_embeddings(monkeypatch: pytest.MonkeyPatch):
     """Keep the suite off the network — the sibling of ``fake_keyring``.
 
