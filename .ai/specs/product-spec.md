@@ -35,7 +35,9 @@ Gingugu instance serves Windsurf and Claude Code against one DB.
 | `memory_export` / `memory_import` | Back up / transfer a namespace | ✅ Shipped |
 | `memory_namespaces` | Namespace CRUD + `default_repo` (what a bare "PR #12" means here; `""` = not a repo) | ✅ Shipped |
 | `credential_*` | OS-keychain secret vault | ✅ Shipped |
-| `suggested_relations` hint | Nudge edge creation at store time; compact payload (title + ~200-char summary) | ✅ Shipped (v0.3.8; compacted unreleased) |
+| `suggested_relations` hint | Surface candidates to examine for a _directional_ edge at store time; compact payload (title + ~200-char summary) | ✅ Shipped (v0.3.8; compacted v0.12.0; reframed from "link these" to "examine these" unreleased) |
+| Relation discipline | Guidance ranks `supersedes`/`contradicts`/`caused_by`/`parent_of` first; `related_to` is a fallback, not a default | ✅ Shipped (unreleased) |
+| Type-weighted spreading activation | Make neighbour selection prefer high-signal relation types | ⛔ Not built — gated on bench evidence |
 | `age` payload field | Derived-at-read relative age on every memory (full, compact, and write-time hints); never persisted | ✅ Shipped (v0.13.0) |
 | Memory Explorer UI | Browse graph + dashboard | ✅ Shipped |
 | `gingugu ui` (launcher) | One command serves the built UI + live `/api/export` on one port (no Node); `--dev` for Vite hot reload. Bundle ships in the wheel | 🔧 Built (v0.9.0, pending release) |

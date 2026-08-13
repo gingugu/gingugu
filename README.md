@@ -170,7 +170,7 @@ or Rust toolchain required to use it. The MCP SDK is first-class in Python.
 | 🔍 **Hybrid Search** | SQLite FTS5 (BM25) + semantic embeddings fused with Reciprocal Rank Fusion. Two backends: [fastembed](https://github.com/qdrant/fastembed) (ONNX, offline) or Ollama (zero extra footprint, uses your existing Ollama process) |
 | ⏰ **Temporal Intelligence** | Trust-led scoring, dormancy tracking (never forgets), "last confirmed" tracking, spreading activation |
 | 🔔 **Review Hints** | Point-in-time memories ("PR #947 open, waiting on…", passed expiry dates) get advisory staleness flags on every read - you reconcile, the server never mutates |
-| 🔗 **Relationships** | Link memories: supersedes, related_to, caused_by, contradicts, parent_of, child_of |
+| 🔗 **Relationships** | A typed graph over what similarity can't see: supersedes, contradicts, caused_by, parent_of/child_of (related_to as a fallback) |
 | 🎯 **Confidence Levels** | verified → inferred → stale → deprecated lifecycle |
 | 🧹 **Consolidation Tools** | Find near-duplicate clusters (read-only suggest scan), then merge, summarize, or deduplicate on demand |
 | 🚀 **Auto-Context** | Surfaces relevant memories on session start - one call loads many namespaces deduped, with an optional compact mode for lighter payloads |
@@ -490,8 +490,10 @@ The whole point is you never have to ask the same question twice.
 
 Use `memory_recall` before non-trivial work to check what's already known.
 Use `memory_update` when something changes — don't leave stale records.
-Use `memory_relate` to link connected memories (supersedes, related_to,
-caused_by, contradicts, parent_of, child_of).
+Use `memory_relate` where an edge records something search cannot infer — what a
+memory `supersedes`, `contradicts`, was `caused_by`, or is `parent_of`/`child_of`.
+Recall already ranks by text + semantic similarity, so `related_to` is a fallback
+for a real connection none of those describe, not shorthand for "same topic".
 
 Set `confidence="verified"` when proven by a test or explicit confirmation.
 Use `confidence="inferred"` for conclusions you drew.

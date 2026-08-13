@@ -45,7 +45,9 @@ SAVE_REMINDER = (
     "({total} tool calls) but ZERO gingugu memory writes. Unsaved sessions "
     "vanish - save what this session learned NOW: memory_store the decisions, "
     "bugs, patterns, and outcomes (project namespace; crow for cross-project "
-    "lessons), then memory_relate the new memories to their cluster. If there "
+    "lessons). Then memory_relate only where an edge records what search cannot "
+    "infer - what a memory supersedes, contradicts, was caused_by, or belongs "
+    "under; skip related_to for mere topical overlap. If there "
     "is genuinely nothing worth saving, you may stop again and this check will "
     "not re-fire this session."
 )

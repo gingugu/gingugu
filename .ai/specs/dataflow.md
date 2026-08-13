@@ -15,7 +15,17 @@ memory_store(content, title, type, namespace, tags, confidence)
 
 `similar_memories` (score ≥ 0.5) = merge candidates. `suggested_relations`
 (score ≥ 0.3, excludes self + already-linked + items already in
-`similar_memories`) = link candidates. Both are hints; neither blocks the write.
+`similar_memories`) = memories to **examine for a directional relationship**.
+Both are hints; neither blocks the write.
+
+`suggested_relations` is deliberately _not_ a link list. Overlap is how a
+candidate is found; what justifies an edge is a fact similarity cannot see
+(`supersedes`, `contradicts`, `caused_by`, `parent_of`/`child_of`). Recall
+already ranks by hybrid text + semantic score, so a `related_to` edge meaning
+"same topic" duplicates the index and — because spreading activation caps at 3
+neighbours per seed and ignores `relation_type` — crowds out an edge that
+carries signal. Measured 2026-08-04 before the guidance was reversed: 69% of a
+real brain's 1369 edges were `related_to`.
 
 Both are **always compact** (title + ~200-char `summary`), unlike the `memory`
 the caller just wrote, which returns in full. A hint is a pointer: enough to
