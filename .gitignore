@@ -104,5 +104,9 @@ docs/pi-central-brain.md
 # and host details. NEVER commit - this repo is public.
 deploy/
 
+# Local-only: parked reading and drafts, not repo content. Kept ignored
+# because `git add -A` otherwise sweeps it into unrelated commits.
+for-later/
+
 # Claude Code / Gingugu artifacts (added by `gingugu init`)
 .claude/settings.local.json
