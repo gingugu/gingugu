@@ -4,7 +4,32 @@ _Last updated: 2026-08-13_
 
 ## In Flight
 
-_Nothing in flight._
+- **Claims enumeration (`feature/claims-enumeration`)** — closes a product gap
+  found by dogfooding, not by a test: `memory_stats.claims.sample` reported a
+  count of open claims and then listed only the _contradicted_ subset, so the
+  2026-08-13 cleanup sweep could see "15 open" and had to query SQLite by hand
+  to learn which fifteen. A count without an enumeration is a dead end wearing
+  a metric's clothes.
+
+  - `claims.sample` now enumerates every open claim, contradicted first, each
+    row tagged `contradicted`. `review_limit` raises the cap (max 100) as before.
+  - New `claims.open_actionable` — open claims excluding those on deprecated
+    memories, which is what `sample` lists. Without it, `open` vs `len(sample)`
+    reads as missing rows.
+  - New `memory_search(claims="open"|"contradicted")` — the backlog with full
+    bodies, composing with `query`, `type`, `namespace`, `tags`, `sort_by`.
+  - New `claim_queries.py` holds the read side (backlog query + the shared
+    `claim_filter()` predicate). One definition serving the stats block and the
+    search filter; also returns `claim_sync.py` (314 lines) under the limit.
+  - **Deliberately unchanged:** contradiction detection stays namespace-scoped.
+    Bare refs key off the namespace's default repo, so cross-namespace matching
+    would pair two different repos' `PR #12`. A real cross-namespace
+    contradiction (devex-ai-gateway vs OKREngine, seen during the sweep) stays
+    invisible — accepted: a missed one is silent, a fabricated one teaches the
+    reader to ignore the metric.
+
+  499 tests passing (13 new in `tests/test_claim_enumeration.py`), ruff + black
+  clean.
 
 ## Shipped in v0.15.0 (2026-08-13)
 
@@ -100,8 +125,11 @@ v0.2.0).
   2026-08-03, still unfiled as an issue.
 
 - **Over the 300-line rule:** `storage.py` (495), `database.py` (485),
-  `handlers/helpers.py` (393), `claim_sync.py` (314). `search.py` is now 267
-  and off this list (the engine/`search_common`/`search_filters` split).
+  `handlers/helpers.py` (393). `search.py` is now 267 and off this list (the
+  engine/`search_common`/`search_filters` split); `claim_sync.py` is 254 and
+  off it too, split by the claims-enumeration work into a write path
+  (`claim_sync.py`) and a read path (`claim_queries.py`, 125) — a split the
+  feature wanted anyway, since both consumers needed the same predicate.
 
   The pinned-tier work added to three of these rather than fixing them:
   `database.py` +31 (migration 008 and its rationale), `storage.py` +21

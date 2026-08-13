@@ -9,6 +9,7 @@ plain table scans.
 
 from __future__ import annotations
 
+from .claim_queries import claim_filter
 from .models import CONFIDENCE_RANK, Confidence, normalize_tag
 
 COLUMNS = (
@@ -62,8 +63,13 @@ def build_filters(
     created_after: str | None = None,
     created_before: str | None = None,
     tags: list[str] | None = None,
+    claims: str | None = None,
 ) -> tuple[list[str], list[object]]:
-    """Compose the standard metadata filters into WHERE fragments + params."""
+    """Compose the standard metadata filters into WHERE fragments + params.
+
+    ``claims`` is "open" or "contradicted" — see ``claim_queries.claim_filter``.
+    It contributes no parameters, so it composes anywhere the others do.
+    """
     where: list[str] = []
     params: list[object] = []
     if namespace_id is not None:
@@ -89,4 +95,6 @@ def build_filters(
         clause, tag_params = tag_filter(f"{alias}.id", tags)
         where.append(clause)
         params.extend(tag_params)
+    if claims:
+        where.append(claim_filter(alias, claims))
     return where, params

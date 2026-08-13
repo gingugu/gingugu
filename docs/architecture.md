@@ -441,13 +441,36 @@ rather than empty when there is nothing to report, so the hint stays cheap to
 ignore. Extraction is best-effort throughout: a failure logs and is swallowed,
 never breaking a write.
 
-**The reconciliation loop**, reusing existing tools only:
+**The reconciliation loop:**
 
 ```text
-memory_stats(review_limit=100)     -> claims { open, resolved, contradicted, sample[] }
-memory_search(ids="…")             -> the flagged bodies
+memory_stats(review_limit=100)     -> claims { open, open_actionable, resolved,
+                                               contradicted, sample[] }
+memory_search(claims="open")       -> the backlog with full bodies
 memory_update(resolve_claims="…")  -> resolution recorded, PROSE UNTOUCHED
 ```
+
+`claims.sample` enumerates the backlog, contradicted entries first, each tagged
+`contradicted` so priority survives the trip. Two counts, deliberately: `open`
+is every unresolved claim, `open_actionable` excludes those on deprecated
+memories - which is the set `sample` lists. Reporting only the first invites a
+caller to compare it against `len(sample)` and conclude rows went missing.
+
+The sample deliberately did **not** enumerate at first: it listed the
+contradicted subset alone, on the reasoning that a contradiction is the only
+*machine-answerable* entry. That reasoning was sound and the result was still
+unusable - a namespace could report five open claims and offer no way to learn
+which five, so a real sweep had to query SQLite by hand. A count without an
+enumeration is a dead end wearing a metric's clothes.
+
+`memory_search(claims="open"|"contradicted")` is the same predicate as a search
+filter, composing with query, type, namespace, and tags. Both consumers share
+one correlated subquery in `claim_queries.py`; two hand-written copies is how
+they drift. Contradiction remains scoped **within** a namespace, for the same
+reason bare refs are: `PR #12` keys off the namespace's default repo, so
+matching across namespaces would pair two different repos' PR #12. A missed
+contradiction is silent; a fabricated one teaches the reader to ignore the
+metric.
 
 ---
 
@@ -744,6 +767,13 @@ entries (`id`, `title`, `signals`) - 5 by default, raise with
 `review_limit` (max 100) to enumerate every flagged memory for a sweep.
 Advisory only.
 
+It also includes a **`claims`** block - the state-claim backlog. `open` counts
+every unresolved claim, `open_actionable` excludes claims on deprecated
+memories, `resolved` counts closed ones, and `contradicted` is the subset a
+later memory in the same namespace already answered. `sample` enumerates the
+backlog (`id`, `title`, `ref`, `contradicted`), contradicted entries first,
+under the same `review_limit` cap. See *State Claims* above for the loop.
+
 The response also includes a **`graph`** block (read-only aggregates over the
 relation graph, computed in `graph_stats.py`):
 
@@ -784,6 +814,12 @@ Advanced search with full filter support, plus a precise fetch-by-ID path.
 - `limit` (optional) — max results
 - `compact` (optional, default `false`) — title + ~200-char `summary`
   instead of full content (same semantics as `memory_recall`'s compact mode)
+- `claims` (optional) — `open` or `contradicted`. Restricts results to the
+  state-claim backlog: memories still asserting a PR/MR is open, or the subset
+  a later memory in the same namespace already recorded as resolved. Composes
+  with every other filter (and with `query`), so
+  `claims="open", namespace="gingugu", sort_by="created"` is a working sweep.
+  Ignored on the `ids` path, like every other filter.
 
 ### `memory_export`
 Export memories to a portable JSON payload (backup/transfer). Credentials are
