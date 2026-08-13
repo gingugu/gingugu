@@ -59,7 +59,7 @@
 | `search_filters.py` | `advanced_search`: filtered search + metadata-only listing |
 | `embeddings.py` | Semantic vector generation |
 | `context.py` | Session priming (`memory_context`): the pinned tier + three quota'd intent buckets, plus spreading activation |
-| `relations.py` | Typed graph edges + hub-dampened 1-hop traversal (`dampened_neighbour_ids`) |
+| `relations.py` | Typed graph edges + hub-dampened 1-hop traversal (`dampened_neighbour_ids`); edge repair (`retype_relation`, `delete_edges`) and enumeration (`list_edges`) |
 | `consolidation.py` | merge / summarize / deduplicate clusters |
 | `decay.py` | Composite scoring, the `reference_timestamp()` freshness anchor (MAX, not COALESCE), dormancy as a resting signal (never auto-forgets), and `relative_age()`/`age_label()` — the derived-at-read `age` string |
 | `stats.py` | Health stats (counts, confidence, dormancy, hygiene, review sweep) |
@@ -72,7 +72,7 @@
 | `namespaces.py` | Namespace CRUD; a `default_repo` change re-derives that namespace's claims (best-effort) so the declaration is not inert |
 | `credentials.py` | OS-keychain credential vault |
 | `portability.py` | Export / import a namespace |
-| `handlers/` | MCP tool handlers: `memory.py` (store/update/forget), `recall.py` (recall/context), `search.py`, `relations.py`, `admin.py`, `credentials.py`, `helpers.py` |
+| `handlers/` | MCP tool handlers: `memory.py` (store/update/forget), `recall.py` (recall/context), `search.py`, `relations.py` (relate/edges/unrelate), `consolidate.py`, `admin.py`, `credentials.py`, `helpers.py` |
 
 Dev-only tooling at the repo root (never shipped in the wheel): **`bench/`** —
 golden-set retrieval benchmark (Recall@K, MRR, precision, token cost;
@@ -86,7 +86,8 @@ Run: `uv run python -m bench [--db <real-brain.db>]`.
 
 - **Memory:** `memory_store`, `memory_update`, `memory_forget`, `memory_recall`,
   `memory_search`, `memory_context`, `memory_stats`
-- **Graph:** `memory_relate`
+- **Graph:** `memory_relate`, `memory_edges` (enumerate, read-only),
+  `memory_unrelate` (retype / remove, single or batch, `dry_run`)
 - **Lifecycle:** `memory_consolidate`, `memory_export`, `memory_import`,
   `memory_namespaces`
 - **Credentials:** `credential_list`, `credential_get`, `credential_store`, `credential_delete`

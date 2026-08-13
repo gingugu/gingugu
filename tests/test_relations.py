@@ -78,6 +78,92 @@ def test_delete_relation(
     assert relations.get_relations(a) == []
 
 
+def test_retype_reports_unchanged_when_the_type_already_matches(
+    store: MemoryStore, namespaces: NamespaceManager, relations: RelationManager
+) -> None:
+    ns_id = namespaces.get_or_create("test-ns").id
+    a, b = _mem(store, ns_id, "a"), _mem(store, ns_id, "b")
+    relations.relate(source_id=a, target_id=b, relation_type=RelationType.RELATED_TO)
+    assert (
+        relations.retype_relation(
+            source_id=a,
+            target_id=b,
+            old_type=RelationType.RELATED_TO,
+            new_type=RelationType.RELATED_TO,
+        )
+        == "unchanged"
+    )
+    assert len(relations.get_relations(a)) == 1
+
+
+def test_retype_of_absent_edge_is_not_found_even_when_types_match(
+    store: MemoryStore, namespaces: NamespaceManager, relations: RelationManager
+) -> None:
+    """A no-op retype must not report success on an edge that was never there."""
+    ns_id = namespaces.get_or_create("test-ns").id
+    a, b = _mem(store, ns_id, "a"), _mem(store, ns_id, "b")
+    assert (
+        relations.retype_relation(
+            source_id=a,
+            target_id=b,
+            old_type=RelationType.RELATED_TO,
+            new_type=RelationType.RELATED_TO,
+        )
+        == "not_found"
+    )
+
+
+def test_retype_does_not_touch_the_reverse_direction(
+    store: MemoryStore, namespaces: NamespaceManager, relations: RelationManager
+) -> None:
+    """Edges are directed; a repair names one direction and leaves the other."""
+    ns_id = namespaces.get_or_create("test-ns").id
+    a, b = _mem(store, ns_id, "a"), _mem(store, ns_id, "b")
+    relations.relate(source_id=a, target_id=b, relation_type=RelationType.RELATED_TO)
+    relations.relate(source_id=b, target_id=a, relation_type=RelationType.RELATED_TO)
+
+    relations.retype_relation(
+        source_id=a,
+        target_id=b,
+        old_type=RelationType.RELATED_TO,
+        new_type=RelationType.CAUSED_BY,
+    )
+    types = {(r["direction"], r["relation_type"]) for r in relations.get_relations(a)}
+    assert types == {("outgoing", "caused_by"), ("incoming", "related_to")}
+
+
+def test_delete_edges_removes_every_type_in_one_direction(
+    store: MemoryStore, namespaces: NamespaceManager, relations: RelationManager
+) -> None:
+    ns_id = namespaces.get_or_create("test-ns").id
+    a, b = _mem(store, ns_id, "a"), _mem(store, ns_id, "b")
+    relations.relate(source_id=a, target_id=b, relation_type=RelationType.RELATED_TO)
+    relations.relate(source_id=a, target_id=b, relation_type=RelationType.CAUSED_BY)
+    relations.relate(source_id=b, target_id=a, relation_type=RelationType.SUPERSEDES)
+
+    removed = relations.delete_edges(source_id=a, target_id=b)
+    assert set(removed) == {"related_to", "caused_by"}
+    assert [r["relation_type"] for r in relations.get_relations(a)] == ["supersedes"]
+
+
+def test_list_edges_spans_namespaces_from_either_endpoint(
+    store: MemoryStore, namespaces: NamespaceManager, relations: RelationManager
+) -> None:
+    """Relations legitimately cross namespaces; a source-only filter would hide
+    half of them, so the filter matches on either end."""
+    left = namespaces.get_or_create("left").id
+    right = namespaces.get_or_create("right").id
+    a, b = _mem(store, left, "a"), _mem(store, right, "b")
+    relations.relate(source_id=a, target_id=b, relation_type=RelationType.RELATED_TO)
+
+    for ns_id in (left, right):
+        result = relations.list_edges(namespace_id=ns_id)
+        assert result["total"] == 1
+    edge = relations.list_edges(namespace_id=right)["edges"][0]
+    assert edge["source_namespace"] == "left"
+    assert edge["target_namespace"] == "right"
+
+
 def test_relations_cascade_on_memory_delete(
     store: MemoryStore, namespaces: NamespaceManager, relations: RelationManager
 ) -> None:

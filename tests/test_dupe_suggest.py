@@ -176,7 +176,7 @@ async def test_empty_memory_ids_string_still_errors(server) -> None:
 async def test_title_fallback_when_embeddings_sparse(server, monkeypatch) -> None:
     """Peer-review regression: one embedded memory must not blind the title
     fallback for a namespace dominated by unembedded memories."""
-    from gingugu.handlers import relations as relations_handler
+    from gingugu.handlers import consolidate as consolidate_handler
 
     one = _payload(
         await server.call_tool(
@@ -193,7 +193,7 @@ async def test_title_fallback_when_embeddings_sparse(server, monkeypatch) -> Non
     assert one["ok"] and two["ok"]
 
     monkeypatch.setattr(
-        relations_handler.consolidation,
+        consolidate_handler.consolidation,
         "find_duplicate_clusters",
         lambda conn, **kw: {
             "mode": "semantic",

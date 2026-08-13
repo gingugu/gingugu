@@ -24,12 +24,13 @@ class ServerContext:
 
 def register_all(mcp, ctx: ServerContext) -> None:
     """Register every handler module's tools onto the FastMCP instance."""
-    from . import admin, credentials, memory, recall, relations, search
+    from . import admin, consolidate, credentials, memory, recall, relations, search
 
     memory.register(mcp, ctx)
     recall.register(mcp, ctx)
     search.register(mcp, ctx)
     relations.register(mcp, ctx)
+    consolidate.register(mcp, ctx)
     admin.register(mcp, ctx)
     # Credential vault is opt-out: a shared/central instance runs with
     # MEMORY_CREDENTIALS_ENABLED=false so it never exposes secret tools.

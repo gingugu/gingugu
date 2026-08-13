@@ -31,6 +31,8 @@ Gingugu instance serves Windsurf and Claude Code against one DB.
 | `memory_context` | Session priming + spreading activation (multi-namespace, deduped; compact mode; not access-credited); pinned tier loads first, additive to `limit` | ✅ Shipped |
 | `memory_stats` | Health: counts, confidence, dormancy, hygiene, review sweep, the `claims` backlog (`sample` enumerates every open claim, contradicted first; `open_actionable` vs `open`; `review_limit` raises the cap), and a `graph` block (edges, degree, type mix, orphans, over-spread-cap) | ✅ Shipped |
 | `memory_relate` | Build typed graph edges | ✅ Shipped |
+| `memory_edges` | Enumerate edges with both endpoints resolved to titles, namespaces and degree; filter by namespace / type / memory, paged | ✅ Shipped (unreleased) |
+| `memory_unrelate` | Repair edges: retype in place (provenance preserved; collision reports `merged`) or remove; single or batch of up to 100 reviewed ops; `dry_run` | ✅ Shipped (unreleased) |
 | `memory_consolidate` | merge / summarize / deduplicate + read-only near-dupe suggest scan | ✅ Shipped |
 | `memory_export` / `memory_import` | Back up / transfer a namespace | ✅ Shipped |
 | `memory_namespaces` | Namespace CRUD + `default_repo` (what a bare "PR #12" means here; `""` = not a repo) | ✅ Shipped |
