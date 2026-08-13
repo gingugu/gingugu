@@ -7,7 +7,7 @@ import sqlite3
 import time
 from datetime import UTC, datetime, timedelta
 
-from . import claim_sync
+from . import claim_queries
 from .decay import DEPRECATE_SUGGEST_AFTER_DAYS, DORMANT_AFTER_DAYS
 from .graph_stats import compute_graph
 from .staleness import REVIEW_HINT_AFTER_DAYS, review_signals
@@ -139,7 +139,7 @@ def compute_stats(
         "graph": compute_graph(conn, namespace_id=namespace_id),
         "hygiene": compute_hygiene(conn, namespace_id=namespace_id),
         "review": compute_review(conn, namespace_id=namespace_id, sample_limit=review_limit),
-        "claims": claim_sync.claim_stats(
+        "claims": claim_queries.claim_stats(
             conn, namespace_id=namespace_id, sample_limit=review_limit
         ),
     }
