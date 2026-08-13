@@ -67,8 +67,23 @@ def days_between(earlier: str | None, now: datetime | None = None) -> float:
 def reference_timestamp(
     last_confirmed: str | None, updated_at: str | None, created_at: str | None
 ) -> str | None:
-    """Null-safe freshness anchor: COALESCE(last_confirmed, updated_at, created_at)."""
-    return last_confirmed or updated_at or created_at
+    """Null-safe freshness anchor: the LATEST of the three instants.
+
+    Deliberately a max, **not** a COALESCE. COALESCE returns the first non-null,
+    so a content edit made after the last confirmation was silently discarded
+    and the memory got scored, spread-sorted and staleness-checked off the
+    older instant. Unparseable candidates are skipped rather than crashing a
+    read; if none parse, fall back to first-non-null so the caller still gets
+    whatever the row has.
+    """
+    parsed = [
+        (dt, raw)
+        for raw in (last_confirmed, updated_at, created_at)
+        if (dt := _parse(raw)) is not None
+    ]
+    if not parsed:
+        return last_confirmed or updated_at or created_at
+    return max(parsed, key=lambda pair: pair[0])[1]
 
 
 def relative_age(instant: str | None, now: datetime | None = None) -> str | None:
@@ -100,6 +115,38 @@ def relative_age(instant: str | None, now: datetime | None = None) -> str | None
     if days < 365:
         return _plural(int(days / 30), "month")
     return _plural(int(days / 365), "year")
+
+
+def age_label(
+    created_at: str | None,
+    anchor: str | None = None,
+    now: datetime | None = None,
+) -> str | None:
+    """Payload-facing age: how long the memory has existed, plus how recently it
+    was maintained when those differ.
+
+    ``"7 weeks ago"`` for an untouched memory; ``"7 weeks ago (updated just
+    now)"`` for one rewritten since it was written. The parenthetical costs ~4
+    tokens and appears **only** on maintained memories — exactly where the
+    distinction carries information, because "durable AND current" is a
+    stronger signal than either half. Without it, a memory rewritten minutes
+    ago reads as weeks stale, which defeats the one job ``age`` exists to do.
+
+    ``anchor`` is the freshness anchor (``reference_timestamp``) — the same
+    instant the scorer, the spread-neighbour sort and staleness already use, so
+    the payload no longer disagrees with the ranking.
+    """
+    base = relative_age(created_at, now)
+    if base is None:
+        return None
+    born, maintained = _parse(created_at), _parse(anchor)
+    if born is None or maintained is None or maintained <= born:
+        return base
+    updated = relative_age(anchor, now)
+    # Identical renderings ("just now (updated just now)") add noise, not signal.
+    if updated is None or updated == base:
+        return base
+    return f"{base} (updated {updated})"
 
 
 def _plural(value: int, unit: str) -> str:

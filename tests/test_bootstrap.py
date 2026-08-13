@@ -8,7 +8,19 @@ from pathlib import Path
 import pytest
 
 from gingugu.bootstrap import CLIENT_RULES_FILES, GITIGNORE_ENTRIES, main
-from gingugu.bootstrap.settings import merge_settings
+from gingugu.bootstrap.settings import declared_flags, foreign_flags, merge_settings
+
+STOP_CMD_WITH_EXTRA_FLAGS = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/stop.py --notify --chat"
+
+# A hook that legitimately accepts more than our template does — the shape of a
+# real customized kit hook.
+RICHER_STOP_PY = """# a repo's own richer stop hook
+import argparse
+p = argparse.ArgumentParser()
+p.add_argument("--chat", action="store_true")
+p.add_argument("--notify", action="store_true")
+p.add_argument("--check-memory-saves", action="store_true")
+"""
 
 
 def _read(path: Path) -> str:
@@ -268,6 +280,87 @@ def test_merge_settings_stays_quiet_when_existing_flags_are_ours():
 
     assert "Stop" not in added
     assert warnings == []
+
+
+# --- the flag check reads the script on disk, not a hardcoded list -------------
+
+
+def test_declared_flags_reads_the_installed_script(tmp_path):
+    script = tmp_path / "stop.py"
+    script.write_text(RICHER_STOP_PY)
+    assert declared_flags(script) == {"--chat", "--notify", "--check-memory-saves"}
+
+
+def test_declared_flags_is_none_when_unreadable(tmp_path):
+    assert declared_flags(tmp_path / "nope.py") is None
+
+
+def test_foreign_flags_defers_to_the_installed_script(tmp_path):
+    """False positive fixed: a richer same-named hook is not "a different script".
+
+    Regression: the check compared against a hardcoded list of OUR template's
+    flags, so a repo running its own hook that genuinely accepts `--chat` and
+    `--notify` was reported as misconfigured when it was correct.
+    """
+    script = tmp_path / "stop.py"
+    script.write_text(RICHER_STOP_PY)
+    assert foreign_flags(STOP_CMD_WITH_EXTRA_FLAGS, "stop.py", script=script) == []
+
+
+def test_foreign_flags_still_reports_genuinely_orphaned_flags(tmp_path):
+    """The real hazard: the script on disk does NOT declare the wired flags."""
+    script = tmp_path / "stop.py"
+    script.write_text('import argparse\np.add_argument("--check-memory-saves")\n')
+    assert foreign_flags(STOP_CMD_WITH_EXTRA_FLAGS, "stop.py", script=script) == [
+        "--notify",
+        "--chat",
+    ]
+
+
+def test_foreign_flags_falls_back_when_no_script_is_available():
+    assert foreign_flags(STOP_CMD_WITH_EXTRA_FLAGS, "stop.py") == ["--notify", "--chat"]
+
+
+def test_merge_settings_is_quiet_when_the_installed_hook_declares_the_flags(tmp_path):
+    hooks = tmp_path / "hooks"
+    hooks.mkdir()
+    (hooks / "stop.py").write_text(RICHER_STOP_PY)
+
+    _, added, warnings = merge_settings(_stop_wired(STOP_CMD_WITH_EXTRA_FLAGS), hooks_dir=hooks)
+
+    assert "Stop" not in added
+    assert warnings == [], "a hook that accepts the flags must not be called foreign"
+
+
+# --- --force must never destroy a customized hook without a backup ------------
+
+
+def test_force_backs_up_a_customized_hook_that_merely_mentions_gingugu(tmp_path):
+    """Regression for real data loss.
+
+    The signature used to be the bare word "gingugu", which every gingugu-aware
+    hook contains — the MCP tool names are `mcp__gingugu__*`. A heavily
+    customized local hook was therefore treated as ours and overwritten by
+    `--force` with NO backup; only a clean git tree saved it.
+    """
+    hooks = tmp_path / ".claude" / "hooks"
+    hooks.mkdir(parents=True)
+    customized = 'MEMORY_WRITE_TOOLS = {"mcp__gingugu__memory_store"}\n# my own extras\n'
+    (hooks / "stop.py").write_text(customized)
+
+    main(["--path", str(tmp_path), "--force"])
+
+    assert (
+        hooks / "stop.py.bak"
+    ).read_text() == customized, "a customized hook must be backed up before --force replaces it"
+    assert "gingugu-init:managed-file" in (hooks / "stop.py").read_text()
+
+
+def test_reforce_over_our_own_file_makes_no_backup(tmp_path):
+    """Our own marked file is not foreign, so re-running --force stays quiet."""
+    main(["--path", str(tmp_path)])
+    main(["--path", str(tmp_path), "--force"])
+    assert not (tmp_path / ".claude" / "hooks" / "stop.py.bak").exists()
 
 
 # --- theme ---------------------------------------------------------------------

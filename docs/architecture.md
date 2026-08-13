@@ -265,9 +265,26 @@ memories keep working.
 
 **`days_since_confirmed` source (null-safe):** `last_confirmed` is nullable —
 a freshly stored memory has never been confirmed. The reference timestamp is
-always resolved as `COALESCE(last_confirmed, updated_at, created_at)`, so a
-brand-new memory scores `freshness ≈ 1.0` (zero days elapsed) rather than
-crashing on `NULL` math. `created_at` is `NOT NULL`, guaranteeing a value.
+always resolved as the **latest** of `last_confirmed`, `updated_at` and
+`created_at`, so a brand-new memory scores `freshness ≈ 1.0` (zero days
+elapsed) rather than crashing on `NULL` math. `created_at` is `NOT NULL`,
+guaranteeing a value.
+
+This anchor is a `MAX`, not a `COALESCE`. A `COALESCE` returns the first
+non-null, so a content edit made *after* the last confirmation was discarded
+and the memory got scored, spread-sorted and staleness-checked off the older
+instant. The same rule applies in SQL (`relations.py`, `stats.py`), where only
+`last_confirmed` needs a null guard because the other two columns are
+`NOT NULL`.
+
+**A rewrite is a confirmation.** `memory_update` advances `last_confirmed`
+whenever `title` or `content` actually changed — someone re-read the claim and
+restated it. Tag-only, retype-only, confidence-only and metadata-only edits
+assert nothing about truth and leave the clock alone (the same "did the
+matching surface move?" test that gates relation hints). Without this, routine
+content maintenance never registered and the freshness signal silently rotted.
+Accepted trade: a one-word typo fix also resets the staleness clock,
+suppressing `review_hints` and `suggests_deprecation` for that memory.
 
 **Confidence ordering** (used by the `confidence` "minimum level" filter on
 `memory_recall` / `memory_search`): `verified > inferred > stale > deprecated`.
@@ -523,12 +540,22 @@ Auto-surface relevant memories for the current workspace. Called on session star
   Pull the full body with `memory_recall` when a memory matters.
 
 Every returned memory carries `age` — a human-readable interval such as
-`"2 days ago"`, derived from `created_at` at serialization time. It survives
-`compact` mode deliberately: the session protocol mandates `compact=true` at
-session start, so dropping every temporal signal left the agent unable to tell
-last night's RESUME memory from June's. **The string is never persisted** — a
-stored `"6 days ago"` would be wrong the moment the world moved on, which is
-the rot `memory_claims` and `review_hints` exist to catch.
+`"2 days ago"`, derived at serialization time. It survives `compact` mode
+deliberately: the session protocol mandates `compact=true` at session start, so
+dropping every temporal signal left the agent unable to tell last night's
+RESUME memory from June's. **The string is never persisted** — a stored
+`"6 days ago"` would be wrong the moment the world moved on, which is the rot
+`memory_claims` and `review_hints` exist to catch.
+
+When the memory has been maintained since it was written, `age` reports both
+halves: `"7 weeks ago (updated just now)"`. The leading interval is how long
+the memory has existed; the parenthetical is the freshness anchor — the same
+instant the scorer, the spread-neighbour sort and staleness use, so the payload
+no longer disagrees with the ranking. The parenthetical costs ~4 tokens and
+appears **only** where the two differ, which is exactly where the distinction
+carries information: "durable AND current" is a stronger signal than either
+half. Without it, a RESUME note rewritten minutes ago read as weeks stale —
+defeating the one job `age` exists to do.
 
 Each returned memory may carry `review_hints` - advisory signals that its
 content describes point-in-time state that may have gone stale (see *Review

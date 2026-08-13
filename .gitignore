@@ -103,3 +103,6 @@ docs/pi-central-brain.md
 # Local-only: Pi deployment automation. Contains wifi PSK, password hashes,
 # and host details. NEVER commit - this repo is public.
 deploy/
+
+# Claude Code / Gingugu artifacts (added by `gingugu init`)
+.claude/settings.local.json

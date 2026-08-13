@@ -47,6 +47,9 @@
 | `webui.py` | `gingugu ui`: serves the built Memory Explorer bundle + live `/api/export` on one port (prod, no Node), or spawns the Vite dev server (`--dev`); assets ship in the wheel at `gingugu/_ui_dist` |
 | `promote.py` | `gingugu promote`: MCP client that promotes local "gold" to a central brain (filter + provenance + idempotent store) — not part of the server |
 | `bootstrap/` | `gingugu init`: copies packaged hook/command/rules templates into a target repo (Claude Code hooks + non-destructive settings merge, or a `--client` rules file) — not part of the server |
+| `bootstrap/global_rules.py` | Manages the memory protocol inside a marked block in the user-level `~/.claude/CLAUDE.md`. Append-only outside the markers; refreshes only its own block; refuses when an unmanaged protocol is already present |
+| `bootstrap/_files.py` | Shared `read_template` / `safe_read` helpers, split out so `global_rules` doesn't import the package `__init__` that imports it |
+| `bootstrap/settings.py` | Non-destructive `.claude/settings.json` merge. `declared_flags()` reads a hook's real `add_argument` flags off disk, so the "wired for a different script" warning reflects the installed script rather than our template's flag set |
 | `config.py` | Config + cross-platform DB path (platformdirs); transport + credentials-flag settings |
 | `database.py` | Connection, schema, WAL, migrations (`PRAGMA user_version`), FTS5 triggers |
 | `models.py` | Memory / namespace / relation data models |
@@ -58,7 +61,7 @@
 | `context.py` | Session priming (`memory_context`) + spreading activation |
 | `relations.py` | Typed graph edges + hub-dampened 1-hop traversal (`dampened_neighbour_ids`) |
 | `consolidation.py` | merge / summarize / deduplicate clusters |
-| `decay.py` | Composite scoring, dormancy as a resting signal (never auto-forgets), and `relative_age()` — the derived-at-read `age` string |
+| `decay.py` | Composite scoring, the `reference_timestamp()` freshness anchor (MAX, not COALESCE), dormancy as a resting signal (never auto-forgets), and `relative_age()`/`age_label()` — the derived-at-read `age` string |
 | `stats.py` | Health stats (counts, confidence, dormancy, hygiene, review sweep) |
 | `staleness.py` | Advisory review hints for point-in-time memories |
 | `claims.py` | Extracts checkable state claims (repo-qualified PR/MR refs) from prose; ignores refs inside `[[wiki-links]]` |

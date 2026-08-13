@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-08-04_
+_Last updated: 2026-08-13_
 
 ## In Flight
 
@@ -29,6 +29,129 @@ _Last updated: 2026-08-04_
   3. type-weighted spreading activation (see Blocked / Pending — needs bench
      evidence)
   4. `memory_store` accepts `relations` inline; then a compound session-end tool
+
+- **`gingugu init` now manages the user-level rules file** (branch
+  `feature/init-global`, stacked on `docs/relate-discipline`). New
+  `bootstrap/global_rules.py` installs and refreshes the memory protocol inside a
+  marked block in `~/.claude/CLAUDE.md`.
+
+  **Why:** bootstrap previously only ever wrote under a target _repo_, so the
+  user-level file — loaded in **every** session, including directories with no
+  project protocol installed — was hand-maintained with no tooling behind it.
+  That is exactly why it drifted: it was still saying "build edges aggressively"
+  after the repo templates had moved on. Raised as a parking-lot item during the
+  relation-discipline work and built the same session.
+
+  **Design, deliberately not a whole-file write.** `init_rules_file` overwrites
+  gated on `--force`, which is fine for a file `init` created and owns. The
+  user-level file is hand-authored and carries identity/workflow rules unrelated
+  to memory, so it gets a marked-section merge instead:
+  - missing file → create
+  - existing prose, no markers → **append below it**, every prior byte preserved
+  - managed block present → replace **only between the markers** (prose before
+    and after survives); byte-identical result is a no-op
+  - unmanaged memory protocol present → **write nothing**, warn, and explain how
+    to opt in (wrap it in the markers). **No flag overrides this**
+  - `.bak` only on the refresh path, since appending risks nothing
+
+  **`--force` is deliberately not forwarded to the global step, and this was
+  learned the hard way mid-session.** A real `uv run --directory ~/GIT/gingugu
+  gingugu init --force` aimed at a repo's hooks appended a duplicate protocol to
+  a hand-authored `~/.claude/CLAUDE.md` — the exact outcome the guard existed to
+  prevent, delivered by one flag authorizing two decisions of very different
+  size. `merge_block` now takes no `force` parameter at all, so the bypass is
+  unreachable rather than merely discouraged; a test asserts passing one raises
+  `TypeError`, and an end-to-end test asserts `init --force` overwrites repo
+  files while leaving a hand-written global file byte-identical.
+
+  **Same run exposed a second footgun:** `--path` defaults to the process's cwd,
+  and `uv run --directory X` _moves_ that cwd, so the command bootstrapped the
+  gingugu repo instead of the directory it was typed in — `--force`-overwriting
+  this repo's own customized hooks (recovered from git). `init` now prints the
+  resolved `target` as its first output line. Also fixed: `theme._style_line`
+  had no prefix match for the new `appended`/`refreshed` statuses, so they
+  rendered without an `[ OK ]` marker.
+
+  **No `--global` flag.** The step is part of the Claude Code bootstrap, like the
+  hooks and the `settings.json` merge; making it opt-in would imply the protocol
+  is optional. Non-Claude `--client` paths never touch it (their user-level rules
+  location is not something this tool should guess at).
+
+  **Hazard closed:** an autouse `sandboxed_global_rules` fixture in
+  `tests/conftest.py` redirects the path for the whole suite. Without it every
+  test calling `bootstrap.main()` would append to the home directory of whoever
+  ran `pytest`. Verified: the real file's checksum is unchanged after a full run.
+
+  19 tests in `tests/test_global_rules.py`.
+
+- **Bootstrap safety fixes found by that same accident** (same branch, separate
+  commit). Both are pre-existing bugs in shipped code, not new-feature fallout:
+
+  1. **`--force` destroyed a customized hook with no backup.**
+     `_TEMPLATE_SIGNATURE` was the bare word `gingugu`, which every
+     gingugu-aware hook contains (the MCP tool names are `mcp__gingugu__*`), so
+     `_write_file` classified a heavily customized local `stop.py` as ours and
+     overwrote it without a `.bak`. Only a clean git tree saved this repo. Every
+     shipped file now carries a `gingugu-init:managed-file` marker.
+  2. **The foreign-flag warning was a false positive.** `foreign_flags`
+     compared a wired command against a hardcoded list of our template's flags,
+     so this repo — whose own `stop.py` genuinely declares `--chat`/`--notify` —
+     was told its wiring "was written for a different script". It now reads
+     `add_argument` declarations from the script on disk (`declared_flags`),
+     falling back to the hardcoded set only when unreadable. It still fires on
+     genuinely orphaned flags, which matters because `parse_known_args` means
+     those are silently ignored at runtime rather than erroring.
+
+- **The shipped protocol template was enriched from a real hand-tuned global
+  file** (user's explicit go-ahead). Added: the credential vault
+  (`credential_list` before ever asking for a secret), `memory_forget` for wrong
+  information, namespace creation when a repo has none, and a concrete list of
+  save triggers instead of a bare "save often". Machine-specific names and
+  examples deliberately not carried over.
+
+  446 tests pass, ruff + black clean.
+
+- **`age` reports maintenance, and the freshness anchor stops discarding edits**
+  (branch `fix/age-freshness-anchor`, stacked on `feature/init-global`). Found
+  by soak-testing the three commits above and watching the session-start payload:
+  a memory substantially rewritten ~20 minutes earlier surfaced as
+  `"age": "7 weeks ago"`.
+
+  Three nested defects, shipped together because #1 alone would make `age`
+  _look_ right while ranking stayed wrong:
+
+  1. **Display.** `age` came off raw `created_at`, ignoring
+     `decay.reference_timestamp` — the anchor the scorer, the spread-neighbour
+     sort and staleness all already used. `age` was the only consumer that
+     disagreed with the other three. Now anchored, and elaborated to
+     `"7 weeks ago (updated just now)"` where the two differ (~4 tokens, only on
+     maintained memories — "durable AND current" beats either half alone).
+  2. **Ranking.** `reference_timestamp` was documented as
+     `COALESCE(last_confirmed, updated_at, created_at)`, and COALESCE takes the
+     first non-null, not the max. A content edit made after the last
+     confirmation was discarded. Now a `MAX` in Python and in both SQL call
+     sites (`relations.py`, `stats.py`); only `last_confirmed` needs a null
+     guard, the other two columns are `NOT NULL`.
+  3. **Root cause.** `storage.update` bumped `last_confirmed` only when
+     `confidence=VERIFIED` was passed explicitly, so ordinary content
+     maintenance never registered as a confirmation. Now a title/content change
+     confirms, reusing the "did the matching surface move?" test already in the
+     module. Retypes, tag edits and metadata writes deliberately do not.
+
+  **Accepted caveat, surfaced before building:** confirming on rewrite also
+  suppresses `review_hints` and `suggests_deprecation`, so a one-word typo fix
+  resets the staleness clock. Correct when you genuinely restated the claim,
+  not free.
+
+  **Bench gate cleared** (#2 and #3 touch ranking, per
+  `.ai/standards/01-code-and-testing.md`): fixture floor 1.000 MRR, and a real-
+  brain A/B on the same DB — before vs after — came back **identical on every
+  metric and every per-question score**, tokens −0.2%. Note the stored
+  `bench/local/*.json` baselines are no longer valid reference points on their
+  own: the live brain has grown ~9 days since they were captured, which alone
+  moves recall@5 and token counts. A/B on one DB is the only honest comparison.
+
+  456 tests pass (10 new), ruff + black clean.
 
 ## Blocked / Pending
 
@@ -79,18 +202,6 @@ _Last updated: 2026-08-04_
   `related_to` edges. Deleting a third of the graph is destructive and
   irreversible; fix the sort so they stop winning slots instead. Pruning returns
   to the table only if the bench says type-weighting is insufficient.
-
-- **No `gingugu init --global` to manage `~/.claude/CLAUDE.md`.** Bootstrap only
-  ever writes under a target _repo_ (`init_claude_code` / `init_rules_file` both
-  resolve paths from the CLI `--path` arg), so the user-level rules file — the
-  one loaded in **every** session, including sessions in repos that have no
-  project protocol installed — is hand-maintained and has no tooling behind it.
-  That is exactly why it drifted: it was still saying "build edges
-  aggressively" after this repo's guidance had moved on, and it is the loudest
-  voice in any session where no repo protocol loads.
-
-  Parked deliberately, not scoped. Raised 2026-08-04 during the relation-
-  discipline work (the global file was fixed by hand in that pass).
 
 - **`gingugu ui --host` exposes an unauthenticated full-DB export.** Found
   2026-08-03, still unfiled as an issue.

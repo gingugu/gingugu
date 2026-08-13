@@ -13,10 +13,12 @@ write the matching rules file with the memory protocol block.
 from __future__ import annotations
 
 import argparse
-from importlib.resources import files
 from pathlib import Path
 
 from . import theme
+from ._files import read_template as _read_template
+from ._files import safe_read as _safe_read
+from .global_rules import init_global_rules
 from .settings import load_settings, merge_settings, write_settings
 
 CLIENT_RULES_FILES = {
@@ -44,10 +46,6 @@ _MCP_HINT = (
 )
 
 
-def _read_template(name: str) -> str:
-    return (files("gingugu.bootstrap") / "templates" / name).read_text()
-
-
 def _ensure_gitignore(target: Path, *, dry_run: bool, results: list[str]) -> None:
     """Append any missing Claude Code / Gingugu ignore rules, non-destructively."""
     path = target / ".gitignore"
@@ -68,9 +66,16 @@ def _ensure_gitignore(target: Path, *, dry_run: bool, results: list[str]) -> Non
     results.append(f"  {verb} {path}  (+{len(missing)} ignore rule(s))")
 
 
-# Every hook template we ship carries this line. Its absence in a file we are
-# about to overwrite means the file belongs to somebody else's tooling.
-_TEMPLATE_SIGNATURE = "gingugu"
+# A distinctive marker every file we ship carries. Its absence in a file we are
+# about to overwrite means that file is NOT ours, so back it up first.
+#
+# This was the bare word "gingugu", which is useless as a signature: any hook
+# that merely mentions the tool matches, and every gingugu-aware hook does — the
+# MCP tool names are `mcp__gingugu__*`. A real, heavily-customized local hook was
+# therefore classified as ours and overwritten by `--force` with NO backup, and
+# only a clean git tree saved it. The marker has to be something only our
+# templates would ever contain.
+_TEMPLATE_SIGNATURE = "gingugu-init:managed-file"
 
 
 def _write_file(
@@ -93,22 +98,20 @@ def _write_file(
     results.append(f"  {verb:<9} {path}")
     if foreign:
         results.append(
-            f"  WARNING: {path.name} did not look like a gingugu hook — it was "
-            f"written by other tooling. Backed up to {path.name}.bak. If your "
-            f"settings.json invokes it with flags gingugu's script does not "
-            f"accept, that command needs updating too."
+            f"  WARNING: {path.name} was not written by this version of `gingugu "
+            f"init` — it may be your own or another tool's. Backed up to "
+            f"{path.name}.bak. If your settings.json invokes it with flags the "
+            f"replacement does not declare, that command needs updating too."
         )
 
 
-def _safe_read(path: Path) -> str:
-    try:
-        return path.read_text()
-    except OSError:
-        return ""
-
-
 def init_claude_code(target: Path, *, force: bool, dry_run: bool) -> list[str]:
-    results: list[str] = ["Claude Code bootstrap:"]
+    # State the resolved target first. `--path` defaults to the process's cwd,
+    # and wrappers move that out from under you — `uv run --directory X` runs in
+    # X, so a bare `gingugu init` there bootstraps X, not the directory you typed
+    # the command in. Naming the path up front turns a silent wrong-repo write
+    # into something you notice on line one.
+    results: list[str] = ["Claude Code bootstrap:", f"  target {target}"]
     hooks_dir = target / ".claude" / "hooks"
     commands_dir = target / ".claude" / "commands"
 
@@ -136,7 +139,7 @@ def init_claude_code(target: Path, *, force: bool, dry_run: bool) -> list[str]:
 
     settings_path = target / ".claude" / "settings.json"
     raw = settings_path.read_text() if settings_path.exists() else None
-    settings, added, warnings = merge_settings(load_settings(settings_path))
+    settings, added, warnings = merge_settings(load_settings(settings_path), hooks_dir=hooks_dir)
     if added:
         if not dry_run:
             if raw is not None:
@@ -154,13 +157,24 @@ def init_claude_code(target: Path, *, force: bool, dry_run: bool) -> list[str]:
 
     _ensure_gitignore(target, dry_run=dry_run, results=results)
 
+    # The user-level rules file is part of the Claude Code bootstrap, same as the
+    # hooks and settings.json — it is what makes the protocol load in sessions
+    # where no repo protocol is installed. Non-destructive and idempotent, so it
+    # needs no opt-in flag; see global_rules for the merge rules.
+    #
+    # `force` is deliberately NOT forwarded: it authorizes overwriting the repo
+    # files init owns, which is a different and much smaller decision than
+    # touching a hand-authored file loaded in every session.
+    results.append("")
+    results.extend(init_global_rules(dry_run=dry_run))
+
     results.append("")
     results.append(_MCP_HINT)
     return results
 
 
 def init_rules_file(client: str, target: Path, *, force: bool, dry_run: bool) -> list[str]:
-    results: list[str] = [f"{client} bootstrap:"]
+    results: list[str] = [f"{client} bootstrap:", f"  target {target}"]
     rules_path = target / CLIENT_RULES_FILES[client]
     protocol = _read_template("rules_protocol.md.tmpl")
 

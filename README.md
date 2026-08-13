@@ -403,10 +403,24 @@ It installs:
 - The runtime artifacts the hooks generate (`logs/`, `.claude/data/`,
   `.claude/settings.local.json`) appended to your `.gitignore` — so a session
   transcript never gets committed, which matters most on a public repo.
+- **The memory protocol in your user-level `~/.claude/CLAUDE.md`**, inside a
+  marked block. This is what covers sessions started in a directory with no
+  project protocol installed. It is strictly additive: the block goes *below*
+  whatever you already wrote, only the block's own contents are ever rewritten
+  on a re-run, and if the file already contains a memory protocol that `init`
+  doesn't manage it writes nothing and tells you how to opt in.
 
-It's idempotent (re-run any time), `--dry-run` previews without writing, and
-`--force` overwrites existing hook files. Then register the server as `gingugu`
-and restart your client:
+It's idempotent (re-run any time — that's how you pick up protocol changes after
+upgrading), `--dry-run` previews without writing, and `--force` overwrites
+existing hook files **in the target repo only** — it never authorizes appending
+to your user-level rules file.
+
+The first line of output is the resolved `target` directory. Check it: `--path`
+defaults to the current directory, and some wrappers change that for you. `uv run
+--directory X gingugu init` runs *in* `X`, so it bootstraps `X` rather than the
+directory you typed the command in. Pass `--path` explicitly when in doubt.
+
+Then register the server as `gingugu` and restart your client:
 
 ```bash
 claude mcp add gingugu -- gingugu

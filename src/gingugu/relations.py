@@ -118,7 +118,11 @@ class RelationManager:
                 break
             rows = self._conn.execute(
                 "SELECT m.id, m.confidence, "
-                "COALESCE(m.last_confirmed, m.updated_at, m.created_at) AS ts, "
+                # Freshness anchor — the LATEST of the three, matching
+                # decay.reference_timestamp. created_at/updated_at are NOT NULL,
+                # so only last_confirmed needs the null guard; MAX() would
+                # otherwise return NULL for any NULL argument.
+                "MAX(COALESCE(m.last_confirmed, ''), m.updated_at, m.created_at) AS ts, "
                 "(SELECT COUNT(*) FROM relations d "
                 " WHERE d.source_id = m.id OR d.target_id = m.id) AS degree "
                 "FROM relations r "
