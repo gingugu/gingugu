@@ -699,8 +699,8 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo) |
 | `memory_export` | Export memories + tags + relations to portable JSON |
 | `memory_import` | Restore a JSON export (skip or replace on conflict) |
-| `memory_stats` | Health overview (dormancy, counts, coverage, review sweep, and the `claims` contradiction backlog — `review_limit` enumerates every flagged memory) |
-| `memory_search` | Advanced filtered search (type, tags, confidence, dates; one or many namespaces; optional compact mode; fetch by exact `ids`) |
+| `memory_stats` | Health overview (dormancy, counts, coverage, review sweep, and the `claims` backlog — `sample` lists every open claim, contradicted ones first; `review_limit` raises the cap) |
+| `memory_search` | Advanced filtered search (type, tags, confidence, dates; one or many namespaces; optional compact mode; fetch by exact `ids`; `claims` to work the reconciliation backlog) |
 | `credential_store` | Store/update a service credential bundle |
 | `credential_get` | Retrieve credentials (secrets from OS Keychain) |
 | `credential_list` | List services + expiry status (no secrets shown) |

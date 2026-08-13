@@ -66,7 +66,8 @@
 | `graph_stats.py` | Relation-graph health: edges, degree, type mix, orphans, and edges stranded past `SPREAD_PER_SEED` |
 | `staleness.py` | Advisory review hints for point-in-time memories |
 | `claims.py` | Extracts checkable state claims (repo-qualified PR/MR refs) from prose; ignores refs inside `[[wiki-links]]` |
-| `claim_sync.py` | Claim persistence, contradiction lookup, stats, and the storage bridge; resolves a namespace's default repo |
+| `claim_sync.py` | Claim **write** path: persistence, contradiction lookup, resolution, and the storage bridge; resolves a namespace's default repo |
+| `claim_queries.py` | Claim **read** path: the `claims.sample` backlog enumeration and the shared `claim_filter()` predicate behind `memory_search(claims=…)` |
 | `claim_rederive.py` | Claim re-derivation that **preserves** resolution state, whole-corpus or scoped to one `namespace_id` (`claim_sync.sync_claims` drops resolution by design) |
 | `namespaces.py` | Namespace CRUD; a `default_repo` change re-derives that namespace's claims (best-effort) so the declaration is not inert |
 | `credentials.py` | OS-keychain credential vault |
@@ -108,12 +109,16 @@ from title + content only).
 **State claims and the reconciliation loop.** `memory_store` / `memory_update`
 also return `contradicted_memories` when the write resolves a ref another
 memory still calls open — omitted, not empty, when there is nothing to report.
-`memory_stats` carries a `claims` block (`open` / `resolved` / `contradicted`
-plus a `review_limit`-capped sample). Reconcile with
+`memory_stats` carries a `claims` block (`open` / `open_actionable` /
+`resolved` / `contradicted` plus a `review_limit`-capped `sample` that
+**enumerates** the backlog, contradicted first, each row tagged). Reconcile with
 `memory_update(resolve_claims="<ref>"|"all")`, which records the resolution and
 leaves the body **byte-identical** — a dated log that said "PR #10 open" was
 correct when written, so `content` is only for claims that were never true.
-The loop needs no new tool: stats → `memory_search(ids=…)` → `resolve_claims`.
+The loop: stats → `memory_search(claims="open")` (or `ids=…`) → `resolve_claims`.
+`open` counts every unresolved claim; `open_actionable` excludes those on
+deprecated memories and is what `sample` lists, so the two numbers explain any
+gap between the count and the rows.
 
 ---
 
