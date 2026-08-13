@@ -349,6 +349,31 @@ def _migration_007_claim_precision(conn: sqlite3.Connection) -> None:
     claim_rederive.rederive_claims(conn)
 
 
+_SCHEMA_V8 = """
+ALTER TABLE memories ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX idx_memories_pinned ON memories(namespace_id, pinned) WHERE pinned = 1;
+"""
+
+
+def _migration_008_pinned(conn: sqlite3.Connection) -> None:
+    """Add the ``pinned`` flag: memories that always load, exempt from ranking.
+
+    Ranking answers "what is most relevant to this task?". It cannot answer
+    "what must never be missing?" — those are different questions, and before
+    this every governing rule competed for a context slot against topical
+    trivia on the same axis. A pin removes a memory from that contest.
+
+    Defaults to 0, so an existing store gains the column and changes no
+    behaviour until something is explicitly pinned. The partial index keeps the
+    context-load lookup cheap: it only ever indexes the handful of pinned rows,
+    not the whole table.
+
+    The FTS5 sync triggers key off ``title``/``content`` only, so a new column
+    needs no trigger changes.
+    """
+    conn.executescript(_SCHEMA_V8)
+
+
 # (target_version, migration_callable) — applied in order when current < target.
 MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
     (1, _migration_001_initial_schema),
@@ -358,7 +383,13 @@ MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
     (5, _migration_005_claims),
     (6, _migration_006_repair_claims_backfill),
     (7, _migration_007_claim_precision),
+    (8, _migration_008_pinned),
 ]
+
+# The version a fully-migrated DB lands on. Derived rather than written down so
+# adding a migration cannot leave a stale literal behind — tests assert against
+# this instead of hardcoding a number that every future bump would invalidate.
+LATEST_SCHEMA_VERSION = MIGRATIONS[-1][0]
 
 
 def _backup_before_migration(

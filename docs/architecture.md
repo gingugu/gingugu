@@ -82,8 +82,13 @@ CREATE TABLE memories (
     last_accessed   TEXT NOT NULL,
     last_confirmed  TEXT,
     access_count    INTEGER DEFAULT 0,
-    metadata        TEXT              -- JSON blob for flexible extra data
+    metadata        TEXT,             -- JSON blob for flexible extra data
+    pinned          INTEGER NOT NULL DEFAULT 0  -- always load in memory_context, exempt from ranking
 );
+
+-- Partial index: only ever indexes the handful of pinned rows, so the
+-- context-load lookup stays cheap regardless of table size.
+CREATE INDEX idx_memories_pinned ON memories(namespace_id, pinned) WHERE pinned = 1;
 ```
 
 #### `memories_fts` (FTS5 Virtual Table)
@@ -570,8 +575,20 @@ from inflating the access component of the composite score (a rich-get-richer
 feedback loop where whatever already ranks high gets auto-loaded, bumped, and
 ranks higher still).
 
-**Retrieval strategy:** the result draws from three intent buckets, each ranked
-by its *own* native signal and given a **guaranteed quota** of the `limit`
+**Pinned memories load first, unconditionally.** A pin
+(`memory_update(pinned=True)`) removes a memory from the ranking contest
+entirely: ranking answers *"what is most relevant to this task?"* and cannot
+answer *"what must never be missing?"*. Pins are **additive to `limit`** rather
+than a share of it, so a caller may receive more than `limit` memories — a
+tier that truncates under contention would recreate the failure it exists to
+fix. The bound is `PINNED_HARD_CAP` (20) per namespace instead, enforced at the
+write path. Deprecated memories are never loaded as pins: *"no longer true"*
+outranks *"never let me miss this"*. Pinned memories are excluded from the
+ranked buckets **in SQL**, not filtered afterwards — `LIMIT` applies first, so
+post-filtering would leave fewer ranked candidates than the quota calls for.
+
+**Retrieval strategy:** the remaining slots draw from three intent buckets, each
+ranked by its *own* native signal and given a **guaranteed quota** of the `limit`
 slots. This replaces the older "union, then one global composite sort" design,
 which let the relevance/access-dominated composite score evict freshly-stored
 memories — the "where we left off" signal — at session start.
@@ -591,9 +608,11 @@ created in the previous session always survives the cut. A memory appearing in
 more than one bucket keeps its highest score. Any slots left after the
 guaranteed quotas are **backfilled** from the combined pool by composite score.
 
-Final cap at `limit`, presented in composite order. Boost weights for types
-`architecture` and `decision` by +0.1 to score (they're disproportionately
-useful for session start).
+Final cap at `limit`, presented in composite order with pins prepended ahead of
+it. Boost weights for types `architecture` and `decision` by +0.1 to score
+(they're disproportionately useful for session start). Pins carry no score by
+design — they never entered the ranking — so they are prepended rather than
+sorted in, which would sink a scoreless memory to the bottom.
 
 ### `memory_update`
 Update an existing memory's content, type, confidence, or metadata.
@@ -620,6 +639,15 @@ Update an existing memory's content, type, confidence, or metadata.
   provided, also return `suggested_relations` (same semantics as
   `memory_store`); tag-only or confidence-only updates skip the check because
   the matching surface didn't change
+- `pinned` (optional) — mark this memory as always loaded by `memory_context`
+  for its namespace, exempt from ranking (see *`memory_context`* above). `false`
+  unpins. Capped at `PINNED_HARD_CAP` (20) per namespace: a **new** pin past the
+  cap is refused with an error directing you to unpin rather than raising it,
+  while re-pinning an already-pinned memory stays idempotent so a full tier
+  never makes its own members unwritable. Pinning does **not** advance
+  `last_confirmed` — it is a retrieval-priority decision, not a claim that the
+  content is still true, and treating it as one would suppress review hints on
+  exactly the memories where staleness costs most
 
 ### `memory_relate`
 Create a relationship between two memories.
@@ -715,6 +743,23 @@ memories tripping a review signal; see *Review Hints* above) plus sample
 entries (`id`, `title`, `signals`) - 5 by default, raise with
 `review_limit` (max 100) to enumerate every flagged memory for a sweep.
 Advisory only.
+
+The response also includes a **`graph`** block (read-only aggregates over the
+relation graph, computed in `graph_stats.py`):
+
+| Field | Meaning |
+| --- | --- |
+| `edges` | Total relations. Namespace-scoped counts include an edge when **either** endpoint is in the namespace — relations legitimately cross namespaces, and a source-only count hides half of them |
+| `edges_per_memory` | Mean degree |
+| `by_relation_type` | Edge count per relation type |
+| `high_signal_edges` / `high_signal_ratio` | Share that is **not** `related_to`. `related_to` is the fallback edge; a graph dominated by it encodes little the hybrid index does not already infer for free |
+| `orphans` / `orphan_ratio` | Memories with no edge in either direction. Reachable only by direct search — spreading activation can never wake them |
+| `over_spread_cap` | Memories carrying more edges than `SPREAD_PER_SEED`. Activation visits at most that many neighbours and does **not** rank them by type, so edges beyond the cap are structurally unreachable |
+| `spread_per_seed` | The cap itself, reported so the number above is interpretable |
+
+Each maps to a concrete retrieval failure rather than being decorative: a high
+edge count with a low `high_signal_ratio` and a high `over_spread_cap` means
+effort went into edges that can never fire.
 
 ### `memory_search`
 Advanced search with full filter support, plus a precise fetch-by-ID path.

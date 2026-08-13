@@ -102,6 +102,7 @@ minting a junk namespace named `"a,b"`.
 
 ```
 memory_context(namespace | "ns1,ns2,…", task_hint, limit, compact)
+  → pinned memories load FIRST, unranked and additive to limit (cap 20/ns)
   → context.py selects top-N per namespace by relevance-to-hint + value signals
   → multi-namespace calls de-dupe across loads (highest-scoring instance wins);
     each memory is stamped with its home namespace
@@ -118,6 +119,19 @@ clock, via `touch_many`) but do **not** bump `access_count` or write
 `access_log` rows - those are reserved for `memory_recall`/`memory_search`
 hits, so session-start loads can't inflate the access ranking signal.
 
+A consequence worth knowing: because the protocol calls `memory_context` every
+session and that refreshes the dormancy clock, anything it routinely surfaces
+can never accumulate `DORMANT_AFTER_DAYS` untouched. Dormancy only ever reaches
+the tail. Intended, and now pinned by `tests/test_dormancy_lifecycle.py`.
+
+**Pinned memories** sit outside all of this. Ranking answers "what is most
+relevant to this task?"; it cannot answer "what must never be missing?". A pin
+(`memory_update(pinned=True)`) removes a memory from the ranking contest
+entirely - it is not scored, not quota'd, and not evictable - and is returned
+_in addition to_ `limit`, because a tier that truncates under contention
+recreates the failure it exists to fix. Bounded by `PINNED_HARD_CAP = 20` per
+namespace at the write path instead. Deprecation beats a pin.
+
 ## Relations + spreading activation
 
 ```
@@ -126,8 +140,19 @@ memory_relate(source_id, target_id, relation_type)
   → later recall/context traverse edges so one hit surfaces its cluster
 ```
 
-Edges are the load-bearing structure: recall quality scales with how aggressively
-they are built. Store-then-relate is the expected loop.
+Edges are the load-bearing structure, but recall quality scales with edge
+**precision**, not edge count. Hybrid retrieval already ranks by text and
+semantic similarity, so a `related_to` edge meaning "these are about the same
+topic" duplicates the index for free while competing for a traversal slot
+against an edge that records what search cannot infer: what a memory
+`supersedes`, `contradicts`, was `caused_by`, or belongs under. Store-then-relate
+is still the expected loop; the filter is whether you can name the directional
+fact the edge records.
+
+Measured on the live brain 2026-08-13 via the new `memory_stats.graph` block:
+61% of 1,570 edges are `related_to` and 339 memories carry more edges than
+traversal will ever visit - the cost of the older volume framing, still being
+worked off.
 
 Traversal is hub-dampened (`RelationManager.dampened_neighbour_ids`): the same
 budgeted set powers `include_related` extras and spreading activation, so a

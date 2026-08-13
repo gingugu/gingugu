@@ -14,6 +14,7 @@ import logging
 from ..models import Confidence, MemoryType
 from . import ServerContext
 from .helpers import (
+    _check_pin_budget,
     _coerce_metadata,
     _err,
     _find_similar,
@@ -162,6 +163,7 @@ def register(mcp, ctx: ServerContext) -> None:
         tags: str | None = None,
         resolve_claims: str | None = None,
         relation_check: bool = True,
+        pinned: bool | None = None,
     ) -> dict:
         """Update one or more fields of an existing memory. Use to correct outdated
         information, promote confidence after confirming an inference, retype a
@@ -195,7 +197,18 @@ def register(mcp, ctx: ServerContext) -> None:
         directional fact (supersedes / contradicts / caused_by / parent_of /
         child_of) justifies an edge. Tag-only or confidence-only updates skip the
         check since the matching surface didn't change. Entries are compact
-        (title + a ~200-char ``summary``), as in ``memory_store``."""
+        (title + a ~200-char ``summary``), as in ``memory_store``.
+
+        ``pinned`` marks a memory as ALWAYS loaded by memory_context for its
+        namespace, ahead of and exempt from ranking, in addition to ``limit``.
+        Reserve it for the few rules that would cause real damage if missed —
+        the ones you would want in front of you before touching anything, not
+        merely useful or frequently relevant material. Ranking already handles
+        "relevant"; a pin is for "inviolable". Capped per namespace (currently
+        20): pinning is a budget, so spending it on a merely-handy memory
+        crowds out a rule that governs behaviour. Pass ``pinned=False`` to
+        unpin. Pinning does not touch ``last_confirmed`` — it is a retrieval
+        decision, not a claim that the content is still true."""
         try:
             conf = None
             if confidence is not None:
@@ -212,6 +225,10 @@ def register(mcp, ctx: ServerContext) -> None:
                         f"invalid type {type!r}; expected one of "
                         f"{[t.value for t in MemoryType]}"
                     )
+            if pinned:
+                refused = _check_pin_budget(ctx, memory_id)
+                if refused is not None:
+                    return refused
             mem = ctx.store.update(
                 memory_id,
                 title=title,
@@ -219,6 +236,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 type=mem_type,
                 confidence=conf,
                 metadata=_coerce_metadata(metadata),
+                pinned=pinned,
             )
             if mem is None:
                 return _err(f"memory {memory_id!r} not found")

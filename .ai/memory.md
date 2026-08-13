@@ -58,11 +58,12 @@
 | `search_common.py` | Shared SQL columns + WHERE-fragment builders |
 | `search_filters.py` | `advanced_search`: filtered search + metadata-only listing |
 | `embeddings.py` | Semantic vector generation |
-| `context.py` | Session priming (`memory_context`) + spreading activation |
+| `context.py` | Session priming (`memory_context`): the pinned tier + three quota'd intent buckets, plus spreading activation |
 | `relations.py` | Typed graph edges + hub-dampened 1-hop traversal (`dampened_neighbour_ids`) |
 | `consolidation.py` | merge / summarize / deduplicate clusters |
 | `decay.py` | Composite scoring, the `reference_timestamp()` freshness anchor (MAX, not COALESCE), dormancy as a resting signal (never auto-forgets), and `relative_age()`/`age_label()` — the derived-at-read `age` string |
 | `stats.py` | Health stats (counts, confidence, dormancy, hygiene, review sweep) |
+| `graph_stats.py` | Relation-graph health: edges, degree, type mix, orphans, and edges stranded past `SPREAD_PER_SEED` |
 | `staleness.py` | Advisory review hints for point-in-time memories |
 | `claims.py` | Extracts checkable state claims (repo-qualified PR/MR refs) from prose; ignores refs inside `[[wiki-links]]` |
 | `claim_sync.py` | Claim persistence, contradiction lookup, stats, and the storage bridge; resolves a namespace's default repo |
@@ -136,11 +137,14 @@ The loop needs no new tool: stats → `memory_search(ids=…)` → `resolve_clai
   one-namespace-per-repo convention, load-bearing: 145 claims vs 26 without it);
   a slug overrides it; `""` declares the namespace is not a repo at all, so bare
   refs are dropped rather than mis-keyed. `crow` and `default` are seeded `""`.
-- Schema versioned via `PRAGMA user_version` (**currently 7**); migrations
+- Schema versioned via `PRAGMA user_version` (**currently 8**); migrations
   additive by default. Migration 006 adds no schema — it re-runs the claims
   backfill to repair DBs that reached v5 from pre-fix code and so can never
   run 005 again. Migration 007 adds `default_repo` and re-derives every claim
-  under the corrected extractor, **preserving resolution state**.
+  under the corrected extractor, **preserving resolution state**. Migration 008
+  adds `memories.pinned` (+ a partial index on the pinned rows only): memories
+  that always load in `memory_context`, exempt from ranking. Defaults to 0, so
+  an existing store changes no behaviour until something is explicitly pinned.
 
 ---
 

@@ -4,7 +4,38 @@ _Last updated: 2026-08-13_
 
 ## In Flight
 
-_Nothing in flight._
+- **Pinned tier + relation-graph metrics** (branch `feature/pinned-tier-and-graph-stats`).
+  Answers an external review of gingugu that was triaged against the live store
+  on 2026-08-13; 4 of its 5 claims held.
+
+  - **Pinned memories** (schema v8, `memories.pinned` + partial index). Ranking
+    answers "what is most relevant to this task?" and cannot answer "what must
+    never be missing?" — so a governing rule competed for a context slot against
+    topical trivia on the same axis. `memory_update(pinned=True)` removes a
+    memory from that contest. Pins are **additive to `limit`** (a tier that
+    truncates under contention recreates the failure it fixes); bounded by
+    `PINNED_HARD_CAP = 20` per namespace, enforced at the write path.
+  - **`graph` block in `memory_stats`** (new `graph_stats.py`). Edge count,
+    degree, type mix, orphans, and memories stranded past `SPREAD_PER_SEED`.
+    Read-only aggregates, no schema change.
+  - **Dormancy lifecycle tests.** The 90-day threshold means the wake path had
+    never run in production; `tests/test_dormancy_lifecycle.py` forces the
+    clock and verifies it end-to-end. **Result: it works** — unproven, not
+    broken. Also pins the load-bearing behaviour that a `memory_context` load
+    refreshes the dormancy clock, so routinely surfaced memories never go
+    dormant and dormancy only ever reaches the tail.
+  - **README:** leads with the shipped session protocol, publishes the measured
+    retrieval numbers (MRR 0.828 / recall@1 0.611 / recall@5 0.983), and adds an
+    **Upgrading** section including the multi-surface install drift gotcha.
+
+  486 tests passing, ruff + black clean.
+
+  **Feeds the two open watch items below.** The `graph` block now measures the
+  `related_to` dominance that the blind-spreading-activation item is about:
+  measured 2026-08-13 on the live brain, `high_signal_ratio` is **0.392**
+  globally (954 of 1,570 edges are `related_to`), **124 orphans** (10.8%), and
+  **339 memories carry more edges than `SPREAD_PER_SEED` will ever visit**. That
+  last number is the size of the prize for type-weighting the sort.
 
 ## Blocked / Pending
 
@@ -59,8 +90,17 @@ _Nothing in flight._
 - **`gingugu ui --host` exposes an unauthenticated full-DB export.** Found
   2026-08-03, still unfiled as an issue.
 
-- **Over the 300-line rule:** `database.py` (454), `search.py` (404),
-  `handlers/helpers.py` (355), `claim_sync.py` (314).
+- **Over the 300-line rule:** `storage.py` (495), `database.py` (485),
+  `handlers/helpers.py` (393), `claim_sync.py` (314). `search.py` is now 267
+  and off this list (the engine/`search_common`/`search_filters` split).
+
+  The pinned-tier work added to three of these rather than fixing them:
+  `database.py` +31 (migration 008 and its rationale), `storage.py` +21
+  (`count_pinned`, the `pinned` update path), `handlers/helpers.py` +38
+  (`_check_pin_budget`, extracted from `handlers/memory.py` specifically to keep
+  _that_ file under 300). Splitting them is a separate refactor and was
+  deliberately not bundled into a feature change — same call as the
+  relation-discipline pass.
 
   `handlers/helpers.py` went 339 → 355 in the relation-discipline pass: the
   rationale comment on `_RELATION_MIN_SCORE` explains _why_ a similarity-only
