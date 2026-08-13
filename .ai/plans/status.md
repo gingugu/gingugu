@@ -4,7 +4,16 @@ _Last updated: 2026-08-13_
 
 ## In Flight
 
-- **Pinned tier + relation-graph metrics** (branch `feature/pinned-tier-and-graph-stats`).
+_Nothing in flight._
+
+## Shipped in v0.15.0 (2026-08-13)
+
+Landed on `main` as #45 (squash `b52a095`), released to PyPI on tag `v0.15.0`.
+Companion site update shipped as gingugu.com#2 (mobile boot-log fix + content
+drift refresh - the site had been advertising a `decay engine` retired in
+v0.2.0).
+
+- **Pinned tier + relation-graph metrics.**
   Answers an external review of gingugu that was triaged against the live store
   on 2026-08-13; 4 of its 5 claims held.
 
