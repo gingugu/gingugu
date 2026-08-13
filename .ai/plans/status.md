@@ -4,6 +4,77 @@ _Last updated: 2026-08-13_
 
 ## In Flight
 
+_Nothing in flight._
+
+## Blocked / Pending
+
+- **Retrieval ranking: superseded RESUME notes can outrank current ones —
+  WATCH ITEM, do not build, do not bench yet.** The freshness term is inert at
+  the timescale resume notes turn over: with `MEMORY_DECAY_LAMBDA = 0.01/day`
+  the half-life is ~69 days, so the weighted freshness swing across a whole
+  week is **0.0044** against a 0.45 relevance term. The scorer cannot separate
+  "written yesterday" from "written last week".
+
+  Observed once, in a session transcript, then **not reproducible** — the
+  captured queries were display-truncated and re-running them ranked the
+  current note first. An earlier diagnosis blaming `access_count` was wrong and
+  has been corrected: it is log-saturated and weighted 0.10, worth at most
+  0.078, against an observed 0.278 gap.
+
+  Deliberately parked. `age` (below) does not change ranking, but it makes a
+  ranking mistake _visible_ — which is the precondition for benching one
+  honestly. Tuning λ against a failure that cannot be replayed is the exact
+  error the 2026-07-31 measured-and-rejected result exists to prevent.
+  Re-open on a replayable case; capture the verbatim query, the ranked list
+  with scores and ages, and the ids. If picked up: bench demoting the targets
+  of a `supersedes` relation _before_ touching λ, which is global and would
+  flatten `pattern`/`preference` memories that should stay flat.
+
+- **Roll the new startup contract out to installed repos.** The template fix
+  below only reaches a repo when `gingugu init --force` runs there. Seven repos
+  carry the hook; `keycloakify` and `ogre` are also still on a pre-v0.11.1
+  `stop.py`.
+
+- **Spreading activation is blind to `relation_type`.** `dampened_neighbour_ids`
+  (`relations.py`) selects neighbours by confidence rank, then _low_ degree, then
+  recency, then id — the `SELECT` never fetches `relation_type` at all. So with
+  `SPREAD_PER_SEED = 3`, a memory carrying 5 `related_to` edges and 2
+  `supersedes` edges can surface three `related_to` neighbours and hide the
+  `supersedes` entirely. The low-signal majority actively out-competes the
+  high-signal minority on every recall.
+
+  Found 2026-08-04 while writing the relation-discipline guidance. The guidance
+  fix only changes what gets written _going forward_; this is the reason the
+  existing 943 `related_to` edges still degrade retrieval today. A type-weighted
+  term in that sort is a small diff and fixes past and future at once.
+
+  **Gated on benchmark evidence** per `.ai/standards/01-code-and-testing.md` —
+  this is a ranking change. Run the fixture floor plus a real-brain pass against
+  `bench/local/brain-v1.json` and compare to the hybrid baselines before
+  shipping. **Decision already taken:** do _not_ bulk-prune the existing 943
+  `related_to` edges. Deleting a third of the graph is destructive and
+  irreversible; fix the sort so they stop winning slots instead. Pruning returns
+  to the table only if the bench says type-weighting is insufficient.
+
+- **`gingugu ui --host` exposes an unauthenticated full-DB export.** Found
+  2026-08-03, still unfiled as an issue.
+
+- **Over the 300-line rule:** `database.py` (454), `search.py` (404),
+  `handlers/helpers.py` (355), `claim_sync.py` (314).
+
+  `handlers/helpers.py` went 339 → 355 in the relation-discipline pass: the
+  rationale comment on `_RELATION_MIN_SCORE` explains _why_ a similarity-only
+  edge is a net loss, which is precisely the knowledge whose absence caused the
+  original defect. Splitting the module is a separate refactor and was
+  deliberately not bundled into a guidance change. Note the count was already
+  stale here (recorded 327, actually 339 at that time).
+
+## Shipped in v0.14.0 (2026-08-13)
+
+Landed on `main` as #39 and #42. PRs #40 and #41 were merged into their
+parent branches rather than `main` - see the recovery note at the end of this
+section.
+
 - **Relation discipline: quality over volume** (branch `docs/relate-discipline`).
   Reverses every guidance surface that drove relation-writing toward edge count.
   Ranks directional types first (`supersedes`, `contradicts`, `caused_by`,
@@ -153,68 +224,19 @@ _Last updated: 2026-08-13_
 
   456 tests pass (10 new), ruff + black clean.
 
-## Blocked / Pending
+- **Recovery: #40 and #41 never reached `main`.** The three PRs were a stack,
+  merged bottom-up but without retargeting the children to `main` first, so
+  only #39 landed there. `main` was left missing 29 files / +1199 lines. A
+  plain merge produced four phantom conflicts - artifacts of #39 being
+  *squash*-merged, so identical content carried different SHAs. Rebasing
+  `--onto origin/main` past the squashed commit resolved it with zero
+  conflicts and a byte-identical tree, landed as #42.
 
-- **Retrieval ranking: superseded RESUME notes can outrank current ones —
-  WATCH ITEM, do not build, do not bench yet.** The freshness term is inert at
-  the timescale resume notes turn over: with `MEMORY_DECAY_LAMBDA = 0.01/day`
-  the half-life is ~69 days, so the weighted freshness swing across a whole
-  week is **0.0044** against a 0.45 relevance term. The scorer cannot separate
-  "written yesterday" from "written last week".
-
-  Observed once, in a session transcript, then **not reproducible** — the
-  captured queries were display-truncated and re-running them ranked the
-  current note first. An earlier diagnosis blaming `access_count` was wrong and
-  has been corrected: it is log-saturated and weighted 0.10, worth at most
-  0.078, against an observed 0.278 gap.
-
-  Deliberately parked. `age` (below) does not change ranking, but it makes a
-  ranking mistake _visible_ — which is the precondition for benching one
-  honestly. Tuning λ against a failure that cannot be replayed is the exact
-  error the 2026-07-31 measured-and-rejected result exists to prevent.
-  Re-open on a replayable case; capture the verbatim query, the ranked list
-  with scores and ages, and the ids. If picked up: bench demoting the targets
-  of a `supersedes` relation _before_ touching λ, which is global and would
-  flatten `pattern`/`preference` memories that should stay flat.
-
-- **Roll the new startup contract out to installed repos.** The template fix
-  below only reaches a repo when `gingugu init --force` runs there. Seven repos
-  carry the hook; `keycloakify` and `ogre` are also still on a pre-v0.11.1
-  `stop.py`.
-
-- **Spreading activation is blind to `relation_type`.** `dampened_neighbour_ids`
-  (`relations.py`) selects neighbours by confidence rank, then _low_ degree, then
-  recency, then id — the `SELECT` never fetches `relation_type` at all. So with
-  `SPREAD_PER_SEED = 3`, a memory carrying 5 `related_to` edges and 2
-  `supersedes` edges can surface three `related_to` neighbours and hide the
-  `supersedes` entirely. The low-signal majority actively out-competes the
-  high-signal minority on every recall.
-
-  Found 2026-08-04 while writing the relation-discipline guidance. The guidance
-  fix only changes what gets written _going forward_; this is the reason the
-  existing 943 `related_to` edges still degrade retrieval today. A type-weighted
-  term in that sort is a small diff and fixes past and future at once.
-
-  **Gated on benchmark evidence** per `.ai/standards/01-code-and-testing.md` —
-  this is a ranking change. Run the fixture floor plus a real-brain pass against
-  `bench/local/brain-v1.json` and compare to the hybrid baselines before
-  shipping. **Decision already taken:** do _not_ bulk-prune the existing 943
-  `related_to` edges. Deleting a third of the graph is destructive and
-  irreversible; fix the sort so they stop winning slots instead. Pruning returns
-  to the table only if the bench says type-weighting is insufficient.
-
-- **`gingugu ui --host` exposes an unauthenticated full-DB export.** Found
-  2026-08-03, still unfiled as an issue.
-
-- **Over the 300-line rule:** `database.py` (454), `search.py` (404),
-  `handlers/helpers.py` (355), `claim_sync.py` (314).
-
-  `handlers/helpers.py` went 339 → 355 in the relation-discipline pass: the
-  rationale comment on `_RELATION_MIN_SCORE` explains _why_ a similarity-only
-  edge is a net loss, which is precisely the knowledge whose absence caused the
-  original defect. Splitting the module is a separate refactor and was
-  deliberately not bundled into a guidance change. Note the count was already
-  stale here (recorded 327, actually 339 at that time).
+  **Rule for the next stack:** merging bottom-up is necessary but not
+  sufficient - retarget each child to `main` (`gh pr edit <child> --base
+  main`) *before* merging its parent, and verify with `git log --oneline
+  origin/main..origin/<branch>` before deleting anything. "Merged" says
+  nothing about *which* branch it merged into.
 
 ## Shipped in v0.13.0 (2026-08-04)
 
