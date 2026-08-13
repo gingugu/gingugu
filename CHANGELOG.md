@@ -41,6 +41,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pair two different repos' `PR #12`; a missed contradiction is silent, a
   fabricated one teaches the reader to ignore the metric.
 
+### Removed
+
+- **The `How It Compares` section is gone from the README**, along with its
+  table-of-contents entry. The capability matrix it once held was retired in
+  favour of prose in a 2026-07-07 docs pass; the prose is now retired too.
+  Gingugu's docs
+  describe what Gingugu is and does, in absolute terms - what one SQLite file,
+  MCP-native transport, typed relations, and no-LLM-call writes buy you. They
+  do not rank the project against other people's roadmaps. The same section
+  came out of gingugu.com in the same pass.
+
 ### Internal
 
 - Claim reads split from writes: the backlog query and the shared
