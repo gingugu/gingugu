@@ -50,10 +50,16 @@ def advanced_search(
     weights: dict[str, float] | None = None,
     decay_lambda: float = 0.01,
     tags: list[str] | None = None,
+    claims: str | None = None,
     embedder: EmbeddingProvider | None = None,
 ) -> list[Memory]:
     """Filtered search. With a query, delegates to FTS5 + composite ranking;
-    without one, lists by metadata filters ordered by ``sort_by``."""
+    without one, lists by metadata filters ordered by ``sort_by``.
+
+    ``claims`` restricts to memories carrying open (or contradicted) state
+    claims — the reconciliation backlog as a first-class corpus, usable with
+    or without a query.
+    """
     if query and query.strip():
         results = search(
             conn,
@@ -68,6 +74,7 @@ def advanced_search(
             weights=weights if sort_by in ("relevance", "decay_score") else None,
             decay_lambda=decay_lambda,
             tags=tags,
+            claims=claims,
             embedder=embedder,
         )
     else:
@@ -83,6 +90,7 @@ def advanced_search(
             weights=weights,
             decay_lambda=decay_lambda,
             tags=tags,
+            claims=claims,
         )
 
     if sort_by in ("relevance", "decay_score"):
@@ -107,6 +115,7 @@ def _list_by_filters(
     weights: dict[str, float] | None,
     decay_lambda: float = 0.01,
     tags: list[str] | None = None,
+    claims: str | None = None,
 ) -> list[Memory]:
     where, params = build_filters(
         alias="memories",
@@ -117,6 +126,7 @@ def _list_by_filters(
         created_after=created_after,
         created_before=created_before,
         tags=tags,
+        claims=claims,
     )
     clause = f"WHERE {' AND '.join(where)} " if where else ""
     sql = f"SELECT {BASE_COLUMNS} FROM memories {clause}ORDER BY last_accessed DESC LIMIT ?"

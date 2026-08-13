@@ -7,6 +7,8 @@ from its text, and asking what those claims contradict.
 Everything here is best-effort by design. A claim is an advisory hint; a
 failure to extract one must never take down a store or an update, so the
 callers swallow and log rather than raise.
+
+The read side — enumeration, filtering, stats — lives in ``claim_queries``.
 """
 
 from __future__ import annotations
@@ -250,65 +252,3 @@ def mark_resolved(
         (claims_mod.STATE_RESOLVED, resolved_by, now, memory_id, ref),
     )
     return cur.rowcount > 0
-
-
-# --- stats -------------------------------------------------------------------
-
-# Mirrors the review-sample caps in stats.py: report the full count always,
-# and let a sweep raise the sample to enumerate the whole backlog.
-_SAMPLE_LIMIT = 5
-_SAMPLE_MAX = 100
-
-
-def claim_stats(
-    conn: sqlite3.Connection,
-    *,
-    namespace_id: str | None = None,
-    sample_limit: int | None = None,
-) -> dict:
-    """State-claim health, and the reconciliation backlog.
-
-    ``contradicted`` is the number that matters: memories still asserting a
-    ref is open when a later memory in the same namespace says it resolved.
-    That is a real backlog, not a heuristic nudge — both sides are recorded
-    claims, so a hit means the brain already holds the answer and nobody
-    joined the two.
-
-    Pairs with ``memory_search(contradicted=True)`` to pull the full bodies,
-    then ``memory_update(resolve_claims=...)`` to reconcile without touching
-    a single character of prose.
-    """
-    limit = _SAMPLE_LIMIT if sample_limit is None else sample_limit
-    limit = max(1, min(limit, _SAMPLE_MAX))
-    and_ns = " AND m.namespace_id = ?" if namespace_id else ""
-    ns_params: tuple = (namespace_id,) if namespace_id else ()
-
-    by_state = {
-        row["state"]: row["n"]
-        for row in conn.execute(
-            "SELECT c.state, COUNT(*) AS n FROM memory_claims c "
-            "JOIN memories m ON m.id = c.memory_id "
-            f"WHERE c.resolved_at IS NULL{and_ns} GROUP BY c.state",
-            ns_params,
-        )
-    }
-    rows = conn.execute(
-        "SELECT DISTINCT c.memory_id AS id, c.ref AS ref, m.title AS title "
-        "FROM memory_claims c JOIN memories m ON m.id = c.memory_id "
-        "WHERE c.state = 'open' AND c.resolved_at IS NULL "
-        f"AND m.confidence != 'deprecated'{and_ns} "
-        "AND EXISTS (SELECT 1 FROM memory_claims o "
-        "            JOIN memories om ON om.id = o.memory_id "
-        "            WHERE o.kind = c.kind AND o.ref = c.ref "
-        "              AND o.state = 'resolved' AND o.memory_id != c.memory_id "
-        "              AND om.namespace_id = m.namespace_id "
-        "              AND om.confidence != 'deprecated') "
-        "ORDER BY m.created_at",
-        ns_params,
-    ).fetchall()
-    return {
-        "open": by_state.get("open", 0),
-        "resolved": by_state.get("resolved", 0),
-        "contradicted": len(rows),
-        "sample": [dict(r) for r in rows[:limit]],
-    }

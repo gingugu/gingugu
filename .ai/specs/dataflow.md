@@ -57,8 +57,9 @@ also resets the staleness clock.
 ## Reconcile
 
 ```
-memory_stats(review_limit=100)     → claims { open, resolved, contradicted, sample[] }
-memory_search(ids="…")             → full bodies of the flagged memories
+memory_stats(review_limit=100)     → claims { open, open_actionable, resolved,
+                                              contradicted, sample[] }
+memory_search(claims="open")       → full bodies of the backlog (or ids="…")
 memory_update(resolve_claims="…")  → marks claims resolved; PROSE UNTOUCHED
 ```
 
@@ -66,8 +67,28 @@ memory_update(resolve_claims="…")  → marks claims resolved; PROSE UNTOUCHED
 `resolved_state`/`resolved_by`/`resolved_at` on the claim row and leaves the
 memory body byte-identical, because a dated record that said "PR #10 open" was
 accurate when written. Use `content` only when a memory asserts something that
-was never true. No new tool was added for this loop — it reuses the v0.8.0
-fetch-by-ids sweep.
+was never true. No new tool was added for this loop — `memory_search` gained a
+`claims` filter, and the v0.8.0 fetch-by-ids sweep still works.
+
+**`sample` enumerates, it does not illustrate.** It first listed only the
+_contradicted_ subset — defensible (those are answerable from what the brain
+already holds) and unusable in practice: a namespace could report five open
+claims and give the caller no way to learn which five, so a real sweep dropped
+to raw SQL against the live database. It now lists every open claim,
+contradicted ones first, each row tagged `contradicted`.
+
+Two counts because they differ: `open` is every unresolved claim, while
+`open_actionable` — what `sample` lists — excludes claims on deprecated
+memories. Reporting only `open` invites a caller to compare it against
+`len(sample)` and conclude rows went missing.
+
+`claim_queries.claim_filter()` is the single definition of both predicates,
+shared by the stats block and `memory_search(claims=…)` through
+`search_common.build_filters`. It contributes no bound parameters, so it
+composes with the FTS5 join, the embeddings join, and a plain table scan
+alike. Contradiction stays scoped **within** a namespace — bare refs are keyed
+off the namespace's default repo, so cross-namespace matching would pair two
+different repos' `PR #12`.
 
 ## Recall
 

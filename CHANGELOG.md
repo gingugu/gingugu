@@ -9,6 +9,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`memory_search(claims="open"|"contradicted")`** — the state-claim backlog as
+  a first-class corpus. Returns full bodies of memories still asserting a PR/MR
+  is open, or the subset a later memory in the same namespace already recorded
+  as resolved. Composes with `query`, `type`, `namespace`, `tags`, and
+  `sort_by`, so `claims="open", namespace="gingugu", sort_by="created"` is a
+  working sweep in one call.
+
+- **`memory_stats.claims.open_actionable`** — open claims excluding those on
+  deprecated memories, which is exactly the set `claims.sample` lists. `open`
+  still counts every unresolved claim; reporting only that number left a caller
+  comparing it against `len(sample)` with no explanation for the gap.
+
+### Changed
+
+- **`memory_stats.claims.sample` now enumerates the whole backlog** instead of
+  only its contradicted subset, ordered contradicted-first, each row tagged
+  `contradicted` so the priority survives. `review_limit` raises the cap to 100
+  as before.
+
+  The original scoping was defensible — a contradiction is answerable
+  immediately from what the brain already holds — and it made the block
+  unusable for the one job it exists for: a namespace could report five open
+  claims and offer no way to learn which five. A count without an enumeration
+  is a dead end wearing a metric's clothes.
+
+  Contradiction detection remains scoped **within** a namespace. Bare refs are
+  keyed off the namespace's default repo, so matching across namespaces would
+  pair two different repos' `PR #12`; a missed contradiction is silent, a
+  fabricated one teaches the reader to ignore the metric.
+
+### Internal
+
+- Claim reads split from writes: the backlog query and the shared
+  `claim_filter()` predicate now live in `claim_queries.py`, used by both the
+  stats block and the search filter so one correlated subquery has one
+  definition. Returns `claim_sync.py` to the 300-line limit.
+
 ---
 
 ## [0.15.0] - 2026-08-13

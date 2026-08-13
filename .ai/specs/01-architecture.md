@@ -92,6 +92,13 @@ AI client (Claude Code / Cursor / Windsurf / …)
   which drops resolution because it runs when a memory's *prose* changed and a
   stale resolution pointer would be worse than none.
 
+  The read side lives in `claim_queries.py`: the `memory_stats.claims` backlog
+  enumeration and the `claim_filter()` predicate behind
+  `memory_search(claims="open"|"contradicted")`. One definition, two consumers —
+  a stats block and a search filter asking the same question with two
+  hand-written correlated subqueries is how they drift apart. The split also
+  put `claim_sync.py` back under the 300-line limit.
+
 ## Retrieval
 
 - `memory_recall` blends **BM25** (FTS5 lexical) with **semantic** similarity

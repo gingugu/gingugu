@@ -6,6 +6,7 @@ import logging
 
 from .. import search_filters as search_mod
 from .. import stats as stats_mod
+from ..claim_queries import CLAIM_FILTERS
 from ..models import Confidence, MemoryType
 from . import ServerContext
 from .helpers import (
@@ -39,6 +40,7 @@ def register(mcp, ctx: ServerContext) -> None:
         limit: int = 10,
         compact: bool = False,
         ids: str | None = None,
+        claims: str | None = None,
     ) -> dict:
         """Advanced filtered search across memories with full control over filters and
         sort order. Use when you need to filter by type, date range, confidence level, or
@@ -63,7 +65,16 @@ def register(mcp, ctx: ServerContext) -> None:
         ``include_deprecated`` also returns deprecated memories (stale ones are always
         included). ``compact=True`` returns title + a ~200-char ``summary`` instead of
         full content — the right mode for broad sweeps where full bodies would flood
-        the client's tool-result budget; pull full bodies with a targeted follow-up."""
+        the client's tool-result budget; pull full bodies with a targeted follow-up.
+
+        ``claims`` restricts results to the reconciliation backlog — memories that
+        still assert a PR/MR is open. "open" is every unresolved claim;
+        "contradicted" narrows to those a later memory in the same namespace has
+        already recorded as resolved, which are answerable immediately from what the
+        brain already holds. Composes with every other filter, so
+        ``claims="open", namespace="gingugu", sort_by="created"`` is a working
+        sweep. Close them out with ``memory_update(resolve_claims=...)``, which
+        records the resolution WITHOUT editing the memory's prose."""
         try:
             id_list = _split_csv(ids)
             if id_list:
@@ -90,6 +101,8 @@ def register(mcp, ctx: ServerContext) -> None:
                     min_conf = Confidence(confidence)
                 except ValueError:
                     return _err(f"invalid confidence {confidence!r}")
+            if claims is not None and claims not in CLAIM_FILTERS:
+                return _err(f"invalid claims {claims!r}; expected one of {list(CLAIM_FILTERS)}")
 
             requested = list(dict.fromkeys(_split_csv(namespace)))
             ns_scope: str | list[str] | None = None
@@ -116,6 +129,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 weights=ctx.config.weights,
                 decay_lambda=ctx.config.decay_lambda,
                 tags=tag_list,
+                claims=claims,
                 embedder=ctx.store.embedder,
             )
             ctx.store.load_tags(results)
@@ -156,9 +170,17 @@ def register(mcp, ctx: ServerContext) -> None:
         signal only, never a confidence change. Dormant memories wake automatically on
         recall via spreading activation. Memory is never auto-forgotten.
 
-        ``review_limit`` raises the ``review.sample`` cap (default 5, max 100) so a
-        reconciliation sweep can enumerate every flagged memory — pair with
-        memory_search's ``ids`` parameter to pull the full bodies.
+        ``review_limit`` raises the ``review.sample`` and ``claims.sample`` caps
+        (default 5, max 100) so a reconciliation sweep can enumerate every flagged
+        memory — pair with memory_search's ``ids`` parameter to pull the full bodies.
+
+        ``stats.claims`` is the state-claim backlog: memories still asserting a PR/MR
+        is open. ``claims.sample`` enumerates them, contradicted first, each row
+        tagged ``contradicted`` (a later memory in the same namespace already recorded
+        that ref as resolved). ``open`` counts every unresolved claim while
+        ``open_actionable`` — what the sample lists — excludes claims on deprecated
+        memories. ``memory_search(claims="open")`` pulls the same set with full bodies;
+        ``memory_update(resolve_claims=...)`` closes them without editing prose.
 
         ``flag_stale`` is deprecated and ignored — auto-demotion to stale contradicted
         the never-forget model and has been removed. Retained so existing callers do not
