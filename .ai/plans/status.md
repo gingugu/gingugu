@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-08-04_
+_Last updated: 2026-08-13_
 
 ## In Flight
 
@@ -110,6 +110,48 @@ _Last updated: 2026-08-04_
   examples deliberately not carried over.
 
   446 tests pass, ruff + black clean.
+
+- **`age` reports maintenance, and the freshness anchor stops discarding edits**
+  (branch `fix/age-freshness-anchor`, stacked on `feature/init-global`). Found
+  by soak-testing the three commits above and watching the session-start payload:
+  a memory substantially rewritten ~20 minutes earlier surfaced as
+  `"age": "7 weeks ago"`.
+
+  Three nested defects, shipped together because #1 alone would make `age`
+  _look_ right while ranking stayed wrong:
+
+  1. **Display.** `age` came off raw `created_at`, ignoring
+     `decay.reference_timestamp` — the anchor the scorer, the spread-neighbour
+     sort and staleness all already used. `age` was the only consumer that
+     disagreed with the other three. Now anchored, and elaborated to
+     `"7 weeks ago (updated just now)"` where the two differ (~4 tokens, only on
+     maintained memories — "durable AND current" beats either half alone).
+  2. **Ranking.** `reference_timestamp` was documented as
+     `COALESCE(last_confirmed, updated_at, created_at)`, and COALESCE takes the
+     first non-null, not the max. A content edit made after the last
+     confirmation was discarded. Now a `MAX` in Python and in both SQL call
+     sites (`relations.py`, `stats.py`); only `last_confirmed` needs a null
+     guard, the other two columns are `NOT NULL`.
+  3. **Root cause.** `storage.update` bumped `last_confirmed` only when
+     `confidence=VERIFIED` was passed explicitly, so ordinary content
+     maintenance never registered as a confirmation. Now a title/content change
+     confirms, reusing the "did the matching surface move?" test already in the
+     module. Retypes, tag edits and metadata writes deliberately do not.
+
+  **Accepted caveat, surfaced before building:** confirming on rewrite also
+  suppresses `review_hints` and `suggests_deprecation`, so a one-word typo fix
+  resets the staleness clock. Correct when you genuinely restated the claim,
+  not free.
+
+  **Bench gate cleared** (#2 and #3 touch ranking, per
+  `.ai/standards/01-code-and-testing.md`): fixture floor 1.000 MRR, and a real-
+  brain A/B on the same DB — before vs after — came back **identical on every
+  metric and every per-question score**, tokens −0.2%. Note the stored
+  `bench/local/*.json` baselines are no longer valid reference points on their
+  own: the live brain has grown ~9 days since they were captured, which alone
+  moves recall@5 and token counts. A/B on one DB is the only honest comparison.
+
+  456 tests pass (10 new), ruff + black clean.
 
 ## Blocked / Pending
 

@@ -39,7 +39,9 @@ Gingugu instance serves Windsurf and Claude Code against one DB.
 | Relation discipline | Guidance ranks `supersedes`/`contradicts`/`caused_by`/`parent_of` first; `related_to` is a fallback, not a default | ✅ Shipped (unreleased) |
 | Type-weighted spreading activation | Make neighbour selection prefer high-signal relation types | ⛔ Not built — gated on bench evidence |
 | User-level protocol management | `gingugu init` installs/refreshes the protocol in a marked block in `~/.claude/CLAUDE.md`; append-only outside the markers, refuses on an unmanaged protocol | ✅ Shipped (unreleased) |
-| `age` payload field | Derived-at-read relative age on every memory (full, compact, and write-time hints); never persisted | ✅ Shipped (v0.13.0) |
+| `age` payload field | Derived-at-read relative age on every memory (full, compact, and write-time hints); never persisted | ✅ Shipped (v0.13.0; anchored on the freshness anchor + elaborated to `"7 weeks ago (updated just now)"` unreleased) |
+| Freshness anchor is a MAX | `reference_timestamp` returns the latest of `last_confirmed`/`updated_at`/`created_at` instead of the first non-null, in Python and in SQL | ✅ Shipped (unreleased) |
+| A rewrite is a confirmation | `memory_update` advances `last_confirmed` when title/content actually changed; retype/tag/metadata edits do not | ✅ Shipped (unreleased) |
 | Memory Explorer UI | Browse graph + dashboard | ✅ Shipped |
 | `gingugu ui` (launcher) | One command serves the built UI + live `/api/export` on one port (no Node); `--dev` for Vite hot reload. Bundle ships in the wheel | 🔧 Built (v0.9.0, pending release) |
 | `gingugu serve` (transport) | Run over streamable HTTP + Bearer auth (hosted/central) | ✅ Shipped |

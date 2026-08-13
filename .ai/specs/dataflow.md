@@ -45,6 +45,15 @@ Claims are derived from text, so `memory_update` re-syncs them whenever title or
 content changes — but NOT on a confidence/tag/type-only update, matching the
 embedding re-encode condition.
 
+That same "did the text move?" test also advances `last_confirmed`: **a rewrite
+is a confirmation.** Someone re-read the claim and restated it. Retypes, tag
+edits, metadata writes and no-op updates assert nothing about truth and leave
+the clock alone. Before this, `last_confirmed` only ever moved when a caller
+explicitly passed `confidence="verified"`, so ordinary content maintenance never
+registered and the freshness signal — which drives scoring, the spread-neighbour
+sort, staleness and `age` — silently rotted. Accepted trade: a one-word typo fix
+also resets the staleness clock.
+
 ## Reconcile
 
 ```
@@ -77,8 +86,10 @@ memory_recall(query, namespace | "ns1,ns2,…", filters)
     related extras compacted too - keeps broad recalls under MCP clients'
     tool-result token caps; access is still credited)
   → every memory carries a derived `age` ("2 days ago"), computed at
-    serialization from created_at and never stored - kept in compact mode
-    even though raw timestamps are dropped
+    serialization and never stored - kept in compact mode even though raw
+    timestamps are dropped. Anchored on the freshness anchor, so a memory
+    maintained since it was written reads "7 weeks ago (updated just now)"
+    instead of looking 7 weeks stale
 ```
 
 `memory_search` takes the same namespace forms (single, CSV, or omitted =
