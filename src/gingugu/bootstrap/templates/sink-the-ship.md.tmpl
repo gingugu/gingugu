@@ -10,5 +10,11 @@ I'm about to end this session. Before it's gone, save everything worth keeping.
 
 Use Gingugu to save everything you can from this session - for the repo and for
 yourself. Don't just save what you think is important; save the decisions, bugs,
-patterns, outcomes, and lessons. Then `memory_relate` the new memories to their
-cluster so nothing floats loose. Unsaved sessions vanish.
+patterns, outcomes, and lessons. Unsaved sessions vanish.
+
+Then wire the new memories with `memory_relate` - selectively. An edge is worth
+writing only when it records something search cannot infer: what this memory
+**supersedes**, **contradicts**, was **caused_by**, or belongs under. Topical
+similarity is already handled by recall, so skip `related_to` unless a real
+connection exists that no other type describes. A few precise edges beat a dense
+mesh of vague ones.

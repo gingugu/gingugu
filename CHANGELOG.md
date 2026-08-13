@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Relation guidance now optimizes edge _quality_, not edge count.** Every
+  guidance surface that drives relation-writing was reversed: the
+  `memory_relate` tool description, the `suggested_relations` framing on
+  `memory_store` / `memory_update`, and the three `gingugu init` templates
+  (`rules_protocol`, `sink-the-ship`, `stop`). Directional types
+  (`supersedes`, `contradicts`, `caused_by`, `parent_of`/`child_of`) are now
+  ranked first and `related_to` is explicitly a fallback, never shorthand for
+  "similar topic".
+
+  Measured on a real 909-memory brain: **69% of 1369 edges were `related_to`**.
+  That type encodes topical adjacency, which hybrid BM25 + semantic search
+  already derives at read time — so those edges duplicated the index while
+  costing a tool round trip each to write. Worse, `dampened_neighbour_ids`
+  sorts by confidence, degree, and recency but **never reads
+  `relation_type`**, so with a budget of 3 neighbours per seed the low-signal
+  majority was out-competing the 31% of edges that carried real signal.
+
+  The old wording caused it directly: `AGENTS.md` described `related_to` as
+  "most common — use liberally" and framed the goal as building edges
+  "aggressively", with a rule of thumb measured in edge _count_. No storage,
+  schema, scoring, or response shape changed — this is guidance and framing
+  only, plus tests that fail if the volume-first vocabulary returns.
+
 ---
 
 ## [0.13.0] - 2026-08-04

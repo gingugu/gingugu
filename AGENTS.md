@@ -109,20 +109,32 @@ Set `confidence="verified"` when proven by a test, run, or explicit confirmation
 Use `confidence="inferred"` for conclusions you drew. Use `memory_update` when
 reality changes — don't let stale records linger.
 
-**After every `memory_store`, immediately relate it.** Check the last few
-memories surfaced by `memory_context`/`memory_recall` — if any connect to what
-you just stored, call `memory_relate` right then. (`memory_store` also returns
-`suggested_relations` — act on them.) Don't defer this; the graph only gets
-useful if you build edges aggressively.
+**After every `memory_store`, relate it — but only where an edge earns its
+keep.** Check the memories surfaced by `memory_context`/`memory_recall` and by
+`memory_store`'s own `suggested_relations`, and ask: *does this new memory
+replace, contradict, explain, or belong under one of them?* If yes, call
+`memory_relate` right then. If the only true statement is "they're both about
+the same area", link nothing.
+
+An edge must record something search cannot infer. Recall already ranks by
+hybrid text + semantic similarity, so topical adjacency is knowledge the index
+has for free — an edge asserting only that duplicates the index and, because
+spreading activation caps at 3 neighbours per seed and does **not** weight by
+type, actively crowds out an edge that carries real signal.
+
+Prefer in this order:
 
 - `supersedes` — new memory replaces an older one (e.g. bug marked FIXED)
-- `related_to` — two memories cover related topics (most common — use liberally)
-- `caused_by` — one thing led to another
 - `contradicts` — new info conflicts with old (then `memory_forget` the wrong one)
+- `caused_by` — one thing led to another
 - `parent_of` / `child_of` — hierarchical grouping
+- `related_to` — **fallback only.** A real connection none of the above
+  describes. Never as shorthand for "similar topic".
 
-**Rule of thumb:** if you store 3 memories in a session and create 0 relations,
-you're doing it wrong. Most work is connected to prior work.
+**Rule of thumb:** if you can't name the directional fact an edge records, don't
+create it. Judge a session's wiring by whether the edges are the right *kind*,
+never by how many there are — roughly 2 per memory is normal, and more is
+usually worse, not better.
 
 ### What to remember (memory types)
 - **architecture** — schema decisions, scoring/ranking changes, module boundaries

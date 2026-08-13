@@ -4,7 +4,31 @@ _Last updated: 2026-08-04_
 
 ## In Flight
 
-_Nothing in flight._ v0.13.0 shipped both items below.
+- **Relation discipline: quality over volume** (branch `docs/relate-discipline`).
+  Reverses every guidance surface that drove relation-writing toward edge count.
+  Ranks directional types first (`supersedes`, `contradicts`, `caused_by`,
+  `parent_of`/`child_of`); demotes `related_to` to an explicit fallback.
+
+  Touches the `memory_relate` tool description, the `suggested_relations`
+  framing on `memory_store`/`memory_update`, `AGENTS.md`, `CLAUDE.md`, this
+  repo's `.claude/` copies, and the three `gingugu init` templates. 13 new tests
+  in `tests/test_relate_discipline.py` (mutation-verified: they fail when the
+  volume vocabulary is reintroduced). No storage, schema, scoring, or response
+  shape change.
+
+  **Evidence:** measured on the live 909-memory brain, 69% of 1369 edges were
+  `related_to` — a type hybrid search already derives for free. The old
+  `AGENTS.md` literally said "most common — use liberally" and "build edges
+  aggressively", with a rule of thumb measured in edge count.
+
+  **First step of a 4-item sequence** (order deliberate — eliminate before
+  batching, so the batch API gets designed against honest usage numbers):
+  1. ← _this_ — stop writing low-value edges
+  2. batch `memory_relate` (array of edges, one transaction, return counts not
+     echoes; prior art: `portability.py` bulk insert + `relations_imported`)
+  3. type-weighted spreading activation (see Blocked / Pending — needs bench
+     evidence)
+  4. `memory_store` accepts `relations` inline; then a compound session-end tool
 
 ## Blocked / Pending
 
@@ -35,11 +59,51 @@ _Nothing in flight._ v0.13.0 shipped both items below.
   carry the hook; `keycloakify` and `ogre` are also still on a pre-v0.11.1
   `stop.py`.
 
+- **Spreading activation is blind to `relation_type`.** `dampened_neighbour_ids`
+  (`relations.py`) selects neighbours by confidence rank, then _low_ degree, then
+  recency, then id — the `SELECT` never fetches `relation_type` at all. So with
+  `SPREAD_PER_SEED = 3`, a memory carrying 5 `related_to` edges and 2
+  `supersedes` edges can surface three `related_to` neighbours and hide the
+  `supersedes` entirely. The low-signal majority actively out-competes the
+  high-signal minority on every recall.
+
+  Found 2026-08-04 while writing the relation-discipline guidance. The guidance
+  fix only changes what gets written _going forward_; this is the reason the
+  existing 943 `related_to` edges still degrade retrieval today. A type-weighted
+  term in that sort is a small diff and fixes past and future at once.
+
+  **Gated on benchmark evidence** per `.ai/standards/01-code-and-testing.md` —
+  this is a ranking change. Run the fixture floor plus a real-brain pass against
+  `bench/local/brain-v1.json` and compare to the hybrid baselines before
+  shipping. **Decision already taken:** do _not_ bulk-prune the existing 943
+  `related_to` edges. Deleting a third of the graph is destructive and
+  irreversible; fix the sort so they stop winning slots instead. Pruning returns
+  to the table only if the bench says type-weighting is insufficient.
+
+- **No `gingugu init --global` to manage `~/.claude/CLAUDE.md`.** Bootstrap only
+  ever writes under a target _repo_ (`init_claude_code` / `init_rules_file` both
+  resolve paths from the CLI `--path` arg), so the user-level rules file — the
+  one loaded in **every** session, including sessions in repos that have no
+  project protocol installed — is hand-maintained and has no tooling behind it.
+  That is exactly why it drifted: it was still saying "build edges
+  aggressively" after this repo's guidance had moved on, and it is the loudest
+  voice in any session where no repo protocol loads.
+
+  Parked deliberately, not scoped. Raised 2026-08-04 during the relation-
+  discipline work (the global file was fixed by hand in that pass).
+
 - **`gingugu ui --host` exposes an unauthenticated full-DB export.** Found
   2026-08-03, still unfiled as an issue.
 
-- **Over the 300-line rule:** `database.py` (454), `claim_sync.py` (314),
-  `handlers/helpers.py` (327), `search.py` (404).
+- **Over the 300-line rule:** `database.py` (454), `search.py` (404),
+  `handlers/helpers.py` (355), `claim_sync.py` (314).
+
+  `handlers/helpers.py` went 339 → 355 in the relation-discipline pass: the
+  rationale comment on `_RELATION_MIN_SCORE` explains _why_ a similarity-only
+  edge is a net loss, which is precisely the knowledge whose absence caused the
+  original defect. Splitting the module is a separate refactor and was
+  deliberately not bundled into a guidance change. Note the count was already
+  stale here (recorded 327, actually 339 at that time).
 
 ## Shipped in v0.13.0 (2026-08-04)
 

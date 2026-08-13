@@ -89,7 +89,9 @@ Run: `uv run python -m bench [--db <real-brain.db>]`.
   instance runs with it `false` to omit the vault.
 
 `memory_store` / `memory_update` return non-blocking `similar_memories` (merge
-candidates, score ≥ 0.5) and `suggested_relations` (link candidates, score ≥ 0.3) hints.
+candidates, score ≥ 0.5) and `suggested_relations` (score ≥ 0.3) hints. The
+latter are candidates to **examine for a directional relationship**, not links
+to create: similarity is how they are found, never the reason to wire them.
 Both are **always compact** — title + a ~200-char `summary`, never full bodies,
 regardless of any caller flag. They are unsolicited extras on a write, so they
 stay cheap; `memory_recall` fetches the body when a candidate matters.

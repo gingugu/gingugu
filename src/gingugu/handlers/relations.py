@@ -26,13 +26,28 @@ def register(mcp, ctx: ServerContext) -> None:
     ) -> dict:
         """Create a directional link between two memories. Relations are used by
         spreading activation (recalling one memory wakes its related cluster) and are
-        returned when include_related=True in memory_recall. Use to build a knowledge
-        graph that surfaces connected context automatically.
+        returned when include_related=True in memory_recall.
+
+        **An edge must encode something search cannot infer.** Recall already ranks
+        by hybrid text + semantic similarity, so "these two memories are about the
+        same topic" is knowledge the index has for free. What only a relation can
+        record is direction and time: which memory REPLACED which, what CAUSED what,
+        what CONTRADICTS what, what CONTAINS what. Prefer, in this order:
+        ``supersedes``, ``contradicts``, ``caused_by``, ``parent_of``/``child_of``.
+        Reach for ``related_to`` only when a genuine connection exists that none of
+        those describe - it is the fallback, not the default.
+
+        Quality over volume: spreading activation surfaces at most 3 neighbours per
+        seed memory, and it does NOT weight by relation type. Every low-signal edge
+        therefore competes for a slot against a high-signal one, so a handful of
+        precise edges retrieves better than a dense mesh of vague ones. If you cannot
+        name the directional fact an edge records, do not create it.
 
         ``source_id`` is the memory making the claim about ``target_id``. ``relation_type``
-        must be one of: supersedes (source replaces target), related_to (general
-        connection), caused_by (source was caused by target), contradicts (conflicting
-        claims), parent_of (source contains target), child_of (source belongs to target)."""
+        must be one of: supersedes (source replaces target), contradicts (conflicting
+        claims), caused_by (source was caused by target), parent_of (source contains
+        target), child_of (source belongs to target), related_to (fallback: a real
+        connection none of the above captures)."""
         try:
             try:
                 rel = RelationType(relation_type)

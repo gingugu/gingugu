@@ -447,16 +447,21 @@ Store a new memory with full metadata.
   a non-blocking hint of up to 3 near-duplicates (score ≥ 0.5) in the same
   namespace; disable for bulk imports
 - `relation_check` (optional, default `true`) — also return
-  `suggested_relations`, a non-blocking hint of up to 3 link candidates with
-  moderate topical overlap (score ≥ 0.3) that aren't already related; disable
-  for bulk imports
+  `suggested_relations`, a non-blocking hint of up to 3 memories with moderate
+  topical overlap (score ≥ 0.3) that aren't already related, worth examining for
+  a directional relationship; disable for bulk imports
 
-**Hint bands.** `similar_memories` flags merge candidates (high overlap),
-`suggested_relations` flags link candidates (moderate overlap, with
-already-related and already-similar memories filtered out). The two lists are
-always disjoint — a high-overlap match goes to `similar_memories`, leaving
-`suggested_relations` for genuinely complementary memories worth wiring up via
-`memory_relate`.
+**Hint bands.** `similar_memories` flags merge candidates (high overlap).
+`suggested_relations` surfaces memories worth *examining* for a relationship
+(moderate overlap, with already-related and already-similar memories filtered
+out). The two lists are always disjoint — a high-overlap match goes to
+`similar_memories`.
+
+`suggested_relations` is not a list of edges to create. Overlap is how a
+candidate is found; what justifies an edge is something search cannot infer —
+whether this memory `supersedes`, `contradicts`, was `caused_by`, or belongs
+under one of them. See [`memory_relate`](#memory_relate) for why a
+similarity-only edge is a net loss.
 
 **Hint payloads are always compact** — each entry is `id`, `type`, `title`,
 `confidence`, `tags`, `age`, `score`, and a ~200-char `summary`, never full
@@ -595,7 +600,23 @@ Create a relationship between two memories.
 **Parameters:**
 - `source_id` (required) — UUID of source memory
 - `target_id` (required) — UUID of target memory
-- `relation_type` (required) — supersedes|related_to|caused_by|contradicts|parent_of|child_of
+- `relation_type` (required) — supersedes|contradicts|caused_by|parent_of|child_of|related_to
+
+**An edge must encode what search cannot infer.** Recall already ranks by hybrid
+BM25 + semantic similarity, so "these two memories are about the same topic" is
+knowledge the index derives for free. What only a relation can record is
+direction and time: which memory *replaced* which, what *caused* what, what
+*contradicts* what, what *contains* what. Prefer `supersedes`, `contradicts`,
+`caused_by`, `parent_of`/`child_of`; treat `related_to` as a fallback for a real
+connection none of those describe, never as shorthand for "similar".
+
+**Quality beats volume.** [Spreading activation](#spreading-activation) surfaces
+at most `SPREAD_PER_SEED` (3) neighbours per seed memory and does **not** weight
+by relation type, so every low-signal edge competes for a slot against a
+high-signal one. A handful of precise edges retrieves better than a dense mesh
+of vague ones. Measured on a real 909-memory brain in August 2026, while the
+guidance still called `related_to` the common case: 69% of 1369 edges were
+`related_to`, crowding out the 31% that carried real signal.
 
 ### `memory_consolidate`
 Merge or summarize related memories into a single consolidated memory - or,
