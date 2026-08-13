@@ -6,8 +6,8 @@
 
 ## Current Status: **Phase 5.75 (The Sextant) Complete — Phase 5.5 Stages 2-4 Next** ⛵
 
-> Shipped and public: **v0.10.0 on PyPI**, **16 MCP
-> tools** live, **367 tests passing** (ruff + black clean), CI green on
+> Shipped and public: **v0.15.0 on PyPI**, **18 MCP
+> tools** live, **532 tests passing** (ruff + black clean), CI green on
 > ubuntu/macos/windows × 3.11–3.13. Phases 1-4 (storage, intelligence,
 > relations, integration) are done and battle-tested. Phase 5 landed the big
 > upgrades: local semantic embeddings (fastembed ONNX + Ollama backend), RRF
@@ -86,6 +86,7 @@ Memory linking, tagging, and consolidation.
 |------|--------|-------|
 | Tag system (CRUD + query) | ✅ | `storage.py` set/add/get/load_tags, normalized; tag filter in `search.py` (all-required) |
 | `memory_relate` tool | ✅ | `relations.py` RelationManager; 6 relation types, idempotent edges |
+| `memory_edges` + `memory_unrelate` tools | ✅ | Unreleased: enumerate the graph, then retype in place or remove; single or batched reviewed ops, `dry_run` |
 | Relationship traversal in search | ✅ | `memory_recall(include_related=True)` appends linked memories (flagged `via_relation`) |
 | `memory_consolidate` tool | ✅ | `consolidation.py`: merge / summarize / deduplicate + `keep_originals` |
 | `memory_update` tool | ✅ | content/title/confidence/metadata/tags |

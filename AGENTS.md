@@ -136,6 +136,14 @@ create it. Judge a session's wiring by whether the edges are the right *kind*,
 never by how many there are — roughly 2 per memory is normal, and more is
 usually worse, not better.
 
+**A wrong edge is fixable, so fix it rather than writing prose around it.**
+`memory_edges` lists what is actually there (both endpoints' titles, plus each
+one's degree, which is what decides whether an edge can ever fire);
+`memory_unrelate` retypes it in place or removes it. Retyping preserves the
+edge's creation time, so correcting a label costs nothing in provenance. Judge
+each edge on its own merits — there is no bulk retype, deliberately, because a
+blanket relabel manufactures directional claims that were never true.
+
 ### What to remember (memory types)
 - **architecture** — schema decisions, scoring/ranking changes, module boundaries
 - **decision** — trade-offs made, rejected alternatives

@@ -4,6 +4,38 @@ _Last updated: 2026-08-13_
 
 ## In Flight
 
+- **Edge repair: `memory_unrelate` + `memory_edges` (`feature/edge-repair`)** —
+  closes the gap that blocked the 3A structure pass. The relation surface was
+  create-only: nothing removed or relabelled an edge, so a wrong one was
+  permanent for the life of both memories, and since spreading activation
+  visits at most 3 neighbours per seed without weighting by type, it kept
+  competing for a slot against a right one forever. Precision demanded, errors
+  unfixable, cost paid on every recall. Two instances hit in two days while
+  writing edges by the very guidance that demands the precision.
+
+  - `memory_unrelate` — retype in place (UPDATE, so id / `created_at` /
+    metadata survive) or delete. Retyping onto an existing type collapses the
+    pair and reports `merged`, not `retyped`. Batches of up to 100 reviewed
+    ops, validated whole before any write; `dry_run` previews.
+  - `memory_edges` — the discovery half. `memory_stats.graph` reported *that* a
+    graph was mostly `related_to` and nothing could say *which* edges those
+    were, so repair meant hand-written SQL against the live brain. Same shape
+    as the claims gap (#47): a metric with no enumeration behind it.
+  - `relations.py` gains `retype_relation`, `delete_edges`, `list_edges`. The
+    long-dead `delete_relation` (tested since it was written, never called by
+    anything) finally has a caller.
+  - `handlers/relations.py` was carrying `memory_consolidate`; it moved to a new
+    `handlers/consolidate.py` to keep both under the 300-line limit. No
+    tool-surface change from the split — same tool, same name.
+  - **Deliberately not built:** a criteria-driven bulk retype. The point of
+    retyping is that each edge deserves a different type based on what it
+    records; a blanket relabel would manufacture directional claims that were
+    never true, and a false `caused_by` retrieves worse than an honest
+    `related_to`. Batching saves round-trips, not judgment.
+  - `edges` is typed `list[dict]`, not a JSON string: FastMCP pre-parses
+    JSON-looking strings before pydantic validation, so a `str`-annotated
+    param can never receive a JSON array.
+
 - **Comparison content retired from the public surface
   (`docs/remove-comparison`)** — the README's `How It Compares` section and its
   TOC entry are gone, and the matching `cat comparison.txt` block came out of

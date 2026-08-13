@@ -696,6 +696,72 @@ of vague ones. Measured on a real 909-memory brain in August 2026, while the
 guidance still called `related_to` the common case: 69% of 1369 edges were
 `related_to`, crowding out the 31% that carried real signal.
 
+**Wrong edges are repairable** — see [`memory_unrelate`](#memory_unrelate).
+
+### `memory_edges`
+Enumerate graph edges. Read-only; nothing is written and no access is credited.
+
+**Parameters:**
+- `namespace` (optional) — matches an edge when **either** endpoint lives
+  there, mirroring `memory_stats.graph`. Relations legitimately cross
+  namespaces and a source-only filter would hide half of them. Unknown
+  namespaces are an error (reads never create).
+- `relation_type` (optional) — one of the six types; `related_to` is the usual
+  repair target
+- `memory_id` (optional) — every edge touching one memory, either direction
+- `limit` / `offset` (optional) — default 50 / 0
+
+Each row carries `source_id`/`target_id`, both titles, both namespaces, the
+relation type, `created_at`, and `source_degree`/`target_degree`. Degree is
+what decides reachability: [spreading activation](#spreading-activation) visits
+at most `SPREAD_PER_SEED` neighbours and does not rank them by type, so edges
+on a high-degree memory may never fire however well labelled.
+
+`memory_stats.graph` reports *that* a graph is mostly `related_to`; this reports
+*which* edges those are, which is the difference between a metric and a work
+queue. Ordering is stable (source title, target title, type) so a paged sweep
+sees each edge once — though repairing as you page changes what matches, so
+restart at `offset=0` when filtering on a type you are actively retyping away
+from.
+
+### `memory_unrelate`
+Repair the graph: retype a mislabelled edge, or remove one that should not
+exist. The counterpart to [`memory_relate`](#memory_relate).
+
+**Parameters:**
+- `source_id` / `target_id` — the edge's endpoints (required unless `edges`)
+- `relation_type` (optional) — which edge to act on; omitted on a delete, every
+  type between the pair goes
+- `new_relation_type` (optional) — present = retype, absent = delete. Requires
+  `relation_type`.
+- `edges` (optional) — batch: an array of up to `MAX_BATCH_EDGES` (100) objects
+  with those same fields. Mutually exclusive with the single-edge parameters.
+- `dry_run` (optional) — preview only; nothing is written
+
+**Retype is an in-place UPDATE**, so the row's id, `created_at` and metadata
+survive. The usual repair is "right connection, wrong label", and the graph
+should keep an honest record of when the link was first drawn. If an edge of
+the new type already joins the pair the two collapse into one, reported as
+`merged` rather than `retyped` — the edge count really does drop by one, and
+nothing is fabricated to keep the arithmetic tidy.
+
+**Deletion is not the bulk prune** the relation guidance warns against: the
+caller names each edge, exactly as `memory_forget` names a memory. Memories are
+never touched, only edges.
+
+**A batch is reviewed decisions submitted together, not a criteria-driven
+sweep.** There is deliberately no "retype every `related_to` in this namespace"
+option: the point of retyping is that each edge deserves a different type based
+on what it actually records, so a blanket relabel would manufacture directional
+claims that were never true — and a false `caused_by` retrieves worse than an
+honest `related_to`. Batching saves round-trips, not judgment. The whole batch
+is validated before anything is written, so a malformed op fails the call rather
+than leaving the graph half-repaired.
+
+Outcomes are reported per edge (`retyped`, `merged`, `deleted`, `not_found`,
+`unchanged`, or the `would_*` forms under `dry_run`) plus an `outcomes` tally.
+Find the edges to repair with [`memory_edges`](#memory_edges).
+
 ### `memory_consolidate`
 Merge or summarize related memories into a single consolidated memory - or,
 without `memory_ids`, discover which memories are worth consolidating.
