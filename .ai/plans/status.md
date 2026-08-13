@@ -4,7 +4,16 @@ _Last updated: 2026-08-13_
 
 ## In Flight
 
-- **Edge repair: `memory_unrelate` + `memory_edges` (`feature/edge-repair`)** —
+_Nothing in flight._
+
+## Shipped in v0.16.0 (2026-08-13)
+
+Released to PyPI on tag `v0.16.0`. Companion site update rides in
+gingugu.com#3 (tool grid 16 -> 18, plus an `[edge_repair]` feature line),
+merged after this release so the site never advertises a tool the published
+package does not carry.
+
+- **Edge repair: `memory_unrelate` + `memory_edges` (#49, squash `7b4f367`)** —
   closes the gap that blocked the 3A structure pass. The relation surface was
   create-only: nothing removed or relabelled an edge, so a wrong one was
   permanent for the life of both memories, and since spreading activation
@@ -36,8 +45,8 @@ _Last updated: 2026-08-13_
     JSON-looking strings before pydantic validation, so a `str`-annotated
     param can never receive a JSON array.
 
-- **Comparison content retired from the public surface
-  (`docs/remove-comparison`)** — the README's `How It Compares` section and its
+- **Comparison content retired from the public surface (#48, squash
+  `23e254e`)** — the README's `How It Compares` section and its
   TOC entry are gone, and the matching `cat comparison.txt` block came out of
   gingugu.com in the same pass (with its now-orphaned `.cmp-note` CSS).
 
@@ -52,7 +61,6 @@ _Last updated: 2026-08-13_
   record, not marketing copy), and the FAQ entry on editor built-ins (it exists
   to explain what `gingugu init` gives you, not to rank a competitor).
 
-## Merged to `main`, awaiting release
 
 - **Claims enumeration (#47, squash `5b0a304`)** — closes a product gap
   found by dogfooding, not by a test: `memory_stats.claims.sample` reported a
@@ -80,6 +88,7 @@ _Last updated: 2026-08-13_
 
   499 tests passing (13 new in `tests/test_claim_enumeration.py`), ruff + black
   clean.
+
 
 ## Shipped in v0.15.0 (2026-08-13)
 
