@@ -26,7 +26,6 @@ file on your machine.
 ## 📋 Table of Contents
 
 - [Why Gingugu](#why-gingugu)
-- [How It Compares](#how-it-compares)
 - [FAQ](#faq)
 - [Features](#features)
 - [Architecture](#architecture)
@@ -88,28 +87,6 @@ your own numbers: `python -m bench --help`.
 
 Where this goes long-term — federated, org-wide agent memory — lives in
 [docs/enterprise-vision.md](https://github.com/gingugu/gingugu/blob/main/docs/enterprise-vision.md).
-
----
-
-## How It Compares
-
-**The honest take.** Gingugu doesn't lead the field on every axis.
-Graphiti has the more sophisticated temporal knowledge graph. Mem0 has
-the broader ecosystem and a managed platform. Letta is a more complete
-stateful-agent runtime. Zep is built for enterprise scale and
-governance. (We used to maintain a capability matrix here; those
-products ship fast, and stale claims about someone else's tool help
-nobody - go evaluate them directly.)
-
-**Where Gingugu wins.** When you're a developer using several coding
-agents and you want one inspectable local memory layer - without
-adopting a cloud account, an agent framework, a graph database, or an
-LLM call for every memory written. One SQLite file. MCP-native.
-Explicit trust and lifecycle. Typed relations. Advisory staleness
-hints. And when a team wants to go further, the same server runs as a
-shared central brain over HTTP (`gingugu serve`) and harvests each
-developer's local gold into it (`gingugu promote`) - no platform
-migration, same single file.
 
 ---
 
