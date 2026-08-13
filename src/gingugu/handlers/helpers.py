@@ -91,6 +91,19 @@ def _stamp_namespace_names(ctx: ServerContext, summaries: list[dict]) -> None:
         summary["namespace"] = name_by_id.get(ns_id, ns_id)
 
 
+def _age_field(mem: Memory) -> str | None:
+    """Derived per read, never stored — see ``decay.age_label``. Ships even in
+    full mode: the raw ISO timestamps are already there and still get misread,
+    because the date arithmetic is done unreliably or skipped outright.
+
+    Anchored on ``reference_timestamp``, not raw ``created_at``, so ``age``
+    agrees with the three consumers (scorer, spread-neighbour sort, staleness)
+    that were already using the freshness anchor.
+    """
+    anchor = decay.reference_timestamp(mem.last_confirmed, mem.updated_at, mem.created_at)
+    return decay.age_label(mem.created_at, anchor)
+
+
 def _memory_summary(mem: Memory) -> dict:
     data = {
         "id": mem.id,
@@ -104,10 +117,7 @@ def _memory_summary(mem: Memory) -> dict:
         "access_count": mem.access_count,
         "tags": mem.tags,
     }
-    # Derived per read, never stored — see decay.relative_age. Ships even in
-    # full mode: raw ISO timestamps are already here and still get misread,
-    # because the date arithmetic is done unreliably or skipped outright.
-    age = decay.relative_age(mem.created_at)
+    age = _age_field(mem)
     if age is not None:
         data["age"] = age
     if mem.score is not None:
@@ -148,7 +158,7 @@ def _compact_summary(mem: Memory) -> dict:
         "namespace_id": mem.namespace_id,
         "tags": mem.tags,
     }
-    age = decay.relative_age(mem.created_at)
+    age = _age_field(mem)
     if age is not None:
         data["age"] = age
     if mem.score is not None:

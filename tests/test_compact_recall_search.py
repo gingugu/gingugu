@@ -174,6 +174,42 @@ async def test_age_present_in_compact_and_full_payloads(server) -> None:
         assert mem["created_at"]  # full mode keeps the raw instant too
 
 
+async def test_age_reports_maintenance_end_to_end(server, tmp_path) -> None:
+    """A memory rewritten today must not read as weeks stale.
+
+    The original defect: `age` came off raw `created_at`, so a RESUME note
+    substantially rewritten minutes earlier surfaced as "7 weeks ago". Both
+    halves of the fix are exercised here — memory_update advancing
+    last_confirmed, and the payload anchoring on it.
+    """
+    import sqlite3
+
+    mem_id = await _store(server, title="maintained resume note")
+    conn = sqlite3.connect(tmp_path / "compact.db")
+    conn.execute(
+        "UPDATE memories SET created_at=?, updated_at=?, last_confirmed=NULL WHERE id=?",
+        ("2026-06-16T14:25:49+00:00", "2026-06-16T14:25:49+00:00", mem_id),
+    )
+    conn.commit()
+    conn.close()
+
+    stale = _payload(await server.call_tool("memory_recall", {"query": "argocd rollout"}))
+    row = next(m for m in stale["memories"] if m["id"] == mem_id)
+    assert "updated" not in row["age"], "untouched memory should read as plain age"
+
+    edited = _payload(
+        await server.call_tool(
+            "memory_update", {"memory_id": mem_id, "content": LONG + " rewritten today"}
+        )
+    )
+    assert edited["ok"]
+
+    after = _payload(await server.call_tool("memory_recall", {"query": "argocd rollout"}))
+    row = next(m for m in after["memories"] if m["id"] == mem_id)
+    assert row["age"].endswith("(updated just now)"), row["age"]
+    assert not row["age"].startswith("just now"), "creation age must survive the rewrite"
+
+
 async def test_age_is_never_persisted(server) -> None:
     """`age` is derived at serialization; it must not reach the DB or export."""
     mem_id = await _store(server, title="derived not stored")
