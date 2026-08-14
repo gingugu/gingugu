@@ -4,96 +4,14 @@ from __future__ import annotations
 
 import logging
 
-from ..models import RelationType
 from ..relations import RelationManager
 from . import ServerContext
 from .helpers import _err, _single_namespace_not_found
+from .relation_ops import MAX_BATCH_EDGES, _apply, _parse_edges, _parse_type
 
 logger = logging.getLogger(__name__)
 
-# A batch is submitted as reviewed, per-edge decisions. Large enough that a
-# repair sweep is not death by round-trip, small enough that a runaway caller
-# cannot rewrite the graph in one call.
-MAX_BATCH_EDGES = 100
-
-
-def _parse_type(value: str) -> RelationType:
-    try:
-        return RelationType(value)
-    except ValueError as exc:
-        raise ValueError(
-            f"invalid relation_type {value!r}; expected one of {[r.value for r in RelationType]}"
-        ) from exc
-
-
-def _parse_edges(parsed: list) -> list[dict]:
-    """Validate the batch payload up front. Any bad op rejects the whole batch."""
-    if not isinstance(parsed, list):
-        raise ValueError("edges must be an array of edge objects")
-    if not parsed:
-        raise ValueError("edges is empty — nothing to do")
-    if len(parsed) > MAX_BATCH_EDGES:
-        raise ValueError(f"edges holds {len(parsed)} ops; max is {MAX_BATCH_EDGES} per call")
-
-    ops: list[dict] = []
-    for i, op in enumerate(parsed):
-        if not isinstance(op, dict):
-            raise ValueError(f"edges[{i}] must be an object")
-        source_id, target_id = op.get("source_id"), op.get("target_id")
-        if not source_id or not target_id:
-            raise ValueError(f"edges[{i}] needs both source_id and target_id")
-        if source_id == target_id:
-            raise ValueError(f"edges[{i}] is a self-edge, which cannot exist")
-        rel_type = op.get("relation_type")
-        new_type = op.get("new_relation_type")
-        ops.append(
-            {
-                "source_id": source_id,
-                "target_id": target_id,
-                "relation_type": _parse_type(rel_type) if rel_type else None,
-                "new_relation_type": _parse_type(new_type) if new_type else None,
-            }
-        )
-    return ops
-
-
-def _apply(relations: RelationManager, op: dict, *, dry_run: bool) -> dict:
-    """Run one reviewed edge decision. Never raises; the outcome is the report."""
-    source_id, target_id = op["source_id"], op["target_id"]
-    old_type, new_type = op["relation_type"], op["new_relation_type"]
-    result = {"source_id": source_id, "target_id": target_id}
-
-    if new_type is not None:
-        if old_type is None:
-            return {**result, "outcome": "error", "detail": "retype needs relation_type"}
-        result |= {"relation_type": old_type.value, "new_relation_type": new_type.value}
-        if dry_run:
-            return {**result, "outcome": "would_retype"}
-        return {
-            **result,
-            "outcome": relations.retype_relation(
-                source_id=source_id, target_id=target_id, old_type=old_type, new_type=new_type
-            ),
-        }
-
-    if old_type is not None:
-        result["relation_type"] = old_type.value
-        if dry_run:
-            return {**result, "outcome": "would_delete"}
-        deleted = relations.delete_relation(
-            source_id=source_id, target_id=target_id, relation_type=old_type
-        )
-        return {**result, "outcome": "deleted" if deleted else "not_found"}
-
-    # No type given: every edge in this direction goes.
-    if dry_run:
-        return {**result, "outcome": "would_delete_all"}
-    removed = relations.delete_edges(source_id=source_id, target_id=target_id)
-    return {
-        **result,
-        "removed_types": removed,
-        "outcome": "deleted" if removed else "not_found",
-    }
+__all__ = ["MAX_BATCH_EDGES", "register"]
 
 
 def register(mcp, ctx: ServerContext) -> None:
@@ -204,13 +122,14 @@ def register(mcp, ctx: ServerContext) -> None:
         target_id: str | None = None,
         relation_type: str | None = None,
         new_relation_type: str | None = None,
+        reverse: bool = False,
         edges: list[dict] | None = None,
         dry_run: bool = False,
     ) -> dict:
-        """Repair the graph: retype a mislabelled edge, or remove one that should not
-        exist. The counterpart to ``memory_relate`` — without it, an edge written in
-        haste is permanent, and every wrong edge keeps competing for one of the 3
-        spreading-activation slots on its memories forever.
+        """Repair the graph: retype a mislabelled edge, turn a backwards one around, or
+        remove one that should not exist. The counterpart to ``memory_relate`` — without
+        it, an edge written in haste is permanent, and every wrong edge keeps competing
+        for one of the 3 spreading-activation slots on its memories forever.
 
         **Retype** by passing ``new_relation_type`` alongside ``relation_type``. The
         edge is relabelled in place: direction, creation time and metadata survive,
@@ -220,7 +139,16 @@ def register(mcp, ctx: ServerContext) -> None:
         outcome reports ``merged`` rather than ``retyped`` — the edge count drops by
         one, and nothing is fabricated to hide that.
 
-        **Delete** by omitting ``new_relation_type``. With ``relation_type``, only
+        **Reverse** by passing ``reverse=True`` alongside ``relation_type``. The
+        endpoints are swapped on the same row, so id, creation time and metadata
+        survive exactly as they do for a retype — the connection was right, only the
+        arrow pointed the wrong way. Reversing COMBINES with ``new_relation_type``, in
+        one write, because an edge recorded backwards is often mislabelled as well.
+        Note that reversing ``parent_of``/``child_of`` is the same operation as flipping
+        between the two types: do one or the other, not both. As with a retype, an
+        existing edge in the target direction absorbs this one and reports ``merged``.
+
+        **Delete** by omitting ``new_relation_type`` and ``reverse``. With ``relation_type``, only
         that edge goes; without it, every edge from ``source_id`` to ``target_id``
         goes, whatever the type. Deletion here is not the bulk prune the graph
         guidance warns against: the caller names each edge, exactly as
@@ -228,11 +156,13 @@ def register(mcp, ctx: ServerContext) -> None:
 
         **Batch** by passing ``edges`` — an array of up to 100 objects, each with
         ``source_id``, ``target_id`` and optionally ``relation_type`` /
-        ``new_relation_type``, i.e. the same decision made once per edge:
+        ``new_relation_type`` / ``reverse``, i.e. the same decision made once per edge:
 
             [{"source_id": "a", "target_id": "b",
               "relation_type": "related_to", "new_relation_type": "caused_by"},
-             {"source_id": "c", "target_id": "d", "relation_type": "related_to"}]
+             {"source_id": "c", "target_id": "d",
+              "relation_type": "caused_by", "reverse": true},
+             {"source_id": "e", "target_id": "f", "relation_type": "related_to"}]
 
         A batch is reviewed decisions submitted together, NOT a criteria-driven
         sweep, and that is deliberate. There is no "retype every ``related_to`` in
@@ -243,14 +173,14 @@ def register(mcp, ctx: ServerContext) -> None:
 
         The batch is validated in full before anything is written, so a malformed op
         fails the whole call rather than leaving the graph half-repaired. Individual
-        outcomes (``retyped``, ``merged``, ``deleted``, ``not_found``, ``unchanged``)
-        are reported per edge. Use ``dry_run=True`` to preview a sweep first; nothing
-        is written and each op reports what it would have done.
+        outcomes (``retyped``, ``reversed``, ``merged``, ``deleted``, ``not_found``,
+        ``unchanged``) are reported per edge. Use ``dry_run=True`` to preview a sweep
+        first; nothing is written and each op reports what it would have done.
 
         Find the edges to repair with ``memory_edges``."""
         try:
             if edges is not None:
-                if source_id or target_id or relation_type or new_relation_type:
+                if source_id or target_id or relation_type or new_relation_type or reverse:
                     return _err(
                         "pass either `edges` for a batch or the single-edge fields, not both"
                     )
@@ -262,6 +192,8 @@ def register(mcp, ctx: ServerContext) -> None:
                     return _err("a memory cannot relate to itself, so there is no edge to repair")
                 if new_relation_type and not relation_type:
                     return _err("retyping needs relation_type (the current type) as well")
+                if reverse and not relation_type:
+                    return _err("reversing needs relation_type (the current type) as well")
                 ops = [
                     {
                         "source_id": source_id,
@@ -270,6 +202,7 @@ def register(mcp, ctx: ServerContext) -> None:
                         "new_relation_type": (
                             _parse_type(new_relation_type) if new_relation_type else None
                         ),
+                        "reverse": reverse,
                     }
                 ]
 

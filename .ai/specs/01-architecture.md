@@ -99,6 +99,21 @@ AI client (Claude Code / Cursor / Windsurf / …)
   hand-written correlated subqueries is how they drift apart. The split also
   put `claim_sync.py` back under the 300-line limit.
 
+  `graph_stats.orphan_filter()` follows the same shape for the graph backlog:
+  one predicate behind both the `memory_stats.graph.orphans` count and
+  `memory_search(orphans=True)`, so a count and its enumeration cannot come to
+  disagree about what they are counting. `compute_graph` returns an
+  `orphan_sample` alongside the count, since a metric nothing can act on
+  describes a cost without offering a way to pay it down.
+
+  Edge repair lives in `relation_repair.py`, mixed into `RelationManager`:
+  `retype_relation` and `reverse_relation` are the two halves of "the pair is
+  right, the label or the arrow is not", and both UPDATE the existing row so an
+  edge's provenance survives its correction. Split out when the reversal work
+  pushed `relations.py` past the 300-line limit; the same pass moved the batch
+  parsing and per-edge dispatch out of `handlers/relations.py` into
+  `handlers/relation_ops.py`, leaving the handler owning the MCP surface alone.
+
 ## Retrieval
 
 - `memory_recall` blends **BM25** (FTS5 lexical) with **semantic** similarity

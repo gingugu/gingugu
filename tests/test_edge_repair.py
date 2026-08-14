@@ -466,3 +466,216 @@ async def test_repair_moves_the_high_signal_ratio_stats_report(server) -> None:
 
     graph = _payload(await server.call_tool("memory_stats", {}))["stats"]["graph"]
     assert graph["high_signal_ratio"] == 1.0
+
+
+# --- reversal: right pair, wrong direction ----------------------------------
+
+
+@pytest.mark.asyncio
+async def test_reverse_swaps_the_endpoints_in_place(server) -> None:
+    """The other half of "right connection, wrong label": the arrow points the
+    wrong way. ``B caused_by A`` written as ``A caused_by B`` is a false claim
+    about causality, not a merely untidy one."""
+    a, b = await _store(server, "alpha"), await _store(server, "beta")
+    await _relate(server, a, b, "caused_by")
+
+    result = await _unrelate(
+        server, source_id=a, target_id=b, relation_type="caused_by", reverse=True
+    )
+    assert result["ok"] is True
+    assert result["outcomes"] == {"reversed": 1}
+
+    edges = await _edges(server)
+    assert edges["total"] == 1
+    edge = edges["edges"][0]
+    assert (edge["source_id"], edge["target_id"]) == (b, a)
+    assert edge["relation_type"] == "caused_by"
+
+
+@pytest.mark.asyncio
+async def test_reverse_preserves_creation_time(server) -> None:
+    """Turning an edge around is a correction, not a new link. Provenance
+    survives it for the same reason it survives a retype."""
+    a, b = await _store(server, "alpha"), await _store(server, "beta")
+    await _relate(server, a, b, "caused_by")
+    before = (await _edges(server))["edges"][0]["created_at"]
+
+    await _unrelate(server, source_id=a, target_id=b, relation_type="caused_by", reverse=True)
+    assert (await _edges(server))["edges"][0]["created_at"] == before
+
+
+@pytest.mark.asyncio
+async def test_reverse_combines_with_a_retype_in_one_write(server) -> None:
+    """The real repair case. An edge recorded backwards is frequently
+    mislabelled too — whoever wrote it was not reading the direction closely —
+    so fixing both must not cost two round trips."""
+    a, b = await _store(server, "alpha"), await _store(server, "beta")
+    await _relate(server, a, b, "related_to")
+
+    result = await _unrelate(
+        server,
+        source_id=a,
+        target_id=b,
+        relation_type="related_to",
+        new_relation_type="caused_by",
+        reverse=True,
+    )
+    assert result["outcomes"] == {"reversed": 1}
+
+    edge = (await _edges(server))["edges"][0]
+    assert (edge["source_id"], edge["target_id"]) == (b, a)
+    assert edge["relation_type"] == "caused_by"
+
+
+@pytest.mark.asyncio
+async def test_reverse_onto_an_existing_reversed_edge_merges_and_says_so(server) -> None:
+    """The pair is already joined in the target direction, so the two collapse.
+    The edge count drops by one and the outcome reports it rather than
+    fabricating a ``reversed`` that would not add up."""
+    a, b = await _store(server, "alpha"), await _store(server, "beta")
+    await _relate(server, a, b, "caused_by")
+    await _relate(server, b, a, "caused_by")
+
+    result = await _unrelate(
+        server, source_id=a, target_id=b, relation_type="caused_by", reverse=True
+    )
+    assert result["outcomes"] == {"merged": 1}
+
+    edges = await _edges(server)
+    assert edges["total"] == 1
+    assert (edges["edges"][0]["source_id"], edges["edges"][0]["target_id"]) == (b, a)
+
+
+@pytest.mark.asyncio
+async def test_reverse_of_a_missing_edge_reports_not_found(server) -> None:
+    a, b = await _store(server, "alpha"), await _store(server, "beta")
+    await _relate(server, a, b, "related_to")
+
+    result = await _unrelate(
+        server, source_id=a, target_id=b, relation_type="caused_by", reverse=True
+    )
+    assert result["outcomes"] == {"not_found": 1}
+    assert (await _edges(server))["total"] == 1
+
+
+@pytest.mark.asyncio
+async def test_reverse_without_current_type_is_rejected(server) -> None:
+    """Which edge to turn around is not inferable when a pair carries several."""
+    a, b = await _store(server, "alpha"), await _store(server, "beta")
+    await _relate(server, a, b, "related_to")
+
+    result = await _unrelate(server, source_id=a, target_id=b, reverse=True)
+    assert result["ok"] is False
+    assert "relation_type" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_reverse_leaves_the_other_edges_of_the_pair_alone(server) -> None:
+    a, b = await _store(server, "alpha"), await _store(server, "beta")
+    await _relate(server, a, b, "caused_by")
+    await _relate(server, a, b, "related_to")
+
+    await _unrelate(server, source_id=a, target_id=b, relation_type="caused_by", reverse=True)
+
+    edges = {
+        (e["source_id"], e["target_id"], e["relation_type"])
+        for e in (await _edges(server))["edges"]
+    }
+    assert edges == {(b, a, "caused_by"), (a, b, "related_to")}
+
+
+@pytest.mark.asyncio
+async def test_batch_reverses_alongside_retypes_and_deletes(server) -> None:
+    """A real sweep mixes all three decisions, which is why they share a call."""
+    a, b, c, d = [await _store(server, t) for t in ("alpha", "beta", "gamma", "delta")]
+    await _relate(server, a, b, "caused_by")
+    await _relate(server, c, d, "related_to")
+    await _relate(server, b, c, "related_to")
+
+    result = await _unrelate(
+        server,
+        edges=[
+            {"source_id": a, "target_id": b, "relation_type": "caused_by", "reverse": True},
+            {
+                "source_id": c,
+                "target_id": d,
+                "relation_type": "related_to",
+                "new_relation_type": "parent_of",
+            },
+            {"source_id": b, "target_id": c, "relation_type": "related_to"},
+        ],
+    )
+    assert result["ok"] is True
+    assert result["outcomes"] == {"reversed": 1, "retyped": 1, "deleted": 1}
+
+    edges = {
+        (e["source_id"], e["target_id"], e["relation_type"])
+        for e in (await _edges(server))["edges"]
+    }
+    assert edges == {(b, a, "caused_by"), (c, d, "parent_of")}
+
+
+@pytest.mark.asyncio
+async def test_batch_reverse_without_current_type_names_the_offending_index(server) -> None:
+    """Validation is up front and whole-batch, so a bad reverse writes nothing."""
+    a, b, c = [await _store(server, t) for t in ("alpha", "beta", "gamma")]
+    await _relate(server, a, b, "related_to")
+    await _relate(server, b, c, "caused_by")
+
+    result = await _unrelate(
+        server,
+        edges=[
+            {"source_id": a, "target_id": b, "relation_type": "related_to"},
+            {"source_id": b, "target_id": c, "reverse": True},
+        ],
+    )
+    assert result["ok"] is False
+    assert "edges[1]" in result["error"]
+    assert (await _edges(server))["total"] == 2
+
+
+@pytest.mark.asyncio
+async def test_batch_rejects_a_non_boolean_reverse(server) -> None:
+    a, b = await _store(server, "alpha"), await _store(server, "beta")
+    await _relate(server, a, b, "related_to")
+
+    result = await _unrelate(
+        server,
+        edges=[{"source_id": a, "target_id": b, "relation_type": "related_to", "reverse": "yes"}],
+    )
+    assert result["ok"] is False
+    assert "edges[0]" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_reverse_and_batch_fields_are_mutually_exclusive(server) -> None:
+    a, b = await _store(server, "alpha"), await _store(server, "beta")
+    await _relate(server, a, b, "related_to")
+
+    result = await _unrelate(
+        server,
+        reverse=True,
+        edges=[{"source_id": a, "target_id": b, "relation_type": "related_to"}],
+    )
+    assert result["ok"] is False
+    assert "not both" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_dry_run_previews_a_reverse_without_writing(server) -> None:
+    a, b = await _store(server, "alpha"), await _store(server, "beta")
+    await _relate(server, a, b, "caused_by")
+
+    result = await _unrelate(
+        server,
+        source_id=a,
+        target_id=b,
+        relation_type="caused_by",
+        reverse=True,
+        dry_run=True,
+    )
+    assert result["dry_run"] is True
+    assert result["outcomes"] == {"would_reverse": 1}
+
+    edge = (await _edges(server))["edges"][0]
+    assert (edge["source_id"], edge["target_id"]) == (a, b)

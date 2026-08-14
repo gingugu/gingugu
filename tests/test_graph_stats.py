@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from gingugu.graph_stats import compute_graph
-from gingugu.models import MemoryType, RelationType
+from gingugu.models import Confidence, MemoryType, RelationType
 from gingugu.namespaces import NamespaceManager
 from gingugu.relations import SPREAD_PER_SEED, RelationManager
 from gingugu.storage import MemoryStore
@@ -124,3 +124,118 @@ def test_graph_block_is_exposed_in_stats(
     stats = compute_stats(store.conn)
     assert stats["graph"]["edges"] == 1
     assert stats["graph"]["high_signal_ratio"] == 1.0
+
+
+# --- orphan enumeration: a count nothing can act on is not observability -----
+
+
+def test_orphan_sample_is_empty_on_an_empty_store(
+    store: MemoryStore, namespaces: NamespaceManager
+) -> None:
+    namespaces.get_or_create("test-ns")
+    assert compute_graph(store.conn)["orphan_sample"] == []
+
+
+def test_orphan_sample_names_the_memories_the_count_reports(
+    store: MemoryStore, namespaces: NamespaceManager, relations: RelationManager
+) -> None:
+    """The whole point. ``orphans: 3`` identifies nobody; the sample does."""
+    ns_id = namespaces.get_or_create("test-ns").id
+    a, b, c, d = (_mk(store, ns_id, t) for t in ("a", "b", "c", "d"))
+    relations.relate(source_id=a.id, target_id=b.id, relation_type=RelationType.CAUSED_BY)
+
+    graph = compute_graph(store.conn)
+    assert graph["orphans"] == 2
+    assert {row["title"] for row in graph["orphan_sample"]} == {c.title, d.title}
+    assert {row["id"] for row in graph["orphan_sample"]} == {c.id, d.id}
+
+
+def test_orphan_sample_excludes_a_memory_connected_in_either_direction(
+    store: MemoryStore, namespaces: NamespaceManager, relations: RelationManager
+) -> None:
+    """Traversal is undirected, so being only a target still counts as connected."""
+    ns_id = namespaces.get_or_create("test-ns").id
+    a, b = (_mk(store, ns_id, t) for t in ("a", "b"))
+    relations.relate(source_id=a.id, target_id=b.id, relation_type=RelationType.PARENT_OF)
+
+    assert compute_graph(store.conn)["orphan_sample"] == []
+
+
+def test_orphan_sample_leads_with_the_costliest_orphans(
+    store: MemoryStore, namespaces: NamespaceManager
+) -> None:
+    """Ordered by confidence, then access count. A verified memory that gets
+    recalled often and is still cut out of the graph is the one costing the
+    most retrieval, because spreading activation can never reach it."""
+    ns_id = namespaces.get_or_create("test-ns").id
+    low = store.create(
+        namespace_id=ns_id,
+        type=MemoryType.FACT,
+        title="low",
+        content="low",
+        confidence=Confidence.INFERRED,
+    )
+    quiet = store.create(
+        namespace_id=ns_id,
+        type=MemoryType.FACT,
+        title="quiet",
+        content="quiet",
+        confidence=Confidence.VERIFIED,
+    )
+    busy = store.create(
+        namespace_id=ns_id,
+        type=MemoryType.FACT,
+        title="busy",
+        content="busy",
+        confidence=Confidence.VERIFIED,
+    )
+    store.record_accesses([busy.id, busy.id, busy.id])
+
+    titles = [row["title"] for row in compute_graph(store.conn)["orphan_sample"]]
+    assert titles == [busy.title, quiet.title, low.title]
+    assert low.id and quiet.id  # both still listed, none filtered out
+
+
+def test_orphan_sample_is_capped_but_the_count_is_not(
+    store: MemoryStore, namespaces: NamespaceManager
+) -> None:
+    """Same contract as the review and claim samples: the full count always,
+    the list on request."""
+    ns_id = namespaces.get_or_create("test-ns").id
+    for i in range(8):
+        _mk(store, ns_id, f"orphan-{i}")
+
+    graph = compute_graph(store.conn)
+    assert graph["orphans"] == 8
+    assert len(graph["orphan_sample"]) == 5
+
+    raised = compute_graph(store.conn, sample_limit=100)
+    assert len(raised["orphan_sample"]) == 8
+
+
+def test_orphan_sample_rows_carry_their_namespace(
+    store: MemoryStore, namespaces: NamespaceManager
+) -> None:
+    """A store-wide call spans every namespace, and "which namespace is this
+    in" is the first question a reconnection sweep asks."""
+    one = namespaces.get_or_create("ns-one").id
+    two = namespaces.get_or_create("ns-two").id
+    _mk(store, one, "from-one")
+    _mk(store, two, "from-two")
+
+    by_title = {row["title"]: row for row in compute_graph(store.conn)["orphan_sample"]}
+    assert by_title["from-one"]["namespace"] == "ns-one"
+    assert by_title["from-two"]["namespace"] == "ns-two"
+
+
+def test_orphan_sample_respects_the_namespace_filter(
+    store: MemoryStore, namespaces: NamespaceManager
+) -> None:
+    one = namespaces.get_or_create("ns-one").id
+    two = namespaces.get_or_create("ns-two").id
+    _mk(store, one, "from-one")
+    _mk(store, two, "from-two")
+
+    graph = compute_graph(store.conn, namespace_id=one)
+    assert graph["orphans"] == 1
+    assert [row["title"] for row in graph["orphan_sample"]] == ["from-one"]

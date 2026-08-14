@@ -51,6 +51,7 @@ def advanced_search(
     decay_lambda: float = 0.01,
     tags: list[str] | None = None,
     claims: str | None = None,
+    orphans: bool = False,
     embedder: EmbeddingProvider | None = None,
 ) -> list[Memory]:
     """Filtered search. With a query, delegates to FTS5 + composite ranking;
@@ -58,7 +59,8 @@ def advanced_search(
 
     ``claims`` restricts to memories carrying open (or contradicted) state
     claims — the reconciliation backlog as a first-class corpus, usable with
-    or without a query.
+    or without a query. ``orphans`` does the same for the graph backlog:
+    memories no relation touches, which spreading activation can never reach.
     """
     if query and query.strip():
         results = search(
@@ -75,6 +77,7 @@ def advanced_search(
             decay_lambda=decay_lambda,
             tags=tags,
             claims=claims,
+            orphans=orphans,
             embedder=embedder,
         )
     else:
@@ -91,6 +94,7 @@ def advanced_search(
             decay_lambda=decay_lambda,
             tags=tags,
             claims=claims,
+            orphans=orphans,
         )
 
     if sort_by in ("relevance", "decay_score"):
@@ -116,6 +120,7 @@ def _list_by_filters(
     decay_lambda: float = 0.01,
     tags: list[str] | None = None,
     claims: str | None = None,
+    orphans: bool = False,
 ) -> list[Memory]:
     where, params = build_filters(
         alias="memories",
@@ -127,6 +132,7 @@ def _list_by_filters(
         created_before=created_before,
         tags=tags,
         claims=claims,
+        orphans=orphans,
     )
     clause = f"WHERE {' AND '.join(where)} " if where else ""
     sql = f"SELECT {BASE_COLUMNS} FROM memories {clause}ORDER BY last_accessed DESC LIMIT ?"

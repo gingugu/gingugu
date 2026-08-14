@@ -41,6 +41,7 @@ def register(mcp, ctx: ServerContext) -> None:
         compact: bool = False,
         ids: str | None = None,
         claims: str | None = None,
+        orphans: bool = False,
     ) -> dict:
         """Advanced filtered search across memories with full control over filters and
         sort order. Use when you need to filter by type, date range, confidence level, or
@@ -74,7 +75,17 @@ def register(mcp, ctx: ServerContext) -> None:
         brain already holds. Composes with every other filter, so
         ``claims="open", namespace="gingugu", sort_by="created"`` is a working
         sweep. Close them out with ``memory_update(resolve_claims=...)``, which
-        records the resolution WITHOUT editing the memory's prose."""
+        records the resolution WITHOUT editing the memory's prose.
+
+        ``orphans=True`` restricts results to memories no relation touches — the
+        graph backlog that ``memory_stats``' ``graph.orphans`` counts. An orphan
+        is reachable only by direct search: spreading activation can never wake
+        it, so a verified, frequently-recalled orphan is retrieval the graph is
+        leaving on the table. Composes with every other filter and works with or
+        without a query, so ``orphans=True, namespace="crow", sort_by="accessed"``
+        walks the ones costing the most first. Reconnect them with
+        ``memory_relate`` — and only where a directional fact exists to record;
+        an orphan is better left alone than wired up with an invented edge."""
         try:
             id_list = _split_csv(ids)
             if id_list:
@@ -130,6 +141,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 decay_lambda=ctx.config.decay_lambda,
                 tags=tag_list,
                 claims=claims,
+                orphans=orphans,
                 embedder=ctx.store.embedder,
             )
             ctx.store.load_tags(results)
@@ -170,9 +182,17 @@ def register(mcp, ctx: ServerContext) -> None:
         signal only, never a confidence change. Dormant memories wake automatically on
         recall via spreading activation. Memory is never auto-forgotten.
 
-        ``review_limit`` raises the ``review.sample`` and ``claims.sample`` caps
-        (default 5, max 100) so a reconciliation sweep can enumerate every flagged
-        memory — pair with memory_search's ``ids`` parameter to pull the full bodies.
+        ``review_limit`` raises the ``review.sample``, ``claims.sample`` and
+        ``graph.orphan_sample`` caps (default 5, max 100) so a reconciliation sweep can
+        enumerate every flagged memory — pair with memory_search's ``ids`` parameter to
+        pull the full bodies.
+
+        ``stats.graph.orphan_sample`` names the memories behind ``graph.orphans``: those
+        no relation touches, which spreading activation can never reach. Ordered by
+        confidence, then access count, then recency, so the orphans costing the most
+        retrieval come first, each row carrying its ``namespace``.
+        ``memory_search(orphans=True)`` pulls the same set with full bodies;
+        ``memory_relate`` reconnects one — where a directional fact genuinely exists.
 
         ``stats.claims`` is the state-claim backlog: memories still asserting a PR/MR
         is open. ``claims.sample`` enumerates them, contradicted first, each row

@@ -672,14 +672,14 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_update` | Update content, type, confidence, or metadata; `resolve_claims` reconciles a stale PR/MR claim without editing the prose |
 | `memory_relate` | Create relationships between memories |
 | `memory_edges` | List edges with both endpoints' titles, namespaces, and degree; filter by namespace, type, or memory |
-| `memory_unrelate` | Retype an edge in place or remove it; one at a time or a batch, with `dry_run` |
+| `memory_unrelate` | Retype an edge in place, reverse a backwards one, or remove it; one at a time or a batch, with `dry_run` |
 | `memory_consolidate` | Merge/summarize/deduplicate; call without ids for a read-only near-dupe scan |
 | `memory_forget` | Deprecate or remove a memory |
 | `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo) |
 | `memory_export` | Export memories + tags + relations to portable JSON |
 | `memory_import` | Restore a JSON export (skip or replace on conflict) |
-| `memory_stats` | Health overview (dormancy, counts, coverage, review sweep, and the `claims` backlog — `sample` lists every open claim, contradicted ones first; `review_limit` raises the cap) |
-| `memory_search` | Advanced filtered search (type, tags, confidence, dates; one or many namespaces; optional compact mode; fetch by exact `ids`; `claims` to work the reconciliation backlog) |
+| `memory_stats` | Health overview (dormancy, counts, coverage, review sweep, the `claims` backlog, and a relation-graph block whose `orphan_sample` names the memories no edge reaches — `review_limit` raises every sample's cap) |
+| `memory_search` | Advanced filtered search (type, tags, confidence, dates; one or many namespaces; optional compact mode; fetch by exact `ids`; `claims` to work the reconciliation backlog, `orphans` to work the graph backlog) |
 | `credential_store` | Store/update a service credential bundle |
 | `credential_get` | Retrieve credentials (secrets from OS Keychain) |
 | `credential_list` | List services + expiry status (no secrets shown) |

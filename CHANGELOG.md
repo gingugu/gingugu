@@ -9,6 +9,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Orphan enumeration** — `memory_stats`' `graph` block reported that N
+  memories had no relation touching them and nothing could name one of them. An
+  orphan is reachable only by direct search, since spreading activation can
+  never wake it, so the count described a real retrieval cost with no way to
+  work through it; reconnecting one meant querying the database behind the
+  server's back. Same shape as the claims backlog before it became enumerable.
+
+  `graph.orphan_sample` now names them, ordered by confidence, then access
+  count, then recency, so the orphans costing the most retrieval come first,
+  each row carrying its namespace. The existing `review_limit` raises the cap
+  (max 100), making one knob cover the review sweep, the claims backlog and the
+  graph backlog alike. Deprecated orphans sink to the bottom of the sample
+  rather than being filtered out, so the list is drawn from exactly the
+  population the count reports and no second number is needed to explain a gap.
+
+  `memory_search(orphans=True)` pulls the same set with full bodies, composing
+  with every other filter, with or without a query. Both are backed by one
+  `graph_stats.orphan_filter()` predicate: a count and its enumeration must be
+  counting the same thing, and two hand-written copies of the same subquery is
+  how they stop.
+
+- **`memory_unrelate(reverse=True)`** — turn a backwards edge around. Retyping
+  covered "right connection, wrong label"; this covers "right pair, wrong
+  direction", which the graph's own preference for directional types makes an
+  easy error to write. `A caused_by B` recorded for `B caused_by A` is a false
+  claim about causality, not an untidy one.
+
+  The endpoints are swapped on the existing row, so id, `created_at` and
+  metadata survive exactly as they do for a retype. It combines with
+  `new_relation_type` in a single write, because an edge recorded backwards is
+  frequently mislabelled as well; reversing `parent_of`/`child_of` is the same
+  operation as flipping between them, so do one or the other. Available singly
+  and in a batch (`edges[].reverse`), with `dry_run` reporting `would_reverse`
+  and an existing edge in the target direction absorbing this one as `merged`.
+
+  Without it, straightening an edge cost a delete plus a `memory_relate` — two
+  calls that discard the provenance the repair path exists to protect.
+
+### Changed
+
+- `relations.py` and `handlers/relations.py` both crossed the 300-line limit as
+  a result, so each gave up a half along its natural seam: repair operations
+  (retype, reverse, delete) moved to `relation_repair.py`, mixed into
+  `RelationManager`, and batch parsing plus per-edge dispatch moved to
+  `handlers/relation_ops.py`, leaving the handler owning the MCP surface. Public
+  API unchanged in both cases; no tool-surface change.
+
 ---
 
 ## [0.16.0] - 2026-08-13
