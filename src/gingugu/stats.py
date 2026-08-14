@@ -136,7 +136,7 @@ def compute_stats(
         "namespaces": namespaces,
         "access_log_rows": _count(conn, "SELECT COUNT(*) FROM access_log"),
         "credentials": _credential_health(conn),
-        "graph": compute_graph(conn, namespace_id=namespace_id),
+        "graph": compute_graph(conn, namespace_id=namespace_id, sample_limit=review_limit),
         "hygiene": compute_hygiene(conn, namespace_id=namespace_id),
         "review": compute_review(conn, namespace_id=namespace_id, sample_limit=review_limit),
         "claims": claim_queries.claim_stats(

@@ -120,6 +120,7 @@ def search(
     decay_lambda: float = 0.01,
     tags: list[str] | None = None,
     claims: str | None = None,
+    orphans: bool = False,
     embedder: EmbeddingProvider | None = None,
 ) -> list[Memory]:
     """True hybrid search re-ranked by the composite decay score.
@@ -145,6 +146,7 @@ def search(
         created_before=created_before,
         tags=tags,
         claims=claims,
+        orphans=orphans,
     )
     pool_size = max(limit * _CANDIDATE_MULTIPLIER, limit)
 
