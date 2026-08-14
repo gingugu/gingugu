@@ -32,7 +32,11 @@ import sqlite3
 _SAMPLE_LIMIT = 5
 _SAMPLE_MAX = 100
 
-CLAIM_FILTERS = ("open", "contradicted")
+CLAIM_FILTERS = ("open", "contradicted", "unverified")
+
+# The state each filter mode selects on. ``contradicted`` narrows ``open``
+# rather than naming a state of its own.
+_FILTER_STATE = {"open": "open", "contradicted": "open", "unverified": "unverified"}
 
 # A memory whose open claim some *other* memory in the same namespace has since
 # recorded as resolved. Correlated against an outer ``memory_claims c``, so the
@@ -46,15 +50,20 @@ _CONTRADICTS = (
 
 
 def claim_filter(alias: str, mode: str) -> str:
-    """WHERE fragment keeping memories that carry open (or contradicted) claims.
+    """WHERE fragment keeping memories that carry claims in ``mode``'s state.
 
-    Takes no parameters — the states are literals, and ``alias`` names a table
-    already in the caller's FROM. That keeps it composable with the FTS5 join,
-    the embeddings join, and a plain table scan alike.
+    Takes no parameters — the states are literals from ``_FILTER_STATE``, never
+    caller text, and ``alias`` names a table already in the caller's FROM. That
+    keeps it composable with the FTS5 join, the embeddings join, and a plain
+    table scan alike.
+
+    ``unverified`` selects a disjoint set from ``open``: the two states never
+    overlap, so a sweep of one cannot silently include the other.
     """
+    state = _FILTER_STATE[mode]
     inner = (
         f"SELECT 1 FROM memory_claims c WHERE c.memory_id = {alias}.id "
-        "AND c.state = 'open' AND c.resolved_at IS NULL"
+        f"AND c.state = '{state}' AND c.resolved_at IS NULL"
     )
     if mode == "contradicted":
         inner += f" AND EXISTS ({_CONTRADICTS.format(ns=f'{alias}.namespace_id')})"
@@ -84,6 +93,11 @@ def claim_stats(
 
     ``contradicted`` is the subset that matters most: the brain already holds
     the resolution, written later by another memory, and nobody joined the two.
+
+    ``unverified`` is reported alongside but is NOT part of that backlog and is
+    deliberately absent from ``sample``: those refs assert nothing, so listing
+    them next to open claims would present history as work. Enumerate them with
+    ``memory_search(claims="unverified")`` instead.
     """
     limit = _SAMPLE_LIMIT if sample_limit is None else sample_limit
     limit = max(1, min(limit, _SAMPLE_MAX))
@@ -112,6 +126,7 @@ def claim_stats(
         "open": by_state.get("open", 0),
         "open_actionable": len(rows),
         "resolved": by_state.get("resolved", 0),
+        "unverified": by_state.get("unverified", 0),
         "contradicted": sum(1 for row in rows if row["contradicted"]),
         "sample": [
             {

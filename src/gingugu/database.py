@@ -374,6 +374,28 @@ def _migration_008_pinned(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA_V8)
 
 
+def _migration_009_unverified_claims(conn: sqlite3.Connection) -> None:
+    """Re-derive claims now that a state-less ref records as ``unverified``.
+
+    No DDL: ``memory_claims.state`` is plain TEXT with no CHECK constraint, so
+    a third state value costs nothing at the schema level. What it does need is
+    a re-derive, because claims are stored rows — the smarter extractor changes
+    nothing that already exists until something re-reads the prose.
+
+    This is the mirror image of migration 007. That one only ever *removed*
+    claims; this one only ever *adds* them, since every ref it newly records is
+    one the old extractor dropped on the floor. ``_prune`` is therefore a no-op
+    here, and the counts move in one direction only.
+
+    Through ``claim_rederive`` for the same reason as 007: the prose is
+    untouched and only the extractor improved, so ``resolved_state`` /
+    ``resolved_by`` / ``resolved_at`` must survive. Measured on a 1161-memory
+    corpus this writes ~225 new rows and leaves ``claims.open`` unchanged —
+    which is the point, and worth asserting after any future change here.
+    """
+    claim_rederive.rederive_claims(conn)
+
+
 # (target_version, migration_callable) — applied in order when current < target.
 MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
     (1, _migration_001_initial_schema),
@@ -384,6 +406,7 @@ MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
     (6, _migration_006_repair_claims_backfill),
     (7, _migration_007_claim_precision),
     (8, _migration_008_pinned),
+    (9, _migration_009_unverified_claims),
 ]
 
 # The version a fully-migrated DB lands on. Derived rather than written down so

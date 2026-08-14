@@ -190,6 +190,12 @@ def register(mcp, ctx: ServerContext) -> None:
         recorded. Reach for ``content`` instead only when the memory asserts
         something that was never true.
 
+        "all" means every OPEN claim, never an ``unverified`` one. An unverified
+        ref is one the prose names without saying what became of it, so sweeping
+        it under "all" would record that you checked something you did not. Name
+        such a ref explicitly to resolve it — that path works and is the honest
+        way to say "I looked, and it merged".
+
         When ``relation_check`` is True (default) and ``title`` or ``content`` was
         provided, the response includes a ``suggested_relations`` list of up to 3
         not-already-linked memories worth examining for a relationship - same

@@ -4,9 +4,45 @@ _Last updated: 2026-08-14_
 
 ## In Flight
 
-- **Orphan enumeration + edge reversal** (branch
-  `feature/orphan-enumeration-edge-reverse`, cut from `main` @ `a4b3b84`).
-  Both halves close gaps found by *running* the 3A sweep below, not by a test.
+- **The `unverified` claim state** (branch `feature/unverified-claim-state`,
+  cut from `main` @ `e689200`). Closes the last product gap found by running
+  step 3: the claims heuristic never fired on a ref whose prose asserted no
+  state, so a memory reading `PR #1: <url>` under a "Deliverables" list
+  produced zero claims and read as in-flight to a human forever.
+
+  **The fix the corpus ruled out.** The obvious move — treat a state-less ref
+  as `open` — was measured first and rejected. Over 1161 memories, 225 ref
+  *mentions* (185 distinct claim rows) are named with no asserted state against
+  223 real claims, and they overwhelmingly narrate finished work: *"Fixed in
+  PR #873"*, *"PR #121 deployed successfully"*. Defaulting them to open would
+  more than double the backlog with history, which is precisely the failure
+  `claims.py` already refuses in its own docstring: a missed claim is silent,
+  a wrong one teaches the reader to ignore claims entirely.
+
+  So a state-less ref gets a third state, `unverified`, asserting only *"this
+  memory names a ref and never says what became of it"*. It is excluded from
+  `claims.open`, from `open_actionable`, from `claims.sample`, and from
+  contradiction detection, and is read through `memory_search(claims=
+  "unverified")`. A browsable index, not a queue.
+
+  **Two sub-calls.** `resolve_claims="all"` stays open-only — sweeping an
+  unverified ref under "all" would record that the caller verified something
+  they never looked at; naming the ref explicitly still resolves it, a path
+  that already worked unchanged. And `unverified` stays out of `sample`,
+  because listing it beside open claims would present history as work.
+
+  **No DDL.** `memory_claims.state` is plain TEXT with no CHECK constraint, so
+  migration 009 is a pure `claim_rederive` pass — the mirror image of 007,
+  which only ever removed claims where this only ever adds them, making
+  `_prune` a no-op. Verified against a copy of the live brain: `open` 0 → 0,
+  `resolved` 188 → 188, 43 existing resolutions preserved, 185 unverified rows
+  gained. 575 tests passing (+14). Ruff + black clean. Tool surface stays 18.
+
+- **Orphan enumeration + edge reversal — SHIPPED to `main` (#51, squash
+  `e689200`).** Merged 2026-08-14; still awaiting a release. Recorded as in
+  flight for three sessions after the fact, which is the doc-lag this entry
+  now closes. Both halves closed gaps found by *running* the 3A sweep below,
+  not by a test.
 
   - **Orphan enumeration.** Third instance of the invisible-backlog pattern,
     after the `related_to` mix (fixed by `memory_edges`, #49) and the claims

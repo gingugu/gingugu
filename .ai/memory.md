@@ -112,8 +112,8 @@ from title + content only).
 also return `contradicted_memories` when the write resolves a ref another
 memory still calls open — omitted, not empty, when there is nothing to report.
 `memory_stats` carries a `claims` block (`open` / `open_actionable` /
-`resolved` / `contradicted` plus a `review_limit`-capped `sample` that
-**enumerates** the backlog, contradicted first, each row tagged). Reconcile with
+`resolved` / `unverified` / `contradicted` plus a `review_limit`-capped `sample`
+that **enumerates** the backlog, contradicted first, each row tagged). Reconcile with
 `memory_update(resolve_claims="<ref>"|"all")`, which records the resolution and
 leaves the body **byte-identical** — a dated log that said "PR #10 open" was
 correct when written, so `content` is only for claims that were never true.
@@ -139,12 +139,18 @@ gap between the count and the rows.
   `resolved_by` / `resolved_at` beside it, so a claim can go stale without the
   prose being edited. Derived from text, so re-synced on any title/content change.
   Refs inside `[[wiki-links]]` are ignored — a citation is not an assertion.
+  `state` is `open`, `resolved`, or `unverified` (migration 009): a ref the prose
+  names without ever saying what became of it. `unverified` is excluded from
+  `open`, `open_actionable`, `sample`, and contradiction detection — measured on
+  1161 memories, 185 such claims exist against 223 real ones and nearly all
+  narrate finished work, so counting them as open would bury the backlog in
+  history. Read them with `memory_search(claims="unverified")`.
 - `namespaces.default_repo` (migration 007): what a bare "PR #12" means in a
   namespace. Unset falls back to the namespace's own name (the
   one-namespace-per-repo convention, load-bearing: 145 claims vs 26 without it);
   a slug overrides it; `""` declares the namespace is not a repo at all, so bare
   refs are dropped rather than mis-keyed. `crow` and `default` are seeded `""`.
-- Schema versioned via `PRAGMA user_version` (**currently 8**); migrations
+- Schema versioned via `PRAGMA user_version` (**currently 9**); migrations
   additive by default. Migration 006 adds no schema — it re-runs the claims
   backfill to repair DBs that reached v5 from pre-fix code and so can never
   run 005 again. Migration 007 adds `default_repo` and re-derives every claim
@@ -152,6 +158,10 @@ gap between the count and the rows.
   adds `memories.pinned` (+ a partial index on the pinned rows only): memories
   that always load in `memory_context`, exempt from ranking. Defaults to 0, so
   an existing store changes no behaviour until something is explicitly pinned.
+  Migration 009 adds no schema either (`state` was always unconstrained TEXT) —
+  it re-derives every claim so state-less refs record as `unverified`, again
+  preserving resolution. The mirror of 007: that one only removed claims, this
+  one only adds them.
 
 ---
 

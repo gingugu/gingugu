@@ -69,7 +69,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
 - **State claims:** `claims.py` extracts repo-qualified PR/MR references and the
   state a memory asserts about them into `memory_claims` (migration 005;
   migration 006 re-runs the backfill for DBs stranded at v5; migration 007
-  re-derives everything under the corrected extractor).
+  re-derives everything under the corrected extractor; migration 009 re-derives
+  again for the `unverified` state below).
   The prose is immutable history — a memory that said "PR #10 open" was correct
   when written — so resolution is recorded in the claim row rather than by
   editing the text. This is the primitive whose absence produced 160 distinct
@@ -87,6 +88,16 @@ AI client (Claude Code / Cursor / Windsurf / …)
   does **not** contain this one — it produced wrong claims in namespaces whose
   default repo was correct — which is why it is handled in the extractor.
 
+  A ref whose prose asserts no state records as **`unverified`** rather than
+  being dropped: dropping made it invisible, and a memory listing `PR #1: <url>`
+  under "Deliverables" read as in-flight forever while `claims.open` said 0.
+  Calling it open instead was measured against the live corpus and rejected —
+  185 such claims against 223 real ones, nearly all narrating shipped work — so
+  it is excluded from `open`, `open_actionable`, `sample`, and contradiction
+  detection, and surfaced only through its own filter. The governing rule is
+  unchanged from the paragraphs above: a missed claim is silent, a wrong one
+  teaches the reader to ignore claims entirely.
+
   `claim_rederive.py` re-derives the whole corpus when the *extractor* changes,
   preserving `resolved_*`. That is the opposite of `claim_sync.sync_claims`,
   which drops resolution because it runs when a memory's *prose* changed and a
@@ -94,7 +105,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
 
   The read side lives in `claim_queries.py`: the `memory_stats.claims` backlog
   enumeration and the `claim_filter()` predicate behind
-  `memory_search(claims="open"|"contradicted")`. One definition, two consumers —
+  `memory_search(claims="open"|"contradicted"|"unverified")`. One definition, two consumers —
   a stats block and a search filter asking the same question with two
   hand-written correlated subqueries is how they drift apart. The split also
   put `claim_sync.py` back under the 300-line limit.
