@@ -46,6 +46,24 @@ Wiki-link spans are therefore blanked before extraction, the same instinct as
 ``_is_quoted``. Nothing is lost by dropping them: when a claim's only state
 evidence sits inside a link, the *linked* memory already holds that claim,
 correctly keyed.
+
+**A ref without a state is not open.** Until v0.17.0 a ref whose prose asserted
+no state was dropped outright, which made it invisible: a memory reading
+``PR #1: <url>`` under a "Deliverables" list produced zero claims, so
+``claims.open`` said 0 while the memory read as in-flight to a human forever.
+The obvious fix — treat a bare ref as open — is wrong, and the corpus says so
+loudly. Measured over 1161 memories, 225 refs are named with no asserted state
+against 223 real claims, and they overwhelmingly narrate *finished* work:
+"Fixed in PR #873", "PR #121 - deployed successfully", "PR #149 - Expanded
+CLAUDE.md". Defaulting those to open would have more than doubled the backlog
+with history, which is exactly the failure this module already refuses above.
+
+So a state-less ref gets its own state, ``unverified``, meaning only "this
+memory names a ref and never says what became of it". It is a browsable index,
+not a backlog: it is excluded from ``claims.open``, from the reconciliation
+sample, and from contradiction detection, and is enumerated on its own through
+``memory_search(claims="unverified")``. Dropping beat guessing; recording
+beats dropping, as long as the record does not overstate what the prose said.
 """
 
 from __future__ import annotations
@@ -97,6 +115,15 @@ _QUOTE_WINDOW = 90
 
 STATE_OPEN = "open"
 STATE_RESOLVED = "resolved"
+STATE_UNVERIFIED = "unverified"
+
+# Which state wins when one memory names the same ref more than once. Resolved
+# beats open for the reason given above; both beat unverified, because a stated
+# outcome anywhere in the prose is strictly better evidence than silence
+# elsewhere in it. Compared by rank, never by assignment order — a memory that
+# says "PR #5 merged" in the title and mentions "PR #5" bare in the body must
+# land on resolved regardless of which occurrence the scanner reaches first.
+_PRECEDENCE = {STATE_UNVERIFIED: 0, STATE_OPEN: 1, STATE_RESOLVED: 2}
 
 
 @dataclass(frozen=True)
@@ -176,6 +203,10 @@ def extract_claims(
     ``title`` is scanned alongside ``content``: a memory titled "PR #174
     MERGED" asserts resolution even when the body narrates the opening.
 
+    A ref whose prose asserts no state is returned as ``STATE_UNVERIFIED``
+    rather than dropped — recorded, but never counted as open. See the module
+    docs for why the corpus rules out the alternative.
+
     ``namespace_default`` is the repo a bare ref most likely means in this
     memory's namespace. Pass None for cross-project namespaces so bare refs
     are dropped rather than mis-keyed.
@@ -196,11 +227,11 @@ def extract_claims(
         elif _OPEN.search(window):
             state = STATE_OPEN
         else:
-            continue  # a bare mention asserts nothing
+            state = STATE_UNVERIFIED  # named, but the prose says nothing
         kind = _normalize_kind(match.group("kind"))
         key = (kind, f"{repo}#{match.group('num')}")
         existing = best.get(key)
-        if existing is not None and not (existing.state == STATE_OPEN and state == STATE_RESOLVED):
+        if existing is not None and _PRECEDENCE[state] <= _PRECEDENCE[existing.state]:
             continue
         best[key] = Claim(
             kind=kind,

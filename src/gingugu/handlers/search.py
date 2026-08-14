@@ -77,6 +77,13 @@ def register(mcp, ctx: ServerContext) -> None:
         sweep. Close them out with ``memory_update(resolve_claims=...)``, which
         records the resolution WITHOUT editing the memory's prose.
 
+        "unverified" is a different set and NOT a backlog: memories naming a
+        PR/MR whose prose never says what became of it. They assert nothing, so
+        they are absent from every ``open`` count and from ``claims.sample``.
+        Most narrate work that long since shipped — this filter is how you read
+        them, not a queue to work down. Resolve one by naming its ref
+        explicitly; ``resolve_claims="all"`` deliberately leaves them alone.
+
         ``orphans=True`` restricts results to memories no relation touches — the
         graph backlog that ``memory_stats``' ``graph.orphans`` counts. An orphan
         is reachable only by direct search: spreading activation can never wake
@@ -201,6 +208,11 @@ def register(mcp, ctx: ServerContext) -> None:
         ``open_actionable`` — what the sample lists — excludes claims on deprecated
         memories. ``memory_search(claims="open")`` pulls the same set with full bodies;
         ``memory_update(resolve_claims=...)`` closes them without editing prose.
+
+        ``claims.unverified`` counts refs a memory names without ever saying what
+        became of them. It is reported for visibility, not action: those refs assert
+        nothing, so they are excluded from ``open`` and from ``sample`` on purpose.
+        Read them with ``memory_search(claims="unverified")``.
 
         ``flag_stale`` is deprecated and ignored — auto-demotion to stale contradicted
         the never-forget model and has been removed. Retained so existing callers do not

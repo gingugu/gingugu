@@ -76,13 +76,14 @@ def test_a_memory_titled_resolved_does_not_inherit_an_open_claim_from_a_link() -
     That is a wrong claim in a namespace whose default repo was correct, so
     namespace containment never covered it.
     """
-    claims = cm.extract_claims(
+    (claim,) = cm.extract_claims(
         "RESOLVED: internal gateway crashloop was the burstable RDS",
         "The guardrail PR #155 can now be re-pointed to k8s/internal and tested here. "
         "See [[DESI-52 guardrails: PR #155 OPEN, merge HELD until DESI-58 tests it]].",
         namespace_default="devex-ai-gateway",
     )
-    assert claims == []
+    assert claim.ref == "devex-ai-gateway#155"
+    assert claim.state == cm.STATE_UNVERIFIED  # named in its own prose, never asserted
 
 
 def test_a_real_claim_survives_alongside_a_wikilink() -> None:
@@ -149,8 +150,62 @@ def test_held_counts_as_open() -> None:
     assert claim.state == cm.STATE_OPEN
 
 
-def test_bare_mention_with_no_state_is_not_a_claim() -> None:
-    assert cm.extract_claims("", "see PR #40 for context", namespace_default="gingugu") == []
+def test_bare_mention_with_no_state_is_unverified_never_open() -> None:
+    """The whole point of the third state: recorded, but not asserted.
+
+    This used to return nothing at all, which made the ref invisible — a memory
+    could read as in-flight to a human forever while ``claims.open`` said 0.
+    Recording it as ``open`` instead would have been worse: measured on the
+    live corpus, 225 refs are named with no state and nearly all narrate work
+    that already shipped.
+    """
+    (claim,) = cm.extract_claims("", "see PR #40 for context", namespace_default="gingugu")
+    assert (claim.ref, claim.state) == ("gingugu#40", cm.STATE_UNVERIFIED)
+
+
+def test_the_motivating_corpus_case_a_ref_under_a_deliverables_list() -> None:
+    """Real memory ``a9224ab9``: the PR merged, and nothing ever detected it.
+
+    ``PR #1:`` followed by its own URL, with no state word anywhere in the
+    window. The URL correctly qualifies the repo — the ref was never the
+    problem, the silence after it was.
+    """
+    (claim,) = cm.extract_claims(
+        "",
+        "- Branch weasyprint-ca-rca, commit 2bcb2cd, PR #1: "
+        "https://github.com/Versaterm-Public-Safety/devex-on-call-notes/pull/1\n"
+        "- Updated README.md incident index, .ai/memory.md",
+        namespace_default="devex-on-call-notes",
+    )
+    assert claim.ref == "devex-on-call-notes#1"
+    assert claim.state == cm.STATE_UNVERIFIED
+
+
+def test_a_stated_outcome_beats_silence_regardless_of_order() -> None:
+    """Precedence is by rank, not by which occurrence the scanner reaches first.
+
+    Both directions must land on the same answer, or a memory's claim would
+    depend on where in the prose the author happened to repeat the ref.
+    """
+    bare_first = "PR #20 is covered below. Later that day PR #20 was merged."
+    merged_first = "PR #20 was merged. Background on PR #20 is covered below."
+    for content in (bare_first, merged_first):
+        (claim,) = cm.extract_claims("", content, namespace_default="gingugu")
+        assert claim.state == cm.STATE_RESOLVED, content
+
+
+def test_open_beats_unverified() -> None:
+    (claim,) = cm.extract_claims(
+        "", "PR #20 for context. PR #20 is still open.", namespace_default="gingugu"
+    )
+    assert claim.state == cm.STATE_OPEN
+
+
+def test_an_unverified_ref_contradicts_nothing() -> None:
+    """Silence cannot resolve anything, so it must never fire the write-time hook."""
+    unverified = cm.extract_claims("", "see PR #40 for context", namespace_default="gingugu")
+    assert [c.state for c in unverified] == [cm.STATE_UNVERIFIED]
+    assert [c for c in unverified if c.state == cm.STATE_RESOLVED] == []
 
 
 def test_quoted_ref_is_cited_not_claimed() -> None:
