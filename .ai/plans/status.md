@@ -4,11 +4,20 @@ _Last updated: 2026-08-14_
 
 ## In Flight
 
-- **The `unverified` claim state** (branch `feature/unverified-claim-state`,
-  cut from `main` @ `e689200`). Closes the last product gap found by running
-  step 3: the claims heuristic never fired on a ref whose prose asserted no
-  state, so a memory reading `PR #1: <url>` under a "Deliverables" list
-  produced zero claims and read as in-flight to a human forever.
+_Nothing in flight._ `main` is clean at the v0.17.0 release; both items below
+shipped in it.
+
+## Shipped in v0.17.0 (2026-08-14)
+
+Released to PyPI on tag `v0.17.0`. Carries two features: the `unverified` claim
+state (#52) and the orphan-enumeration + edge-reversal work (#51), which merged
+after v0.16.0 had already been cut and so waited for this release.
+
+- **The `unverified` claim state (#52, squash `b2cc479`).** Closes the last
+  product gap found by running step 3: the claims heuristic never fired on a
+  ref whose prose asserted no state, so a memory reading `PR #1: <url>` under a
+  "Deliverables" list produced zero claims and read as in-flight to a human
+  forever.
 
   **The fix the corpus ruled out.** The obvious move — treat a state-less ref
   as `open` — was measured first and rejected. Over 1161 memories, 225 ref
@@ -38,11 +47,11 @@ _Last updated: 2026-08-14_
   `resolved` 188 → 188, 43 existing resolutions preserved, 185 unverified rows
   gained. 575 tests passing (+14). Ruff + black clean. Tool surface stays 18.
 
-- **Orphan enumeration + edge reversal — SHIPPED to `main` (#51, squash
-  `e689200`).** Merged 2026-08-14; still awaiting a release. Recorded as in
-  flight for three sessions after the fact, which is the doc-lag this entry
-  now closes. Both halves closed gaps found by *running* the 3A sweep below,
-  not by a test.
+- **Orphan enumeration + edge reversal (#51, squash `e689200`).** Merged
+  2026-08-14, one release behind the work: it landed after v0.16.0 was cut, so
+  it ships here. Recorded as in flight for three sessions after the fact, which
+  is the doc-lag this entry closes. Both halves closed gaps found by *running*
+  the 3A sweep below, not by a test.
 
   - **Orphan enumeration.** Third instance of the invisible-backlog pattern,
     after the `related_to` mix (fixed by `memory_edges`, #49) and the claims
