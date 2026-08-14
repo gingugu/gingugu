@@ -445,8 +445,9 @@ never breaking a write.
 
 ```text
 memory_stats(review_limit=100)     -> claims { open, open_actionable, resolved,
-                                               contradicted, sample[] }
+                                               unverified, contradicted, sample[] }
 memory_search(claims="open")       -> the backlog with full bodies
+memory_search(claims="unverified") -> refs named but never resolved in prose
 memory_update(resolve_claims="…")  -> resolution recorded, PROSE UNTOUCHED
 ```
 
@@ -463,8 +464,19 @@ unusable - a namespace could report five open claims and offer no way to learn
 which five, so a real sweep had to query SQLite by hand. A count without an
 enumeration is a dead end wearing a metric's clothes.
 
-`memory_search(claims="open"|"contradicted")` is the same predicate as a search
-filter, composing with query, type, namespace, and tags. Both consumers share
+A ref whose prose asserts no state records as `unverified` rather than being
+dropped. Dropping made it invisible: a memory listing `PR #1:` beside its own
+URL under "Deliverables" read as in-flight to a human forever while
+`claims.open` said 0. Calling it open instead was measured against the live
+corpus and rejected - 185 such claims against 223 real ones, nearly all
+narrating work that had already shipped - so it is excluded from `open`,
+`open_actionable`, `sample`, and contradiction detection, and read through its
+own filter. Same rule as everywhere else here: a missed claim is silent, a
+wrong one teaches the reader to ignore claims entirely. `resolve_claims="all"`
+stays open-only for that reason; naming the ref explicitly still resolves it.
+
+`memory_search(claims="open"|"contradicted"|"unverified")` is the same predicate
+as a search filter, composing with query, type, namespace, and tags. Both consumers share
 one correlated subquery in `claim_queries.py`; two hand-written copies is how
 they drift. Contradiction remains scoped **within** a namespace, for the same
 reason bare refs are: `PR #12` keys off the namespace's default repo, so
@@ -903,12 +915,14 @@ Advanced search with full filter support, plus a precise fetch-by-ID path.
 - `limit` (optional) — max results
 - `compact` (optional, default `false`) — title + ~200-char `summary`
   instead of full content (same semantics as `memory_recall`'s compact mode)
-- `claims` (optional) — `open` or `contradicted`. Restricts results to the
-  state-claim backlog: memories still asserting a PR/MR is open, or the subset
-  a later memory in the same namespace already recorded as resolved. Composes
-  with every other filter (and with `query`), so
-  `claims="open", namespace="gingugu", sort_by="created"` is a working sweep.
-  Ignored on the `ids` path, like every other filter.
+- `claims` (optional) — `open`, `contradicted`, or `unverified`. The first two
+  restrict results to the state-claim backlog: memories still asserting a PR/MR
+  is open, or the subset a later memory in the same namespace already recorded
+  as resolved. `unverified` is a disjoint set and not a backlog — memories
+  naming a ref whose prose never says what became of it, most of them narrating
+  work that already shipped. Composes with every other filter (and with
+  `query`), so `claims="open", namespace="gingugu", sort_by="created"` is a
+  working sweep. Ignored on the `ids` path, like every other filter.
 - `orphans` (optional, default `false`) — restrict results to memories no
   relation touches: the graph backlog that
   [`memory_stats`](#memory_stats)' `graph.orphans` counts. An orphan is

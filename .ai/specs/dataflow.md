@@ -58,8 +58,9 @@ also resets the staleness clock.
 
 ```
 memory_stats(review_limit=100)     → claims { open, open_actionable, resolved,
-                                              contradicted, sample[] }
+                                              unverified, contradicted, sample[] }
 memory_search(claims="open")       → full bodies of the backlog (or ids="…")
+memory_search(claims="unverified") → refs named but never resolved in prose
 memory_update(resolve_claims="…")  → marks claims resolved; PROSE UNTOUCHED
 ```
 
@@ -81,6 +82,17 @@ Two counts because they differ: `open` is every unresolved claim, while
 `open_actionable` — what `sample` lists — excludes claims on deprecated
 memories. Reporting only `open` invites a caller to compare it against
 `len(sample)` and conclude rows went missing.
+
+**`unverified` is a third state, not a third slice of the backlog.** A ref the
+prose names without ever saying what became of it used to produce no claim at
+all, so `claims.open` read 0 while the memory read as in-flight forever. The
+obvious repair — call it open — was measured and rejected: 185 such claims exist
+against 223 real ones, and nearly all narrate work that already shipped, so
+adopting them would have buried the backlog in history. It is therefore excluded
+from `open`, `open_actionable`, `sample`, and contradiction detection (which
+requires two assertions, and silence is not one), and read on its own through
+`memory_search(claims="unverified")`. `resolve_claims="all"` stays open-only for
+the same reason; naming the ref explicitly still resolves it.
 
 `claim_queries.claim_filter()` is the single definition of both predicates,
 shared by the stats block and `memory_search(claims=…)` through

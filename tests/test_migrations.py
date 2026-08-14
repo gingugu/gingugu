@@ -423,3 +423,92 @@ def test_v7_rederive_is_idempotent() -> None:
 
     pruned, written = claim_rederive.rederive_claims(conn)
     assert (pruned, written) == (0, 1)
+
+
+# --- migration 009: the unverified claim state -------------------------------
+
+
+def test_v9_records_a_state_less_ref_that_was_previously_dropped() -> None:
+    """The gap 009 closes, seeded exactly as a real 0.16.x database holds it.
+
+    ``_apply_through(8)`` runs 005's backfill with the OLD extractor, so the
+    ref is absent from the table before 009 runs — which is what made it
+    invisible on disk, not merely uncounted.
+    """
+    conn = sqlite3.connect(":memory:")
+    _apply_through(conn, 8)
+    _seed_claim_memories(conn, (("m1", "deliverables", "Branch done, PR #40: shipped it"),))
+
+    assert conn.execute("SELECT COUNT(*) FROM memory_claims").fetchone()[0] == 0
+
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
+
+    rows = conn.execute("SELECT ref, state FROM memory_claims").fetchall()
+    assert [tuple(r) for r in rows] == [("gingugu#40", "unverified")]
+
+
+def test_v9_leaves_the_open_backlog_untouched() -> None:
+    """The regression that matters most: 009 must add rows, never reclassify.
+
+    An open claim silently becoming unverified would empty the reconciliation
+    backlog and look like progress.
+    """
+    conn = sqlite3.connect(":memory:")
+    _apply_through(conn, 8)
+    _seed_claim_memories(
+        conn,
+        (
+            ("m1", "session log", "PR #20 is still open"),
+            ("m2", "notes", "see PR #40 for context"),
+        ),
+    )
+
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
+
+    states = dict(conn.execute("SELECT ref, state FROM memory_claims").fetchall())
+    assert states == {"gingugu#20": "open", "gingugu#40": "unverified"}
+
+
+def test_v9_preserves_resolution_on_an_existing_claim() -> None:
+    """009 goes through ``claim_rederive`` for 007's reason: prose is untouched."""
+    conn = sqlite3.connect(":memory:")
+    _apply_through(conn, 8)
+    _seed_claim_memories(conn, (("m1", "PR #20 open", "PR #20 is still open. Also see PR #40."),))
+    # Seeded directly: memories inserted by SQL never ran the extractor, which
+    # is exactly the on-disk shape of a 0.16.x database carrying manual
+    # reconciliation work.
+    conn.execute(
+        "INSERT INTO memory_claims (id, memory_id, kind, ref, state, resolved_state, "
+        "resolved_at, created_at) VALUES "
+        "('c1','m1','pr','gingugu#20','open','resolved','2026-02-01','2026-01-01')"
+    )
+    conn.commit()
+
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
+
+    rows = conn.execute(
+        "SELECT ref, resolved_state, resolved_at FROM memory_claims ORDER BY ref"
+    ).fetchall()
+    assert [tuple(r) for r in rows] == [
+        ("gingugu#20", "resolved", "2026-02-01"),
+        ("gingugu#40", None, None),
+    ]
+
+
+def test_v9_prunes_nothing_and_is_idempotent() -> None:
+    """009 only ever adds: every ref it records is one the old extractor dropped."""
+    from gingugu import claim_rederive
+
+    conn = sqlite3.connect(":memory:")
+    _apply_through(conn, 8)
+    _seed_claim_memories(
+        conn,
+        (
+            ("m1", "session log", "PR #20 is still open"),
+            ("m2", "notes", "see PR #40 for context"),
+        ),
+    )
+    migrate(conn)
+
+    pruned, written = claim_rederive.rederive_claims(conn)
+    assert (pruned, written) == (0, 2)

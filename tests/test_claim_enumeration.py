@@ -217,3 +217,91 @@ async def test_full_reconciliation_loop_without_leaving_the_tools(server) -> Non
     assert resolved["memory"]["content"] == prose  # byte-identical
 
     assert (await _claims(server))["open_actionable"] == 0
+
+
+# --- unverified: named, but asserting nothing -------------------------------
+
+
+@pytest.mark.asyncio
+async def test_unverified_refs_stay_out_of_every_open_count(server) -> None:
+    """The guarantee the whole design rests on.
+
+    Recording state-less refs must not move ``open`` by one. Measured on the
+    live corpus this state covers ~225 refs against 223 real claims, so a leak
+    here would more than double the backlog with prose about finished work.
+    """
+    await _store(server, "deliverables", "Branch done, PR #1: shipped it")
+    await _store(server, "notes", "see PR #40 for context")
+    await _store(server, "real backlog", "PR #10 open, waiting on review")
+
+    claims = await _claims(server)
+    assert claims["unverified"] == 2
+    assert claims["open"] == 1
+    assert claims["open_actionable"] == 1
+    assert [row["ref"] for row in claims["sample"]] == ["gingugu#10"]
+
+
+@pytest.mark.asyncio
+async def test_unverified_is_enumerable_on_its_own(server) -> None:
+    """Invisible was the bug; a backlog it is not. So it gets its own filter."""
+    quiet = await _store(server, "notes", "see PR #40 for context")
+    await _store(server, "real backlog", "PR #10 open, waiting on review")
+
+    found = _payload(await server.call_tool("memory_search", {"claims": "unverified"}))
+    assert [m["id"] for m in found["memories"]] == [quiet["id"]]
+
+
+@pytest.mark.asyncio
+async def test_open_and_unverified_filters_return_disjoint_sets(server) -> None:
+    """Neither sweep may quietly include the other's rows."""
+    quiet = await _store(server, "notes", "see PR #40 for context")
+    loud = await _store(server, "real backlog", "PR #10 open, waiting on review")
+
+    for mode, expected in (("unverified", quiet["id"]), ("open", loud["id"])):
+        found = _payload(await server.call_tool("memory_search", {"claims": mode}))
+        assert [m["id"] for m in found["memories"]] == [expected], mode
+
+
+@pytest.mark.asyncio
+async def test_resolve_all_never_sweeps_an_unverified_ref(server) -> None:
+    """ "all" means everything this memory says is in flight.
+
+    An unverified ref says nothing, so closing it under "all" would record that
+    the caller checked something they never looked at.
+    """
+    mem = await _store(server, "mixed", "PR #10 open, waiting on review. Also see PR #40.")
+
+    resolved = _payload(
+        await server.call_tool("memory_update", {"memory_id": mem["id"], "resolve_claims": "all"})
+    )
+    assert resolved["resolved_claims"] == ["gingugu#10"]
+
+    claims = await _claims(server)
+    assert claims["open_actionable"] == 0
+    assert claims["unverified"] == 1  # untouched
+
+
+@pytest.mark.asyncio
+async def test_naming_an_unverified_ref_explicitly_does_resolve_it(server) -> None:
+    """The honest way to say "I looked, and it merged"."""
+    mem = await _store(server, "deliverables", "Branch done, PR #40: shipped it")
+    assert (await _claims(server))["unverified"] == 1
+
+    resolved = _payload(
+        await server.call_tool(
+            "memory_update", {"memory_id": mem["id"], "resolve_claims": "gingugu#40"}
+        )
+    )
+    assert resolved["resolved_claims"] == ["gingugu#40"]
+    assert (await _claims(server))["unverified"] == 0
+
+
+@pytest.mark.asyncio
+async def test_an_unverified_ref_cannot_contradict_a_later_memory(server) -> None:
+    """Contradiction needs two assertions. Silence is not one of them."""
+    await _store(server, "notes", "see PR #40 for context")
+    await _store(server, "release", "PR #40 merged to main")
+
+    claims = await _claims(server)
+    assert claims["contradicted"] == 0
+    assert claims["sample"] == []

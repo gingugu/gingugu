@@ -11,6 +11,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The `unverified` claim state** — a memory naming a PR or MR whose prose
+  never said what became of it produced *no claim at all*. `PR #1:` followed by
+  its own URL under a "Deliverables" list asserted nothing the extractor could
+  see, so `claims.open` read 0 while the memory read as in-flight to a human
+  forever. The backlog was not merely unenumerable, as it was before `#47`; it
+  was undetected.
+
+  The obvious fix — treat a state-less ref as open — was measured against a
+  real 1161-memory corpus and rejected. 225 ref mentions (185 distinct claims)
+  are named with no asserted state, against 223 real claims, and they
+  overwhelmingly narrate work that already shipped: *"Fixed in PR #873"*,
+  *"PR #121 deployed successfully"*. Emitting those as open would more than
+  double the backlog with history — the exact failure the extractor already
+  refuses elsewhere, where a missed claim is silent and a wrong one teaches the
+  reader to ignore claims entirely.
+
+  Such a ref now records as `unverified`, asserting only that the memory names
+  it and never says what became of it. It is excluded from `claims.open`,
+  `open_actionable`, `claims.sample`, and contradiction detection, and is read
+  through `memory_search(claims="unverified")` — a browsable index, not a queue.
+  `claims.unverified` reports the count alongside.
+
+  `resolve_claims="all"` deliberately still means every *open* claim: closing an
+  unverified ref under "all" would record that the caller checked something they
+  never looked at. Naming the ref explicitly resolves it, which is the honest
+  way to say "I looked, and it merged".
+
+  Migration 009 re-derives existing stores through `claim_rederive`, preserving
+  every recorded resolution. No schema change: `state` was already unconstrained
+  TEXT. Where migration 007 only ever removed claims, this one only ever adds
+  them.
+
 - **Orphan enumeration** — `memory_stats`' `graph` block reported that N
   memories had no relation touching them and nothing could name one of them. An
   orphan is reachable only by direct search, since spreading activation can
