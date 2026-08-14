@@ -161,7 +161,10 @@ memory_relate(source_id, target_id, relation_type)
   → later recall/context traverse edges so one hit surfaces its cluster
 
 memory_edges(namespace|relation_type|memory_id)     → read the graph
-memory_unrelate(... new_relation_type?) | edges[]   → repair it
+memory_unrelate(... new_relation_type? reverse?)    → repair it
+  | edges[]
+memory_stats.graph.orphan_sample                    → what the graph never reaches
+memory_search(orphans=True)                         → the same set, with bodies
 ```
 
 Edges are the load-bearing structure, but recall quality scales with edge
@@ -183,11 +186,20 @@ that insists on picking a specific type and then makes every wrong pick
 permanent charges the full cost of an error on every future recall.
 `memory_edges` reads the graph (both endpoints resolved to titles, namespaces
 and degree, so an edge can be judged from the row) and `memory_unrelate`
-repairs it - retype in place, or delete. Retype UPDATEs the row rather than
-recreating it, so id, `created_at` and metadata survive: the usual repair is
-"right connection, wrong label", and when the link was drawn stays true.
+repairs it - retype in place, reverse, or delete. Retype UPDATEs the row rather
+than recreating it, so id, `created_at` and metadata survive: the usual repair
+is "right connection, wrong label", and when the link was drawn stays true.
 Retyping onto a type that already joins the pair collapses the two and reports
 `merged`, not `retyped` - the edge count genuinely drops by one.
+
+`reverse` is the sibling repair: the pair is right and the arrow points the
+wrong way. `A caused_by B` written for `B caused_by A` is a false claim about
+causality, not an untidy one, and the directional types this graph asks for are
+exactly the ones that can be recorded backwards. It swaps the endpoints on the
+same row, with the same provenance guarantee, and combines with a retype in one
+write because an edge recorded backwards is frequently mislabelled too.
+Reversing `parent_of`/`child_of` is the same operation as flipping between
+them - do one or the other, not both.
 
 Batches are lists of per-edge decisions, deliberately **not** criteria-driven
 sweeps. There is no "retype every `related_to` here" option, because each edge
@@ -201,6 +213,20 @@ budgeted set powers `include_related` extras and spreading activation, so a
 highly-connected "generic hub" memory contributes its few best neighbours
 instead of its entire cluster. Budgets (3 per seed, 10 total) are tuned against
 the real-brain benchmark.
+
+The other end of the same problem is memories the graph never reaches at all.
+`memory_stats.graph` reports an orphan count, and `orphan_sample` names the
+memories behind it - ordered by confidence, then access count, then recency, so
+the orphans costing the most retrieval come first, each row carrying its
+namespace. `memory_search(orphans=True)` pulls the same set with full bodies,
+composing with every other filter, with or without a query.
+`graph_stats.orphan_filter()` is the single definition behind both, on the same
+argument as `claim_filter()`: a count and its enumeration must be counting the
+same thing. Deprecated orphans sink to the bottom of the sample rather than
+being filtered out, so - unlike claims, which needed `open` and
+`open_actionable` - one population serves both numbers and no gap needs
+explaining. Reconnecting an orphan is still a judged act: an orphan is better
+left alone than wired up with an invented edge.
 
 ## Lifecycle
 

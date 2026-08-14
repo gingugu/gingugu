@@ -27,12 +27,12 @@ Gingugu instance serves Windsurf and Claude Code against one DB.
 | `memory_update` | Mutate an existing memory (incl. `type` retype, `pinned` to always-load it, and `resolve_claims` to reconcile a stale claim without editing prose) | ✅ Shipped |
 | `memory_forget` | Deprecate / delete (only removal path) | ✅ Shipped |
 | `memory_recall` | Hybrid BM25 + semantic retrieval (multi-namespace CSV, total-limit; compact mode) | ✅ Shipped |
-| `memory_search` | Precision retrieval with filters (multi-namespace CSV, total-limit; compact mode; fetch by exact `ids`; `claims="open"\|"contradicted"` to work the reconciliation backlog) | ✅ Shipped |
+| `memory_search` | Precision retrieval with filters (multi-namespace CSV, total-limit; compact mode; fetch by exact `ids`; `claims="open"\|"contradicted"` to work the reconciliation backlog; `orphans=True` to work the graph backlog) | ✅ Shipped |
 | `memory_context` | Session priming + spreading activation (multi-namespace, deduped; compact mode; not access-credited); pinned tier loads first, additive to `limit` | ✅ Shipped |
-| `memory_stats` | Health: counts, confidence, dormancy, hygiene, review sweep, the `claims` backlog (`sample` enumerates every open claim, contradicted first; `open_actionable` vs `open`; `review_limit` raises the cap), and a `graph` block (edges, degree, type mix, orphans, over-spread-cap) | ✅ Shipped |
+| `memory_stats` | Health: counts, confidence, dormancy, hygiene, review sweep, the `claims` backlog (`sample` enumerates every open claim, contradicted first; `open_actionable` vs `open`; `review_limit` raises the cap), and a `graph` block (edges, degree, type mix, orphans + `orphan_sample`, over-spread-cap; `review_limit` raises that sample too) | ✅ Shipped |
 | `memory_relate` | Build typed graph edges | ✅ Shipped |
 | `memory_edges` | Enumerate edges with both endpoints resolved to titles, namespaces and degree; filter by namespace / type / memory, paged | ✅ Shipped (unreleased) |
-| `memory_unrelate` | Repair edges: retype in place (provenance preserved; collision reports `merged`) or remove; single or batch of up to 100 reviewed ops; `dry_run` | ✅ Shipped (unreleased) |
+| `memory_unrelate` | Repair edges: retype in place, reverse the direction (combinable with a retype), or remove — provenance preserved throughout, collision reports `merged`; single or batch of up to 100 reviewed ops; `dry_run` | ✅ Shipped (`reverse` unreleased) |
 | `memory_consolidate` | merge / summarize / deduplicate + read-only near-dupe suggest scan | ✅ Shipped |
 | `memory_export` / `memory_import` | Back up / transfer a namespace | ✅ Shipped |
 | `memory_namespaces` | Namespace CRUD + `default_repo` (what a bare "PR #12" means here; `""` = not a repo) | ✅ Shipped |
@@ -41,6 +41,7 @@ Gingugu instance serves Windsurf and Claude Code against one DB.
 | Relation discipline | Guidance ranks `supersedes`/`contradicts`/`caused_by`/`parent_of` first; `related_to` is a fallback, not a default | ✅ Shipped (unreleased) |
 | Pinned memories | A per-namespace tier that always loads, exempt from ranking; additive to `limit`, capped at 20 | ✅ Shipped (unreleased) |
 | Relation-graph metrics | `memory_stats.graph`: measures the orphan/low-signal/over-cap conditions that degrade retrieval | ✅ Shipped (unreleased) |
+| Orphan enumeration | `graph.orphan_sample` + `memory_search(orphans=True)` name the memories the orphan count reports, costliest first — one shared predicate, so count and enumeration cannot drift | ✅ Shipped (unreleased) |
 | Type-weighted spreading activation | Make neighbour selection prefer high-signal relation types | ⛔ Not built — gated on bench evidence (the `graph` block now supplies the baseline: high_signal_ratio 0.392, over_spread_cap 339) |
 | User-level protocol management | `gingugu init` installs/refreshes the protocol in a marked block in `~/.claude/CLAUDE.md`; append-only outside the markers, refuses on an unmanaged protocol | ✅ Shipped (unreleased) |
 | `age` payload field | Derived-at-read relative age on every memory (full, compact, and write-time hints); never persisted | ✅ Shipped (v0.13.0; anchored on the freshness anchor + elaborated to `"7 weeks ago (updated just now)"` unreleased) |
