@@ -139,10 +139,19 @@ usually worse, not better.
 **A wrong edge is fixable, so fix it rather than writing prose around it.**
 `memory_edges` lists what is actually there (both endpoints' titles, plus each
 one's degree, which is what decides whether an edge can ever fire);
-`memory_unrelate` retypes it in place or removes it. Retyping preserves the
-edge's creation time, so correcting a label costs nothing in provenance. Judge
-each edge on its own merits — there is no bulk retype, deliberately, because a
-blanket relabel manufactures directional claims that were never true.
+`memory_unrelate` retypes it in place, reverses a backwards one, or removes it.
+Both repairs preserve the edge's creation time, so correcting a label or a
+direction costs nothing in provenance, and `reverse` combines with a retype in
+one call. Judge each edge on its own merits — there is no bulk retype,
+deliberately, because a blanket relabel manufactures directional claims that
+were never true.
+
+**The opposite failure is a memory with no edges at all**, reachable only by
+direct search since spreading activation can never wake it.
+`memory_stats.graph.orphan_sample` names them, costliest first, and
+`memory_search(orphans=True)` pulls the same set with full bodies. Reconnecting
+one is still a judged act under the rule above: an orphan is better left alone
+than wired up with an invented edge.
 
 ### What to remember (memory types)
 - **architecture** — schema decisions, scoring/ranking changes, module boundaries

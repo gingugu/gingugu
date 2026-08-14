@@ -59,11 +59,12 @@
 | `search_filters.py` | `advanced_search`: filtered search + metadata-only listing |
 | `embeddings.py` | Semantic vector generation |
 | `context.py` | Session priming (`memory_context`): the pinned tier + three quota'd intent buckets, plus spreading activation |
-| `relations.py` | Typed graph edges + hub-dampened 1-hop traversal (`dampened_neighbour_ids`); edge repair (`retype_relation`, `delete_edges`) and enumeration (`list_edges`) |
+| `relations.py` | Typed graph edges + hub-dampened 1-hop traversal (`dampened_neighbour_ids`) and enumeration (`list_edges`) |
+| `relation_repair.py` | Edge repair mixed into `RelationManager`: `retype_relation`, `reverse_relation`, `delete_relation`, `delete_edges`. Every op is an UPDATE/DELETE on the existing row, so id / `created_at` / metadata survive a correction |
 | `consolidation.py` | merge / summarize / deduplicate clusters |
 | `decay.py` | Composite scoring, the `reference_timestamp()` freshness anchor (MAX, not COALESCE), dormancy as a resting signal (never auto-forgets), and `relative_age()`/`age_label()` — the derived-at-read `age` string |
 | `stats.py` | Health stats (counts, confidence, dormancy, hygiene, review sweep) |
-| `graph_stats.py` | Relation-graph health: edges, degree, type mix, orphans, and edges stranded past `SPREAD_PER_SEED` |
+| `graph_stats.py` | Relation-graph health: edges, degree, type mix, orphans, and edges stranded past `SPREAD_PER_SEED`. Also `orphan_sample` (the orphans behind the count, costliest first) and the shared `orphan_filter()` predicate behind `memory_search(orphans=True)` |
 | `staleness.py` | Advisory review hints for point-in-time memories |
 | `claims.py` | Extracts checkable state claims (repo-qualified PR/MR refs) from prose; ignores refs inside `[[wiki-links]]` |
 | `claim_sync.py` | Claim **write** path: persistence, contradiction lookup, resolution, and the storage bridge; resolves a namespace's default repo |
@@ -72,7 +73,7 @@
 | `namespaces.py` | Namespace CRUD; a `default_repo` change re-derives that namespace's claims (best-effort) so the declaration is not inert |
 | `credentials.py` | OS-keychain credential vault |
 | `portability.py` | Export / import a namespace |
-| `handlers/` | MCP tool handlers: `memory.py` (store/update/forget), `recall.py` (recall/context), `search.py`, `relations.py` (relate/edges/unrelate), `consolidate.py`, `admin.py`, `credentials.py`, `helpers.py` |
+| `handlers/` | MCP tool handlers: `memory.py` (store/update/forget), `recall.py` (recall/context), `search.py`, `relations.py` (relate/edges/unrelate) with `relation_ops.py` (batch parsing + per-edge dispatch), `consolidate.py`, `admin.py`, `credentials.py`, `helpers.py` |
 
 Dev-only tooling at the repo root (never shipped in the wheel): **`bench/`** —
 golden-set retrieval benchmark (Recall@K, MRR, precision, token cost;
@@ -87,7 +88,7 @@ Run: `uv run python -m bench [--db <real-brain.db>]`.
 - **Memory:** `memory_store`, `memory_update`, `memory_forget`, `memory_recall`,
   `memory_search`, `memory_context`, `memory_stats`
 - **Graph:** `memory_relate`, `memory_edges` (enumerate, read-only),
-  `memory_unrelate` (retype / remove, single or batch, `dry_run`)
+  `memory_unrelate` (retype / reverse / remove, single or batch, `dry_run`)
 - **Lifecycle:** `memory_consolidate`, `memory_export`, `memory_import`,
   `memory_namespaces`
 - **Credentials:** `credential_list`, `credential_get`, `credential_store`, `credential_delete`

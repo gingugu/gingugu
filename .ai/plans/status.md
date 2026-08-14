@@ -1,10 +1,68 @@
 # Project Status
 
-_Last updated: 2026-08-13_
+_Last updated: 2026-08-14_
 
 ## In Flight
 
-_Nothing in flight._
+- **Orphan enumeration + edge reversal** (branch
+  `feature/orphan-enumeration-edge-reverse`, cut from `main` @ `a4b3b84`).
+  Both halves close gaps found by *running* the 3A sweep below, not by a test.
+
+  - **Orphan enumeration.** Third instance of the invisible-backlog pattern,
+    after the `related_to` mix (fixed by `memory_edges`, #49) and the claims
+    backlog (#47). `memory_stats.graph` reported an orphan count and nothing
+    could name a single one, so working the backlog meant raw SQL against the
+    live brain. New `graph.orphan_sample` (confidence → access count → recency,
+    namespace-stamped, raised by the existing `review_limit`) plus
+    `memory_search(orphans=True)` for the same set with full bodies. One shared
+    `graph_stats.orphan_filter()` predicate behind both, on the `claim_filter()`
+    precedent.
+
+    **Design note:** deprecated orphans sink to the bottom of the sample rather
+    than being filtered out. That deliberately avoids the `open` vs
+    `open_actionable` two-number problem the claims work needed — one
+    population serves the count and the list, so no gap needs explaining.
+
+  - **Edge reversal.** `memory_unrelate(reverse=True)` swaps an edge's
+    endpoints on the existing row, preserving id / `created_at` / metadata like
+    a retype, and combines with `new_relation_type` in one write. The 3A sweep
+    hit ~11 edges that were correctly connected but backwards, several also
+    mistyped; each cost a delete plus a re-`memory_relate`, which discards the
+    provenance the repair path exists to protect.
+
+  - **Two forced splits.** Both target files crossed 300 lines as a direct
+    result: `relations.py` (351) → `relation_repair.py` (repair ops, mixed into
+    `RelationManager`), and `handlers/relations.py` (332) →
+    `handlers/relation_ops.py` (batch parse + per-edge dispatch). Conceptual
+    seams, not arbitrary cuts; public API unchanged, tool surface stays at 18.
+
+  561 tests passing (+29: 13 reverse cases in `test_edge_repair.py`, 7 sample
+  cases in `test_graph_stats.py`, and a new `tests/test_orphan_enumeration.py`
+  mirroring `test_claim_enumeration.py`). Ruff + black clean. No schema change,
+  no migration, every new parameter defaults off.
+
+  **Feeds 3B** under *Blocked / Pending*: the whole argument for building this
+  before the content read was that orphan enumeration is how 3B gets
+  prioritized.
+
+- **Memory cleanup 3A: the `crow` structure pass — COMPLETE (2026-08-13).**
+  Recorded here two sessions late; the work touched only the memory store, not
+  this repo, which is exactly why it kept missing the doc pass.
+
+  All 394 `crow` `related_to` edges were read and judged individually across
+  nine rounds. `high_signal_ratio` **0.304 → 0.832**; `related_to` 394 → 80;
+  edges 566 → 475; `over_spread_cap` 95 → 49. It was the first real use of
+  `memory_unrelate`, on the exact edge it was built for.
+
+  **Orphans rose 38 → 44 and were deliberately not papered over** — deleting a
+  pure-topic-adjacency edge is the honest outcome even when it strands a
+  memory, and inventing a replacement edge to keep the metric flat would be the
+  precise failure the relation-discipline pass exists to prevent. That is the
+  backlog the orphan enumeration above now makes workable.
+
+  **Standing decision amended at round 1:** per-edge deletion of pure topic
+  adjacency is approved. The no-bulk-prune decision under *Blocked / Pending*
+  stands unchanged — it forbids criteria-driven sweeps, not judged deletions.
 
 ## Shipped in v0.16.0 (2026-08-13)
 
@@ -183,8 +241,21 @@ v0.2.0).
 - **`gingugu ui --host` exposes an unauthenticated full-DB export.** Found
   2026-08-03, still unfiled as an issue.
 
+- **Memory cleanup 3B: content read of the untouched namespaces.** The last
+  item in the cleanup arc, and the only one not started. ~540 memories across
+  12 namespaces were verified green **by instrument** during steps 1 and 2 and
+  never actually read; 3A read every `crow` edge but only memory *titles*, so
+  crow's bodies are unread too. Best leads: `devex-on-call-notes` (59 memories,
+  worst connectivity in the store, and runbook detail rots silently) and
+  `ds-base-images` (both memories still `inferred`). Prioritize with the new
+  orphan enumeration — that was the argument for building it first.
+
 - **Over the 300-line rule:** `storage.py` (495), `database.py` (485),
-  `handlers/helpers.py` (393). `search.py` is now 267 and off this list (the
+  `handlers/helpers.py` (393). `relations.py` (223) and
+  `handlers/relations.py` (224) are off this list as of the orphan/reverse
+  work, split into `relation_repair.py` (158) and `handlers/relation_ops.py`
+  (125) — splits the feature forced, along seams it wanted anyway. `search.py`
+  is now 267 and off this list (the
   engine/`search_common`/`search_filters` split); `claim_sync.py` is 254 and
   off it too, split by the claims-enumeration work into a write path
   (`claim_sync.py`) and a read path (`claim_queries.py`, 125) — a split the

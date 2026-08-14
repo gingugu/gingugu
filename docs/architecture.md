@@ -725,8 +725,9 @@ restart at `offset=0` when filtering on a type you are actively retyping away
 from.
 
 ### `memory_unrelate`
-Repair the graph: retype a mislabelled edge, or remove one that should not
-exist. The counterpart to [`memory_relate`](#memory_relate).
+Repair the graph: retype a mislabelled edge, turn a backwards one around, or
+remove one that should not exist. The counterpart to
+[`memory_relate`](#memory_relate).
 
 **Parameters:**
 - `source_id` / `target_id` — the edge's endpoints (required unless `edges`)
@@ -734,6 +735,8 @@ exist. The counterpart to [`memory_relate`](#memory_relate).
   type between the pair goes
 - `new_relation_type` (optional) — present = retype, absent = delete. Requires
   `relation_type`.
+- `reverse` (optional) — swap the edge's endpoints. Requires `relation_type`,
+  and combines with `new_relation_type` to reverse and retype in one write.
 - `edges` (optional) — batch: an array of up to `MAX_BATCH_EDGES` (100) objects
   with those same fields. Mutually exclusive with the single-edge parameters.
 - `dry_run` (optional) — preview only; nothing is written
@@ -744,6 +747,16 @@ should keep an honest record of when the link was first drawn. If an edge of
 the new type already joins the pair the two collapse into one, reported as
 `merged` rather than `retyped` — the edge count really does drop by one, and
 nothing is fabricated to keep the arithmetic tidy.
+
+**Reversal is the sibling repair** — the pair is right, the arrow points the
+wrong way. `A caused_by B` recorded for `B caused_by A` is a false claim about
+causality, not an untidy one, and the directional types this graph asks for are
+exactly the ones that can be written backwards. It swaps the endpoints on the
+same row, with the same provenance guarantee as a retype, and combines with one
+because an edge recorded backwards is frequently mislabelled as well. Note that
+reversing `parent_of`/`child_of` is the same operation as flipping between the
+two types: do one or the other, not both. An existing edge in the target
+direction absorbs this one and reports `merged`.
 
 **Deletion is not the bulk prune** the relation guidance warns against: the
 caller names each edge, exactly as `memory_forget` names a memory. Memories are
@@ -758,8 +771,9 @@ honest `related_to`. Batching saves round-trips, not judgment. The whole batch
 is validated before anything is written, so a malformed op fails the call rather
 than leaving the graph half-repaired.
 
-Outcomes are reported per edge (`retyped`, `merged`, `deleted`, `not_found`,
-`unchanged`, or the `would_*` forms under `dry_run`) plus an `outcomes` tally.
+Outcomes are reported per edge (`retyped`, `reversed`, `merged`, `deleted`,
+`not_found`, `unchanged`, or the `would_*` forms under `dry_run`) plus an
+`outcomes` tally.
 Find the edges to repair with [`memory_edges`](#memory_edges).
 
 ### `memory_consolidate`
@@ -850,12 +864,21 @@ relation graph, computed in `graph_stats.py`):
 | `by_relation_type` | Edge count per relation type |
 | `high_signal_edges` / `high_signal_ratio` | Share that is **not** `related_to`. `related_to` is the fallback edge; a graph dominated by it encodes little the hybrid index does not already infer for free |
 | `orphans` / `orphan_ratio` | Memories with no edge in either direction. Reachable only by direct search — spreading activation can never wake them |
+| `orphan_sample` | The orphans behind that count (`id`, `type`, `title`, `confidence`, `access_count`, `namespace`), ordered by confidence, then access count, then recency, so the ones costing the most retrieval come first. Capped at 5 and raised by `review_limit` (max 100). Deprecated orphans sink to the bottom rather than being filtered out, so the sample is drawn from exactly the population the count reports |
 | `over_spread_cap` | Memories carrying more edges than `SPREAD_PER_SEED`. Activation visits at most that many neighbours and does **not** rank them by type, so edges beyond the cap are structurally unreachable |
 | `spread_per_seed` | The cap itself, reported so the number above is interpretable |
 
 Each maps to a concrete retrieval failure rather than being decorative: a high
 edge count with a low `high_signal_ratio` and a high `over_spread_cap` means
 effort went into edges that can never fire.
+
+`orphan_sample` exists because a count nothing can act on describes a cost
+without offering a way to pay it down — knowing 45 memories are cut out of the
+graph identifies none of them, and reconnecting one meant querying the database
+behind the server's back. `graph_stats.orphan_filter()` is the single predicate
+behind both the count and [`memory_search(orphans=True)`](#memory_search), on
+the same argument as `claim_filter()`: a count and its enumeration must be
+counting the same thing.
 
 ### `memory_search`
 Advanced search with full filter support, plus a precise fetch-by-ID path.
@@ -886,6 +909,16 @@ Advanced search with full filter support, plus a precise fetch-by-ID path.
   with every other filter (and with `query`), so
   `claims="open", namespace="gingugu", sort_by="created"` is a working sweep.
   Ignored on the `ids` path, like every other filter.
+- `orphans` (optional, default `false`) — restrict results to memories no
+  relation touches: the graph backlog that
+  [`memory_stats`](#memory_stats)' `graph.orphans` counts. An orphan is
+  reachable only by direct search, since spreading activation can never wake
+  it, so a verified and frequently-recalled orphan is retrieval the graph is
+  leaving on the table. Composes with every other filter and works with or
+  without a query, so `orphans=true, namespace="crow", sort_by="accessed"`
+  walks the costliest first. Reconnect with [`memory_relate`](#memory_relate) —
+  and only where a directional fact exists to record; an orphan is better left
+  alone than wired up with an invented edge. Ignored on the `ids` path.
 
 ### `memory_export`
 Export memories to a portable JSON payload (backup/transfer). Credentials are

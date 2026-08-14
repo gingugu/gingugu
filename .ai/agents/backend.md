@@ -3,7 +3,8 @@
 ## Scope
 
 The Python MCP server and its core: `server.py`, `handlers/`, `storage.py`,
-`search.py`, `embeddings.py`, `context.py`, `relations.py`, `consolidation.py`,
+`search.py`, `embeddings.py`, `context.py`, `relations.py`/`relation_repair.py`,
+`consolidation.py`,
 `decay.py`, `stats.py`, `namespaces.py`, `credentials.py`, `portability.py`,
 `database.py`, `config.py`, `models.py`.
 
@@ -18,7 +19,9 @@ The Python MCP server and its core: `server.py`, `handlers/`, `storage.py`,
   migrations (additive), FTS5 triggers in lockstep, never-forget.
 - **300-line limit.** Split modules before they cross it — `handlers/` is
   already domain-split (write `memory.py`, read `recall.py`, `search.py`,
-  `relations.py`, `admin.py`, `credentials.py`, shared `helpers.py`).
+  `relations.py` + `relation_ops.py`, `admin.py`, `credentials.py`, shared
+  `helpers.py`). Split along a seam the code already has — repair vs
+  build/read, MCP surface vs dispatch — not at an arbitrary line number.
 - **Async.** Handlers are async; test with `pytest-asyncio`.
 - Verify against the MCP spec, SQLite FTS5 docs, and the `mcp` SDK before
   changing transport or schema behavior.
