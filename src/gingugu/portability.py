@@ -15,16 +15,21 @@ import logging
 import sqlite3
 import uuid
 
-from .models import Confidence, MemoryType, RelationType, utcnow_iso
+from .models import (
+    MEMORY_COLUMNS,
+    Confidence,
+    MemoryType,
+    RelationType,
+    memory_columns_sql,
+    memory_placeholders_sql,
+    utcnow_iso,
+)
 
 logger = logging.getLogger(__name__)
 
 EXPORT_FORMAT_VERSION = 1
 
-_MEMORY_COLUMNS = (
-    "id, namespace_id, type, title, content, confidence, source, "
-    "created_at, updated_at, last_accessed, last_confirmed, access_count, metadata"
-)
+_MEMORY_COLUMNS = memory_columns_sql()
 _NAMESPACE_COLUMNS = "id, name, path, description, created_at, updated_at"
 _RELATION_COLUMNS = "id, source_id, target_id, relation_type, created_at, metadata"
 
@@ -183,11 +188,14 @@ def import_data(conn: sqlite3.Connection, data: dict, *, on_conflict: str = "ski
         else:
             imported += 1
         conn.execute(
-            f"INSERT INTO memories({_MEMORY_COLUMNS}) VALUES "
-            "(:id, :namespace_id, :type, :title, :content, :confidence, :source, "
-            ":created_at, :updated_at, :last_accessed, :last_confirmed, :access_count, :metadata)",
+            f"INSERT INTO memories({_MEMORY_COLUMNS}) " f"VALUES ({memory_placeholders_sql()})",
             {
-                **{k: mem.get(k) for k in _MEMORY_COLUMNS.replace(" ", "").split(",")},
+                **{k: mem.get(k) for k in MEMORY_COLUMNS},
+                # `pinned` is NOT NULL, and an export written before it existed
+                # has no such key - `mem.get` would hand SQLite a None and fail
+                # the insert. Absent means unpinned, which is also the honest
+                # reading: that file never recorded a pin either way.
+                "pinned": int(bool(mem.get("pinned"))),
                 "namespace_id": local_ns,
             },
         )

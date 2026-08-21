@@ -10,14 +10,19 @@ import uuid
 from . import claim_sync
 from . import embeddings as emb
 from .embeddings import EmbeddingProvider, NullEmbeddingProvider
-from .models import Confidence, Memory, MemoryType, normalize_tag, utcnow_iso
+from .models import (
+    Confidence,
+    Memory,
+    MemoryType,
+    memory_columns_sql,
+    memory_placeholders_sql,
+    normalize_tag,
+    utcnow_iso,
+)
 
 logger = logging.getLogger(__name__)
 
-_COLUMNS = (
-    "id, namespace_id, type, title, content, confidence, source, "
-    "created_at, updated_at, last_accessed, last_confirmed, access_count, metadata, pinned"
-)
+_COLUMNS = memory_columns_sql()
 
 
 def _normalize_metadata(metadata: str | None) -> str | None:
@@ -101,10 +106,7 @@ class MemoryStore:
             metadata=metadata,
         )
         self._conn.execute(
-            f"INSERT INTO memories({_COLUMNS}) "
-            "VALUES (:id, :namespace_id, :type, :title, :content, :confidence, :source, "
-            ":created_at, :updated_at, :last_accessed, :last_confirmed, :access_count, "
-            ":metadata, :pinned)",
+            f"INSERT INTO memories({_COLUMNS}) VALUES ({memory_placeholders_sql()})",
             {
                 **mem.model_dump(exclude={"score", "tags"}),
                 "type": mem.type.value,

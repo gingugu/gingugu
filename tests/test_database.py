@@ -90,6 +90,58 @@ def test_backup_taken_when_migrations_pending(tmp_path: Path) -> None:
     bconn.close()
 
 
+def test_backup_captures_writes_still_sitting_in_the_wal(tmp_path: Path) -> None:
+    """The pre-migration backup must include committed-but-uncheckpointed rows.
+
+    Regression. This used to be ``shutil.copy2(db_path, ...)``, which copies the
+    main database file only. We run in WAL mode, where a committed transaction
+    lives in ``<db>-wal`` until a checkpoint folds it in, so a file copy silently
+    left the newest writes behind - on a real brain, 4.6MB of committed memories
+    against a 20MB file. This copy is the only safety net if a migration goes
+    wrong, so missing the most recent work is the one thing it must never do.
+    """
+    db_path = tmp_path / "wal.db"
+
+    from gingugu.database import MIGRATIONS
+
+    holder = sqlite3.connect(str(db_path))
+    holder.execute("PRAGMA journal_mode=WAL")
+    for target, fn in MIGRATIONS[:3]:  # a v3 DB, so v4+ are pending
+        fn(holder)
+        holder.execute(f"PRAGMA user_version = {target}")
+    holder.commit()
+
+    holder.execute(
+        "INSERT INTO namespaces(id, name, created_at, updated_at) VALUES (?,?,?,?)",
+        ("ns-wal", "in-the-wal", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"),
+    )
+    holder.commit()
+
+    # Hold the connection open: SQLite checkpoints when the last one closes, and
+    # the point of this test is the state before that happens.
+    wal_file = db_path.with_name(db_path.name + "-wal")
+    assert wal_file.exists() and wal_file.stat().st_size > 0, "test setup is not exercising the WAL"
+    raw_main_file = db_path.read_bytes()
+    assert (
+        b"in-the-wal" not in raw_main_file
+    ), "row unexpectedly already checkpointed; this test would prove nothing"
+
+    db = Database(db_path)
+    db.connect()
+    db.close()
+    holder.close()
+
+    backup = db_path.with_name("wal.db.bak-before-v4")
+    assert backup.exists()
+    bconn = sqlite3.connect(str(backup))
+    try:
+        names = [r[0] for r in bconn.execute("SELECT name FROM namespaces")]
+        assert "in-the-wal" in names, "backup lost a committed write that was in the WAL"
+        assert bconn.execute("PRAGMA user_version").fetchone()[0] == 3
+    finally:
+        bconn.close()
+
+
 def test_backup_not_overwritten_on_retry(tmp_path: Path) -> None:
     """If a backup already exists for this target, leave it alone."""
     db_path = tmp_path / "retry.db"

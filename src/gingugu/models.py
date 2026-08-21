@@ -94,3 +94,50 @@ class Memory(BaseModel):
     tags: list[str] = Field(default_factory=list)
     # Populated only on search/recall results; not stored.
     score: float | None = Field(default=None, exclude=True)
+
+
+# ``Memory`` fields that are NOT columns on the `memories` table: `tags` is read
+# from `memory_tags`, `score` exists only on a search result.
+NON_COLUMN_FIELDS: frozenset[str] = frozenset({"tags", "score"})
+
+# The `memories` table columns, in schema order. THE one canonical list.
+#
+# Four modules used to keep private copies of this (storage, context,
+# search_common, portability) and they drifted the moment `pinned` was added:
+# only two copies gained it. Every search path then built `Memory(**row)` from a
+# list without `pinned`, so the field fell back to its default and reported a
+# confident `False` for genuinely pinned memories - and `memory_export` dropped
+# the flag outright, silently unpinning them on a restore. The copies are gone;
+# `test_memory_columns.py` holds this tuple against both `Memory` and the live
+# SQLite schema, so adding a column without teaching the readers fails CI.
+MEMORY_COLUMNS: tuple[str, ...] = (
+    "id",
+    "namespace_id",
+    "type",
+    "title",
+    "content",
+    "confidence",
+    "source",
+    "created_at",
+    "updated_at",
+    "last_accessed",
+    "last_confirmed",
+    "access_count",
+    "metadata",
+    "pinned",
+)
+
+
+def memory_columns_sql(prefix: str = "") -> str:
+    """The column list for a SELECT, optionally table-qualified (e.g. ``"m."``)."""
+    return ", ".join(f"{prefix}{column}" for column in MEMORY_COLUMNS)
+
+
+def memory_placeholders_sql() -> str:
+    """The matching ``:name`` placeholder list for an INSERT.
+
+    Generated from the same tuple as the column list so the two can never fall
+    out of order or out of step, which is how a hand-written VALUES clause
+    silently drops a column.
+    """
+    return ", ".join(f":{column}" for column in MEMORY_COLUMNS)

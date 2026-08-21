@@ -11,15 +11,11 @@ from __future__ import annotations
 
 from .claim_queries import claim_filter
 from .graph_stats import orphan_filter
-from .models import CONFIDENCE_RANK, Confidence, normalize_tag
+from .models import CONFIDENCE_RANK, Confidence, memory_columns_sql, normalize_tag
 
-COLUMNS = (
-    "m.id, m.namespace_id, m.type, m.title, m.content, m.confidence, m.source, "
-    "m.created_at, m.updated_at, m.last_accessed, m.last_confirmed, "
-    "m.access_count, m.metadata"
-)
+COLUMNS = memory_columns_sql("m.")
 
-BASE_COLUMNS = COLUMNS.replace("m.", "")
+BASE_COLUMNS = memory_columns_sql()
 
 
 def confidence_filter(column: str, min_confidence: Confidence) -> tuple[str, list[object]]:

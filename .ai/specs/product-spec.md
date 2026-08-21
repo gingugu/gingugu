@@ -39,7 +39,7 @@ Gingugu instance serves Windsurf and Claude Code against one DB.
 | `credential_*` | OS-keychain secret vault | ✅ Shipped |
 | `suggested_relations` hint | Surface candidates to examine for a _directional_ edge at store time; compact payload (title + ~200-char summary) | ✅ Shipped (v0.3.8; compacted v0.12.0; reframed from "link these" to "examine these" unreleased) |
 | Relation discipline | Guidance ranks `supersedes`/`contradicts`/`caused_by`/`parent_of` first; `related_to` is a fallback, not a default | ✅ Shipped (unreleased) |
-| Pinned memories | A per-namespace tier that always loads, exempt from ranking; additive to `limit`, capped at 20 | ✅ Shipped (unreleased) |
+| Pinned memories | A per-namespace tier that always loads, exempt from ranking; additive to `limit`, capped at 20. Reported by every read path and preserved across an export/import round trip | ✅ Shipped (v0.15.0; correct reporting + round-trip unreleased) |
 | Relation-graph metrics | `memory_stats.graph`: measures the orphan/low-signal/over-cap conditions that degrade retrieval | ✅ Shipped (unreleased) |
 | Orphan enumeration | `graph.orphan_sample` + `memory_search(orphans=True)` name the memories the orphan count reports, costliest first — one shared predicate, so count and enumeration cannot drift | ✅ Shipped (unreleased) |
 | Type-weighted spreading activation | Make neighbour selection prefer high-signal relation types | ⛔ Not built — gated on bench evidence (the `graph` block now supplies the baseline: high_signal_ratio 0.392, over_spread_cap 339) |

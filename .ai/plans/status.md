@@ -4,9 +4,50 @@ _Last updated: 2026-08-21_
 
 ## In Flight
 
-**Bootstrap `--force` data loss - `fix/bootstrap-backup-on-force`.** Three
+**One column list for `memories` + a WAL-safe pre-migration backup -
+`fix/unify-memory-columns`.** Two data-integrity defects, one PR. 589 tests
+green, `ruff` + `black` clean.
+
+1. **The column list had drifted into four private copies.** `storage.py` and
+   `context.py` carried `pinned`; `search_common.py` and `portability.py` did
+   not. Nothing failed loudly, because a short list still parses and
+   `Memory(**row)` still constructs - the field simply took its default. So
+   every search path reported a confident `pinned=False` for genuinely pinned
+   memories, and `memory_export` dropped the flag outright. Measured against the
+   live brain: 7 pinned rows in `crow`, `0` surviving an export. Export/import
+   is the documented backup path, so restoring a backup silently unpinned
+   exactly the memories marked never-lose-these.
+
+   Now declared once in `models.py` as `MEMORY_COLUMNS`, with
+   `memory_columns_sql()` / `memory_placeholders_sql()` so an INSERT's VALUES
+   clause is generated from the same tuple as its columns. `pinned` is restored
+   on import, and an export written before the column existed still imports
+   (absent means `0`, since `pinned` is `NOT NULL`).
+
+2. **The pre-migration backup was not WAL-safe.** `_backup_before_migration`
+   used `shutil.copy2`, which copies `memories.db` and leaves `memories.db-wal`
+   behind. Under the real conditions the resulting backup did not even contain
+   the `namespaces` table - the entire schema was still in the WAL. That file is
+   the only safety net if a migration goes wrong. Now uses `conn.backup()`,
+   which is WAL-aware and consistent under concurrent writers (two sessions
+   sharing a brain is normal here).
+
+   `.ai/standards/02-database.md` **already carried this rule**, written for the
+   manual rehearsal workflow and never applied to the shipped code path. The
+   standard now says so explicitly.
+
+**Guard against the recurrence:** `tests/test_memory_columns.py` holds
+`MEMORY_COLUMNS` against both `Memory`'s fields and the live SQLite schema, so a
+migration that adds a column without teaching the readers fails CI. Verified by
+deliberately removing `pinned` from the tuple: 4 tests go red, structural and
+behavioural.
+
+## Shipped to `main`, awaiting release in v0.18.0
+
+**Bootstrap `--force` data loss - PR #53, merged `2646666` (2026-08-21).** Three
 defects in the `bootstrap` package, one PR. All three were live in released code
-(v0.14.0 through v0.17.0, on PyPI). 581 tests green, `ruff` + `black` clean.
+(v0.14.0 through v0.17.0, on PyPI); the fix reaches users when v0.18.0 ships.
+581 tests green at merge, `ruff` + `black` clean, 9/9 CI.
 
 1. **`_write_file` lost its backup net the moment the net first worked.** The
    `.bak` was written only when the target _lacked_ `gingugu-init:managed-file`,
@@ -34,11 +75,15 @@ defects in the `bootstrap` package, one PR. All three were live in released code
    deliberately not opt-in) and a test now fails if any shipped surface names it
    again.
 
-**Worth carrying beyond this PR:** `test_reforce_over_our_own_file_makes_no_backup`
+**Worth carrying beyond that PR:** `test_reforce_over_our_own_file_makes_no_backup`
 asserted defect (1) _was correct_ and was green in CI the entire time the
 behavior was destroying files. 575 passing tests were never evidence that path
 was safe - the suite was holding the bug in place. The test is inverted, not
 deleted. See `.ai/standards/01-code-and-testing.md`.
+
+Both of these PRs fixed a **silent** defect that a green suite was compatible
+with: one because a test asserted it, one because a short column list still
+parses. Neither would have been caught by running more of the same tests.
 
 ## Shipped in v0.17.0 (2026-08-14)
 
