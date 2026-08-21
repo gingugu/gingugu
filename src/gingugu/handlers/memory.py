@@ -1,7 +1,7 @@
-"""Memory mutation tool handlers: store, update, forget.
+"""Memory mutation tool handlers: store and update.
 
 The write side of the memory surface. Read handlers (recall, context) live in
-``recall.py``.
+``recall.py``; the destructive one (``memory_forget``) in ``forget.py``.
 
 All handlers wrap their work in try/except and return structured dict
 responses — the MCP server must never crash the client flow.
@@ -17,11 +17,10 @@ from .helpers import (
     _check_pin_budget,
     _coerce_metadata,
     _err,
-    _find_similar,
     _memory_summary,
     _split_csv,
-    _suggest_relations,
 )
+from .hints import find_similar, suggest_relations
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +57,11 @@ def register(mcp, ctx: ServerContext) -> None:
         namespace whose content/title overlap strongly with this one — a
         non-blocking hint so the caller can choose to update/relate/consolidate
         instead of accumulating near-duplicates. Disable for bulk imports.
+        **Usually EMPTY, and that is the signal working.** Each hit carries
+        ``similarity`` (0-1) and its ``basis``: ``cosine`` over embeddings, or
+        ``lexical`` token overlap when they are unavailable. Unlike a search
+        relevance it has magnitude and is comparable between calls - it says
+        how close the two texts are, not how this candidate ranked.
 
         When ``relation_check`` is True (default), the response also includes a
         ``suggested_relations`` list of up to 3 not-already-linked memories worth
@@ -67,12 +71,15 @@ def register(mcp, ctx: ServerContext) -> None:
         under - and if the honest answer is "they are just both about the same
         area", link nothing. Search already surfaces topical neighbours, so a
         `related_to` edge that says only "these are similar" adds no retrieval
-        signal and competes with the directional edges that do. Distinct from
-        ``similar_memories``: those are merge candidates.
+        signal and competes with the directional edges that do. Same gate as
+        above, set softer; ``similar_memories`` are merge candidates instead.
 
         Both hint lists are COMPACT: title plus a ~200-char ``summary``, never
         full bodies. They are enough to decide whether to merge, link, or move
         on; call ``memory_recall`` when a candidate warrants a closer look.
+        Both carry ``similarity`` + ``basis``, never a search ``score``: these
+        lists are not a ranking of the corpus, they are a measurement against
+        what you just wrote.
 
         The response may also carry ``contradicted_memories``: older memories
         whose state claim THIS memory just resolved. Recording "PR #10 merged"
@@ -111,7 +118,7 @@ def register(mcp, ctx: ServerContext) -> None:
             ns_name = ctx.namespaces.resolve_name(namespace)
             ns = ctx.namespaces.get_or_create(ns_name)
             similar = (
-                _find_similar(ctx, namespace_id=ns.id, title=title, content=content)
+                find_similar(ctx, namespace_id=ns.id, title=title, content=content)
                 if dedupe_check
                 else []
             )
@@ -126,7 +133,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 tags=_split_csv(tags),
             )
             relations = (
-                _suggest_relations(
+                suggest_relations(
                     ctx,
                     memory_id=mem.id,
                     namespace_id=ns.id,
@@ -203,7 +210,9 @@ def register(mcp, ctx: ServerContext) -> None:
         directional fact (supersedes / contradicts / caused_by / parent_of /
         child_of) justifies an edge. Tag-only or confidence-only updates skip the
         check since the matching surface didn't change. Entries are compact
-        (title + a ~200-char ``summary``), as in ``memory_store``.
+        (title + a ~200-char ``summary``) and carry ``similarity`` + ``basis``,
+        as in ``memory_store``; an empty list means nothing was close enough to
+        be worth your time.
 
         ``pinned`` marks a memory as ALWAYS loaded by memory_context for its
         namespace, ahead of and exempt from ranking, in addition to ``limit``.
@@ -255,7 +264,7 @@ def register(mcp, ctx: ServerContext) -> None:
                     memory_id, _split_csv(resolve_claims)
                 )
             if relation_check and (title is not None or content is not None):
-                response["suggested_relations"] = _suggest_relations(
+                response["suggested_relations"] = suggest_relations(
                     ctx,
                     memory_id=mem.id,
                     namespace_id=mem.namespace_id,
@@ -272,31 +281,3 @@ def register(mcp, ctx: ServerContext) -> None:
         except Exception as exc:
             logger.exception("memory_update failed")
             return _err(f"memory_update failed: {exc}")
-
-    @mcp.tool()
-    def memory_forget(
-        memory_id: str,
-        hard_delete: bool = False,
-        reason: str | None = None,
-    ) -> dict:
-        """Mark a memory as no longer valid or permanently remove it. Default behavior
-        (hard_delete=False) sets confidence to "deprecated", keeping the memory as a
-        historical record but excluding it from future search results by default. Use
-        hard_delete=True only when the memory must be permanently erased (e.g. sensitive
-        data stored by mistake). Prefer deprecation over deletion when in doubt.
-
-        ``reason`` is optional but recommended for audit trail — recorded in logs."""
-        try:
-            if hard_delete:
-                deleted = ctx.store.delete(memory_id)
-                if not deleted:
-                    return _err(f"memory {memory_id!r} not found")
-                return {"ok": True, "memory_id": memory_id, "action": "hard_deleted"}
-            mem = ctx.store.update(memory_id, confidence=Confidence.DEPRECATED)
-            if mem is None:
-                return _err(f"memory {memory_id!r} not found")
-            logger.info("Deprecated memory %s (reason=%s)", memory_id, reason)
-            return {"ok": True, "memory_id": memory_id, "action": "deprecated"}
-        except Exception as exc:
-            logger.exception("memory_forget failed")
-            return _err(f"memory_forget failed: {exc}")

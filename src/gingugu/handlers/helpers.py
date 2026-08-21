@@ -6,7 +6,6 @@ import json
 import logging
 
 from .. import decay, staleness
-from .. import search as search_mod
 from ..context import PINNED_HARD_CAP
 from ..models import Confidence, Memory, Namespace
 from ..relations import RelationManager
@@ -162,7 +161,7 @@ _COMPACT_CONTENT_CHARS = 200
 def _compact_summary(mem: Memory) -> dict:
     """Lightweight variant of ``_memory_summary`` for ``compact`` reads
     (memory_context, memory_recall, memory_search) and for the write-time
-    hints (``_find_similar``, ``_suggest_relations``), which are always
+    hints (``hints.find_similar``, ``hints.suggest_relations``), which are always
     compact regardless of any caller flag — they are unasked-for extras on a
     write, so they must stay cheap.
 
@@ -265,129 +264,3 @@ def _spread_activation(ctx: ServerContext, seed_ids: list[str]) -> int:
     except Exception:  # never break a read on a best-effort reactivation
         logger.warning("spreading activation failed", exc_info=True)
         return 0
-
-
-# Minimum fused-relevance score for a memory to be surfaced as a near-duplicate
-# of an incoming ``memory_store`` payload. 0.5 keeps the signal-to-noise honest:
-# trivially-shared tokens (e.g. "the") fall below it while genuine title/topic
-# overlap clears it. Tunable from feel as we accumulate data.
-_DEDUPE_MIN_SCORE = 0.5
-_DEDUPE_LIMIT = 3
-
-# Minimum fused-relevance score for a memory to be surfaced as a relation
-# candidate. Softer than ``_DEDUPE_MIN_SCORE`` because these are only
-# *candidates to examine*, not a claim that an edge exists.
-#
-# Similarity FINDS the candidate; it is never itself the reason to link. The
-# hybrid index already knows which memories are topically adjacent, so an edge
-# that encodes only "these two are similar" duplicates the index at the
-# caller's expense. What earns an edge is a directional fact similarity cannot
-# see: supersedes, contradicts, caused_by, parent_of/child_of. Measured
-# 2026-08-04, before this framing landed: 69% of a 1369-edge real brain was
-# `related_to`, and because spreading activation is type-blind those edges were
-# out-competing the 31% that carried real signal for a per-seed budget of 3.
-_RELATION_MIN_SCORE = 0.3
-_RELATION_LIMIT = 3
-
-
-def _find_similar(
-    ctx: ServerContext,
-    *,
-    namespace_id: str,
-    title: str,
-    content: str,
-) -> list[dict]:
-    """Return up to ``_DEDUPE_LIMIT`` existing memories in ``namespace_id`` that
-    look like near-duplicates of a new (``title``, ``content``) payload.
-
-    Uses the existing hybrid BM25+semantic search over the namespace and keeps
-    hits above ``_DEDUPE_MIN_SCORE``. Best-effort: any failure is swallowed so
-    the store itself never breaks on a dedup-hint error.
-
-    Hits are ``_compact_summary`` — see that function and ``_suggest_relations``
-    for why hints never carry full bodies.
-    """
-    query = f"{title} {content}".strip()
-    if not query:
-        return []
-    try:
-        hits = search_mod.search(
-            ctx.conn,
-            query=query,
-            namespace_id=namespace_id,
-            limit=_DEDUPE_LIMIT,
-            embedder=ctx.store.embedder,
-        )
-    except Exception:  # never block a store on a hint failure
-        logger.warning("dedupe hint search failed", exc_info=True)
-        return []
-    return [_compact_summary(m) for m in hits if (m.score or 0.0) >= _DEDUPE_MIN_SCORE]
-
-
-def _suggest_relations(
-    ctx: ServerContext,
-    *,
-    memory_id: str | None,
-    namespace_id: str,
-    title: str,
-    content: str,
-    exclude_ids: set[str] | None = None,
-) -> list[dict]:
-    """Return up to ``_RELATION_LIMIT`` existing memories in ``namespace_id``
-    worth EXAMINING for a directional relationship to a (``title``,
-    ``content``) payload.
-
-    These are candidates, not verdicts. Topical overlap is how they are found,
-    never a reason in itself to link them - see ``_RELATION_MIN_SCORE`` for why
-    a similarity-only edge is a net loss. The caller's job is to ask whether one
-    of these is the memory the new one *supersedes*, *contradicts*, was *caused
-    by*, or belongs under; if the honest answer is "no, they are just both about
-    deploys", the correct action is to link nothing.
-
-    Excludes ``memory_id`` itself, any ids in ``exclude_ids`` (typically the
-    already-surfaced ``similar_memories``), and any memory already linked to
-    ``memory_id`` via an existing relation (either direction). Keeps hits above
-    ``_RELATION_MIN_SCORE``. Best-effort: any failure is swallowed so the store
-    itself never breaks on a hint error.
-
-    Hits are ``_compact_summary``. A hint is a pointer, not a payload: the
-    caller only needs enough to decide whether to merge, link, or ignore, and
-    ``memory_recall`` is one call away when the answer is "look closer". Full
-    bodies here cost the caller its context budget on every single write —
-    six of them (three similar + three suggested) on a store that may itself
-    be one line long.
-    """
-    query = f"{title} {content}".strip()
-    if not query:
-        return []
-    skip: set[str] = set(exclude_ids or set())
-    if memory_id:
-        skip.add(memory_id)
-        try:
-            for other_id in RelationManager(ctx.conn).related_ids(memory_id):
-                skip.add(other_id)
-        except Exception:
-            logger.warning("relation lookup failed in suggestion hint", exc_info=True)
-    try:
-        # Pull a few extra so post-filtering by skip-set still leaves a useful
-        # number of candidates.
-        hits = search_mod.search(
-            ctx.conn,
-            query=query,
-            namespace_id=namespace_id,
-            limit=_RELATION_LIMIT + len(skip),
-            embedder=ctx.store.embedder,
-        )
-    except Exception:
-        logger.warning("relation hint search failed", exc_info=True)
-        return []
-    out: list[dict] = []
-    for mem in hits:
-        if mem.id in skip:
-            continue
-        if (mem.score or 0.0) < _RELATION_MIN_SCORE:
-            continue
-        out.append(_compact_summary(mem))
-        if len(out) >= _RELATION_LIMIT:
-            break
-    return out
