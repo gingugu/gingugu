@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`memory_context` now presents memories in the order it selected them.** The
+  pinned tier was served last on every call: the selection layer prepends pins
+  correctly, then the handler re-sorted the merged result by composite score,
+  and a pin carries no score by design - so every pin collapsed to zero and sank
+  to the bottom. Measured on a real store with a two-namespace load, **0 of 8**
+  pins landed in the top 8; they occupied positions 20-27 of 28. All 8 now lead
+  the payload.
+
+  The same sort also ranked buckets against each other on a number they do not
+  share. Only the task bucket carries a real search relevance; the recency and
+  cross-namespace buckets carry a fixed placeholder, because they have no query
+  to be relevant to. The recency quota would guarantee the freshest memory a
+  slot and the sort would then show it below every task hit, which is the same
+  as not guaranteeing it.
+
+  Selection order and presentation order are now separate decisions. Quotas
+  still fill recency first, which is what prevents eviction when `limit` is
+  contended; the payload is then emitted by bucket membership - task hits first
+  (the caller asked a question), then recency, then cross-namespace, then the
+  score-ordered backfill - with pins ahead of all of it. Multi-namespace calls
+  no longer sort globally either: composite scores are not comparable across
+  namespaces, so each namespace's pins lead and the ranked tails interleave by
+  rank position.
+
 - **`sort_by` now sorts the corpus instead of a pool picked on another axis.**
   `memory_search(sort_by="created")` returned the newest rows *of a candidate
   pool* that had already been truncated by relevance (with a query) or by

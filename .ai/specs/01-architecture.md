@@ -138,6 +138,15 @@ AI client (Claude Code / Cursor / Windsurf / …)
   load ahead of the ranked set and exempt from it, additive to `limit` and
   capped at 20 per namespace - the tier for rules that must never be missing,
   which is a different question from what ranking answers.
+- **Selection order and presentation order are separate decisions** in
+  `memory_context`, and neither one re-sorts by composite score. Quotas are
+  filled recency-first (so a contended `limit` cannot evict the "where we left
+  off" memory); the payload is then emitted by bucket membership - task hits,
+  recency, cross-namespace, backfill - with pins ahead of all of it. The
+  composite is not comparable across those buckets: only the task bucket
+  carries a real search relevance, the others carry a `relevance=0.5`
+  placeholder, and pins carry no score at all. Sorting the payload on it sank
+  every pin to the bottom.
 - `memory_search` is the precision path: explicit filters (tags, type, date,
   confidence), sort order, and exact fetch-by-`ids` (requested order,
   deprecated included, `missing` reported) - the companion to

@@ -33,6 +33,45 @@ from .helpers import (
 logger = logging.getLogger(__name__)
 
 
+def _merge_namespace_context(
+    pins: list[Memory],
+    tails: list[list[Memory]],
+    best: dict[str, Memory],
+) -> list[Memory]:
+    """Merge per-namespace context loads without destroying their order.
+
+    ``build_context`` has already ordered each namespace: pins, then a
+    quota-selected ranked tail. This preserves both, because composite scores
+    are not comparable *across* namespaces - corpora differ in size, access
+    volume and age, so the same number means something different in each - and
+    they are not comparable across buckets *within* one either, since only the
+    task bucket carries a real search relevance. Sorting the merged set by that
+    number ranks memories against each other on a scale none of them share.
+
+    So: every namespace's pins first, then the ranked tails interleaved by rank
+    position. Interleaving is what keeps a multi-namespace load honest - plain
+    concatenation would bury the second namespace's freshest memory beneath the
+    first namespace's entire list.
+    """
+    out: list[Memory] = []
+    seen: set[str] = set()
+
+    def emit(mem: Memory) -> None:
+        # A memory surfacing in two namespaces is emitted once, at its earliest
+        # position, using whichever instance won de-duplication.
+        if mem.id not in seen:
+            seen.add(mem.id)
+            out.append(best.get(mem.id, mem))
+
+    for mem in pins:
+        emit(mem)
+    for rank in range(max((len(t) for t in tails), default=0)):
+        for tail in tails:
+            if rank < len(tail):
+                emit(tail[rank])
+    return out
+
+
 def register(mcp, ctx: ServerContext) -> None:
     @mcp.tool()
     def memory_recall(
@@ -173,14 +212,18 @@ def register(mcp, ctx: ServerContext) -> None:
 
             # Load each namespace, de-duplicating across them: a memory that
             # surfaces in several loads (typically via the cross-namespace
-            # pattern bucket) keeps its highest-scoring instance.
+            # pattern bucket) keeps its highest-scoring instance. De-dup decides
+            # which *instance* survives, never where it sits - ordering is the
+            # merge's job below.
             best: dict[str, Memory] = {}
+            pins: list[Memory] = []
+            tails: list[list[Memory]] = []
             loaded_total = 0
             for name in ns_names:
                 # Session start in a fresh workspace is the one read that should
                 # bootstrap its namespace, so get_or_create is intentional here.
                 ns = ctx.namespaces.get_or_create(name)
-                for mem in context_mod.build_context(
+                loaded = context_mod.build_context(
                     ctx.conn,
                     namespace_id=ns.id,
                     task_hint=task_hint,
@@ -188,13 +231,22 @@ def register(mcp, ctx: ServerContext) -> None:
                     weights=ctx.config.weights,
                     decay_lambda=ctx.config.decay_lambda,
                     embedder=ctx.store.embedder,
-                ):
-                    loaded_total += 1
+                )
+                loaded_total += len(loaded)
+                # build_context prepends this namespace's own pins. A memory
+                # pinned in a *different* namespace can also reach the ranked
+                # tail via the cross-namespace bucket, so match on namespace_id
+                # too rather than trusting the flag alone.
+                ns_pins = [m for m in loaded if m.pinned and m.namespace_id == ns.id]
+                pin_ids = {m.id for m in ns_pins}
+                pins.extend(ns_pins)
+                tails.append([m for m in loaded if m.id not in pin_ids])
+                for mem in loaded:
                     current = best.get(mem.id)
                     if current is None or (mem.score or 0.0) > (current.score or 0.0):
                         best[mem.id] = mem
 
-            results = sorted(best.values(), key=lambda m: m.score or 0.0, reverse=True)
+            results = _merge_namespace_context(pins, tails, best)
             ctx.store.load_tags(results)
             seed_ids = [m.id for m in results]
             # A context load is a protocol-driven read, not a real access:
