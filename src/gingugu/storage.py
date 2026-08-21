@@ -349,11 +349,7 @@ class MemoryStore:
 
     # --- Embeddings ---------------------------------------------------------
 
-    @staticmethod
-    def _embedding_input(title: str, content: str) -> str:
-        """The text fed into the embedder. Title carries strong signal so we
-        prepend it — fastembed's BGE models handle short prefixes well."""
-        return f"{title}\n\n{content}"
+    _embedding_input = staticmethod(emb.embedding_input)
 
     def _persist_embedding(self, memory_id: str, title: str, content: str) -> None:
         """Encode the (title, content) tuple and upsert into memory_embeddings.

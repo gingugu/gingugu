@@ -13,10 +13,39 @@ memory_store(content, title, type, namespace, tags, confidence)
                                       suggested_relations[], contradicted_memories[]? }
 ```
 
-`similar_memories` (score ≥ 0.5) = merge candidates. `suggested_relations`
-(score ≥ 0.3, excludes self + already-linked + items already in
-`similar_memories`) = memories to **examine for a directional relationship**.
-Both are hints; neither blocks the write.
+`similar_memories` = merge candidates. `suggested_relations` (excludes self +
+already-linked + items already in `similar_memories`) = memories to **examine
+for a directional relationship**. Both are hints; neither blocks the write.
+
+Both are **two-stage**, and the stages answer different questions:
+
+1. **Find** with hybrid retrieval (`search.py`). RRF fusion is good at "what is
+   nearest".
+2. **Adjudicate** with an absolute measure (`similarity.py`) and gate on that:
+   cosine over the stored embeddings, or token Jaccard when embeddings are
+   unavailable. Each hit reports `similarity` + the `basis` it was measured on,
+   and no retrieval `score`.
+
+Stage 2 is not optional garnish. The fused RRF relevance is a function of a
+candidate's **rank** in the pools, normalized so rank 1 in both maps to 1.0,
+and something is always rank 1, so the top hit trended toward 1.0 for every
+payload ever written, while both gates (0.5 and 0.3) sat below what the
+arithmetic could even produce. Measured on a 1,423-memory brain: the payload
+"Lunch was a tuna sandwich" scored **0.9262** against a corpus of engineering
+notes, the identical score two other unrelated payloads got in a different
+namespace. The practical cost was three merge candidates and three relation
+candidates on **every** store, each needing a manual read to dismiss.
+
+Cutoffs are calibrated, not guessed: 228 `supersedes` pairs as positives
+against 7,688 random same-namespace pairs. Cosine `0.80` and Jaccard `0.15` sit
+at the same operating point (~8.5% of random pairs admitted, ~85% of genuine
+near-duplicates kept), so turning embeddings off changes the instrument's
+precision but not the meaning of the gate. Relations use a softer `0.72`/`0.10`:
+they are candidates to examine, not merge proposals. Do not port these numbers
+to another corpus unexamined; BGE cosine does not bottom out near zero, and two
+unrelated memories from one brain sit around 0.71 simply from shared register.
+
+An empty hint list is the **common** case and the signal working.
 
 `suggested_relations` is deliberately _not_ a link list. Overlap is how a
 candidate is found; what justifies an edge is a fact similarity cannot see

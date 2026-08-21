@@ -4,8 +4,72 @@ _Last updated: 2026-08-21_
 
 ## In Flight
 
-**`memory_context` presents what it selected, instead of re-sorting it -
-`fix/context-presentation-ordering`.** 619 tests green (was 614), `ruff` +
+**Write-time hints report an absolute similarity, not a rank artifact -
+`fix/dedupe-hint-absolute-similarity`.** 627 tests green (was 619), `ruff` +
+`black` clean.
+
+`similar_memories` and `suggested_relations` reported the fused RRF relevance
+from `search()`. That number is a function of a candidate's *rank* in the BM25
+and semantic pools, normalized so rank 1 in both maps to 1.0. Something is
+always rank 1, so the top hit trended toward 1.0 for every payload ever
+written, and both gates - 0.5 for merge candidates, 0.3 for relation candidates
+- sat below what the arithmetic could even produce. Neither ever rejected
+anything: **every store returned six candidates**, each costing a read to
+dismiss.
+
+Measured on a read-only copy of the live brain (1,423 embedded memories), the
+payload "Lunch was a tuna sandwich" scored **0.9262** against a corpus of
+engineering notes. Two other unrelated payloads, one of them in a different
+namespace, scored 0.9262 as well - identical to four decimals, because all
+three landed on the same rank pair. A genuine paraphrase of an existing memory
+scored 0.9841. The entire usable range was 0.058 wide; cosine separates the
+same pairs by 0.33.
+
+**The decision worth flagging:** retrieval and adjudication are now separate
+stages, and the split is the fix. RRF is kept for *finding* candidates, which
+is what it is good at. An absolute measure (`similarity.py`) then rescores the
+survivors and owns the gate. Hits report `similarity` + `basis` and no longer
+carry a retrieval `score` - two numbers under one payload, one of them
+meaningless, is worse than one number that means what it says. This is a
+visible change to what the tool returns.
+
+**Cutoffs are calibrated, not chosen by feel.** Positives: 228 `supersedes`
+pairs from the live brain. Negatives: 7,688 random same-namespace pairs. Cosine
+`0.80` admits 8.5% of random pairs while keeping 84.7% of genuine
+near-duplicates; token Jaccard `0.15` lands at 8.7% / 84.2%, the same operating
+point in the other instrument - so turning embeddings off changes precision,
+not the meaning of the gate. Relations sit softer at `0.72`/`0.10`. The
+calibration is corpus-specific on purpose: BGE cosine does not bottom out near
+zero, and two unrelated memories from one brain sit around 0.71 from shared
+register alone.
+
+**Effect, measured end to end on the same five payloads:** hints emitted across
+five stores fell from **30 to 10**. All three nonsense payloads now return
+empty lists; the real duplicate still surfaces all three of its hits.
+
+**Regression evidence:** `tests/test_hint_similarity.py` (7 tests). The two a
+rank-based score cannot pass are `test_unrelated_payload_gets_no_hints` (an
+unrelated payload gets an empty list even though retrieval still hands over its
+best candidates) and `test_similarity_does_not_depend_on_the_rest_of_the_pool`
+(the same pair reports the same number alone and buried in a crowded pool).
+`test_hints_do_not_leak_a_retrieval_score` pins the payload change.
+`tests/test_suggest_relations.py` was rewritten: it used to stamp `mem.score`
+on a fixture to drive the gate, which now tests nothing, so candidates pass or
+fail on their text instead.
+
+**Structural change:** `helpers.py` was 393 lines, well over the 300 limit, so
+both hint builders moved to `handlers/hints.py` (helpers drops to 266). The
+tool-surface docs the fix requires pushed `memory.py` from 302 to 313, so
+`memory_forget` moved to `handlers/forget.py` - a real seam, since it is the
+only tool in the package that can remove a memory. Every touched module is now
+under 300. `embeddings.py` gained `embedding_input()`, the single text recipe
+the write path and the compare path must share; a drift between them would not
+raise, it would quietly compare vectors built from different text.
+
+## Recently merged
+
+**`memory_context` presents what it selected, instead of re-sorting it - PR #57,
+merged `4169980` (2026-08-21).** 619 tests green (was 614), `ruff` +
 `black` clean.
 
 Two defects in the same presentation code, one PR. `context.py` prepended the

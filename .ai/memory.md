@@ -59,7 +59,8 @@
 | `search_common.py` | Shared SQL columns + WHERE-fragment builders |
 | `search_filters.py` | `advanced_search`: picks the retrieval strategy `sort_by` asks for - the hybrid engine, or one of the ordered listings |
 | `search_listing.py` | The ordered-retrieval strategies: by column, by composite score, by FTS match set, by exact id. Each selects rows in the order it returns them; none re-sorts a pool truncated on another axis |
-| `embeddings.py` | Semantic vector generation |
+| `embeddings.py` | Semantic vector generation; owns `embedding_input()`, the one text recipe the write path and any compare path must share |
+| `similarity.py` | ABSOLUTE payload-vs-memory similarity for the write-time hints: cosine, or token Jaccard without embeddings. Cutoffs are calibrated against a real corpus, never inherited from a ranking score |
 | `context.py` | Session priming (`memory_context`): the pinned tier + three quota'd intent buckets, plus spreading activation |
 | `relations.py` | Typed graph edges + hub-dampened 1-hop traversal (`dampened_neighbour_ids`) and enumeration (`list_edges`) |
 | `relation_repair.py` | Edge repair mixed into `RelationManager`: `retype_relation`, `reverse_relation`, `delete_relation`, `delete_edges`. Every op is an UPDATE/DELETE on the existing row, so id / `created_at` / metadata survive a correction |
@@ -75,7 +76,7 @@
 | `namespaces.py` | Namespace CRUD; a `default_repo` change re-derives that namespace's claims (best-effort) so the declaration is not inert |
 | `credentials.py` | OS-keychain credential vault |
 | `portability.py` | Export / import a namespace |
-| `handlers/` | MCP tool handlers: `memory.py` (store/update/forget), `recall.py` (recall/context), `search.py`, `relations.py` (relate/edges/unrelate) with `relation_ops.py` (batch parsing + per-edge dispatch), `consolidate.py`, `admin.py`, `credentials.py`, `helpers.py` |
+| `handlers/` | MCP tool handlers: `memory.py` (store/update), `forget.py` (the one destructive tool), `hints.py` (write-time similar/relation hints), `recall.py` (recall/context), `search.py`, `relations.py` (relate/edges/unrelate) with `relation_ops.py` (batch parsing + per-edge dispatch), `consolidate.py`, `admin.py`, `credentials.py`, `helpers.py` |
 
 Dev-only tooling at the repo root (never shipped in the wheel): **`bench/`** —
 golden-set retrieval benchmark (Recall@K, MRR, precision, token cost;
@@ -98,9 +99,13 @@ Run: `uv run python -m bench [--db <real-brain.db>]`.
   instance runs with it `false` to omit the vault.
 
 `memory_store` / `memory_update` return non-blocking `similar_memories` (merge
-candidates, score ≥ 0.5) and `suggested_relations` (score ≥ 0.3) hints. The
-latter are candidates to **examine for a directional relationship**, not links
-to create: similarity is how they are found, never the reason to wire them.
+candidates) and `suggested_relations` hints. The latter are candidates to
+**examine for a directional relationship**, not links to create: similarity is
+how they are found, never the reason to wire them. Both are found by hybrid
+retrieval and then gated on an **absolute** similarity (`similarity.py`: cosine
+over embeddings, or token Jaccard without them), reported as `similarity` +
+`basis`. A retrieval score could not do this job: it ranks within a pool, so its
+best hit approaches 1.0 for any payload. An empty list is the common case.
 Both are **always compact** — title + a ~200-char `summary`, never full bodies,
 regardless of any caller flag. They are unsolicited extras on a write, so they
 stay cheap; `memory_recall` fetches the body when a candidate matters.

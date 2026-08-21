@@ -268,6 +268,16 @@ AI client (Claude Code / Cursor / Windsurf / …)
   always compact: an unsolicited extra attached to a write must not cost more
   context than the write itself, so a hint carries a pointer (title + ~200-char
   excerpt) and leaves the body to `memory_recall`.
+- **Retrieval finds; an absolute measure adjudicates.** A ranking score answers
+  "which of these is nearest", and it cannot answer "is this one actually
+  close" - it is normalized against the pool, so its best hit approaches 1.0
+  whether or not anything relevant exists. Any surface that reports a number to
+  a caller as though it carried magnitude therefore rescores with something
+  absolute (`similarity.py`: cosine, or token Jaccard without embeddings) and
+  gates on that. The write-time hints shipped in v0.3.8 reporting the fused RRF
+  rank score, which made both their thresholds unreachable and fired six
+  candidates at every store. Cutoffs are calibrated against a real corpus, and
+  carry a `basis` so the caller knows which instrument produced the number.
 - **An edge must encode what search cannot infer.** Recall ranks by hybrid
   BM25 + semantic score, so topical adjacency is already free; relations exist
   to record direction and time (`supersedes`, `contradicts`, `caused_by`,

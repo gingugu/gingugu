@@ -38,6 +38,7 @@ Gingugu instance serves Windsurf and Claude Code against one DB.
 | `memory_namespaces` | Namespace CRUD + `default_repo` (what a bare "PR #12" means here; `""` = not a repo) | ✅ Shipped |
 | `credential_*` | OS-keychain secret vault | ✅ Shipped |
 | `suggested_relations` hint | Surface candidates to examine for a _directional_ edge at store time; compact payload (title + ~200-char summary) | ✅ Shipped (v0.3.8; compacted v0.12.0; reframed from "link these" to "examine these" unreleased) |
+| Write-time hints report an absolute `similarity` | Both hint lists are gated on cosine (or token Jaccard without embeddings) instead of the retrieval rank score, and report `similarity` + `basis` rather than `score`. An unrelated payload now returns an empty list instead of three candidates | ✅ Shipped (unreleased) |
 | Relation discipline | Guidance ranks `supersedes`/`contradicts`/`caused_by`/`parent_of` first; `related_to` is a fallback, not a default | ✅ Shipped (unreleased) |
 | Pinned memories | A per-namespace tier that always loads, exempt from ranking; additive to `limit`, capped at 20. Reported by every read path and preserved across an export/import round trip | ✅ Shipped (v0.15.0; correct reporting + round-trip unreleased) |
 | Relation-graph metrics | `memory_stats.graph`: measures the orphan/low-signal/over-cap conditions that degrade retrieval | ✅ Shipped (unreleased) |

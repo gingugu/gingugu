@@ -70,22 +70,26 @@ async def test_similar_memories_are_compact(server) -> None:
 
 
 def test_suggested_relations_are_compact(db, store, namespaces, config, monkeypatch) -> None:
-    """Unit level, mocked scores — same reason as ``test_suggest_relations``:
+    """Unit level with retrieval mocked - same reason as ``test_suggest_relations``:
     real hybrid scores aren't deterministic enough to pin a relation hit at
     the tool surface. ``memory_store`` and ``memory_update`` share this one
     helper, so covering it here covers both.
+
+    The candidate clears the gate on its TEXT, not a stamped score: the hint no
+    longer reads the retrieval score at all.
     """
-    from gingugu.handlers import ServerContext, helpers
-    from gingugu.handlers.helpers import _RELATION_MIN_SCORE, _suggest_relations
+    from gingugu.handlers import ServerContext, hints
+    from gingugu.handlers.hints import suggest_relations
     from gingugu.models import MemoryType
 
     ns_id = namespaces.get_or_create("hints-unit").id
     hit = store.create(namespace_id=ns_id, type=MemoryType.FACT, title="candidate", content=LONG)
-    hit.score = _RELATION_MIN_SCORE + 0.1
-    monkeypatch.setattr(helpers.search_mod, "search", lambda *a, **k: [hit])
+    monkeypatch.setattr(hints.search_mod, "search", lambda *a, **k: [hit])
 
     ctx = ServerContext(config=config, store=store, namespaces=namespaces, conn=db.conn)
-    out = _suggest_relations(ctx, memory_id=None, namespace_id=ns_id, title="t", content="c")
+    out = suggest_relations(
+        ctx, memory_id=None, namespace_id=ns_id, title="candidate", content=LONG
+    )
 
     assert [m["id"] for m in out] == [hit.id]
     _assert_compact_hint(out[0])
