@@ -66,6 +66,12 @@
   the fix, watch it go red, restore it. Cheap, and the alternative is a green
   suite that guards nothing - which is exactly how the `--force` backup defect
   survived several releases.
+- **A test that legitimately passes against the old code is a characterization
+  test - label it.** Some tests in a fix's suite pin behaviour the fix
+  introduces rather than a defect it removes, and those cannot go red on the old
+  code. That is fine, but it must be written down in the test itself, otherwise
+  the next reader counts it among the guards and the suite looks stronger than
+  it is. Say which ones bite and which ones describe.
 
 ## Docs in lockstep
 

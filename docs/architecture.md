@@ -1160,7 +1160,8 @@ src/gingugu/
 ├── storage.py            # CRUD operations for memories
 ├── search.py             # True hybrid engine: BM25 + semantic pools, RRF fusion
 ├── search_common.py      # Shared SQL columns + WHERE-fragment builders
-├── search_filters.py     # advanced_search: filtered search + metadata listing
+├── search_filters.py     # advanced_search: picks the strategy sort_by asks for
+├── search_listing.py     # ordered retrieval: by column, by score, by match set, by id
 ├── relations.py          # Relationship management
 ├── decay.py              # Decay scoring + staleness detection
 ├── consolidation.py      # Merge/summarize/deduplicate logic

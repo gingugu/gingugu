@@ -129,6 +129,29 @@ memory_recall(query, namespace | "ns1,ns2,…", filters)
     instead of looking 7 weeks stale
 ```
 
+`memory_search`'s `sort_by` selects the retrieval path rather than reordering
+one:
+
+```
+sort_by = relevance | decay_score
+  → with a query:    search.py, the hybrid engine above
+  → without a query: score every matching row (six columns, no bodies), take
+                     the top `limit`, then fetch those bodies by id
+sort_by = created | accessed
+  → with a query:    the FTS match set, ORDER BY the column, LIMIT in SQL -
+                     no BM25 ranking and no semantic cohort, because a date
+                     asks what relevance cannot answer. No `score` returned
+  → without a query: ORDER BY the column, LIMIT in SQL
+ids = "a,b,c"
+  → exact fetch, requested order, deprecated included, `missing` reported
+```
+
+Every path selects its rows in the order it returns them. Sorting a pool that
+was truncated on a different axis reorders a biased sample rather than the
+corpus, so a row that lost the earlier cut is unreachable however well it
+matches the sort - which is why `sort_by="created"` used to return neither the
+newest rows nor a stable answer as `limit` changed. Ties break on `id`.
+
 `memory_search` takes the same namespace forms (single, CSV, or omitted =
 all namespaces). Unknown namespaces error and name the missing one(s) — reads
 never mint namespaces. Single-namespace-only tools return a comma-hint when
