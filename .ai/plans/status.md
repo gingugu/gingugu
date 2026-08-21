@@ -4,8 +4,55 @@ _Last updated: 2026-08-21_
 
 ## In Flight
 
-**`sort_by` sorts the corpus, not a pool truncated on another axis -
-`fix/sort-by-truncation`.** 614 tests green (was 606), `ruff` + `black` clean.
+**`memory_context` presents what it selected, instead of re-sorting it -
+`fix/context-presentation-ordering`.** 618 tests green (was 614), `ruff` +
+`black` clean.
+
+Two defects in the same presentation code, one PR. `context.py` prepended the
+pinned tier correctly and `handlers/recall.py` then sorted the merged result by
+`m.score or 0.0` - and a pin carries no score by design, so every pin sank to
+the bottom of every payload. Measured on a copy of the live brain with a
+`crow,gingugu` load: **0 of 8** pins in the top 8 before, **8 of 8** after. The
+pins were at positions 20-27 of 28.
+
+The same sort also ranked buckets against each other on a number they do not
+share. Only the task bucket has a real search relevance; the recency and
+cross-namespace buckets carry a fixed `relevance=0.5` placeholder, because they
+have no query to be relevant to. So the recency quota would guarantee the
+freshest memory a slot and the sort would then show it below every task hit -
+which is the same as not guaranteeing it.
+
+**The decision worth flagging:** selection order and presentation order are now
+explicitly different questions. Selection still fills recency _first_, because
+that is what prevents eviction under a contended `limit`. Presentation emits by
+bucket _membership_ - task, then recency, then cross-namespace, then the
+score-ordered backfill - so the caller's question is answered at the top and the
+fresh anchor sits right behind it. Membership rather than which quota claimed
+the row: recency is filled first, so a task-relevant memory that is also recent
+was otherwise presented as though it had never matched the query at all. That is
+what `test_context_task_hint_prioritizes` caught, and it was right to.
+
+Multi-namespace merging no longer globally sorts either. Composite scores are
+not comparable _across_ namespaces (different corpora, different access and age
+distributions), so `_merge_namespace_context` puts every namespace's pins first
+and then interleaves the ranked tails by rank position - preserving each
+namespace's internal order without burying the second one's freshest material
+under the first one's entire list.
+
+**Regression evidence:** `tests/test_context_ordering.py` (4 tests), asserting
+POSITION in the payload over the live tool surface - a layer where the existing
+pin tests stopped, since they assert position against `build_context` directly
+and only membership through the handler. Reverted the source with the tests in
+place: **3 of the 4 fail**, reporting the pin at index 5 of 5, both pins at 10
+and 11 in a two-namespace load, and the freshest memory below the guaranteed
+region. The fourth (`test_second_namespace_is_interleaved_not_appended`) passes
+against the old code too and says so in its docstring - the old global sort also
+mixed namespaces, so it guards the replacement merge rather than the defect.
+
+## Shipped to `main`, awaiting release in v0.18.0
+
+**`sort_by` sorts the corpus, not a pool truncated on another axis - PR #56,
+merged `5229dce` (2026-08-21).** 614 tests green at merge, 9/9 CI.
 
 `memory_search(sort_by="created")` returned the newest rows *of a candidate
 pool* that had already been cut by a different ordering: `limit * 4` rows by

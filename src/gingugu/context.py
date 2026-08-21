@@ -17,6 +17,12 @@ Quotas are filled recency-first so a freshly-stored, never-accessed memory
 (the "where we left off" signal) always survives the cut. Any slots left after
 the guaranteed quotas are backfilled from the combined pool by composite score.
 
+Results are returned in the order selection produced them, because the buckets
+are not scored on a comparable scale: only the task bucket has a real search
+relevance, and re-sorting the selected set by composite score would rank a
+guaranteed recency slot below every task hit - undoing the quota that just
+protected it.
+
 Types ``architecture`` and ``decision`` get a +0.1 score boost (disproportionately
 useful at session start).
 
@@ -140,7 +146,7 @@ def build_context(
     ``limit`` slots is taken from each (recency first) so the "where we left
     off" signal can't be evicted by the relevance/access-dominated composite.
     Remaining slots are backfilled from the combined pool by composite score;
-    the final list is presented in composite order.
+    the final list is presented in that selection order, not re-sorted.
 
     Pinned memories are prepended to that result and are **additive to**
     ``limit`` (up to ``PINNED_HARD_CAP``), so the caller may receive more than
@@ -199,10 +205,12 @@ def build_context(
         if mem.type.value in _BOOST_TYPES and mem.score is not None:
             mem.score += _BOOST_AMOUNT
 
-    # Guaranteed-quota selection. Fill recency first — it's the intent the old
-    # score-and-collapse design starved — then task relevance, then cross-ns.
-    selected: list[str] = []
+    # Guaranteed-quota selection. Fill recency FIRST - it's the intent the old
+    # score-and-collapse design starved, and filling it first is what stops a
+    # contended limit from evicting it. Selection order is a survival question;
+    # it is deliberately not the order these are presented in (see below).
     chosen: set[str] = set()
+    backfilled: list[str] = []
 
     def take(bucket: list[Memory], quota: int) -> None:
         taken = 0
@@ -211,7 +219,6 @@ def build_context(
                 return
             if mem.id not in chosen:
                 chosen.add(mem.id)
-                selected.append(mem.id)
                 taken += 1
 
     recent_quota = max(1, math.ceil(limit * _RECENT_RATIO))
@@ -232,11 +239,42 @@ def build_context(
             if len(chosen) >= limit:
                 break
             chosen.add(mem.id)
-            selected.append(mem.id)
+            backfilled.append(mem.id)
 
-    # Present the surfaced set in composite order, pins first. Pins carry no
-    # score by design (they never entered the ranking), so they are prepended
-    # rather than sorted in — a scoreless memory would otherwise sink to the
-    # bottom of a score-ordered list, which is the opposite of what a pin means.
-    ranked = sorted((best[mid] for mid in selected), key=lambda m: m.score or 0.0, reverse=True)
+    # Presentation order, which is a different question from selection order:
+    # answer what was asked first (task), then "where did we leave off"
+    # (recency), then cross-namespace wisdom, then the score-ordered backfill.
+    # With no task_hint the task bucket is empty and recency leads naturally.
+    #
+    # Keyed off bucket MEMBERSHIP, not off which quota happened to claim the
+    # memory: recency is filled first, so a task-relevant memory that is also
+    # recent gets taken by the recency quota and would otherwise be presented as
+    # though it had never matched the query at all.
+    #
+    # Each bucket is emitted in its own native order (search relevance,
+    # last_accessed, access_count), which is the ordering that actually means
+    # something within it.
+    #
+    # Do NOT re-sort this by composite score. The buckets are scored on
+    # incomparable relevance: task hits carry a real search relevance while the
+    # recency and cross-namespace buckets carry the ``relevance=0.5``
+    # placeholder assigned above, which caps them no matter how fresh they are.
+    # A score sort therefore silently undoes the quota that just protected the
+    # recency slot, burying the "where we left off" memory in the tail of a long
+    # payload - it gets its guaranteed slot and is then shown last, which is the
+    # same as not guaranteeing it.
+    #
+    # Pins lead for that reason and one more: they carry no score at all (they
+    # never entered the ranking), so any score-ordered sort sinks them to the
+    # bottom - the exact opposite of what a pin means.
+    selected: list[str] = []
+    seen: set[str] = set()
+    for bucket in (task_bucket, recent_bucket, cross_bucket):
+        for mem in bucket:
+            if mem.id in chosen and mem.id not in seen:
+                seen.add(mem.id)
+                selected.append(mem.id)
+    selected.extend(mid for mid in backfilled if mid not in seen)
+
+    ranked = [best[mid] for mid in selected]
     return [*pinned, *ranked[:limit]]
