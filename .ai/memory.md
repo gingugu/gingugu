@@ -57,7 +57,8 @@
 | `search.py` | True hybrid engine: BM25 pool, RRF fusion, composite re-rank. Ties break on id, never on iteration order |
 | `semantic_pool.py` | The cosine ranking cohort, split out when `search.py` crossed 300 lines. `SEMANTIC_COHORT` / `ENTRANT_CAP` are FIXED constants: sizing them by `limit` made a memory's relevance depend on how many rows the caller asked for |
 | `search_common.py` | Shared SQL columns + WHERE-fragment builders |
-| `search_filters.py` | `advanced_search`: filtered search + metadata-only listing |
+| `search_filters.py` | `advanced_search`: picks the retrieval strategy `sort_by` asks for - the hybrid engine, or one of the ordered listings |
+| `search_listing.py` | The ordered-retrieval strategies: by column, by composite score, by FTS match set, by exact id. Each selects rows in the order it returns them; none re-sorts a pool truncated on another axis |
 | `embeddings.py` | Semantic vector generation |
 | `context.py` | Session priming (`memory_context`): the pinned tier + three quota'd intent buckets, plus spreading activation |
 | `relations.py` | Typed graph edges + hub-dampened 1-hop traversal (`dampened_neighbour_ids`) and enumeration (`list_edges`) |

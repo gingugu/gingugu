@@ -1,38 +1,31 @@
 """Filtered search and metadata-only listing (``memory_search`` backend).
 
-With a query string, delegates to the hybrid engine in ``search.py``;
-without one, lists by metadata filters ordered by ``sort_by``. Split out
-of ``search.py`` to keep each module within the repo's size discipline.
+Picks the retrieval strategy that answers the call: the hybrid engine in
+``search.py`` when relevance is the sort, one of the ordered listings in
+``search_listing.py`` otherwise. Split out of ``search.py`` to keep each
+module within the repo's size discipline.
+
+``sort_by`` chooses the strategy rather than being applied on top of one.
+That is the point: a sort layered over an already-truncated pool reorders
+a biased sample instead of the corpus, so whatever lost the earlier cut
+can never appear however well it matches the sort.
 """
 
 from __future__ import annotations
 
 import sqlite3
 
-from . import decay
 from .embeddings import EmbeddingProvider
 from .models import Confidence, Memory
-from .search import _CANDIDATE_MULTIPLIER, search
-from .search_common import BASE_COLUMNS, build_filters
+from .search import search
+from .search_common import build_filters
+from .search_listing import fetch_by_ids, list_by_column, list_by_score, match_ordered_by
 
+# Sorts whose key is a column, so SQLite can order the corpus itself.
+# Anything else is scored in Python (``relevance``, ``decay_score``).
+_ORDER_COLUMNS = {"created": "created_at", "accessed": "last_accessed"}
 
-def fetch_by_ids(conn: sqlite3.Connection, ids: list[str]) -> tuple[list[Memory], list[str]]:
-    """Fetch memories by exact ID, preserving the requested order.
-
-    An ID fetch is an explicit read — the caller named the memory — so
-    deprecated memories are returned too (a reconciliation sweep must be able
-    to inspect what it is reconciling). Returns ``(found, missing_ids)``.
-    """
-    if not ids:
-        return [], []
-    placeholders = ", ".join("?" for _ in ids)
-    rows = conn.execute(
-        f"SELECT {BASE_COLUMNS} FROM memories WHERE id IN ({placeholders})", ids
-    ).fetchall()
-    by_id = {row["id"]: Memory(**dict(row)) for row in rows}
-    found = [by_id[mid] for mid in ids if mid in by_id]
-    missing = [mid for mid in ids if mid not in by_id]
-    return found, missing
+__all__ = ["advanced_search", "fetch_by_ids"]
 
 
 def advanced_search(
@@ -61,69 +54,15 @@ def advanced_search(
     claims — the reconciliation backlog as a first-class corpus, usable with
     or without a query. ``orphans`` does the same for the graph backlog:
     memories no relation touches, which spreading activation can never reach.
+
+    A column ``sort_by`` (``created``/``accessed``) orders the *whole*
+    matching corpus before the limit, so the answer is the true
+    newest/least-recently-read and does not change with ``limit``. With a
+    query that corpus is the FTS match set: a date sort asks a question
+    relevance cannot answer, so the semantic cohort - whose membership is
+    itself a relevance judgement - does not vote in it.
     """
-    if query and query.strip():
-        results = search(
-            conn,
-            query=query,
-            namespace_id=namespace_id,
-            type=type,
-            min_confidence=min_confidence,
-            include_deprecated=include_deprecated,
-            created_after=created_after,
-            created_before=created_before,
-            limit=max(limit * _CANDIDATE_MULTIPLIER, limit),
-            weights=weights if sort_by in ("relevance", "decay_score") else None,
-            decay_lambda=decay_lambda,
-            tags=tags,
-            claims=claims,
-            orphans=orphans,
-            embedder=embedder,
-        )
-    else:
-        results = _list_by_filters(
-            conn,
-            namespace_id=namespace_id,
-            type=type,
-            min_confidence=min_confidence,
-            created_after=created_after,
-            created_before=created_before,
-            include_deprecated=include_deprecated,
-            limit=max(limit * _CANDIDATE_MULTIPLIER, limit),
-            weights=weights,
-            decay_lambda=decay_lambda,
-            tags=tags,
-            claims=claims,
-            orphans=orphans,
-        )
-
-    if sort_by in ("relevance", "decay_score"):
-        results.sort(key=lambda m: m.score or 0.0, reverse=True)
-    elif sort_by == "created":
-        results.sort(key=lambda m: m.created_at, reverse=True)
-    elif sort_by == "accessed":
-        results.sort(key=lambda m: m.last_accessed, reverse=True)
-    return results[:limit]
-
-
-def _list_by_filters(
-    conn: sqlite3.Connection,
-    *,
-    namespace_id: str | list[str] | None,
-    type: str | None,
-    min_confidence: Confidence | None,
-    created_after: str | None,
-    created_before: str | None,
-    include_deprecated: bool,
-    limit: int,
-    weights: dict[str, float] | None,
-    decay_lambda: float = 0.01,
-    tags: list[str] | None = None,
-    claims: str | None = None,
-    orphans: bool = False,
-) -> list[Memory]:
-    where, params = build_filters(
-        alias="memories",
+    filters = dict(
         namespace_id=namespace_id,
         type=type,
         min_confidence=min_confidence,
@@ -134,27 +73,45 @@ def _list_by_filters(
         claims=claims,
         orphans=orphans,
     )
-    clause = f"WHERE {' AND '.join(where)} " if where else ""
-    sql = f"SELECT {BASE_COLUMNS} FROM memories {clause}ORDER BY last_accessed DESC LIMIT ?"
-    rows = conn.execute(sql, [*params, limit]).fetchall()
+    order_column = _ORDER_COLUMNS.get(sort_by)
 
-    out: list[Memory] = []
-    for row in rows:
-        mem = Memory(**dict(row))
-        # No query → relevance defaults to 0.5 so freshness/confidence drive order.
-        mem.score = (
-            decay.score_memory(
-                relevance=0.5,
-                last_confirmed=mem.last_confirmed,
-                updated_at=mem.updated_at,
-                created_at=mem.created_at,
-                access_count=mem.access_count,
-                confidence=mem.confidence.value,
+    if query and query.strip():
+        if order_column is None:
+            return search(
+                conn,
+                query=query,
+                limit=limit,
                 weights=weights,
                 decay_lambda=decay_lambda,
+                embedder=embedder,
+                **filters,  # type: ignore[arg-type]
             )
-            if weights
-            else 0.5
+        where, params = build_filters(**filters)  # type: ignore[arg-type]
+        return match_ordered_by(
+            conn,
+            query=query,
+            where=where,
+            params=params,
+            order_column=order_column,
+            limit=limit,
         )
-        out.append(mem)
-    return out
+
+    where, params = build_filters(alias="memories", **filters)  # type: ignore[arg-type]
+    if order_column is None:
+        return list_by_score(
+            conn,
+            where=where,
+            params=params,
+            limit=limit,
+            weights=weights,
+            decay_lambda=decay_lambda,
+        )
+    return list_by_column(
+        conn,
+        where=where,
+        params=params,
+        order_column=order_column,
+        limit=limit,
+        weights=weights,
+        decay_lambda=decay_lambda,
+    )

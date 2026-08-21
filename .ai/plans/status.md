@@ -4,8 +4,55 @@ _Last updated: 2026-08-21_
 
 ## In Flight
 
-**Recall relevance no longer depends on `limit` - `fix/recall-limit-invariance`.**
-606 tests green, `ruff` + `black` clean.
+**`sort_by` sorts the corpus, not a pool truncated on another axis -
+`fix/sort-by-truncation`.** 614 tests green (was 606), `ruff` + `black` clean.
+
+`memory_search(sort_by="created")` returned the newest rows *of a candidate
+pool* that had already been cut by a different ordering: `limit * 4` rows by
+relevance with a query, or by `last_accessed` without one, re-sorted in Python
+afterwards. Anything that lost that first cut was unreachable however new it
+was. A date sort has exactly one correct answer, and this returned a provably
+wrong one.
+
+Measured on a copy of the live brain before the fix: `sort_by="created",
+limit=5` in `crow` returned **0 of the 5** correct rows, two of them three weeks
+older than what belonged in those positions, while the true newest was minutes
+old. With a query, `"RESUME"` in `gingugu` at limit=5 missed the two newest
+matching memories outright. After the fix both branches match the SQL ground
+truth exactly, 5 of 5, and the prefix invariant holds:
+`ids(limit=k) == ids(limit=K)[:k]`.
+
+Each ordering is now its own strategy in a new `search_listing.py`, and every
+one of them selects rows in the order it returns them. A column sort orders the
+whole matching corpus in SQL before the limit. A score sort - which SQLite
+cannot order, since the composite is computed in Python - scores every matching
+row, reading six columns and no bodies, then fetches bodies for the winners
+alone. `search_filters.py` is now just the dispatcher that picks between them
+(117 lines, down from 161).
+
+**One semantics decision worth flagging.** With a query, a date sort now runs
+over the FTS match set alone: no BM25 ranking and no semantic cohort. A date
+asks something relevance cannot answer, and cohort membership is itself a
+relevance judgement, so including it would leave the corpus defined by the very
+axis the caller asked to sort *instead* of. Those results carry no `score`,
+because there is no ranking behind them to report. Relevance sorts are
+untouched.
+
+`_CANDIDATE_MULTIPLIER` is gone from `search.py` - it existed only to
+oversample this pool, and PR #55's fixed cohort had already made it redundant
+for relevance sorts.
+
+**Regression evidence:** `tests/test_sort_by_truncation.py` (8 tests). Reverted
+the source with the tests in place: **7 of the 8 fail**, each because the row
+that should have won is absent rather than mis-ranked. The eighth
+(`test_score_sort_without_weights_falls_back_to_listing_order`) passes against
+the old code too and says so in a comment - it pins a new fallback branch and is
+not a regression guard.
+
+## Shipped to `main`, awaiting release in v0.18.0
+
+**Recall relevance no longer depends on `limit` - PR #55, merged `1e84260`
+(2026-08-21).** 606 tests green at merge, 9/9 CI.
 
 `search(q, limit=k)` was not the first k of `search(q, limit=K)`. The semantic
 cohort was sized `limit * 4` plus `limit // 2` entrants, so a memory's semantic
@@ -37,8 +84,6 @@ and is unchanged (MRR 1.000 on the fixture). That confirms no BM25 regression
 and nothing more - the fixture bench runs without embeddings, so it is
 structurally blind to a semantic-cohort change, the same way it was blind to
 call depth. Do not read a green fixture run as evidence about this path.
-
-## Shipped to `main`, awaiting release in v0.18.0
 
 **One column list for `memories` + a WAL-safe pre-migration backup - PR #54,
 merged `fd5bcfa` (2026-08-21).** Two data-integrity defects, one PR. 589 tests

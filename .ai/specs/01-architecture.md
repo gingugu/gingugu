@@ -209,6 +209,23 @@ AI client (Claude Code / Cursor / Windsurf / …)
   and stay out of the semantic ranking, so a deep call cannot reshuffle a shallow
   one. Ties break on id for the same reason: RRF maps swapped rank pairs to
   identical floats, and the winner must not depend on set iteration order.
+- **`sort_by` chooses the retrieval strategy; it is never applied on top of
+  one.** A sort layered over a pool that was truncated by a *different* ordering
+  reorders a biased sample, not the corpus - so whatever lost the earlier cut
+  can never appear, however well it matches the sort. `advanced_search` used to
+  fetch `limit * 4` rows by relevance (with a query) or by `last_accessed`
+  (without one) and then re-sort them in Python: `sort_by="created"` returned
+  the newest of a pool selected on another axis. Measured against a real store,
+  `sort_by="created", limit=5` got **0 of 5** rows right and returned memories
+  three weeks older than the ones that belonged there. Each ordering is now its
+  own strategy in `search_listing.py`, selecting rows in the order it returns
+  them: a column sort orders the whole matching corpus in SQL before the limit,
+  and a score sort - which SQLite cannot order, since the composite is computed
+  in Python - scores every matching row, reading only the six columns it needs
+  and fetching bodies for the winners alone. With a query, a date sort runs over
+  the FTS match set: a date asks something relevance cannot answer, so the
+  semantic cohort, whose membership is itself a relevance judgement, does not
+  vote in it. Ties break on `id`, as everywhere else.
 - **One column list for `memories`, declared beside the model it fills.**
   `models.MEMORY_COLUMNS` is the single source; `storage`, `context`,
   `search_common` and `portability` all derive their SQL from it via

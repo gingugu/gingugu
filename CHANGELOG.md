@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`sort_by` now sorts the corpus instead of a pool picked on another axis.**
+  `memory_search(sort_by="created")` returned the newest rows *of a candidate
+  pool* that had already been truncated by relevance (with a query) or by
+  `last_accessed` (without one). A memory that lost that earlier cut could not
+  appear no matter how new it was, so a date sort could return neither the
+  newest rows nor a stable answer when `limit` changed - and a miss is
+  indistinguishable from an answer. Measured on a real store: asking for the 5
+  newest memories in a namespace returned **0 of the 5**, with two of the rows
+  three weeks older than what belonged there.
+
+  Each ordering is now its own retrieval path, selecting rows in the order it
+  returns them. A `created`/`accessed` sort orders the whole matching corpus in
+  SQL before the limit; a score sort, which SQLite cannot order because the
+  composite is computed in Python, scores every matching row - reading only the
+  six columns it needs, then fetching bodies for the winners alone. The same
+  namespace now returns 5 of 5, and `sort_by` obeys the prefix invariant:
+  narrowing `limit` narrows the answer rather than changing it.
+
+  With a query, a date sort now runs over the keyword match set. A date asks
+  something relevance cannot answer, so the semantic cohort - whose membership
+  is itself a relevance judgement - no longer votes in it, and those results
+  carry no `score`. Relevance sorts are unchanged.
+
 - **Asking for fewer results no longer changes which results you get.**
   `memory_recall(query, limit=3)` was not the first three of the same query at
   `limit=10`. The semantic candidate cohort was sized from `limit`, so a
