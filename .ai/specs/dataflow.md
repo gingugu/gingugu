@@ -164,7 +164,9 @@ minting a junk namespace named `"a,b"`.
 memory_context(namespace | "ns1,ns2,…", task_hint, limit, compact)
   → pinned memories load FIRST, unranked and additive to limit (cap 20/ns)
   → context.py selects top-N per namespace by relevance-to-hint + value signals
+  → selection order ≠ presentation order (see below)
   → multi-namespace calls de-dupe across loads (highest-scoring instance wins);
+    each namespace's pins lead, then the ranked tails interleave by rank;
     each memory is stamped with its home namespace
   → spreading activation wakes related dormant memories
   → returns the working set the agent should hold for the session
@@ -183,6 +185,25 @@ A consequence worth knowing: because the protocol calls `memory_context` every
 session and that refreshes the dormancy clock, anything it routinely surfaces
 can never accumulate `DORMANT_AFTER_DAYS` untouched. Dormancy only ever reaches
 the tail. Intended, and now pinned by `tests/test_dormancy_lifecycle.py`.
+
+**Selection order is not presentation order**, and conflating them is what put
+the pinned tier at the bottom of every payload. Selection fills the recency
+quota _first_, because filling it first is what stops a contended `limit` from
+evicting the "where we left off" memory - that is a survival question.
+Presentation then answers a different one, "what should the agent read first?",
+and emits by bucket membership: task hits (the caller asked a question), then
+recency, then cross-namespace, then the score-ordered backfill. Membership, not
+which quota happened to claim the row - recency is filled first, so a
+task-relevant memory that is also recent would otherwise be presented as though
+it had never matched the query.
+
+Neither layer re-sorts by composite score, because that score is not comparable
+across buckets: only the task bucket has a real search relevance, while the
+recency and cross-namespace buckets carry a fixed `relevance=0.5` placeholder
+(they have no query to be relevant _to_). Sorting on it ranks rows against each
+other on a scale none of them share - and silently undoes the quota that just
+protected the recency slot. Measured on a copy of the live brain, the old global
+sort placed **0 of 8** pins in the top 8; the fix places **8 of 8**.
 
 **Pinned memories** sit outside all of this. Ranking answers "what is most
 relevant to this task?"; it cannot answer "what must never be missing?". A pin
