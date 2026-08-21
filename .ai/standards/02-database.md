@@ -129,6 +129,15 @@ migration was wiping ten hand-reconciled claims. It was not — the copy predate
 the reconciliation. **When a rehearsal contradicts work you did minutes ago,
 suspect the harness before the code.**
 
+**This rule applies to product code, not only to hand-run rehearsals.** It was
+written for the rehearsal workflow and then read as being about that workflow,
+while `_backup_before_migration` - the pre-migration safety net shipped to every
+user - went on calling `shutil.copy2`. A test that reproduced the real
+conditions (a v3 DB with committed rows still in the WAL) showed the resulting
+backup did not even contain the `namespaces` **table**: the whole schema was in
+the WAL, so the "backup" was very nearly an empty file. A rule scoped to how we
+work by hand is worth little if the code we ship does the opposite.
+
 ## FTS5 in lockstep
 
 - The `memories` table is mirrored into an **FTS5** virtual table by sync
@@ -143,8 +152,10 @@ suspect the harness before the code.**
 
 ## Backups before destructive ops
 
-- Copy the DB file (or `memory_export` the namespace) before any
-  `memory_consolidate` / prune touching **>100 rows**.
+- Snapshot the DB with `src.backup(dst)` (or `memory_export` the namespace)
+  before any `memory_consolidate` / prune touching **>100 rows**. Not a file
+  copy - see the WAL rule above; a `shutil.copy` here backs up the wrong thing
+  at exactly the moment it matters.
 
 ## Integrity
 

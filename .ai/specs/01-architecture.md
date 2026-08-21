@@ -197,6 +197,23 @@ AI client (Claude Code / Cursor / Windsurf / …)
   leaves no litter. Both write paths (`_write_file` for hooks and commands,
   `init_rules_file` for `--client`) share the one implementation specifically so
   the guarantee cannot drift apart again.
+- **One column list for `memories`, declared beside the model it fills.**
+  `models.MEMORY_COLUMNS` is the single source; `storage`, `context`,
+  `search_common` and `portability` all derive their SQL from it via
+  `memory_columns_sql()`, and INSERTs generate their `:name` placeholders from
+  the same tuple with `memory_placeholders_sql()`. Four private copies used to
+  exist and they drifted the moment `pinned` was added: only two gained it. The
+  failure mode is what makes this structural rather than tidiness - a short
+  column list is still valid SQL and `Memory(**row)` still constructs, so the
+  missing field quietly took its default and every search path reported a
+  confident `pinned=False` while export dropped the flag. Nothing raised.
+  `tests/test_memory_columns.py` holds the tuple against `Memory`'s fields *and*
+  against the live schema, so the drift cannot come back silently.
+- **The pre-migration backup uses SQLite's backup API, never a file copy.** We
+  run WAL, so committed transactions sit in `<db>-wal` until a checkpoint;
+  `shutil.copy2` captures the main file and leaves them. That backup is the only
+  safety net when a migration goes wrong, so it is the one copy that must be
+  current. See `.ai/standards/02-database.md`.
 - **The UI ships in the wheel.** `gingugu ui` (`webui.py`) serves the pre-built
   React bundle *and* a live `/api/export` read from one process on one port, so
   pip-installed users get the Memory Explorer with no repo checkout and no Node.

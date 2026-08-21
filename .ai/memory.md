@@ -52,7 +52,7 @@
 | `bootstrap/settings.py` | Non-destructive `.claude/settings.json` merge. `declared_flags()` reads a hook's real `add_argument` flags off disk, so the "wired for a different script" warning reflects the installed script rather than our template's flag set |
 | `config.py` | Config + cross-platform DB path (platformdirs); transport + credentials-flag settings |
 | `database.py` | Connection, schema, WAL, migrations (`PRAGMA user_version`), FTS5 triggers |
-| `models.py` | Memory / namespace / relation data models |
+| `models.py` | Memory / namespace / relation data models. Also owns `MEMORY_COLUMNS` - the one declared `memories` column list - plus `memory_columns_sql()` / `memory_placeholders_sql()`. Every module that reads or inserts a memory row derives its SQL from these; private copies drifted and silently dropped `pinned` |
 | `storage.py` | Memory CRUD (store, update, forget) |
 | `search.py` | True hybrid engine: independent BM25 + semantic pools, RRF fusion |
 | `search_common.py` | Shared SQL columns + WHERE-fragment builders |
