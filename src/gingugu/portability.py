@@ -15,6 +15,8 @@ import logging
 import sqlite3
 import uuid
 
+from . import embedding_sync
+from .embeddings import EmbeddingProvider
 from .models import (
     MEMORY_COLUMNS,
     Confidence,
@@ -156,12 +158,30 @@ def _validate_payload(data: dict) -> None:
             )
 
 
-def import_data(conn: sqlite3.Connection, data: dict, *, on_conflict: str = "skip") -> dict:
+def import_data(
+    conn: sqlite3.Connection,
+    data: dict,
+    *,
+    on_conflict: str = "skip",
+    embedder: EmbeddingProvider | None = None,
+) -> dict:
     """Restore a payload from :func:`export_data`. Returns a summary of changes.
 
     ``on_conflict`` is ``skip`` (leave existing memories) or ``replace``
     (overwrite memories sharing an id). Raises ``ValueError`` on a malformed
     payload.
+
+    ``embedder`` encodes the imported memories so they are semantically
+    searchable. Without it they are reachable by keyword only: the FTS5 index
+    has triggers and keeps itself in step, but ``memory_embeddings`` has none,
+    so a vector exists only where some code path deliberately wrote one. The
+    summary reports ``embeddings_written``.
+
+    Vectors are recomputed rather than carried in the payload. They are
+    model-specific - a 384-dim BGE export restored on a host running a 768-dim
+    model would have to be discarded on arrival - so shipping them would add
+    ~1.5KB per memory to an export that is meant to stay portable and legible,
+    for data that is derived from the text sitting beside it.
     """
     if not isinstance(data, dict) or "memories" not in data or "namespaces" not in data:
         raise ValueError("malformed export payload: missing 'memories'/'namespaces'")
@@ -172,6 +192,7 @@ def import_data(conn: sqlite3.Connection, data: dict, *, on_conflict: str = "ski
     ns_map, ns_created = _resolve_namespaces(conn, data.get("namespaces", []))
 
     imported = skipped = replaced = 0
+    written_ids: list[str] = []
     for mem in data["memories"]:
         local_ns = ns_map.get(mem["namespace_id"])
         if local_ns is None:
@@ -199,6 +220,7 @@ def import_data(conn: sqlite3.Connection, data: dict, *, on_conflict: str = "ski
                 "namespace_id": local_ns,
             },
         )
+        written_ids.append(mem["id"])
         for tag_name in mem.get("tags", []):
             tag_id = _get_or_create_tag(conn, tag_name)
             conn.execute(
@@ -234,12 +256,20 @@ def import_data(conn: sqlite3.Connection, data: dict, *, on_conflict: str = "ski
         conn.execute("DELETE FROM tags WHERE id NOT IN (SELECT DISTINCT tag_id FROM memory_tags)")
 
     conn.commit()
+
+    # Embed AFTER the commit: the rows must exist for `embed_ids` to read their
+    # title/content back, and a failure here must not cost us the import. An
+    # encoding failure is already swallowed and logged, and leaves the memories
+    # keyword-searchable and eligible for the startup backfill.
+    embeddings_written = embedding_sync.embed_ids(conn, embedder, written_ids)
+
     summary = {
         "namespaces_created": ns_created,
         "memories_imported": imported,
         "memories_replaced": replaced,
         "memories_skipped": skipped,
         "relations_imported": relations_imported,
+        "embeddings_written": embeddings_written,
     }
     logger.info("Import complete: %s", summary)
     return summary

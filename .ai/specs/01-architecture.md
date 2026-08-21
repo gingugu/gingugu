@@ -268,6 +268,16 @@ AI client (Claude Code / Cursor / Windsurf / …)
   always compact: an unsolicited extra attached to a write must not cost more
   context than the write itself, so a hint carries a pointer (title + ~200-char
   excerpt) and leaves the body to `memory_recall`.
+- **An invariant with no trigger belongs to a module, not to one writer.** FTS5
+  keeps itself in step with `memories` because it has triggers; `memory_embeddings`
+  has none, so a vector exists only where code deliberately wrote one. That logic
+  lived inside `MemoryStore`, which made it unreachable for the other module that
+  writes memory rows - `memory_import` - and every restored memory landed
+  keyword-searchable but semantically invisible. `embedding_sync.py` now owns the
+  invariant and takes `(conn, embedder)`, so any writer can honor it without
+  depending on the CRUD layer. The general rule: when a derived table has no
+  trigger, the code maintaining it must be reachable by every writer of the
+  source table, or the invariant is held by whoever remembered.
 - **Retrieval finds; an absolute measure adjudicates.** A ranking score answers
   "which of these is nearest", and it cannot answer "is this one actually
   close" - it is normalized against the pool, so its best hit approaches 1.0

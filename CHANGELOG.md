@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`memory_import` now embeds the memories it writes.** Restored memories were
+  reachable by keyword only. The FTS5 index has triggers and keeps itself in
+  step with `memories`; `memory_embeddings` has none, so a vector exists only
+  where some code path deliberately wrote one - and `memory_import` writes
+  memory rows with raw SQL, never touching embeddings. Everything recovered
+  from a backup was invisible to the semantic half of hybrid retrieval.
+
+  The startup backfill was not a repair path for this. It drains one batch of
+  32 per process, so a 1,423-memory restore needed **45 server restarts** to
+  finish, and the "later writes will cover the rest" reasoning never applied to
+  imported rows, which are never written again.
+
+  `import_data` now accepts an `embedder` and the summary reports
+  `embeddings_written`. Encoding runs after the commit, so a failing or absent
+  model costs the vectors, never the restore - an import with no embedder still
+  succeeds and leaves the rows eligible for the backfill.
+
+  Vectors are recomputed on arrival rather than carried in the export payload.
+  They are model-specific, so a 384-dim export restored on a host running a
+  768-dim model would have to be discarded anyway, and shipping them would add
+  ~1.5KB per memory to a file meant to stay portable and legible. **The export
+  format is unchanged.**
+
 - **Write-time hints now report an absolute similarity instead of a rank
   artifact.** `similar_memories` and `suggested_relations` reported the fused
   RRF relevance from the search engine. That number is a function of a

@@ -46,7 +46,8 @@ import logging
 import re
 import sqlite3
 
-from .embeddings import EmbeddingProvider, cosine, embedding_input, unpack
+from . import embedding_sync
+from .embeddings import EmbeddingProvider, cosine, embedding_input
 
 logger = logging.getLogger(__name__)
 
@@ -117,19 +118,11 @@ def payload_similarity(
             logger.warning("payload encode failed; falling back to lexical", exc_info=True)
 
     if query_vec is not None:
-        placeholders = ", ".join("?" for _ in memory_ids)
-        rows = conn.execute(
-            f"SELECT memory_id, embedding FROM memory_embeddings "
-            f"WHERE dim = ? AND memory_id IN ({placeholders})",
-            [embedder.dim, *memory_ids],
-        ).fetchall()
-        out: dict[str, float] = {}
-        for row in rows:
-            try:
-                out[row["memory_id"]] = cosine(query_vec, unpack(row["embedding"]))
-            except Exception:  # pragma: no cover - defensive
-                continue
-        return out, "cosine"
+        # `embedding_sync` owns reads of memory_embeddings, including the
+        # mismatched-model filter. Hand-rolling the query here would make this
+        # a fifth site that has to remember that rule.
+        stored = embedding_sync.get_many(conn, embedder, memory_ids)
+        return {mid: cosine(query_vec, vec) for mid, vec in stored.items()}, "cosine"
 
     placeholders = ", ".join("?" for _ in memory_ids)
     rows = conn.execute(

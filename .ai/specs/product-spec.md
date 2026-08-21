@@ -34,7 +34,7 @@ Gingugu instance serves Windsurf and Claude Code against one DB.
 | `memory_edges` | Enumerate edges with both endpoints resolved to titles, namespaces and degree; filter by namespace / type / memory, paged | ✅ Shipped (unreleased) |
 | `memory_unrelate` | Repair edges: retype in place, reverse the direction (combinable with a retype), or remove — provenance preserved throughout, collision reports `merged`; single or batch of up to 100 reviewed ops; `dry_run` | ✅ Shipped (`reverse` unreleased) |
 | `memory_consolidate` | merge / summarize / deduplicate + read-only near-dupe suggest scan | ✅ Shipped |
-| `memory_export` / `memory_import` | Back up / transfer a namespace | ✅ Shipped |
+| `memory_export` / `memory_import` | Back up / transfer a namespace; import embeds what it writes and reports `embeddings_written` | ✅ Shipped (import embedding unreleased) |
 | `memory_namespaces` | Namespace CRUD + `default_repo` (what a bare "PR #12" means here; `""` = not a repo) | ✅ Shipped |
 | `credential_*` | OS-keychain secret vault | ✅ Shipped |
 | `suggested_relations` hint | Surface candidates to examine for a _directional_ edge at store time; compact payload (title + ~200-char summary) | ✅ Shipped (v0.3.8; compacted v0.12.0; reframed from "link these" to "examine these" unreleased) |

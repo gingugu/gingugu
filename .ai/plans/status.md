@@ -4,8 +4,61 @@ _Last updated: 2026-08-21_
 
 ## In Flight
 
-**Write-time hints report an absolute similarity, not a rank artifact -
-`fix/dedupe-hint-absolute-similarity`.** 627 tests green (was 619), `ruff` +
+**`memory_import` embeds what it writes -
+`fix/import-persists-embeddings`.** 634 tests green (was 627), `ruff` +
+`black` clean.
+
+Everything restored from a backup was reachable by keyword only. The FTS5 index
+has triggers and keeps itself in step with `memories`; `memory_embeddings` has
+none, so a vector exists only where some code path deliberately wrote one - and
+`import_data` writes memory rows with raw SQL and never touched embeddings.
+
+**The startup backfill was not the repair path people assumed.** It drains ONE
+batch of 32 per process. Measured: a 272-memory namespace needs 9 server
+restarts to become searchable, a 1,423-memory brain needs **45**. The comment
+claiming "subsequent recalls will surface the rest naturally as memories get
+embedded on write" is false for exactly this case - imported rows are never
+written again. That correction matters more than the count, because it is why
+the bug survived: the drip looked like a safety net and was not one.
+
+**The decision worth flagging:** vectors are recomputed on arrival rather than
+carried in the export payload, so **the export format is unchanged**. They are
+model-specific - a 384-dim BGE export restored on a host running a 768-dim
+model would have to be discarded on arrival - so shipping them would add ~1.5KB
+per memory to a file meant to stay portable and legible, for data derived from
+the text sitting right beside it. The trade is a slower import; correctness by
+construction is worth it.
+
+Encoding runs **after** the commit. The memories are the payload and the
+vectors are a bonus, so the two must never be traded: an import with a broken
+or absent embedder still succeeds and leaves the rows eligible for the backfill.
+
+**Structural change, and it is the actual root cause.** The embedding logic
+lived inside `MemoryStore`, which made it unreachable for the *other* module
+that writes memory rows. It now lives in `embedding_sync.py`, which takes
+`(conn, embedder)` so any writer can honor the invariant without depending on
+the CRUD layer. `storage.py` drops 493 -> 388 (still over the 300 limit, but a
+big bite out of pre-existing debt) and its embedding methods are thin
+delegations, so the public API is unchanged. `similarity.py` was hand-rolling
+the same `memory_embeddings` read and now uses `embedding_sync.get_many`,
+removing a fifth site that had to remember the mismatched-model filter.
+
+`embed_ids` is deliberately distinct from `backfill`: it finishes the list it
+is given, while `backfill` drains one batch by design because it runs at
+startup where a cold model download must not block the process.
+
+**Regression evidence:** `tests/test_import_embeddings.py` (7 tests). Neutered
+the fix with the tests in place: **3 of 7 fail**, reporting 0 embeddings after a
+3-memory import, 0 after a `replace`, and an empty vector map through the
+storage layer. The other four are guards - the no-embedder path, the broken-
+embedder path, the skip path (a skip wrote nothing, so it must not claim to
+have embedded anything), and `embed_ids` clearing 70 ids where `backfill`
+clears 32.
+
+## Recently merged
+
+**Write-time hints report an absolute similarity, not a rank artifact - PR #58,
+merged `3ebe9f2` (2026-08-21).** 627 tests green (was 619), `ruff` +
 `black` clean.
 
 `similar_memories` and `suggested_relations` reported the fused RRF relevance

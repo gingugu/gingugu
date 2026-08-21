@@ -7,7 +7,7 @@ import logging
 import sqlite3
 import uuid
 
-from . import claim_sync
+from . import claim_sync, embedding_sync
 from . import embeddings as emb
 from .embeddings import EmbeddingProvider, NullEmbeddingProvider
 from .models import (
@@ -348,146 +348,41 @@ class MemoryStore:
             mem.tags = self.get_tags(mem.id)
 
     # --- Embeddings ---------------------------------------------------------
+    #
+    # Thin delegations to `embedding_sync`, which owns the
+    # memories -> memory_embeddings invariant. It lives outside this class
+    # because `MemoryStore` is not the only writer of memory rows:
+    # `memory_import` writes them too, and while this logic was private to the
+    # store it had no way to honor the invariant.
 
     _embedding_input = staticmethod(emb.embedding_input)
 
     def _persist_embedding(self, memory_id: str, title: str, content: str) -> None:
-        """Encode the (title, content) tuple and upsert into memory_embeddings.
-
-        Errors are swallowed — search degrades gracefully to BM25-only when an
-        embedding is missing. We never let an encoding failure block a write.
-        """
-        if not self._embedder.enabled:
-            return
-        try:
-            vec = self._embedder.encode(self._embedding_input(title, content))
-        except Exception:
-            logger.exception("encode failed for memory %s; skipping embedding", memory_id)
-            return
-        if vec is None:
-            return
-        now = utcnow_iso()
-        try:
-            self._conn.execute(
-                "INSERT INTO memory_embeddings(memory_id, model, dim, embedding, "
-                "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) "
-                "ON CONFLICT(memory_id) DO UPDATE SET "
-                "model=excluded.model, dim=excluded.dim, embedding=excluded.embedding, "
-                "updated_at=excluded.updated_at",
-                (
-                    memory_id,
-                    self._embedder.model_name,
-                    len(vec),
-                    emb.pack(vec),
-                    now,
-                    now,
-                ),
-            )
-            self._conn.commit()
-        except Exception:
-            logger.exception("persist_embedding failed for memory %s", memory_id)
+        embedding_sync.persist_one(self._conn, self._embedder, memory_id, title, content)
 
     def get_embedding(self, memory_id: str) -> list[float] | None:
-        """Return the stored embedding for a memory, or None if absent or
-        encoded with a model whose dim doesn't match the active provider."""
-        row = self._conn.execute(
-            "SELECT model, dim, embedding FROM memory_embeddings WHERE memory_id = ?",
-            (memory_id,),
-        ).fetchone()
-        if row is None:
-            return None
-        # Mismatched-model embeddings are intentionally hidden — combining
-        # vectors from different models silently produces garbage. They'll
-        # get re-encoded on the next write or via the backfill path.
-        if self._embedder.enabled and self._embedder.dim and row["dim"] != self._embedder.dim:
-            return None
-        return emb.unpack(row["embedding"])
+        """The stored vector for a memory, or None if absent or from another model."""
+        return embedding_sync.get_one(self._conn, self._embedder, memory_id)
 
     def get_embeddings_for(self, memory_ids: list[str]) -> dict[str, list[float]]:
-        """Bulk fetch embeddings keyed by memory_id. Mismatched-model rows
-        are filtered out (see get_embedding)."""
-        if not memory_ids:
-            return {}
-        placeholders = ", ".join("?" for _ in memory_ids)
-        rows = self._conn.execute(
-            f"SELECT memory_id, model, dim, embedding FROM memory_embeddings "
-            f"WHERE memory_id IN ({placeholders})",
-            memory_ids,
-        ).fetchall()
-        active_dim = self._embedder.dim if self._embedder.enabled else 0
-        out: dict[str, list[float]] = {}
-        for r in rows:
-            if active_dim and r["dim"] != active_dim:
-                continue
-            out[r["memory_id"]] = emb.unpack(r["embedding"])
-        return out
+        """Bulk fetch embeddings keyed by memory_id."""
+        return embedding_sync.get_many(self._conn, self._embedder, memory_ids)
 
     def list_unembedded_ids(self, *, limit: int = 100) -> list[str]:
-        """IDs of memories without a current-model embedding (for backfill).
+        """IDs of memories without a current-model embedding (for backfill)."""
+        return embedding_sync.unembedded_ids(self._conn, self._embedder, limit=limit)
 
-        A memory is considered unembedded if it has no row in
-        memory_embeddings, or its row uses a different model dim than the
-        active embedder.
-        """
-        if not self._embedder.enabled:
-            return []
-        active_dim = self._embedder.dim
-        if not active_dim:
-            # Embedder hasn't been initialized yet — return memories with no
-            # embedding at all and let the backfill drive lazy init.
-            rows = self._conn.execute(
-                "SELECT m.id FROM memories m "
-                "LEFT JOIN memory_embeddings e ON e.memory_id = m.id "
-                "WHERE e.memory_id IS NULL LIMIT ?",
-                (limit,),
-            ).fetchall()
-        else:
-            rows = self._conn.execute(
-                "SELECT m.id FROM memories m "
-                "LEFT JOIN memory_embeddings e ON e.memory_id = m.id "
-                "WHERE e.memory_id IS NULL OR e.dim != ? LIMIT ?",
-                (active_dim, limit),
-            ).fetchall()
-        return [r["id"] for r in rows]
+    def embed_memories(self, memory_ids: list[str], *, batch_size: int = 32) -> int:
+        """Encode and persist vectors for every named memory. Returns rows written."""
+        return embedding_sync.embed_ids(
+            self._conn, self._embedder, memory_ids, batch_size=batch_size
+        )
 
     def backfill_embeddings(self, *, batch_size: int = 32) -> int:
-        """Encode and persist embeddings for memories missing one.
+        """Encode one batch of memories missing a current-model embedding.
 
-        Returns the number of embeddings written. Intended to be called once
-        on startup so older memories pick up semantic search after upgrade.
-        Safe to call repeatedly — only encodes what's missing.
+        Called once on startup so rows predating an embedding upgrade recover.
+        Safe to call repeatedly. Bulk importers should use `embed_memories`,
+        which finishes the job instead of draining one batch per process.
         """
-        if not self._embedder.enabled:
-            return 0
-        ids = self.list_unembedded_ids(limit=batch_size)
-        if not ids:
-            return 0
-        # Fetch title+content for each id
-        placeholders = ", ".join("?" for _ in ids)
-        rows = self._conn.execute(
-            f"SELECT id, title, content FROM memories WHERE id IN ({placeholders})",
-            ids,
-        ).fetchall()
-        texts = [self._embedding_input(r["title"], r["content"]) for r in rows]
-        vectors = self._embedder.encode_many(texts)
-        now = utcnow_iso()
-        written = 0
-        for r, vec in zip(rows, vectors, strict=False):
-            if vec is None:
-                continue
-            try:
-                self._conn.execute(
-                    "INSERT INTO memory_embeddings(memory_id, model, dim, embedding, "
-                    "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) "
-                    "ON CONFLICT(memory_id) DO UPDATE SET "
-                    "model=excluded.model, dim=excluded.dim, embedding=excluded.embedding, "
-                    "updated_at=excluded.updated_at",
-                    (r["id"], self._embedder.model_name, len(vec), emb.pack(vec), now, now),
-                )
-                written += 1
-            except Exception:
-                logger.exception("backfill failed for memory %s", r["id"])
-        if written:
-            self._conn.commit()
-            logger.info("Backfilled %d embeddings", written)
-        return written
+        return embedding_sync.backfill(self._conn, self._embedder, batch_size=batch_size)
