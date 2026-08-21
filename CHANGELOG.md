@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Pinned memories are reported correctly and survive an export/import round
+  trip.** The `memories` column list existed as four private copies, and when
+  `pinned` was added only two of them gained it. Nothing failed loudly: a short
+  column list is still valid SQL and the model still constructs, so the field
+  quietly took its default. Every search path therefore reported a confident
+  `pinned=False` for genuinely pinned memories, and `memory_export` dropped the
+  flag entirely - which means restoring from a backup silently unpinned exactly
+  the memories you had marked as never-lose-these. Measured on a real store: 7
+  pinned memories, 0 surviving an export.
+
+  The list is now declared once, in `models.MEMORY_COLUMNS`, and every reader
+  and writer derives its SQL from it. An export written before `pinned` existed
+  still imports cleanly. No migration is needed: the stored data was always
+  correct, only the readers were wrong, so existing pins come back on upgrade.
+
+- **The pre-migration backup no longer misses your most recent memories.**
+  Gingugu runs SQLite in WAL mode, where committed transactions live in
+  `memories.db-wal` until a checkpoint folds them into the main file. The
+  automatic `<db>.bak-before-vN` snapshot was a plain file copy, so it captured
+  the main file and left the newest writes behind. Under realistic conditions
+  the snapshot could be missing the schema itself. It now uses SQLite's own
+  backup API, which is WAL-aware and consistent while other sessions are
+  writing.
+
 - **`gingugu init --force` now backs up every file it replaces.** The backup was
   conditioned on the target *lacking* the `gingugu-init:managed-file` marker, so
   the protection expired the first time it worked: the opening `--force` wrote a

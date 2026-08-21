@@ -37,7 +37,7 @@ import sqlite3
 
 from . import decay, search
 from .embeddings import EmbeddingProvider
-from .models import Memory
+from .models import Memory, memory_columns_sql
 
 _BOOST_TYPES = {"architecture", "decision"}
 _BOOST_AMOUNT = 0.1
@@ -57,10 +57,7 @@ _CROSS_NS_QUOTA = 3
 # is to unpin, not to raise the cap.
 PINNED_HARD_CAP = 20
 
-_COLUMNS = (
-    "id, namespace_id, type, title, content, confidence, source, "
-    "created_at, updated_at, last_accessed, last_confirmed, access_count, metadata, pinned"
-)
+_COLUMNS = memory_columns_sql()
 
 
 def _score(mem: Memory, weights: dict[str, float], decay_lambda: float, relevance: float) -> float:
