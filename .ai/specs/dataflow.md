@@ -328,7 +328,14 @@ left alone than wired up with an invented edge.
   `memory_ids`, a read-only suggest scan surfaces near-dupe clusters
   (pairwise embedding cosine, title-only fallback) to feed back in.
 - `memory_export` / `memory_import` — back up or transfer a namespace (export
-  before any large destructive op).
+  before any large destructive op). `memory_import` embeds what it writes and
+  reports `embeddings_written`; without that, restored memories were reachable
+  by keyword only, because FTS5 has triggers and `memory_embeddings` does not.
+  Vectors are recomputed on arrival rather than carried in the payload: they
+  are model-specific, so a 384-dim export restored on a 768-dim host would be
+  discarded anyway, and they are derived from the text sitting beside them.
+  Encoding happens **after** the commit, so a failing model costs the vectors,
+  never the restore.
 - `decay.py` — recomputes dormancy as a resting signal; never mutates confidence.
 
 ## Storage / migrations

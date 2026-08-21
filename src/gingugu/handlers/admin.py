@@ -122,11 +122,18 @@ def register(mcp, ctx: ServerContext) -> None:
         ``on_conflict`` is ``skip`` (default — leave existing memories untouched)
         or ``replace`` (overwrite existing memories with the same id). Namespaces
         are created if missing; tags and relations are restored.
+
+        Imported memories are embedded as part of the import, so they are
+        semantically searchable immediately rather than keyword-only. The
+        summary reports ``embeddings_written``; on a large payload this is the
+        slow part of the call.
         """
         try:
             if on_conflict not in ("skip", "replace"):
                 return _err(f"invalid on_conflict {on_conflict!r}; expected 'skip' or 'replace'")
-            result = portability.import_data(ctx.conn, data, on_conflict=on_conflict)
+            result = portability.import_data(
+                ctx.conn, data, on_conflict=on_conflict, embedder=ctx.store.embedder
+            )
             return {"ok": True, **result}
         except ValueError as exc:
             return _err(str(exc))

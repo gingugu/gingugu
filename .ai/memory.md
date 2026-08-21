@@ -60,6 +60,7 @@
 | `search_filters.py` | `advanced_search`: picks the retrieval strategy `sort_by` asks for - the hybrid engine, or one of the ordered listings |
 | `search_listing.py` | The ordered-retrieval strategies: by column, by composite score, by FTS match set, by exact id. Each selects rows in the order it returns them; none re-sorts a pool truncated on another axis |
 | `embeddings.py` | Semantic vector generation; owns `embedding_input()`, the one text recipe the write path and any compare path must share |
+| `embedding_sync.py` | Keeps `memory_embeddings` in step with `memories`. Extracted from `storage.py` because the invariant belongs to whoever writes a memory row, and `MemoryStore` is not the only one - `memory_import` writes them too. There are NO triggers for embeddings; a vector exists only where code deliberately wrote one |
 | `similarity.py` | ABSOLUTE payload-vs-memory similarity for the write-time hints: cosine, or token Jaccard without embeddings. Cutoffs are calibrated against a real corpus, never inherited from a ranking score |
 | `context.py` | Session priming (`memory_context`): the pinned tier + three quota'd intent buckets, plus spreading activation |
 | `relations.py` | Typed graph edges + hub-dampened 1-hop traversal (`dampened_neighbour_ids`) and enumeration (`list_edges`) |
@@ -75,7 +76,7 @@
 | `claim_rederive.py` | Claim re-derivation that **preserves** resolution state, whole-corpus or scoped to one `namespace_id` (`claim_sync.sync_claims` drops resolution by design) |
 | `namespaces.py` | Namespace CRUD; a `default_repo` change re-derives that namespace's claims (best-effort) so the declaration is not inert |
 | `credentials.py` | OS-keychain credential vault |
-| `portability.py` | Export / import a namespace |
+| `portability.py` | Export / import a namespace. `import_data` takes an `embedder` and embeds what it writes; vectors are recomputed, never carried in the payload (they are model-specific and derived) |
 | `handlers/` | MCP tool handlers: `memory.py` (store/update), `forget.py` (the one destructive tool), `hints.py` (write-time similar/relation hints), `recall.py` (recall/context), `search.py`, `relations.py` (relate/edges/unrelate) with `relation_ops.py` (batch parsing + per-edge dispatch), `consolidate.py`, `admin.py`, `credentials.py`, `helpers.py` |
 
 Dev-only tooling at the repo root (never shipped in the wheel): **`bench/`** —
