@@ -179,9 +179,16 @@ async def test_identical_timestamps_break_deterministically(server, tmp_path) ->
     )
     arch = arch_res["memory"]["id"]
 
-    # Force the exact tie the coarse-clock runners produce.
+    # Force the exact tie the coarse-clock runners produce. EVERY timestamp the
+    # composite score reads must be pinned, not just last_accessed: leave
+    # created_at alone and the two rows differ by microseconds of freshness,
+    # which decides the order on its own and the boost is never exercised.
     conn = sqlite3.connect(tmp_path / "ordering.db")
-    conn.execute("UPDATE memories SET last_accessed = '2026-01-01T00:00:00+00:00'")
+    conn.execute(
+        "UPDATE memories SET last_accessed = :t, created_at = :t, "
+        "updated_at = :t, last_confirmed = :t",
+        {"t": "2026-01-01T00:00:00+00:00"},
+    )
     conn.commit()
     conn.close()
 

@@ -186,19 +186,6 @@ def build_context(
     for mem in cross_bucket:
         mem.score = _score(mem, weights, decay_lambda, relevance=0.5)
 
-    # Give each SQL-ordered bucket a deterministic total order: native signal
-    # first, composite score to break ties, id last so the result never depends
-    # on SQLite's tie behaviour. Ties here are routine rather than exotic -
-    # memories written in one batch share a timestamp, and on a coarse system
-    # clock two separate writes land in the same tick - so without this the
-    # order comes from rowid on some platforms and from the clock on others.
-    # Comparing scores WITHIN a bucket is sound (every row got its relevance the
-    # same way); comparing them across buckets is not, which is why this sort is
-    # per-bucket and never global. It is also what keeps the architecture and
-    # decision boost meaningful now that presentation is not score-ordered.
-    recent_bucket.sort(key=lambda m: (m.last_accessed, m.score or 0.0, m.id), reverse=True)
-    cross_bucket.sort(key=lambda m: (m.access_count, m.score or 0.0, m.id), reverse=True)
-
     # De-duplicate across buckets, keeping each memory's highest score (a task
     # hit that also shows up in the recency bucket keeps its richer relevance).
     # Drop pins from the ranked buckets: they are already guaranteed, so
@@ -220,6 +207,28 @@ def build_context(
     for mem in best.values():
         if mem.type.value in _BOOST_TYPES and mem.score is not None:
             mem.score += _BOOST_AMOUNT
+
+    # Give each SQL-ordered bucket a deterministic total order: native signal
+    # first, composite score to break ties, id only as a last resort.
+    #
+    # Ties on the native signal are routine rather than exotic - memories
+    # written in one batch share a timestamp, and on a coarse system clock two
+    # separate writes land in the same tick - so without this the order comes
+    # from SQLite's rowid on some platforms and from the clock on others.
+    #
+    # This MUST run after the boost above, not before. The boost is what
+    # separates an architecture memory from an otherwise identical fact, so
+    # sorting on the pre-boost score leaves them tied and drops through to the
+    # id - a random UUID, which is a coin flip per run rather than a tiebreak.
+    # Scores are read from ``best`` because that is the instance the boost was
+    # applied to; a bucket may hold a different, unboosted instance of the same
+    # memory.
+    #
+    # Comparing scores WITHIN a bucket is sound - every row got its relevance
+    # the same way. Comparing them ACROSS buckets is not, which is why this sort
+    # is per-bucket and never global.
+    recent_bucket.sort(key=lambda m: (m.last_accessed, best[m.id].score or 0.0, m.id), reverse=True)
+    cross_bucket.sort(key=lambda m: (m.access_count, best[m.id].score or 0.0, m.id), reverse=True)
 
     # Guaranteed-quota selection. Fill recency FIRST - it's the intent the old
     # score-and-collapse design starved, and filling it first is what stops a
