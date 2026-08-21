@@ -197,6 +197,18 @@ AI client (Claude Code / Cursor / Windsurf / …)
   leaves no litter. Both write paths (`_write_file` for hooks and commands,
   `init_rules_file` for `--client`) share the one implementation specifically so
   the guarantee cannot drift apart again.
+- **The semantic cohort is fixed; relevance is never a function of `limit`.**
+  `semantic_pool.SEMANTIC_COHORT` / `ENTRANT_CAP` are constants. They used to be
+  `limit * 4` and `limit // 2`, which made a memory's semantic rank depend on how
+  many rows the caller requested - so `search(q, k)` was not the first k of
+  `search(q, K)`, and asking for fewer results returned different, worse
+  memories. A rank only means something against a fixed cohort. The constants are
+  the geometry at the benchmarked depth, so a limit=10 call is unchanged and the
+  recorded benchmark still describes the code. Requests deeper than the cohort
+  fetch extra BM25 rows to have enough to return; those rows keep their BM25 rank
+  and stay out of the semantic ranking, so a deep call cannot reshuffle a shallow
+  one. Ties break on id for the same reason: RRF maps swapped rank pairs to
+  identical floats, and the winner must not depend on set iteration order.
 - **One column list for `memories`, declared beside the model it fills.**
   `models.MEMORY_COLUMNS` is the single source; `storage`, `context`,
   `search_common` and `portability` all derive their SQL from it via

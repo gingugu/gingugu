@@ -49,6 +49,23 @@
   `uv run python -m bench` (fixture floor) and a real-brain run against the
   recorded baseline (see `docs/roadmap.md` Phase 5.75). Grading is
   deterministic math only — never LLM-as-judge (design law, 2026-07-18).
+- **Know what the bench cannot see, and say so.** The fixture run reports
+  `retrieval: bm25-only`, so it is structurally blind to any change in the
+  semantic cohort, the entry threshold, or the fusion of the two - a green
+  fixture run is evidence about BM25 and about nothing else. It also issues a
+  single call at `limit=max(ks)` and slices, so it cannot see behaviour that
+  varies with call depth. Two real defects lived in those blind spots. When a
+  change lands in one of them, measure it directly against a copy of a real
+  brain and report that, rather than quoting a benchmark that never exercised
+  the code.
+- **Reintroduce the defect to prove the test is a guard.** A test written to
+  prevent a recurrence is not finished until it has been seen to fail against
+  the old behaviour. Twice this has caught a test that proved nothing: a
+  limit-invariance suite passed against the broken code because its corpus was
+  smaller than the pool being truncated, so no truncation ever occurred. Revert
+  the fix, watch it go red, restore it. Cheap, and the alternative is a green
+  suite that guards nothing - which is exactly how the `--force` backup defect
+  survived several releases.
 
 ## Docs in lockstep
 

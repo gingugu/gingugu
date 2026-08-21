@@ -24,24 +24,21 @@ import re
 import sqlite3
 
 from . import decay
-from . import embeddings as emb
-from .embeddings import EmbeddingProvider, cosine
+from .embeddings import EmbeddingProvider
 from .models import Confidence, Memory
 from .search_common import COLUMNS, build_filters
+from .semantic_pool import ENTRANT_CAP, SEMANTIC_COHORT, semantic_pool
 
 logger = logging.getLogger(__name__)
 
-# Pull this many × limit candidates per pool before composite re-ranking.
+# Still used by `search_filters`, which oversamples its own candidate pool
+# before re-sorting. That is a separate pool with a separate defect of its own
+# (a `sort_by` applied after a differently-ordered truncation); it is not the
+# semantic cohort and must not be conflated with it.
 _CANDIDATE_MULTIPLIER = 4
 
 # RRF constant. 60 is the canonical value from the original RRF paper.
 _RRF_K = 60
-
-# Cosine floor for memories that enter the fusion WITHOUT a BM25 match.
-# BM25 candidates always keep their semantic rank; this gate only applies
-# to purely-semantic entrants, so weak lookalikes can't displace keyword
-# matches. Tuned against the real-brain benchmark (bench/).
-_SEMANTIC_ENTRY_MIN = 0.55
 
 _TOKEN_RE = re.compile(r"[^\w]+", re.UNICODE)
 
@@ -148,7 +145,9 @@ def search(
         claims=claims,
         orphans=orphans,
     )
-    pool_size = max(limit * _CANDIDATE_MULTIPLIER, limit)
+    # Fetch enough rows to satisfy a large request, but never fewer than the
+    # cohort: the pool has two jobs and only one of them scales with `limit`.
+    pool_size = max(SEMANTIC_COHORT, limit)
 
     sql = (
         f"SELECT {COLUMNS}, bm25(memories_fts) AS bm25_score "
@@ -164,12 +163,20 @@ def search(
     # (more negative = better match), so position is the rank (1-indexed).
     bm25_ranks: dict[str, int] = {row["id"]: i + 1 for i, row in enumerate(rows)}
 
-    # Entrant cap scales with retrieval depth: enough room for genuine
-    # semantic-only matches, small enough that entrants can't compress the
-    # BM25 candidates' semantic ranks into noise (benchmark-tuned).
-    entrant_cap = max(1, limit // 2)
-    semantic_ranks = _semantic_pool(
-        conn, query, filters, filter_params, embedder, entrant_cap, set(bm25_ranks)
+    # Rank semantics against the top of the pool only. When `limit` exceeds the
+    # cohort we fetch extra BM25 rows to have enough to return; those rows keep
+    # their BM25 rank and stay out of the semantic ranking, so a deep request
+    # cannot reshuffle the relevance of a shallow one.
+    cohort_ids = set(list(bm25_ranks)[:SEMANTIC_COHORT])
+    semantic_ranks = semantic_pool(
+        conn,
+        query,
+        filters,
+        filter_params,
+        embedder,
+        ENTRANT_CAP,
+        cohort_ids,
+        set(bm25_ranks),
     )
     if not bm25_ranks and not semantic_ranks:
         return []
@@ -205,67 +212,12 @@ def search(
             mem.score = relevance
         results.append(mem)
 
-    results.sort(key=lambda m: m.score or 0.0, reverse=True)
+    # Break ties on id, not on iteration order. Exact score ties are common
+    # (RRF maps equal rank pairs to identical floats), and the ordering among
+    # them used to come from `_fuse_ranks` iterating a `set` - so which of two
+    # tied memories came first varied between processes for the same query on
+    # the same data. Same reasoning as the cohort fix above: a query must mean
+    # the same thing every time it is asked, and "which one shows up first" is
+    # not a place to leave a coin flip.
+    results.sort(key=lambda m: (-(m.score or 0.0), m.id))
     return results[:limit]
-
-
-def _semantic_pool(
-    conn: sqlite3.Connection,
-    query: str,
-    filters: list[str],
-    filter_params: list[object],
-    embedder: EmbeddingProvider | None,
-    entrant_cap: int,
-    bm25_ids: set[str],
-) -> dict[str, int] | None:
-    """Semantic ranking over BM25 candidates plus qualified entrants.
-
-    Cosine similarity is computed over the whole filtered corpus —
-    brute-force on purpose: at personal-brain scale it is faster than
-    maintaining a vector index. Every BM25 candidate with an embedding
-    keeps a semantic rank (never displaced), and memories with no BM25
-    match join the fusion only when their similarity clears
-    ``_SEMANTIC_ENTRY_MIN`` — at most ``entrant_cap`` of them — so
-    purely-semantic matches surface without weak lookalikes displacing
-    keyword matches. Returns None if the embedder is missing/disabled,
-    the query can't be encoded, or no filtered memory has a current-dim
-    embedding.
-    """
-    if embedder is None or not getattr(embedder, "enabled", False):
-        return None
-    try:
-        query_vec = embedder.encode(query)
-    except Exception:  # pragma: no cover - defensive
-        logger.exception("query encode failed; falling back to BM25-only")
-        return None
-    if query_vec is None:
-        return None
-
-    where = " AND ".join(["e.dim = ?", *filters]) if filters else "e.dim = ?"
-    rows = conn.execute(
-        "SELECT m.id, e.embedding FROM memory_embeddings e "
-        "JOIN memories m ON m.id = e.memory_id "
-        f"WHERE {where}",
-        [embedder.dim, *filter_params],
-    ).fetchall()
-    if not rows:
-        return None
-
-    candidates: list[tuple[str, float]] = []
-    entrants: list[tuple[str, float]] = []
-    for r in rows:
-        try:
-            vec = emb.unpack(r["embedding"])
-        except Exception:  # pragma: no cover - defensive
-            continue
-        sim = cosine(query_vec, vec)
-        if r["id"] in bm25_ids:
-            candidates.append((r["id"], sim))
-        elif sim >= _SEMANTIC_ENTRY_MIN:
-            entrants.append((r["id"], sim))
-    entrants.sort(key=lambda x: x[1], reverse=True)
-    sims = candidates + entrants[:entrant_cap]
-    if not sims:
-        return None
-    sims.sort(key=lambda x: x[1], reverse=True)
-    return {mid: i + 1 for i, (mid, _) in enumerate(sims)}

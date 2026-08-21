@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Asking for fewer results no longer changes which results you get.**
+  `memory_recall(query, limit=3)` was not the first three of the same query at
+  `limit=10`. The semantic candidate cohort was sized from `limit`, so a
+  memory's semantic rank - and therefore its relevance and the final order -
+  moved with the number of rows requested. Narrowing a query to be precise
+  returned a different and worse answer, the opposite of what the caller
+  intended. Measured across 5 queries in 2 namespaces of a real store: 8 of 10
+  were unstable and 4 returned a different top result purely from the limit;
+  after the fix, none are.
+
+  The cohort and entrant cap are now fixed constants, set to the geometry the
+  retrieval benchmark already measured, so a `limit=10` call returns exactly
+  what it did before and every other limit now behaves the same way.
+
+- **Equally-scored memories come back in a stable order.** Rank fusion maps a
+  swapped pair of ranks to identical scores, so exact ties are common, and the
+  order among tied memories was falling out of set iteration - the same query
+  against the same data could return them in a different order from one run to
+  the next. Ties now break on memory id.
+
 - **Pinned memories are reported correctly and survive an export/import round
   trip.** The `memories` column list existed as four private copies, and when
   `pinned` was added only two of them gained it. Nothing failed loudly: a short
