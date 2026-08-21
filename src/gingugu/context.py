@@ -17,11 +17,14 @@ Quotas are filled recency-first so a freshly-stored, never-accessed memory
 (the "where we left off" signal) always survives the cut. Any slots left after
 the guaranteed quotas are backfilled from the combined pool by composite score.
 
-Results are returned in the order selection produced them, because the buckets
-are not scored on a comparable scale: only the task bucket has a real search
-relevance, and re-sorting the selected set by composite score would rank a
-guaranteed recency slot below every task hit - undoing the quota that just
-protected it.
+Selection order and presentation order are separate decisions. Quotas are
+filled recency-first (a survival question); the result is then presented by
+bucket membership - task, recency, cross-namespace, backfill - because the
+buckets are not scored on a comparable scale. Only the task bucket has a real
+search relevance, so re-sorting the selected set by composite score would rank
+a guaranteed recency slot below every task hit, undoing the quota that just
+protected it. Within a bucket the scores ARE comparable, and each bucket is
+given a deterministic total order so ties never fall to SQLite.
 
 Types ``architecture`` and ``decision`` get a +0.1 score boost (disproportionately
 useful at session start).
@@ -182,6 +185,19 @@ def build_context(
     cross_bucket = _cross_namespace_patterns(conn, exclude_ns=namespace_id)
     for mem in cross_bucket:
         mem.score = _score(mem, weights, decay_lambda, relevance=0.5)
+
+    # Give each SQL-ordered bucket a deterministic total order: native signal
+    # first, composite score to break ties, id last so the result never depends
+    # on SQLite's tie behaviour. Ties here are routine rather than exotic -
+    # memories written in one batch share a timestamp, and on a coarse system
+    # clock two separate writes land in the same tick - so without this the
+    # order comes from rowid on some platforms and from the clock on others.
+    # Comparing scores WITHIN a bucket is sound (every row got its relevance the
+    # same way); comparing them across buckets is not, which is why this sort is
+    # per-bucket and never global. It is also what keeps the architecture and
+    # decision boost meaningful now that presentation is not score-ordered.
+    recent_bucket.sort(key=lambda m: (m.last_accessed, m.score or 0.0, m.id), reverse=True)
+    cross_bucket.sort(key=lambda m: (m.access_count, m.score or 0.0, m.id), reverse=True)
 
     # De-duplicate across buckets, keeping each memory's highest score (a task
     # hit that also shows up in the recency bucket keeps its richer relevance).

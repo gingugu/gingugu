@@ -5,7 +5,7 @@ _Last updated: 2026-08-21_
 ## In Flight
 
 **`memory_context` presents what it selected, instead of re-sorting it -
-`fix/context-presentation-ordering`.** 618 tests green (was 614), `ruff` +
+`fix/context-presentation-ordering`.** 619 tests green (was 614), `ruff` +
 `black` clean.
 
 Two defects in the same presentation code, one PR. `context.py` prepended the
@@ -39,15 +39,26 @@ and then interleaves the ranked tails by rank position - preserving each
 namespace's internal order without burying the second one's freshest material
 under the first one's entire list.
 
-**Regression evidence:** `tests/test_context_ordering.py` (4 tests), asserting
+Each bucket also gained a deterministic total order - native signal, then
+composite score, then `id`. CI caught the need for it: `test_context_type_boost`
+failed on two Windows runners and passed on the other seven. The two fixtures
+tie exactly on `last_accessed` (coarse clock, same tick), and the old global
+score sort had been masking that tie via the type boost. Removing the sort
+exposed a latent flake and, with it, the fact that the architecture/decision
+boost no longer influenced order at all. Comparing scores *within* a bucket is
+sound - every row got its relevance the same way - so the boost lives there.
+
+**Regression evidence:** `tests/test_context_ordering.py` (5 tests), asserting
 POSITION in the payload over the live tool surface - a layer where the existing
 pin tests stopped, since they assert position against `build_context` directly
 and only membership through the handler. Reverted the source with the tests in
-place: **3 of the 4 fail**, reporting the pin at index 5 of 5, both pins at 10
+place: **3 of the 5 fail**, reporting the pin at index 5 of 5, both pins at 10
 and 11 in a two-namespace load, and the freshest memory below the guaranteed
-region. The fourth (`test_second_namespace_is_interleaved_not_appended`) passes
-against the old code too and says so in its docstring - the old global sort also
-mixed namespaces, so it guards the replacement merge rather than the defect.
+region. `test_identical_timestamps_break_deterministically` forces the exact tie
+the Windows runners hit and fails without the per-bucket tiebreak. The remaining
+one (`test_second_namespace_is_interleaved_not_appended`) passes against the old
+code too and says so in its docstring - the old global sort also mixed
+namespaces, so it guards the replacement merge rather than the defect.
 
 ## Shipped to `main`, awaiting release in v0.18.0
 

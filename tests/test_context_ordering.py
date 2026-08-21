@@ -149,3 +149,46 @@ async def test_second_namespace_is_interleaved_not_appended(server) -> None:
         f"beta's first entry served at {sources.index('beta')} of {len(sources)}; "
         f"order was {sources}"
     )
+
+
+@pytest.mark.asyncio
+async def test_identical_timestamps_break_deterministically(server, tmp_path) -> None:
+    """Ties on the bucket's native signal must not be left to SQLite.
+
+    Memories written in one batch share a timestamp, and on a coarse system
+    clock two separate writes land in the same tick - so `last_accessed` ties
+    are routine, not exotic. Left untied, order comes from rowid on some
+    platforms and from the clock on others: CI caught exactly that, passing on
+    six runners and failing on two. The composite score breaks the tie, which is
+    also what keeps the architecture/decision boost meaningful.
+    """
+    import sqlite3
+
+    plain = await _store(server, "plain fact")
+    arch_res = _payload(
+        await server.call_tool(
+            "memory_store",
+            {
+                "title": "arch note",
+                "content": "body",
+                "type": "architecture",
+                "dedupe_check": False,
+                "relation_check": False,
+            },
+        )
+    )
+    arch = arch_res["memory"]["id"]
+
+    # Force the exact tie the coarse-clock runners produce.
+    conn = sqlite3.connect(tmp_path / "ordering.db")
+    conn.execute("UPDATE memories SET last_accessed = '2026-01-01T00:00:00+00:00'")
+    conn.commit()
+    conn.close()
+
+    memories = await _context(server, limit=5)
+
+    ids = [m["id"] for m in memories]
+    assert ids.index(arch) < ids.index(plain), (
+        "architecture must win a last_accessed tie via the type boost; "
+        f"order was {[m['title'] for m in memories]}"
+    )
