@@ -171,8 +171,11 @@ AI client (Claude Code / Cursor / Windsurf / …)
 - **The user-level rules file is part of the bootstrap, and is merged, not
   written.** `bootstrap/global_rules.py` manages the protocol inside a marked
   block in `~/.claude/CLAUDE.md` — the file loaded in *every* session, including
-  directories with no project protocol installed. A repo rules file is created
-  and owned by `init`, so a `--force`-gated whole-file write is fine there; the
+  directories with no project protocol installed. A repo rules file is written
+  by `init`, so a `--force`-gated whole-file write is fine there **provided it
+  backs the old bytes up first** - "init writes this file" was read for a while
+  as "init owns this file", and the rules-file path shipped with no `.bak` at
+  all until that was corrected; the
   user-level file is hand-authored and carries identity/workflow rules unrelated
   to memory, so the only bytes `init` may rewrite are the ones between its own
   sentinels. Everything else appends. An unmanaged protocol already in the file
@@ -180,7 +183,20 @@ AI client (Claude Code / Cursor / Windsurf / …)
   There is deliberately **no `--global` flag**: making the step opt-in would
   imply the protocol is optional. It exists because that file drifted — it still
   said "build edges aggressively" long after the templates had moved on, with no
-  tooling able to correct it.
+  tooling able to correct it. Nothing we ship may name that flag; a test asserts
+  the managed note, the module docstring and the run output never do, because the
+  note is written into the user's own `CLAUDE.md` and a stale invocation there is
+  advice they will follow and watch fail.
+- **A `--force` backup keys off content, never off ownership.** Whether a file
+  carries `gingugu-init:managed-file` says whether *we* wrote it; it says nothing
+  about whether the user has since edited it. Conditioning the `.bak` on the
+  marker being absent - as `_write_file` originally did - makes the protection
+  expire the moment it succeeds, because the first `--force` stamps the marker
+  that suppresses every later backup. The rule is therefore: back up whenever
+  `--force` would change the bytes on disk, and only then, so an unchanged file
+  leaves no litter. Both write paths (`_write_file` for hooks and commands,
+  `init_rules_file` for `--client`) share the one implementation specifically so
+  the guarantee cannot drift apart again.
 - **The UI ships in the wheel.** `gingugu ui` (`webui.py`) serves the pre-built
   React bundle *and* a live `/api/export` read from one process on one port, so
   pip-installed users get the Memory Explorer with no repo checkout and no Node.

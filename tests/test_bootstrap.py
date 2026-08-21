@@ -356,11 +356,65 @@ def test_force_backs_up_a_customized_hook_that_merely_mentions_gingugu(tmp_path)
     assert "gingugu-init:managed-file" in (hooks / "stop.py").read_text()
 
 
-def test_reforce_over_our_own_file_makes_no_backup(tmp_path):
-    """Our own marked file is not foreign, so re-running --force stays quiet."""
+def test_reforce_backs_up_local_edits_to_our_own_marked_file(tmp_path):
+    """Regression for the second round of real data loss.
+
+    This assertion used to run the other way - it asserted that re-running
+    ``--force`` over our own marked file wrote NO backup, and it was green in CI
+    the whole time the behavior was destroying files. Conditioning the backup on
+    the marker being ABSENT meant the net vanished the moment it first worked:
+    every repo initialized after the marker shipped had no protection left.
+    """
+    hooks = tmp_path / ".claude" / "hooks"
+    main(["--path", str(tmp_path)])
+
+    edited = _read(hooks / "stop.py") + "\n# MY PRECIOUS LOCAL EDIT\n"
+    (hooks / "stop.py").write_text(edited)
+
+    main(["--path", str(tmp_path), "--force"])
+
+    assert (
+        hooks / "stop.py.bak"
+    ).read_text() == edited, "local edits to a managed file must survive --force as a .bak"
+    assert "MY PRECIOUS LOCAL EDIT" not in _read(hooks / "stop.py")
+
+
+def test_reforce_over_an_untouched_file_makes_no_backup(tmp_path):
+    """No change on disk means nothing to lose - stay quiet rather than litter."""
     main(["--path", str(tmp_path)])
     main(["--path", str(tmp_path), "--force"])
     assert not (tmp_path / ".claude" / "hooks" / "stop.py.bak").exists()
+
+
+@pytest.mark.parametrize("client,filename", CLIENT_RULES_FILES.items())
+def test_force_backs_up_a_hand_authored_rules_file(tmp_path, client, filename):
+    """A rules file is the user's from line one - it was never ours to replace.
+
+    This path had no backup at all, on any branch: ``--force`` wrote the template
+    straight over whatever the user had written.
+    """
+    rules = tmp_path / filename
+    handwritten = "# MY HAND-WRITTEN RULES\n- never delete prod\n"
+    rules.write_text(handwritten)
+
+    main(["--path", str(tmp_path), "--client", client, "--force"])
+
+    assert (
+        tmp_path / f"{filename}.bak"
+    ).read_text() == handwritten, "a hand-authored rules file must be backed up before --force"
+    assert "## Memory Protocol" in _read(rules)
+
+
+def test_dry_run_force_writes_nothing_at_all(tmp_path):
+    """--dry-run must not create the backup either; it reports, it does not act."""
+    hooks = tmp_path / ".claude" / "hooks"
+    main(["--path", str(tmp_path)])
+    (hooks / "stop.py").write_text("# local edit\n")
+
+    main(["--path", str(tmp_path), "--force", "--dry-run"])
+
+    assert _read(hooks / "stop.py") == "# local edit\n"
+    assert not (hooks / "stop.py.bak").exists()
 
 
 # --- theme ---------------------------------------------------------------------

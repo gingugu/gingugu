@@ -252,3 +252,25 @@ def test_global_flag_is_not_a_thing(tmp_path):
     """A --global flag would imply the step is optional. It isn't."""
     with pytest.raises(SystemExit):
         main(["--path", str(tmp_path), "--global"])
+
+
+def test_nothing_we_ship_advertises_the_forbidden_global_flag(tmp_path, monkeypatch):
+    """We must not tell the user to run a command the parser rejects.
+
+    The managed note is written INTO the user's own CLAUDE.md, so a stale
+    invocation there is advice they will follow and watch fail.
+    """
+    from gingugu.bootstrap import global_rules
+
+    monkeypatch.setattr(
+        "gingugu.bootstrap.global_rules.global_claude_md",
+        lambda: tmp_path / ".claude" / "CLAUDE.md",
+    )
+    surfaces = [
+        global_rules._MANAGED_NOTE,
+        global_rules.__doc__ or "",
+        render_block(PROTOCOL),
+        "\n".join(init_global_rules(dry_run=True)),
+    ]
+    for surface in surfaces:
+        assert "init --global" not in surface

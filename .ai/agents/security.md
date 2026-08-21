@@ -19,6 +19,12 @@ a **public** repository.
   is open source.
 - **Path safety.** Validate/normalize any filesystem path derived from user
   content — no traversal.
+- **Never destroy a user's bytes without a copy.** Any code path that overwrites
+  a file in the user's repo or home directory writes `<name>.bak` first whenever
+  the content would change. Ownership is not the test: a file `gingugu` wrote is
+  still full of edits the user made afterwards, and keying the backup off "did we
+  write this?" is how `init --force` came to destroy customized hooks silently
+  for three releases. Destructive flags earn a net, not a shortcut.
 - **External writes are approval-gated.** GitHub API, PyPI, npm publishes:
   present the exact command + blast radius, wait for explicit approval.
 

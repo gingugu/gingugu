@@ -167,17 +167,27 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.14.0** (PyPI). MINOR: `gingugu init` gained user-level
-  rules management — the memory protocol now lives in a marked block in
-  `~/.claude/CLAUDE.md` that `init` owns, strictly additive outside its
-  markers. Shipped alongside it: the `age`/freshness-anchor fix (`age` is
-  anchored on `reference_timestamp` and elaborates to
-  `"7 weeks ago (updated just now)"`; the anchor became a MAX instead of a
-  COALESCE; a title/content rewrite now advances `last_confirmed`), the
-  relation-discipline guidance reversal, and two `gingugu init` bootstrap
-  fixes. Existing installs need `gingugu init --force` to pick up the template
-  changes. Public repo `gingugu/gingugu`.
-- Previous: **0.13.0** — introduced the derived `age` payload field and fixed
-  the startup contract's workspace inference.
+- Current version: **0.17.0** (PyPI). Adds the `unverified` claim state (a ref
+  a memory names without ever saying what became of it - excluded from
+  `claims.open` and read via `memory_search(claims="unverified")`) and the
+  orphan-enumeration + edge-reversal work (`graph.orphan_sample`,
+  `memory_search(orphans=True)`, `memory_unrelate(reverse=True)`). Public repo
+  `gingugu/gingugu`.
+- Previous: **0.16.0** - edge repair: `memory_unrelate` (retype in place or
+  remove) and `memory_edges` (enumerate a memory's relations).
+- **0.15.0** - pinned memories: `memory_update(pinned=True)` marks a memory as
+  unconditionally loaded by `memory_context`, exempt from ranking.
+- **0.14.0** - `gingugu init` gained user-level rules management: the memory
+  protocol lives in a marked block in `~/.claude/CLAUDE.md` that `init`
+  manages, strictly additive outside its markers. Shipped alongside it: the
+  `age`/freshness-anchor fix (`age` is anchored on `reference_timestamp` and
+  elaborates to `"7 weeks ago (updated just now)"`; the anchor became a MAX
+  instead of a COALESCE; a title/content rewrite now advances
+  `last_confirmed`), the relation-discipline guidance reversal, and two
+  `gingugu init` bootstrap fixes. Existing installs need `gingugu init --force`
+  to pick up template changes - and as of the current unreleased fix, that
+  command backs up anything it replaces.
+- **0.13.0** - introduced the derived `age` payload field and fixed the
+  startup contract's workspace inference.
 - Two-layer namespace convention (`crow` + project) is live.
 - See `.ai/plans/status.md` for in-flight work and carry-overs.
