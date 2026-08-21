@@ -230,6 +230,21 @@ def unpack(blob: bytes) -> list[float]:
     return list(struct.unpack(f"<{n}f", blob))
 
 
+def embedding_input(title: str, content: str) -> str:
+    """The text fed into the embedder for a memory.
+
+    Title carries strong signal so we prepend it - fastembed's BGE models
+    handle short prefixes well.
+
+    This lives here, not in the storage layer, because two callers must agree
+    on it exactly: the write path that persists a memory's vector, and any
+    read path that encodes a fresh payload to compare against those vectors.
+    A drift between the two recipes would not raise; it would quietly compare
+    vectors built from different text and return a plausible wrong number.
+    """
+    return f"{title}\n\n{content}"
+
+
 def cosine(a: list[float], b: list[float]) -> float:
     """Cosine similarity between two vectors. Returns 0.0 on degenerate input."""
     if not a or not b or len(a) != len(b):

@@ -11,6 +11,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Write-time hints now report an absolute similarity instead of a rank
+  artifact.** `similar_memories` and `suggested_relations` reported the fused
+  RRF relevance from the search engine. That number is a function of a
+  candidate's *rank* in the retrieval pools, normalized so rank 1 in both maps
+  to 1.0 - and something is always rank 1, so the top hit trended toward 1.0 for
+  every payload ever written. Both gates (0.5 for merge candidates, 0.3 for
+  relation candidates) sat below what that arithmetic could produce, so neither
+  ever rejected anything: **every store returned three merge candidates and
+  three relation candidates**, whatever was written, each needing a manual read
+  to dismiss.
+
+  Measured on a 1,423-memory store, the payload "Lunch was a tuna sandwich"
+  scored 0.9262 against a corpus of software engineering notes - the identical
+  score, to four decimals, that two other unrelated payloads received in a
+  different namespace, because all three landed on the same rank pair. The full
+  range between nonsense and a real duplicate was 0.926 to 0.984.
+
+  Retrieval still finds the candidates; an absolute measure now adjudicates
+  them. Each hit reports `similarity` (cosine over the stored embeddings, or
+  token Jaccard when embeddings are unavailable) plus the `basis` it was
+  measured on, and no longer carries a retrieval `score`. Cutoffs are calibrated
+  against 228 known near-duplicate pairs and 7,688 random pairs: cosine 0.80 and
+  Jaccard 0.15 land on the same operating point, so disabling embeddings changes
+  the instrument's precision but not the meaning of the gate.
+
+  On the same five payloads, hints emitted across five stores fell from 30 to
+  10: unrelated payloads now return **empty lists**, while genuine duplicates
+  are surfaced exactly as before.
+
+  Hint payloads that consumed the `score` field must read `similarity`.
+
 - **`memory_context` now presents memories in the order it selected them.** The
   pinned tier was served last on every call: the selection layer prepends pins
   correctly, then the handler re-sorted the merged result by composite score,
