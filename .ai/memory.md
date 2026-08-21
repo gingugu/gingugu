@@ -54,7 +54,8 @@
 | `database.py` | Connection, schema, WAL, migrations (`PRAGMA user_version`), FTS5 triggers |
 | `models.py` | Memory / namespace / relation data models. Also owns `MEMORY_COLUMNS` - the one declared `memories` column list - plus `memory_columns_sql()` / `memory_placeholders_sql()`. Every module that reads or inserts a memory row derives its SQL from these; private copies drifted and silently dropped `pinned` |
 | `storage.py` | Memory CRUD (store, update, forget) |
-| `search.py` | True hybrid engine: independent BM25 + semantic pools, RRF fusion |
+| `search.py` | True hybrid engine: BM25 pool, RRF fusion, composite re-rank. Ties break on id, never on iteration order |
+| `semantic_pool.py` | The cosine ranking cohort, split out when `search.py` crossed 300 lines. `SEMANTIC_COHORT` / `ENTRANT_CAP` are FIXED constants: sizing them by `limit` made a memory's relevance depend on how many rows the caller asked for |
 | `search_common.py` | Shared SQL columns + WHERE-fragment builders |
 | `search_filters.py` | `advanced_search`: filtered search + metadata-only listing |
 | `embeddings.py` | Semantic vector generation |

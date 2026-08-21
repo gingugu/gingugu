@@ -4,9 +4,45 @@ _Last updated: 2026-08-21_
 
 ## In Flight
 
-**One column list for `memories` + a WAL-safe pre-migration backup -
-`fix/unify-memory-columns`.** Two data-integrity defects, one PR. 589 tests
-green, `ruff` + `black` clean.
+**Recall relevance no longer depends on `limit` - `fix/recall-limit-invariance`.**
+606 tests green, `ruff` + `black` clean.
+
+`search(q, limit=k)` was not the first k of `search(q, limit=K)`. The semantic
+cohort was sized `limit * 4` plus `limit // 2` entrants, so a memory's semantic
+RANK - and therefore its relevance, and therefore the result order - moved with
+the number of rows the caller asked for. A caller narrowing the request to be
+precise got a different, worse answer.
+
+Measured on the real brain across 5 queries x 2 namespaces: **8 of 10 pairs
+unstable, 4 of them returning a different top-1 memory purely from the limit.
+After the fix, 0 of 10**, with the full prefix invariant holding.
+
+The cohort and entrant cap are now fixed constants in a new `semantic_pool.py`,
+set to the geometry at the benchmarked depth (`bench/` issues one call at
+limit=10, giving a 40-row pool and a 5-entrant cap). Verified: a limit=10 call
+returns identical ids and identical scores before and after, so the recorded
+real-brain benchmark still describes this code. Every other limit now behaves
+the way the benchmarked one already did.
+
+**A second defect surfaced while measuring the first.** Comparing old against
+new at depth 10 showed 2 of 10 pairs differing - then 0 of 10 on a rerun of the
+same comparison. The variance was the finding: RRF maps a swapped rank pair to
+identical floats, so exact ties are routine, and the order among tied memories
+came from `_fuse_ranks` iterating a `set`. The same query on the same data
+returned tied memories in a different order from one process to the next. Ties
+now break on id.
+
+**On the benchmark:** `uv run python -m bench` reports `retrieval: bm25-only`
+and is unchanged (MRR 1.000 on the fixture). That confirms no BM25 regression
+and nothing more - the fixture bench runs without embeddings, so it is
+structurally blind to a semantic-cohort change, the same way it was blind to
+call depth. Do not read a green fixture run as evidence about this path.
+
+## Shipped to `main`, awaiting release in v0.18.0
+
+**One column list for `memories` + a WAL-safe pre-migration backup - PR #54,
+merged `fd5bcfa` (2026-08-21).** Two data-integrity defects, one PR. 589 tests
+green at merge, 9/9 CI.
 
 1. **The column list had drifted into four private copies.** `storage.py` and
    `context.py` carried `pinned`; `search_common.py` and `portability.py` did
@@ -41,8 +77,6 @@ green, `ruff` + `black` clean.
 migration that adds a column without teaching the readers fails CI. Verified by
 deliberately removing `pinned` from the tuple: 4 tests go red, structural and
 behavioural.
-
-## Shipped to `main`, awaiting release in v0.18.0
 
 **Bootstrap `--force` data loss - PR #53, merged `2646666` (2026-08-21).** Three
 defects in the `bootstrap` package, one PR. All three were live in released code
