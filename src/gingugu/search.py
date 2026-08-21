@@ -13,8 +13,9 @@ When no embeddings are available (provider disabled, missing rows, etc.)
 the relevance falls back to a rank-based BM25 score — which still avoids
 the old normalize_bm25 compression issue because ranks don't squash.
 
-Filtered listing without a query lives in ``search_filters.py``
-(``advanced_search``); shared SQL fragments live in ``search_common.py``.
+``search_filters.py`` (``advanced_search``) picks between this engine and
+the column-ordered strategies in ``search_listing.py`` according to
+``sort_by``; shared SQL fragments live in ``search_common.py``.
 """
 
 from __future__ import annotations
@@ -30,12 +31,6 @@ from .search_common import COLUMNS, build_filters
 from .semantic_pool import ENTRANT_CAP, SEMANTIC_COHORT, semantic_pool
 
 logger = logging.getLogger(__name__)
-
-# Still used by `search_filters`, which oversamples its own candidate pool
-# before re-sorting. That is a separate pool with a separate defect of its own
-# (a `sort_by` applied after a differently-ordered truncation); it is not the
-# semantic cohort and must not be conflated with it.
-_CANDIDATE_MULTIPLIER = 4
 
 # RRF constant. 60 is the canonical value from the original RRF paper.
 _RRF_K = 60

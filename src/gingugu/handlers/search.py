@@ -60,7 +60,13 @@ def register(mcp, ctx: ServerContext) -> None:
         total result cap. A multi-namespace response carries ``namespaces`` and stamps
         each memory with its source ``namespace``.
         ``tags`` is comma-separated; all provided tags must match. ``sort_by`` is one of:
-        relevance, created, accessed, decay_score. ``confidence`` sets a minimum
+        relevance, created, accessed, decay_score. A ``created``/``accessed`` sort
+        orders the whole matching corpus before the limit, so it returns the true
+        newest (or least recently read) rows and narrowing ``limit`` narrows that
+        answer instead of changing it. With a query, that corpus is the keyword
+        match set: a date sort asks something relevance cannot answer, so the
+        semantic cohort does not vote in it and results carry no ``score``.
+        ``confidence`` sets a minimum
         confidence threshold (verified > inferred > stale > deprecated). ``created_after``
         and ``created_before`` accept ISO 8601 date strings (e.g. "2025-01-01").
         ``include_deprecated`` also returns deprecated memories (stale ones are always
