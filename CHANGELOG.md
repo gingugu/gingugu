@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`gingugu init --force` now backs up every file it replaces.** The backup was
+  conditioned on the target *lacking* the `gingugu-init:managed-file` marker, so
+  the protection expired the first time it worked: the opening `--force` wrote a
+  `.bak` and stamped the marker, and every `--force` after that recognized its
+  own marker and overwrote the file - local edits included - with no `.bak` and
+  no warning. A file being ours says nothing about whether you have since
+  customized it. The backup now fires whenever `--force` would change what is on
+  disk, and an unchanged file still writes nothing, so re-running `init` does not
+  litter `.bak` files.
+
+- **Rules files for `--client windsurf|cursor|cline` are backed up too.** That
+  path had no backup on any branch: `--force` wrote the protocol template
+  straight over `.windsurfrules` / `.cursorrules` / `.clinerules`, which are
+  hand-authored from line one and were never `init`'s to replace. Both write
+  paths now share a single implementation, so the guarantee cannot drift apart
+  again.
+
+- **Removed three references to a `gingugu init --global` flag that does not
+  exist** and that `init` rejects. The worst of them was written *into* your
+  user-level `~/.claude/CLAUDE.md`, so the managed block told you to run a
+  command that errors. The global rules step has deliberately never been
+  opt-in; only the documentation claimed otherwise.
+
 ## [0.17.0] - 2026-08-14
 
 ### Added

@@ -79,23 +79,42 @@ _TEMPLATE_SIGNATURE = "gingugu-init:managed-file"
 
 
 def _write_file(
-    path: Path, content: str, *, force: bool, dry_run: bool, results: list[str]
+    path: Path,
+    content: str,
+    *,
+    force: bool,
+    dry_run: bool,
+    results: list[str],
+    skip_hint: str = "",
 ) -> None:
     if path.exists() and not force:
-        results.append(f"  skip   {path}  (exists; use --force to overwrite)")
+        results.append(f"  skip   {path}  (exists; use --force to overwrite){skip_hint}")
         return
+
+    existing = _safe_read(path) if path.exists() else None
+    # Back up whenever `--force` would change what is on disk - NOT only when the
+    # file looks foreign.
+    #
+    # The backup used to be conditioned on _TEMPLATE_SIGNATURE being ABSENT, which
+    # meant the net disappeared the moment it did its job: the first `--force`
+    # wrote a .bak and stamped the marker, and every `--force` after that saw its
+    # own marker and destroyed the user's edits silently. A file being ours says
+    # nothing about whether the user has since customized it.
+    changed = existing is not None and existing != content
     foreign = (
-        path.exists()
+        existing is not None
         and _TEMPLATE_SIGNATURE in content
-        and _TEMPLATE_SIGNATURE not in _safe_read(path)
+        and _TEMPLATE_SIGNATURE not in existing
     )
-    if foreign and not dry_run:
-        (path.parent / f"{path.name}.bak").write_text(_safe_read(path))
+    if changed and not dry_run:
+        (path.parent / f"{path.name}.bak").write_text(existing or "")
+
     verb = "would write" if dry_run else ("overwrite" if path.exists() else "write")
     if not dry_run:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content)
     results.append(f"  {verb:<9} {path}")
+
     if foreign:
         results.append(
             f"  WARNING: {path.name} was not written by this version of `gingugu "
@@ -103,6 +122,9 @@ def _write_file(
             f"{path.name}.bak. If your settings.json invokes it with flags the "
             f"replacement does not declare, that command needs updating too."
         )
+    elif changed:
+        would = "would back up" if dry_run else "backed up"
+        results.append(f"  {would} your version to {path.name}.bak")
 
 
 def init_claude_code(target: Path, *, force: bool, dry_run: bool) -> list[str]:
@@ -178,16 +200,19 @@ def init_rules_file(client: str, target: Path, *, force: bool, dry_run: bool) ->
     rules_path = target / CLIENT_RULES_FILES[client]
     protocol = _read_template("rules_protocol.md.tmpl")
 
-    if rules_path.exists() and not force:
-        results.append(
-            f"  skip   {rules_path}  (exists; use --force to overwrite). "
-            "Paste the Memory Protocol section yourself, or re-run with --force."
-        )
-    else:
-        verb = "would write" if dry_run else "write"
-        if not dry_run:
-            rules_path.write_text(protocol)
-        results.append(f"  {verb} {rules_path}")
+    # Routed through _write_file so this path gets the same backup guarantee as
+    # the Claude Code hooks. It had none at all: a rules file is hand-authored by
+    # the user from line one, and `--force` replaced it with the template
+    # outright. Nothing here carries our marker, so the backup rests entirely on
+    # the content-changed check.
+    _write_file(
+        rules_path,
+        protocol,
+        force=force,
+        dry_run=dry_run,
+        results=results,
+        skip_hint=(". Paste the Memory Protocol section yourself, or re-run with --force."),
+    )
 
     results.append("")
     results.append(

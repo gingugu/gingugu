@@ -36,6 +36,15 @@
 - Run `uv run pytest -v` green before opening a PR.
 - CI matrix: ubuntu/macos/windows × Python 3.11–3.13 — cross-platform claims must
   be backed by green CI on all three OSes, not just local.
+- **A test asserting current behavior is not evidence the behavior is right.**
+  `test_reforce_over_our_own_file_makes_no_backup` asserted that `--force` wrote
+  no backup over our own managed file, and stayed green across every release in
+  which that behavior was destroying users' local edits. The suite was pinning
+  the defect, so a passing run said nothing about that path. When a test named
+  after a *mechanism* ("no backup is written") turns red, ask what the user
+  needed before assuming the change broke it - and when a bug is fixed, invert
+  the test that encoded it rather than deleting it, so the record shows the
+  behavior was chosen and then rejected.
 - **Ranking/scoring changes ship with benchmark evidence:** run
   `uv run python -m bench` (fixture floor) and a real-brain run against the
   recorded baseline (see `docs/roadmap.md` Phase 5.75). Grading is
