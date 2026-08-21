@@ -1,11 +1,44 @@
 # Project Status
 
-_Last updated: 2026-08-14_
+_Last updated: 2026-08-21_
 
 ## In Flight
 
-_Nothing in flight._ `main` is clean at the v0.17.0 release; both items below
-shipped in it.
+**Bootstrap `--force` data loss - `fix/bootstrap-backup-on-force`.** Three
+defects in the `bootstrap` package, one PR. All three were live in released code
+(v0.14.0 through v0.17.0, on PyPI). 581 tests green, `ruff` + `black` clean.
+
+1. **`_write_file` lost its backup net the moment the net first worked.** The
+   `.bak` was written only when the target _lacked_ `gingugu-init:managed-file`,
+   so the opening `--force` backed the file up and stamped the marker, and every
+   `--force` after that saw its own marker and overwrote the file - the user's
+   edits with it - silently. Proven by experiment: init a repo, edit a managed
+   hook, `--force`, and the edit is gone with no `.bak` on disk. Whether a file
+   is _ours_ says nothing about whether it has since been _customized_, so the
+   backup now keys off content changing, not ownership. An unchanged file still
+   writes no `.bak`, so re-running `init` does not litter.
+
+2. **The `--client` rules-file path had no backup on any branch.** `--force`
+   wrote the protocol template straight over `.windsurfrules` / `.cursorrules` /
+   `.clinerules`. Strictly worse than (1): those files are hand-authored from
+   line one and were never `init`'s to replace, and no test covered the path.
+   Found while scoping the fix for (1), not previously recorded. Both write
+   paths now go through `_write_file`, so there is one backup rule rather than
+   two that can drift.
+
+3. **Three strings advertised `gingugu init --global`,** a flag the parser
+   rejects and `test_global_flag_is_not_a_thing` asserts must `SystemExit`. The
+   worst was `_MANAGED_NOTE`, which is written _into_ the user's own
+   `~/.claude/CLAUDE.md` - shipping a file that tells the reader to run a command
+   that errors. Strings corrected (the flag was never added; the step is
+   deliberately not opt-in) and a test now fails if any shipped surface names it
+   again.
+
+**Worth carrying beyond this PR:** `test_reforce_over_our_own_file_makes_no_backup`
+asserted defect (1) _was correct_ and was green in CI the entire time the
+behavior was destroying files. 575 passing tests were never evidence that path
+was safe - the suite was holding the bug in place. The test is inverted, not
+deleted. See `.ai/standards/01-code-and-testing.md`.
 
 ## Shipped in v0.17.0 (2026-08-14)
 

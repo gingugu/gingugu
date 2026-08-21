@@ -1,8 +1,11 @@
-"""``gingugu init --global`` — manage the memory protocol in the USER-level rules file.
+"""User-level rules file - the memory protocol in the global ``CLAUDE.md``.
+
+Part of every ``gingugu init`` run; there is no flag for it, and deliberately so
+(see ``init_claude_code``). A ``--global`` flag would imply the step is optional.
 
 Why this is a separate path from ``init_rules_file``: a per-repo rules file is
-usually created by ``gingugu init`` and owned by it, so a whole-file write gated
-on ``--force`` is acceptable. The user-level file is the opposite. It is
+written by ``gingugu init``, so a whole-file write gated on ``--force`` (plus a
+``.bak``) is acceptable. The user-level file is the opposite. It is
 hand-authored, it accumulates identity, working style, and workflow rules that
 have nothing to do with memory, and it is loaded in **every** session — including
 sessions in directories with no project protocol installed. Overwriting it would
@@ -32,7 +35,7 @@ BEGIN_MARKER = "<!-- BEGIN GINGUGU MEMORY PROTOCOL -->"
 END_MARKER = "<!-- END GINGUGU MEMORY PROTOCOL -->"
 
 _MANAGED_NOTE = (
-    "<!-- Managed by `gingugu init --global`. Edits between these markers are\n"
+    "<!-- Managed by `gingugu init`. Edits between these markers are\n"
     "     replaced on re-run; put your own rules outside them. -->"
 )
 
@@ -153,7 +156,6 @@ def init_global_rules(*, dry_run: bool, path: Path | None = None) -> list[str]:
 
     results.append("")
     results.append(
-        "Re-run `gingugu init --global` after upgrading gingugu to refresh the "
-        "protocol in place."
+        "Re-run `gingugu init` after upgrading gingugu to refresh the protocol in place."
     )
     return results

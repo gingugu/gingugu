@@ -276,6 +276,10 @@ cd ~/code/my-repo && gingugu init --force
 if you want to see the changes before they land. Your `.claude/settings.json`
 is merged, not overwritten.
 
+If you have edited a managed file yourself, `--force` saves your version
+alongside it as `<name>.bak` before writing the new one, and says so in the
+output. A file it would not change is left untouched and gets no `.bak`.
+
 <details>
 <summary><strong>If an upgrade doesn't seem to take effect</strong></summary>
 
@@ -471,7 +475,8 @@ It installs:
 It's idempotent (re-run any time — that's how you pick up protocol changes after
 upgrading), `--dry-run` previews without writing, and `--force` overwrites
 existing hook files **in the target repo only** — it never authorizes appending
-to your user-level rules file.
+to your user-level rules file. Anything `--force` replaces is copied to
+`<name>.bak` first, including a `--client` rules file you wrote yourself.
 
 The first line of output is the resolved `target` directory. Check it: `--path`
 defaults to the current directory, and some wrappers change that for you. `uv run
