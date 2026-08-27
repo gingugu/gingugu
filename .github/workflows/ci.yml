@@ -37,4 +37,37 @@ jobs:
         run: uv run black --check .
 
       - name: Pytest
-        run: uv run pytest
+        run: uv run pytest -m "not bench_embeddings"
+
+  bench-embeddings:
+    runs-on: ubuntu-latest
+    # Retrieval scoring is pure arithmetic over SQLite + vectors, not OS- or
+    # interpreter-specific, so this runs once rather than across the test
+    # matrix - the matrix's job already covers whether fastembed installs
+    # and imports cleanly on every OS/Python cell.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install "3.13"
+
+      - name: Sync dependencies
+        run: uv sync --extra dev --python "3.13"
+
+      - name: Cache fastembed model
+        # fastembed's default cache_dir is tempfile.gettempdir()/fastembed_cache
+        # (/tmp/fastembed_cache on this runner), not ~/.cache/fastembed - verified
+        # against fastembed/common/utils.py, not assumed.
+        uses: actions/cache@v4
+        with:
+          path: /tmp/fastembed_cache
+          key: fastembed-bge-small-en-v1.5
+
+      - name: Pytest (bench, real embeddings)
+        run: uv run pytest -m bench_embeddings -v

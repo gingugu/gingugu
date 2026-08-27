@@ -41,6 +41,12 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--no-embeddings", action="store_true", help="force BM25-only retrieval on a real DB"
     )
+    parser.add_argument(
+        "--embeddings",
+        action="store_true",
+        help="also embed the fixture with the real (fastembed) provider for a hybrid run "
+        "(downloads the model on a cold cache; default fixture run stays bm25-only/offline)",
+    )
     parser.add_argument("--json", type=Path, help="also write the full report as JSON")
     return parser.parse_args(argv)
 
@@ -96,7 +102,11 @@ def main(argv: list[str] | None = None) -> int:
                 ollama_model=cfg.embeddings_ollama_model,
             )
     elif dataset.is_fixture:
-        conn, key_to_id = build_fixture_db(dataset)
+        if args.embeddings:
+            from gingugu.embeddings import FastEmbedProvider
+
+            embedder = FastEmbedProvider()
+        conn, key_to_id = build_fixture_db(dataset, embedder=embedder)
         weights, decay_lambda = dict(FIXTURE_WEIGHTS), 0.01
     else:
         print("error: dataset has no fixture memories; pass --db", file=sys.stderr)
