@@ -18,7 +18,7 @@ from pathlib import Path
 from . import theme
 from ._files import read_template as _read_template
 from ._files import safe_read as _safe_read
-from .global_rules import init_global_rules
+from .global_rules import init_global_rules, init_repo_rules
 from .settings import load_settings, merge_settings, write_settings
 
 CLIENT_RULES_FILES = {
@@ -127,7 +127,7 @@ def _write_file(
         results.append(f"  {would} your version to {path.name}.bak")
 
 
-def init_claude_code(target: Path, *, force: bool, dry_run: bool) -> list[str]:
+def init_claude_code(target: Path, *, force: bool, dry_run: bool, adopt: bool = False) -> list[str]:
     # State the resolved target first. `--path` defaults to the process's cwd,
     # and wrappers move that out from under you — `uv run --directory X` runs in
     # X, so a bare `gingugu init` there bootstraps X, not the directory you typed
@@ -188,7 +188,13 @@ def init_claude_code(target: Path, *, force: bool, dry_run: bool) -> list[str]:
     # files init owns, which is a different and much smaller decision than
     # touching a hand-authored file loaded in every session.
     results.append("")
-    results.extend(init_global_rules(dry_run=dry_run))
+    results.extend(init_global_rules(dry_run=dry_run, adopt=adopt))
+
+    # Same rationale, aimed at the repo's own CLAUDE.md / AGENTS.md instead of
+    # the user-level file. Only touches files that already exist — see
+    # init_repo_rules.
+    results.append("")
+    results.extend(init_repo_rules(target, dry_run=dry_run, adopt=adopt))
 
     results.append("")
     results.append(_MCP_HINT)
@@ -238,6 +244,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--dry-run", action="store_true", help="Show what would happen, write nothing"
     )
+    parser.add_argument(
+        "--adopt",
+        action="store_true",
+        help=(
+            "Wrap an existing hand-written memory protocol (in ~/.claude/CLAUDE.md, "
+            "or this repo's CLAUDE.md/AGENTS.md) in gingugu's managed markers, then "
+            "refresh it to the template. Without this, a file that already has its "
+            "own protocol is left untouched."
+        ),
+    )
     args = parser.parse_args(argv)
 
     target = Path(args.path).expanduser().resolve()
@@ -245,8 +261,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: target path is not a directory: {target}")
         return 1
 
+    if args.adopt and args.client != "claude-code":
+        print("error: --adopt only applies to --client claude-code (the default)")
+        return 1
+
     if args.client == "claude-code":
-        results = init_claude_code(target, force=args.force, dry_run=args.dry_run)
+        results = init_claude_code(target, force=args.force, dry_run=args.dry_run, adopt=args.adopt)
     else:
         results = init_rules_file(args.client, target, force=args.force, dry_run=args.dry_run)
 

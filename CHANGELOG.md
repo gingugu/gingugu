@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`gingugu init` now manages a repo's own `CLAUDE.md` / `AGENTS.md`, and
+  gained `--adopt`.** The marked-section merge that already protected
+  `~/.claude/CLAUDE.md` from drift now reaches the repo's own rules files too
+  — only ones that already exist, never created. A file with its own
+  hand-written protocol used to hit a permanent skip with no way in; `--adopt`
+  wraps that section in the managed markers and refreshes it to the template
+  in one command, backing up the original first. It locates the section by
+  its heading's own title, not by scanning body text, so a neighboring
+  subsection that merely mentions a tool name in passing is never mistaken
+  for the real one.
+
 - **`memory_excerpt`: read inside a single memory.** Retrieval answered "which
   memory?"; nothing answered "where in it?". Between a full body and a
   ~200-char compact summary there was no middle, so asking whether a long

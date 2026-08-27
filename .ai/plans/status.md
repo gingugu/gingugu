@@ -4,11 +4,70 @@ _Last updated: 2026-08-27_
 
 ## In Flight
 
+**`gingugu init` now manages a repo's own `CLAUDE.md` / `AGENTS.md`, and
+gained `--adopt` - branch not yet pushed, PR not yet opened.** 749 tests
+green, `ruff` + `black` clean. Board item #1 (renamed from the 15th sail's
+item 6, "`--adopt` + manage repo CLAUDE.md / AGENTS.md" - fixes a drift
+*class*, not one instance).
+
+`init_repo_rules` reuses the existing `merge_block` engine unchanged against
+`CLAUDE.md`/`AGENTS.md` in the repo root - only files that already exist, same
+no-`--force` rule as the user-level file. But a hand-written protocol hits
+`conflict` and stays that way forever with no way in, which is exactly the
+"correct guard, zero reach" shape a prior finding already named. New
+`--adopt` breaks it: locate the hand-written section, wrap it in the
+sentinel markers, immediately refresh it to the template - one command, one
+backup of the true original.
+
+**Real bug caught before it reached disk in isolation, then again on the
+real files.** The first version of `_find_unmanaged_section` matched a
+heading by scanning its *body* text for the hint words and picked the
+*narrowest* matching span, on the theory that a nested heading's span is
+always a strict subset of its enclosing heading's. True in isolation, and a
+unit test with a synthetic fixture passed on it. But this repo's own
+`AGENTS.md` and the user's global `CLAUDE.md` both have H3 subsections whose
+*body* prose happens to name a tool in passing (e.g. "run `memory_recall`
+before asking" under "### Daily protocol") - so a subsection with nothing to
+do with being *the* protocol section beat the true enclosing `## Memory
+Protocol` heading on span width and won. Live first run (`--adopt` for real,
+not `--dry-run`) confirmed it: chunks of the original hand-written protocol
+were left orphaned outside the markers in both files. Fixed by matching
+title text only, and excluding H1 (a document's own title always spans
+trivially to EOF absent a second H1). Two regression tests reproduce the
+exact real-world shape (a decoy subsection body, not just a synthetic
+fixture) rather than trusting the isolated unit test alone.
+
+**A second, smaller thing found and then explicitly NOT fixed:** the
+adopted block fuses directly onto whatever heading follows it with no
+separating blank line. Traced to `merge_block`'s own refresh path - its
+`tail = existing[end + len(END_MARKER):].lstrip("\n")` collapses any number
+of blank lines to zero on *every* refresh, adopt or not. Pre-existing,
+shipped, tested behavior (`test_refresh_preserves_prose_written_after_the_block`
+already accepts it), not a regression from this work, and purely cosmetic -
+an HTML comment directly followed by an ATX heading with no blank line still
+renders correctly in CommonMark. Left alone rather than touching the shared
+refresh path for a formatting nit outside this item's scope.
+
+**Adopted for real on this repo's own files** (`~/.claude/CLAUDE.md`, this
+repo's `CLAUDE.md`, this repo's `AGENTS.md`) - dogfooding the exact drift
+class the 15th sail's finding described. One real near-miss during that
+process: while cleaning up backup files after the first (buggy) live run,
+`~/.claude/CLAUDE.md.bak` - the one copy of the pre-adopt original - got
+deleted before it was read back. Recovered without data loss: the exact text
+was still sitting verbatim in that session's own opening context (loaded
+once, before any edits, per the session-start contract), so the file was
+reconstructed from that rather than from disk. Then re-verified against
+isolated scratch copies of the real files before touching them live again.
+
+**Not done yet:** this PR.
+
+## Shipped to `main`, awaiting release in v0.18.0
+
 **`bench/` gains real call-depth coverage and a hybrid (embeddings) pass, and
-runs in CI - `feature/bench-ci-embeddings`.** 666 tests green (was 663), `ruff`
-+ `black` clean. Board item #1 - the item that was #7 through most of the
-board's history, promoted to #1 once #61 (below) merged and closed the
-correctness bug that had been sitting above it.
+runs in CI - PR #62, merged `cfa89d0` (2026-08-27).** 666 tests green (was
+663), `ruff` + `black` clean, 9/9 CI. Board item #1 - the item that was #7
+through most of the board's history, promoted to #1 once #61 (below) merged
+and closed the correctness bug that had been sitting above it.
 
 **The harness had never issued a `limit=1` call in its life.**
 `run_benchmark` computed recall@1/@5/@10 by slicing one `search()` call made at
@@ -54,12 +113,12 @@ not OS- or interpreter-specific - so the existing matrix already covers whether
 `fastembed` installs and imports cleanly on every cell; re-downloading and
 re-scoring the same fixture nine times would be pure waste.
 
-**PR #62 pushed; first CI run caught a real bug in the cache step, not the
-code.** The job itself passed in 16s - too fast for a genuine cold-cache 80MB
-download - and `actions/cache`'s post-step logged "Path(s) specified in the
-action for caching do(es) not exist, hence no cache is being saved." The
-workflow was caching `~/.cache/fastembed`, a path I assumed rather than
-verified. `fastembed/common/utils.py` sets the real default to
+**First CI run caught a real bug in the cache step, not the code.** The job
+itself passed in 16s - too fast for a genuine cold-cache 80MB download - and
+`actions/cache`'s post-step logged "Path(s) specified in the action for
+caching do(es) not exist, hence no cache is being saved." The workflow was
+caching `~/.cache/fastembed`, a path I assumed rather than verified.
+`fastembed/common/utils.py` sets the real default to
 `tempfile.gettempdir()/fastembed_cache` (`/tmp/fastembed_cache` on this
 runner). The embeddings themselves were never in question - confirmed locally
 with a direct `FastEmbedProvider().encode(...)` call returning a real 384-dim
@@ -69,8 +128,6 @@ Fixed in the same PR before merge. Verified locally: full suite green under
 both `pytest -m "not bench_embeddings"` and `pytest -m bench_embeddings`
 alone, `ruff`/`black` clean, both `uv run python -m bench` and `uv run python
 -m bench --embeddings` run to completion end to end.
-
-## Shipped to `main`, awaiting release in v0.18.0
 
 **The `memory_context` recency bucket orders by write recency - PR #61,
 merged `b9a6ba0` (2026-08-27).** 663 tests green (was 658), `ruff` + `black`

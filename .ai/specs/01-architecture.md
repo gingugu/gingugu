@@ -196,6 +196,21 @@ AI client (Claude Code / Cursor / Windsurf / …)
   the managed note, the module docstring and the run output never do, because the
   note is written into the user's own `CLAUDE.md` and a stale invocation there is
   advice they will follow and watch fail.
+- **The same merge now also targets a repo's own `CLAUDE.md` / `AGENTS.md`,
+  and `--adopt` is the escape hatch out of the permanent conflict-skip.**
+  `merge_block` was already generic over any text, so `init_repo_rules` reuses
+  it unchanged — touching only files that already exist in the repo root
+  (never creating an `AGENTS.md`), with the same no-`--force` rule as the
+  user-level file. But a hand-written protocol hits `conflict` and stays that
+  way forever with no flag to opt in — the exact shape a prior finding named
+  ("a correct guard can make a feature inert in the field"). `--adopt` breaks
+  that: it locates the hand-written section by its own heading TITLE (never
+  its body — an early version matched on body text and a nested subsection
+  merely *naming* a tool in passing, e.g. "run `memory_recall` before
+  asking", outranked the true enclosing heading by having a narrower span),
+  wraps that span in the sentinel markers, and immediately re-runs
+  `merge_block` to refresh it to the template — one command, one backup of
+  the true original.
 - **A `--force` backup keys off content, never off ownership.** Whether a file
   carries `gingugu-init:managed-file` says whether *we* wrote it; it says nothing
   about whether the user has since edited it. Conditioning the `.bak` on the

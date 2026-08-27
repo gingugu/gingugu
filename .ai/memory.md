@@ -47,7 +47,7 @@
 | `webui.py` | `gingugu ui`: serves the built Memory Explorer bundle + live `/api/export` on one port (prod, no Node), or spawns the Vite dev server (`--dev`); assets ship in the wheel at `gingugu/_ui_dist` |
 | `promote.py` | `gingugu promote`: MCP client that promotes local "gold" to a central brain (filter + provenance + idempotent store) — not part of the server |
 | `bootstrap/` | `gingugu init`: copies packaged hook/command/rules templates into a target repo (Claude Code hooks + non-destructive settings merge, or a `--client` rules file) — not part of the server |
-| `bootstrap/global_rules.py` | Manages the memory protocol inside a marked block in the user-level `~/.claude/CLAUDE.md`. Append-only outside the markers; refreshes only its own block; refuses when an unmanaged protocol is already present |
+| `bootstrap/global_rules.py` | Manages the memory protocol inside a marked block in the user-level `~/.claude/CLAUDE.md` AND a repo's own `CLAUDE.md`/`AGENTS.md` (existing files only). Append-only outside the markers; refreshes only its own block; refuses on an unmanaged protocol unless `--adopt` wraps it in first (heading-title match, not body) |
 | `bootstrap/_files.py` | Shared `read_template` / `safe_read` helpers, split out so `global_rules` doesn't import the package `__init__` that imports it |
 | `bootstrap/settings.py` | Non-destructive `.claude/settings.json` merge. `declared_flags()` reads a hook's real `add_argument` flags off disk, so the "wired for a different script" warning reflects the installed script rather than our template's flag set |
 | `config.py` | Config + cross-platform DB path (platformdirs); transport + credentials-flag settings |

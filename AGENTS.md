@@ -5,166 +5,85 @@ Read this before making any changes.
 
 ---
 
-## 🧠 Memory Protocol
+<!-- BEGIN GINGUGU MEMORY PROTOCOL -->
+<!-- Managed by `gingugu init`. Edits between these markers are
+     replaced on re-run; put your own rules outside them. -->
+
+## Memory Protocol
 
 Gingugu is your long-term brain. Memory is split into **two layers**:
 
 1. **`crow`** — your global namespace. Identity, preferences, cross-project
-   wisdom, meta-learnings, opinions about tools/tech. Loaded FIRST at every
-   session start. (Named after the crow's nest — sees across all horizons.)
-2. **Project namespace** — one per repo (e.g. `gingugu`, `my-app`). Schema
-   decisions, bug history, release quirks, specific commits, file paths. Loaded
-   AFTER crow.
+   wisdom, opinions, meta-learnings. Loaded FIRST every session.
+2. **Project namespace** (named for this repo) — schema decisions, bug history,
+   deploy quirks, specific commits. Loaded AFTER crow.
 
-### What goes where
-
-- References a specific repo, file, commit, branch, or project decision →
-  **project namespace**
-- About HOW you think, work, communicate, or collaborate → **crow**
-- Patterns that transcend any one codebase → **crow**
-- Tool preferences, debugging instincts, opinions about tech → **crow**
-- **When in doubt, project-scope it.** Crow is for things that genuinely apply
-  to any project.
+**What goes where:**
+- References a specific repo, file, commit, or project decision → project
+- About HOW you think, work, or collaborate → `crow`
+- Patterns/opinions that transcend any one codebase → `crow`
+- When in doubt, project-scope it.
 
 ### Session start
-
-**Load everything the workspace might need, in parallel. Don't ask the user
-which repo they care about — the workspace itself is the answer.**
-
-1. `memory_context(namespace="crow,<project>[,<project2>…]", task_hint=…)` - ONE
+1. `memory_context(namespace="crow,<project>[,<project2>…]", task_hint=…)` — one
    call loads the identity foundation plus every repo in the workspace,
-   de-duplicated across namespaces. Add `compact=true` for a lighter payload
-   and pull full bodies with `memory_recall` when a memory matters.
-2. `memory_stats(namespace="crow")` — global health pulse (dormancy is a
-   resting signal, not rot; never auto-forgotten)
-3. `memory_stats(namespace="<project>")` for each project namespace, in
-   parallel with step 2
+   de-duplicated across namespaces. Load them all speculatively rather than
+   asking which one to focus on. Add `compact=true` for a lighter payload and
+   pull full bodies with `memory_recall` as needed.
+2. `memory_stats(namespace="crow")` — global health.
+3. `memory_stats(namespace="<project>")` for each project namespace.
 
-Multi-repo workspaces are common (e.g. `gingugu` + `gingugu.com` side-by-side).
-Load them all speculatively — the cost is near-zero and it prevents an
-unnecessary clarifying question before any real work starts.
+If a repo has no project namespace yet, create it:
+`memory_namespaces(action="create", name="<project>")`.
 
-If no project namespace exists yet for a repo in the workspace, create one:
-`memory_namespaces(action="create", name="<project>")`. One namespace per
-project keeps context clean.
+### During the session
+**Default: save. Immediately.** Don't filter, and don't batch saves for the end
+of a session — save at the moment of observation, because that is the moment the
+detail still exists. Save whenever you:
 
-### Working memory — daily protocol
+- read a file and understood what it does
+- ran a command and saw its output
+- hit an error, even one you fixed immediately
+- made any trade-off, or rejected an alternative
+- completed a task
+- formed an opinion about a tool or approach
+- noticed something about how the user works or decides
 
-- **Before non-trivial work:** `memory_recall` for the specific topic. Use
-  `memory_search` when you need precision (filter by tags, date range, type,
-  or confidence level).
-- **When something changes:** `memory_update` the affected memory (e.g. mark a
-  bug FIXED) instead of leaving stale records.
-- **When something is wrong:** `memory_forget` it. Don't leave lies in the
-  system — deprecate or hard-delete definitively incorrect memories.
-- **Periodically:** run `memory_consolidate` on clusters of related memories
-  (strategy: `merge` for duplicates, `summarize` for sprawl, `deduplicate`
-  for exact repeats). A good time is session-end or when you notice 3+ memories
-  on the same narrow topic.
-- **Before destructive ops:** `memory_export` the namespace as a backup.
-  Use `memory_import` to restore or transfer memory between environments.
+Project namespace for anything naming a repo, file, commit, or decision; `crow`
+for opinions, working style, and conclusions that outlive this one project.
 
-### Questions — ALWAYS check memory before asking the user
+**Before asking the user any question** — run `memory_recall` or `memory_search`
+first. If the answer is in memory, use it. Don't ask the same thing twice.
 
-Before asking the user ANY question — about a process, a decision, a config
-value, a credential, a file path, a preference, or anything else — run
-`memory_recall` or `memory_search` against the relevant namespace first.
+Use `memory_update` when something changes. Set `confidence="verified"` when
+proven; `inferred` for conclusions. When something turns out to be **wrong**, use
+`memory_forget` — deprecate it, or hard-delete it if it was never true. A
+confidently wrong memory costs more than a missing one.
 
-If the answer is in memory: **use it, don't ask**.
-If memory is empty or inconclusive: ask once, then immediately store the answer.
+**Relating memories — quality, not volume.** An edge is worth writing only when
+it records something search cannot infer. Recall already ranks by hybrid text +
+semantic similarity, so "same topic" is knowledge the index has for free. Use
+`memory_relate` for direction and time, preferring in this order: `supersedes`
+(this replaces that), `contradicts`, `caused_by`, `parent_of`/`child_of`. Treat
+`related_to` as a fallback for a real connection none of those describe — never
+as shorthand for "similar". Spreading activation surfaces at most 3 neighbours
+per memory and does not weight by type, so a vague edge crowds out a useful one.
+If you can't name the directional fact an edge records, don't create it.
 
-**Zero tolerance for asking something that was already answered in a prior session.**
+### Credentials
+Gingugu carries an OS-keychain vault, so secrets never belong in files or chat.
 
-### Credentials — ALWAYS check before asking the user
+- **`credential_list` FIRST**, before asking the user for any secret, token, or
+  API key — it may already be vaulted.
+- `credential_get` to retrieve one for use.
+- `credential_store` to vault a new one the moment you receive it.
+- `credential_delete` when one is revoked, then store the replacement.
 
-- `credential_list` — see what's vaulted (check this FIRST when a secret is
-  needed, before asking the user to provide one)
-- `credential_get` — retrieve a secret for use (e.g. the PyPI or npm token)
-- `credential_store` — vault new secrets immediately, never leave them in
-  files or chat history
-- `credential_delete` — remove revoked/rotated credentials (then re-store the new one)
+### Memory types
+`fact`, `decision`, `architecture`, `bug`, `pattern`, `workflow`, `context`,
+`preference`.
 
-### Saving philosophy — treat Gingugu as live working memory
-
-**Don't filter. Just save.** Gingugu has trust-led scoring, consolidation, and
-dormancy tracking (never forgetting) — volume is its problem, not yours. Your
-job is to be the input stream.
-
-**Mental model:** a human expert working on this codebase all day doesn't decide
-what to remember. They just work and their brain records continuously. Be that brain.
-
-**Default: save. Immediately.** Don't batch saves for end of session. Save at the
-moment of observation with `memory_store` (pass the appropriate namespace —
-`crow` for identity/cross-project, the project namespace for repo-scoped).
-
-Save whenever you read a file and understood it, ran a command and saw output,
-hit an error (even one fixed immediately), noticed a pattern or convention, saw
-a config/version/path that matters, made a trade-off, disproved an assumption,
-or completed a task. For `crow`: when you formed an opinion, noticed how the
-user works, reached a cross-project conclusion, or had a reflection worth keeping.
-
-**The only reason not to save:** you stored the exact same thing 5 minutes ago.
-
-Set `confidence="verified"` when proven by a test, run, or explicit confirmation.
-Use `confidence="inferred"` for conclusions you drew. Use `memory_update` when
-reality changes — don't let stale records linger.
-
-**After every `memory_store`, relate it — but only where an edge earns its
-keep.** Check the memories surfaced by `memory_context`/`memory_recall` and by
-`memory_store`'s own `suggested_relations`, and ask: *does this new memory
-replace, contradict, explain, or belong under one of them?* If yes, call
-`memory_relate` right then. If the only true statement is "they're both about
-the same area", link nothing.
-
-An edge must record something search cannot infer. Recall already ranks by
-hybrid text + semantic similarity, so topical adjacency is knowledge the index
-has for free — an edge asserting only that duplicates the index and, because
-spreading activation caps at 3 neighbours per seed and does **not** weight by
-type, actively crowds out an edge that carries real signal.
-
-Prefer in this order:
-
-- `supersedes` — new memory replaces an older one (e.g. bug marked FIXED)
-- `contradicts` — new info conflicts with old (then `memory_forget` the wrong one)
-- `caused_by` — one thing led to another
-- `parent_of` / `child_of` — hierarchical grouping
-- `related_to` — **fallback only.** A real connection none of the above
-  describes. Never as shorthand for "similar topic".
-
-**Rule of thumb:** if you can't name the directional fact an edge records, don't
-create it. Judge a session's wiring by whether the edges are the right *kind*,
-never by how many there are — roughly 2 per memory is normal, and more is
-usually worse, not better.
-
-**A wrong edge is fixable, so fix it rather than writing prose around it.**
-`memory_edges` lists what is actually there (both endpoints' titles, plus each
-one's degree, which is what decides whether an edge can ever fire);
-`memory_unrelate` retypes it in place, reverses a backwards one, or removes it.
-Both repairs preserve the edge's creation time, so correcting a label or a
-direction costs nothing in provenance, and `reverse` combines with a retype in
-one call. Judge each edge on its own merits — there is no bulk retype,
-deliberately, because a blanket relabel manufactures directional claims that
-were never true.
-
-**The opposite failure is a memory with no edges at all**, reachable only by
-direct search since spreading activation can never wake it.
-`memory_stats.graph.orphan_sample` names them, costliest first, and
-`memory_search(orphans=True)` pulls the same set with full bodies. Reconnecting
-one is still a judged act under the rule above: an orphan is better left alone
-than wired up with an invented edge.
-
-### What to remember (memory types)
-- **architecture** — schema decisions, scoring/ranking changes, module boundaries
-- **decision** — trade-offs made, rejected alternatives
-- **bug** — issues found and fixes applied (update to FIXED when resolved)
-- **pattern** — recurring design choices, idioms, approaches worth reusing
-- **fact** — concrete state: versions, file locations, config values, test counts
-- **preference** — your opinions, the user's working style, tool choices
-- **workflow** — process steps, sequences, how something gets done
-- **context** — background, reflections, milestones, the *why* behind the *what*
-
----
-
+<!-- END GINGUGU MEMORY PROTOCOL -->
 ## What This Repo Is
 
 **gingugu** is a local **MCP server** that gives AI coding assistants persistent,
