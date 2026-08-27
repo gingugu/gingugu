@@ -4,9 +4,104 @@ _Last updated: 2026-08-26_
 
 ## In Flight
 
-**Per-hit score breakdown + `memory_excerpt` -
-`feature/score-breakdown-and-excerpt`.** 658 tests green (was 634), `ruff` +
-`black` clean. Board items #2 and #3, shipped together: both are arithmetic and
+**The `memory_context` recency bucket orders by write recency -
+`fix/recency-bucket-write-recency`, PR #61 (open).** 663 tests green (was 658),
+`ruff` + `black` clean. Board item #1, the correctness bug that has sat at the
+top of the board since 2026-08-21.
+
+`context_buckets.recently_active()` ordered by `last_accessed`. That is a
+**read** timestamp, so the bucket whose stated purpose is "a freshly-stored,
+never-accessed memory always survives the cut" was in fact ranked by
+familiarity - the opposite question. Reading promotes; writing does not.
+
+**It was self-reinforcing.** `memory_context` touches everything it surfaces to
+refresh the dormancy clock, so each session-start load lifted its own output to
+the top of the next load's bucket. Anti-discovery bias in the bucket that
+exists for discovery.
+
+**No migration, and that is a deliberate narrowing of the approved design.**
+The design settled on separating dormancy from bucket ordering rather than
+patching one column to mean both things. Reading the write surface first showed
+the second column already exists: `grep "UPDATE memories"` returns exactly three
+statements, two of which touch only `last_accessed` (`record_accesses`,
+`touch_many`) while the third is an explicit edit. So `updated_at` moves only on
+a deliberate write and cannot self-reinforce. A new column would have duplicated
+it. `MEMORY_COLUMNS`, the `Memory` model and the schema are untouched.
+
+The accepted trade: a confidence-only or metadata-only edit lifts a memory in
+the bucket. "Someone worked on this recently" is a legitimate discovery signal,
+and it is not the pathology being fixed, which was a *read* promoting itself.
+
+`last_accessed` is unchanged and still correct for what it is actually for -
+dormancy and the access signal. `handlers/recall.py`'s `touch_many` is
+deliberately left alone: it is now harmless to the bucket and remains right for
+its real purpose.
+
+**Measured on a real 295-memory namespace:** the old key returned a
+chronologically scrambled window (position 2 from Aug 21, position 5 from Aug
+27, position 8 from Aug 17) that omitted both the newest handoff and the
+current board entirely. The new key returns them at positions 2 and 4, newest
+first, with only 4 of 10 rows in common. This retires a standing workaround
+carried in every handoff memory: "do not topic-recall for the resume, read the
+ID off `memory_context` and fetch by ID" existed because the newest handoff was
+structurally unreachable.
+
+**Regression evidence:** `tests/test_context_buckets.py` is new (4 tests) and
+gives `recently_active()` its first direct coverage - the existing tests all
+reached it through `build_context`, whose quota machinery can fill a slot from
+the backfill pool and mask a wrong `ORDER BY` underneath. Plus two in
+`tests/test_context.py`. Neutered the fix with all six in place: **4 of 6 fail.**
+The other two document filtering and namespace scoping, which this change does
+not touch.
+
+One test was written for this PR and then **cut rather than kept**: it asserted
+that a context load's own `touch_many` buries a newer memory, and it passed
+against the unfixed code. It could not fail, because that load also touches the
+newcomer. The burial needs reads of *other* memories after the write, which is
+exactly what the surviving high-access test proves.
+
+**A red CI run then exposed four tests that were racing the clock.** The first
+push went green on ubuntu and macOS and red on `windows-latest` 3.11 and 3.12.
+Windows resolved `datetime.now()` to 15.6ms until Python 3.13 switched to
+`GetSystemTimePreciseAsFileTime`, which is why 3.13 sat green beside 3.11 and
+3.12 red - a version boundary, not a flake. Consecutive `store.create()` calls
+land inside one tick there and come out with a byte-identical `updated_at`, so
+every test that stored memories and then asserted an ordering by write time was
+asserting a coin flip.
+
+**A `rowid DESC` tiebreak was tried first and was wrong.** It turned the
+originally-failing test green and broke two others, which is the useful part:
+`rowid` is *creation* order and an edit never moves it, so on a tie it answers
+"created later" - the exact question this bucket was just fixed for not asking.
+The edit tests had been passing on rowid-ascending ties by accident. Nothing
+stored records write order, so there is no correct tiebreak to reach for, and
+the ordering now documents the tie as unspecified rather than resolving it
+wrongly. Which of two memories written inside one tick is newer is not knowable
+from the data.
+
+**The tests supply their own timestamps instead.** A `backdate` fixture
+(`tests/conftest.py`) stamps memories with well-separated past `updated_at`
+values, ending a day in the past so a subsequent real `store.update()` lands
+strictly later and an edit genuinely leads. `tests/test_context_ordering.py`
+carries a local equivalent because it reaches the server over MCP rather than
+through the `store` fixture.
+
+**Verified by simulating the failing platform**, not by re-running CI: a
+throwaway autouse fixture monkeypatched `utcnow_iso` to a 15.6ms-granular clock
+and ran the full suite. It reproduced the Windows failures on macOS, and caught
+two more clock-dependent tests that Windows CI had passed only by luck
+(`test_context_fresh_memory_survives_high_access_competition`,
+`test_freshest_memory_is_not_buried_by_its_placeholder_score`). Suite is green
+under both the simulated coarse clock and the real one.
+
+`pinned()` and `cross_namespace_patterns()` sort on `last_confirmed`/
+`created_at` and `access_count` respectively and have the same unspecified-tie
+class. Deliberately out of scope here; worth a board item.
+
+## Shipped to `main`, awaiting release in v0.18.0
+
+**Per-hit score breakdown + `memory_excerpt` - PR #60, merged `b9fc4f1`
+(2026-08-26).** 658 tests green (was 634), `ruff` + `black` clean. Board items #2 and #3, shipped together: both are arithmetic and
 string handling on the retrieval surface, and neither needs a migration.
 
 **The breakdown is an instrument, not a feature.** Every read surface can now
@@ -64,8 +159,6 @@ invariants - the reported terms must add up to the score they explain, at the
 arithmetic layer and over the live tool surface - and `type_boost` being its own
 term rather than folded into another, since a breakdown that does not add up is
 worse than no breakdown at all.
-
-## Shipped to `main`, awaiting release in v0.18.0
 
 **`memory_import` embeds the memories it writes - PR #59,
 merged `0cabfdf` (2026-08-21).** 634 tests green (was 627), `ruff` +

@@ -242,6 +242,16 @@ clock, via `touch_many`) but do **not** bump `access_count` or write
 `access_log` rows - those are reserved for `memory_recall`/`memory_search`
 hits, so session-start loads can't inflate the access ranking signal.
 
+That refresh is also why the recency bucket must not be ordered by
+`last_accessed`. It was, until 2026-08-26, and the result was a feedback loop:
+each load refreshed the clock on everything it surfaced, lifting exactly those
+rows to the top of the next load's bucket, so the bucket converged on what it
+had already shown and a newly-stored memory could not break in. The bucket
+orders by `updated_at` instead - a write timestamp no read path touches - which
+is what the bucket was always documented to mean. Dormancy and bucket ordering
+ask opposite questions ("has anyone touched this lately" vs "is this new to
+me"), so they get two columns rather than one column serving both.
+
 A consequence worth knowing: because the protocol calls `memory_context` every
 session and that refreshes the dormancy clock, anything it routinely surfaces
 can never accumulate `DORMANT_AFTER_DAYS` untouched. Dormancy only ever reaches

@@ -9,6 +9,8 @@ receives, which is the layer where a second sort can undo the selection.
 from __future__ import annotations
 
 import json
+import sqlite3
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -16,6 +18,27 @@ import pytest
 def _payload(result) -> dict:
     content = result[0] if isinstance(result, tuple) else result
     return json.loads(content[0].text)
+
+
+def _backdate(tmp_path, *memory_ids: str) -> None:
+    """Push memories into the past, one day apart, over the tool surface's DB.
+
+    These tests reach the server through MCP rather than the ``store`` fixture,
+    so they cannot use the ``backdate`` fixture - but they need the same thing
+    from it. Consecutive stores tie on a coarse clock (Windows resolved
+    ``datetime.now()`` to 15.6ms before Python 3.13), and a test that asserts
+    one memory is the newest write must supply that ordering rather than race
+    for it.
+    """
+    conn = sqlite3.connect(tmp_path / "ordering.db")
+    base = datetime.now(UTC) - timedelta(days=len(memory_ids) + 1)
+    for offset, memory_id in enumerate(memory_ids):
+        conn.execute(
+            "UPDATE memories SET updated_at = ? WHERE id = ?",
+            ((base + timedelta(days=offset)).isoformat(), memory_id),
+        )
+    conn.commit()
+    conn.close()
 
 
 @pytest.fixture
@@ -91,7 +114,7 @@ async def test_every_namespace_contributes_to_the_pin_tier(server) -> None:
 
 
 @pytest.mark.asyncio
-async def test_freshest_memory_is_not_buried_by_its_placeholder_score(server) -> None:
+async def test_freshest_memory_is_not_buried_by_its_placeholder_score(server, tmp_path) -> None:
     """The recency bucket's synthetic relevance must not decide presentation.
 
     The recency bucket is scored with a fixed ``relevance=0.5`` placeholder - it
@@ -106,13 +129,15 @@ async def test_freshest_memory_is_not_buried_by_its_placeholder_score(server) ->
     that the freshest memory sits in the guaranteed region right behind them,
     not below the score-ordered backfill.
     """
-    for i in range(8):
-        await _store(server, f"kraken sighting {i}")
+    kraken = [await _store(server, f"kraken sighting {i}") for i in range(8)]
     # Give the older memories a large access-count advantage, which is what
     # dominates the composite once the placeholder caps the fresh one.
     for _ in range(5):
         await server.call_tool("memory_recall", {"query": "kraken", "limit": 8})
     newest = await _store(server, "anchor stowed at dusk")
+    # "Freshest" has to be a fact, not a hope: nine consecutive stores can all
+    # land inside one tick of a coarse clock.
+    _backdate(tmp_path, *kraken)
 
     memories = await _context(server, task_hint="kraken", limit=6)
 
