@@ -47,21 +47,28 @@ the deliberate, explicitly-opted-in exception that incident's fix anticipated,
 carrying its own `@pytest.mark.timeout(180)` and a new `bench_embeddings`
 pytest marker. The main CI matrix now runs `pytest -m "not bench_embeddings"`;
 a new single-cell `bench-embeddings` job (`ubuntu-latest`, Python 3.13) runs
-just that one test, with `actions/cache` keyed on the model name caching
-`~/.cache/fastembed` so only the first run ever downloads it. One job rather
-than folding into the 3x3 matrix, because retrieval scoring is pure arithmetic
-over SQLite + vectors - not OS- or interpreter-specific - so the existing
-matrix already covers whether `fastembed` installs and imports cleanly on every
-cell; re-downloading and re-scoring the same fixture nine times would be pure
-waste.
+just that one test, with `actions/cache` on the model's cache directory so only
+the first run ever downloads it. One job rather than folding into the 3x3
+matrix, because retrieval scoring is pure arithmetic over SQLite + vectors -
+not OS- or interpreter-specific - so the existing matrix already covers whether
+`fastembed` installs and imports cleanly on every cell; re-downloading and
+re-scoring the same fixture nine times would be pure waste.
 
-**Not yet pushed; CI has not run this branch.** Verified locally: full suite
-green under both `pytest -m "not bench_embeddings"` and `pytest -m
-bench_embeddings` alone, `ruff`/`black` clean, both `uv run python -m bench`
-and `uv run python -m bench --embeddings` run to completion end to end
-(model downloads and caches correctly). Windows/macOS behavior of the new
-`bench-embeddings` job is unexercised since it only runs on `ubuntu-latest` by
-design.
+**PR #62 pushed; first CI run caught a real bug in the cache step, not the
+code.** The job itself passed in 16s - too fast for a genuine cold-cache 80MB
+download - and `actions/cache`'s post-step logged "Path(s) specified in the
+action for caching do(es) not exist, hence no cache is being saved." The
+workflow was caching `~/.cache/fastembed`, a path I assumed rather than
+verified. `fastembed/common/utils.py` sets the real default to
+`tempfile.gettempdir()/fastembed_cache` (`/tmp/fastembed_cache` on this
+runner). The embeddings themselves were never in question - confirmed locally
+with a direct `FastEmbedProvider().encode(...)` call returning a real 384-dim
+vector, not `None` - only the cache path was wrong, so every run would have
+silently redownloaded the model forever rather than genuinely caching it.
+Fixed in the same PR before merge. Verified locally: full suite green under
+both `pytest -m "not bench_embeddings"` and `pytest -m bench_embeddings`
+alone, `ruff`/`black` clean, both `uv run python -m bench` and `uv run python
+-m bench --embeddings` run to completion end to end.
 
 ## Shipped to `main`, awaiting release in v0.18.0
 

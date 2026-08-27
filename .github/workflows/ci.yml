@@ -61,9 +61,12 @@ jobs:
         run: uv sync --extra dev --python "3.13"
 
       - name: Cache fastembed model
+        # fastembed's default cache_dir is tempfile.gettempdir()/fastembed_cache
+        # (/tmp/fastembed_cache on this runner), not ~/.cache/fastembed - verified
+        # against fastembed/common/utils.py, not assumed.
         uses: actions/cache@v4
         with:
-          path: ~/.cache/fastembed
+          path: /tmp/fastembed_cache
           key: fastembed-bge-small-en-v1.5
 
       - name: Pytest (bench, real embeddings)
