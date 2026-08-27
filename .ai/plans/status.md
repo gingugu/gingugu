@@ -5,9 +5,9 @@ _Last updated: 2026-08-26_
 ## In Flight
 
 **The `memory_context` recency bucket orders by write recency -
-`fix/recency-bucket-write-recency`.** 663 tests green (was 658), `ruff` +
-`black` clean. Board item #1, the correctness bug that has sat at the top of
-the board since 2026-08-21.
+`fix/recency-bucket-write-recency`, PR #61 (open).** 664 tests green (was 658),
+`ruff` + `black` clean. Board item #1, the correctness bug that has sat at the
+top of the board since 2026-08-21.
 
 `context_buckets.recently_active()` ordered by `last_accessed`. That is a
 **read** timestamp, so the bucket whose stated purpose is "a freshly-stored,
@@ -59,6 +59,27 @@ that a context load's own `touch_many` buries a newer memory, and it passed
 against the unfixed code. It could not fail, because that load also touches the
 newcomer. The burial needs reads of *other* memories after the write, which is
 exactly what the surviving high-access test proves.
+
+**A red CI run then found the same inversion one scale down.** The first push
+went green on ubuntu and macOS and red on `windows-latest` 3.11 and 3.12, on
+the new bucket test alone. Both memories in it had been stored inside a single
+clock tick: Windows resolved `datetime.now()` to 15.6ms until Python 3.13
+switched to `GetSystemTimePreciseAsFileTime` (hence 3.13 green beside 3.11 and
+3.12 red), so their `updated_at` values were byte-identical and `ORDER BY
+updated_at DESC` alone left the tie unspecified. SQLite settled it by rowid
+**ascending** and returned the older memory first.
+
+That is the bug this PR exists to fix, reappearing below the resolution of the
+sort key. The fix is `ORDER BY updated_at DESC, rowid DESC` (insertion order,
+so "last written wins" continues to hold once the timestamp runs out of
+digits), not a loosened assertion. A fifth bucket test forces the tie by
+writing an identical `updated_at` rather than racing the clock, so it is
+asserted on every platform instead of only where the clock is coarse; it fails
+against the untied ordering.
+
+`pinned()` and `cross_namespace_patterns()` sort on `last_confirmed`/
+`created_at` and `access_count` respectively and have the same unspecified-tie
+class. Deliberately out of scope here; worth a board item.
 
 ## Shipped to `main`, awaiting release in v0.18.0
 

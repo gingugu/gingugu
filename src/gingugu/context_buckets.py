@@ -52,11 +52,20 @@ def recently_active(conn: sqlite3.Connection, namespace_id: str, limit: int) -> 
     applies first: fetching N rows and *then* dropping the pinned ones yields
     fewer than N ranked candidates, so a full pin tier would quietly starve the
     recency bucket it was supposed to sit alongside.
+
+    ``rowid`` breaks ties, descending. Timestamps are only as fine as the clock
+    that made them - Windows resolves ``datetime.now()`` to 15.6ms before Python
+    3.13 - so two memories written in the same tick carry a byte-identical
+    ``updated_at``. Left unspecified, SQLite settles that in rowid *ascending*
+    order and hands back the older one first, which is the very inversion this
+    ordering exists to prevent, just at sub-tick scale. ``rowid`` is insertion
+    order on a rowid table, so descending is "last written wins" - the same rule
+    the timestamp expresses, applied where the timestamp has run out of digits.
     """
     rows = conn.execute(
         f"SELECT {_COLUMNS} FROM memories "
         "WHERE namespace_id = ? AND confidence != 'deprecated' AND pinned = 0 "
-        "ORDER BY updated_at DESC LIMIT ?",
+        "ORDER BY updated_at DESC, rowid DESC LIMIT ?",
         (namespace_id, limit),
     ).fetchall()
     return [Memory(**dict(r)) for r in rows]

@@ -36,6 +36,27 @@ def test_recently_active_orders_by_write_not_read(
     assert [m.id for m in rows] == [newer.id, older.id]
 
 
+def test_recently_active_breaks_a_timestamp_tie_toward_the_later_write(
+    store: MemoryStore, namespaces: NamespaceManager
+) -> None:
+    # A timestamp is only as fine as the clock that made it: Windows resolved
+    # `datetime.now()` to 15.6ms before Python 3.13, so two stores in one tick
+    # share an `updated_at` byte for byte. The tie is forced here rather than
+    # raced for, because on a microsecond clock it never occurs at all - and an
+    # unspecified tie sorts rowid ASCENDING, returning the older memory first.
+    ns_id = namespaces.get_or_create("test-ns").id
+    first = store.create(
+        namespace_id=ns_id, type=MemoryType.FACT, title="first", content="same tick"
+    )
+    second = store.create(
+        namespace_id=ns_id, type=MemoryType.FACT, title="second", content="same tick"
+    )
+    store.conn.execute("UPDATE memories SET updated_at = '2026-01-01T00:00:00+00:00'")
+    store.conn.commit()
+    rows = recently_active(store.conn, ns_id, limit=10)
+    assert [m.id for m in rows] == [second.id, first.id]
+
+
 def test_recently_active_lifts_an_edited_memory(
     store: MemoryStore, namespaces: NamespaceManager
 ) -> None:
