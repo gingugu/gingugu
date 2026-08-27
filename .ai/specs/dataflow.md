@@ -187,6 +187,38 @@ never mint namespaces. Single-namespace-only tools return a comma-hint when
 handed a CSV value, and `memory_store` rejects CSV outright rather than
 minting a junk namespace named `"a,b"`.
 
+`explain=True` (recall, search, context) adds the terms behind each `score`:
+
+```
+score_breakdown = {relevance, freshness, access, confidence}  weighted, sums to score
+                + type_boost                                  context only, where applied
+  → decay.score_parts() computes them; score_memory() is the SUM of that call,
+    so the explanation and the ranking are one arithmetic, not two
+  → no breakdown where there is no composite to decompose: pinned memories
+    (never ranked), an `ids` fetch, a created/accessed sort, a bare relevance
+  → a constant relevance term across several context hits is the signal that
+    those came from the recency or cross-namespace bucket, which score on a
+    synthetic relevance rather than on any match
+```
+
+## Excerpt (reading inside one memory)
+
+```
+memory_excerpt(memory_id, query? , start?, end?, max_matches, context_chars)
+  → excerpt.py: literal, case-insensitive-by-default substring scan.
+    No ranking, no stemming, no model - the same answer every time
+  → query:       each match returns {start, end, line, excerpt}; offsets are
+                 absolute in the full body, so a hit feeds straight back as a range
+  → start/end:   exact character slice; omitted bounds mean body start/end,
+                 out-of-range clamps, inverted bounds swap
+  → both:        search runs INSIDE the range, offsets still absolute
+  → neither:     `length` + `lines` only, which is how you size a memory first
+  → total_matches is the TRUE count even when max_matches caps the list, so a
+    caller can tell "all of them" from "the first 10 of 300"
+  → credits a real access, like memory_search(ids=…). No spreading activation:
+    it traverses no relations
+```
+
 ## Context (session priming)
 
 ```

@@ -9,6 +9,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`memory_excerpt`: read inside a single memory.** Retrieval answered "which
+  memory?"; nothing answered "where in it?". Between a full body and a
+  ~200-char compact summary there was no middle, so asking whether a long
+  memory mentions a particular decision, and where, meant pulling every byte of
+  it into context.
+
+  Two composable modes. `query` runs a literal, case-insensitive scan and
+  returns each match with its character offsets, its 1-indexed line, and
+  `context_chars` of surrounding text. `start`/`end` read an exact character
+  range. Passing both searches only inside the range, with offsets still
+  reported against the full body so a hit can be fed straight back as a range
+  read. `total_matches` reports the true count even when `max_matches` caps the
+  payload, so a caller can tell "that was all of them" from "that was the first
+  10 of 300". Called with neither, it returns `length` and `lines` only, which
+  is a cheap way to size a memory before deciding how to read it.
+
+  The scan is literal and deterministic: no ranking, no stemming, no model.
+  Matches come back in the order they appear in the text, and asking twice
+  gives the same answer.
+
+- **`explain=True` returns a per-hit score breakdown** on `memory_recall`,
+  `memory_search` and `memory_context`. `score_breakdown` carries the weighted
+  `relevance`/`freshness`/`access`/`confidence` terms that `score` is the sum
+  of, plus `type_boost` where `memory_context`'s architecture/decision boost
+  applied. A single blended float said nothing about which signal produced it,
+  so "why did this rank here?" could only be answered by reading the source.
+
+  The terms are weighted contributions rather than raw components because they
+  then add up to the number they explain, and reading them needs no knowledge
+  of the configured weights. `composite_score` is summed from a new
+  `composite_parts` and `score_memory` from a new `score_parts`, so a breakdown
+  and its score cannot drift.
+
+  Opt-in: a diagnostic is asked for rarely and deliberately, and an always-on
+  field is paid for on every hit of every read. Results with no ranking behind
+  them carry no breakdown rather than an invented one - pinned memories never
+  entered the ranking, an `ids` fetch was not ranked, and a bare relevance has
+  no composite to decompose.
+
 ### Fixed
 
 - **`memory_import` now embeds the memories it writes.** Restored memories were

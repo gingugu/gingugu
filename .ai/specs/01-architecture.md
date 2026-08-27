@@ -235,8 +235,27 @@ AI client (Claude Code / Cursor / Windsurf / …)
   the FTS match set: a date asks something relevance cannot answer, so the
   semantic cohort, whose membership is itself a relevance judgement, does not
   vote in it. Ties break on `id`, as everywhere else.
+- **A score breakdown is summed from the same arithmetic as the score.**
+  `composite_score` is `sum(composite_parts(...).values())` and `score_memory`
+  is `sum(score_parts(...).values())`, so what `explain=True` reports and what
+  ranked the result cannot be two implementations that drift. The terms are
+  weighted contributions, not raw components: they then add up to the number
+  they are explaining, and reading them requires no knowledge of the configured
+  weights (the raw component divides back out; the ranking consequence does
+  not). `memory_context`'s `+0.1` architecture/decision boost is reported as
+  its own `type_boost` term for the same reason - folding it into an existing
+  term would hide it, and omitting it would leave the terms not summing to the
+  score. A result with no ranking behind it carries no breakdown rather than a
+  fabricated one: pins never entered the ranking, an `ids` fetch was not ranked,
+  and a bare fused relevance has no composite to decompose.
+- **Reading inside a memory is deliberately dumb.** `excerpt.py` does literal
+  substring matching over character offsets: no ranking, no stemming, no model,
+  no embedding. Retrieval is where judgement belongs; once the caller has named
+  the memory, "where does this say X" has one correct answer and it should be
+  the same answer every time. `total_matches` is reported separately from the
+  capped match list so the cap bounds the payload without bounding the truth.
 - **One column list for `memories`, declared beside the model it fills.**
-  `models.MEMORY_COLUMNS` is the single source; `storage`, `context`,
+  `models.MEMORY_COLUMNS` is the single source; `storage`, `context_buckets`,
   `search_common` and `portability` all derive their SQL from it via
   `memory_columns_sql()`, and INSERTs generate their `:name` placeholders from
   the same tuple with `memory_placeholders_sql()`. Four private copies used to
