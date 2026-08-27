@@ -27,6 +27,7 @@ decoupled.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from ._files import read_template, safe_read
@@ -63,6 +64,74 @@ def render_block(protocol: str) -> str:
 def _has_unmanaged_protocol(existing: str) -> bool:
     lowered = existing.lower()
     return any(hint in lowered for hint in _UNMANAGED_HINTS)
+
+
+_HEADING_RE = re.compile(r"^(#{1,6}) (.*)$", re.MULTILINE)
+
+
+def _find_unmanaged_section(existing: str) -> tuple[int, int] | None:
+    """Locate the heading-bounded span of a hand-written protocol section.
+
+    Returns ``(start, end)`` character offsets running from a markdown heading
+    whose TITLE hits the ``_UNMANAGED_HINTS`` through the next heading at the
+    same level or shallower (or end of file). ``None`` if no heading title in
+    the file matches — the caller falls back to telling the user to wrap it by
+    hand.
+
+    Matches on the heading's own title line only, never its body. A real
+    protocol section's title says so directly (e.g. "## Memory Protocol").
+    Matching on body text instead is unreliable both ways: a real protocol
+    section commonly has H3 subsections (Session start, Credentials, ...)
+    whose OWN bodies happen to name a tool like `memory_recall` in passing —
+    those subsections would then look like narrower, more "specific" matches
+    than the true enclosing heading and win over it. Title-only matching
+    treats such prose-only subsections as ordinary content, so the real H2
+    title is the one and only match, and its span is used as found — no
+    need to compare candidates against each other. Level-1 headings are
+    skipped for the same reason a document's own title is never itself "the
+    protocol section": it would trivially contain every match beneath it.
+    """
+    for m in _HEADING_RE.finditer(existing):
+        level, title = len(m.group(1)), m.group(2)
+        if level < 2 or not _has_unmanaged_protocol(title):
+            continue
+        start = m.start()
+        end = len(existing)
+        for other in _HEADING_RE.finditer(existing, m.end()):
+            if len(other.group(1)) <= level:
+                end = other.start()
+                break
+        return start, end
+    return None
+
+
+def adopt_unmanaged_protocol(existing: str) -> str | None:
+    """Wrap a hand-written protocol section in the managed markers, verbatim.
+
+    This does not replace the section's wording — it only adds the markers
+    around whatever is already there. The caller re-runs ``merge_block`` on the
+    result immediately after, which is what actually replaces the wrapped
+    content with the rendered template (backed up first). Adopting means
+    handing the section to gingugu going forward, not preserving the
+    hand-written text.
+
+    Whatever comes after the wrapped section ends up glued directly to
+    ``END_MARKER`` with no separating blank line — not a bug introduced here,
+    but the existing, shipped, tested behavior of ``merge_block``'s refresh
+    path (its ``tail`` is always ``lstrip("\\n")``-ed), which this wrap
+    immediately runs through too. Cosmetic only: an HTML comment directly
+    followed by an ATX heading with no blank line still renders correctly.
+
+    Returns ``None`` when no heading-bounded section matches, so the caller can
+    fall back to the plain conflict message instead of guessing.
+    """
+    span = _find_unmanaged_section(existing)
+    if span is None:
+        return None
+    start, end = span
+    before, section, after = existing[:start], existing[start:end].rstrip("\n"), existing[end:]
+    sep = "" if not before or before.endswith("\n") else "\n"
+    return f"{before}{sep}{BEGIN_MARKER}\n{section}\n{END_MARKER}\n{after}"
 
 
 def merge_block(existing: str, protocol: str) -> tuple[str | None, str]:
@@ -104,7 +173,70 @@ def merge_block(existing: str, protocol: str) -> tuple[str | None, str]:
     return f"{existing}{sep}\n{block}", "appended"
 
 
-def init_global_rules(*, dry_run: bool, path: Path | None = None) -> list[str]:
+def _apply_protocol(
+    target: Path, existing: str, protocol: str, *, dry_run: bool, adopt: bool
+) -> tuple[list[str], str]:
+    """Merge the managed block into ``target``. Returns ``(result lines, status)``.
+
+    Shared between the user-level file and the repo's own CLAUDE.md / AGENTS.md
+    — both are hand-authored, both are loaded every session, so both get the
+    same no-``--force`` merge and the same ``--adopt`` escape hatch.
+    """
+    new_text, status = merge_block(existing, protocol)
+    lines: list[str] = []
+
+    if status == "conflict" and adopt:
+        wrapped = adopt_unmanaged_protocol(existing)
+        if wrapped is not None:
+            new_text, status = merge_block(wrapped, protocol)
+            status = "adopted"
+        else:
+            lines.append(
+                f"  WARNING: --adopt found no markdown heading to wrap in {target} "
+                "— wrap it in "
+                f"{BEGIN_MARKER} / {END_MARKER} by hand instead."
+            )
+
+    if status == "current":
+        lines.append(f"  no change     {target}  (managed block already current)")
+        return lines, status
+
+    if status == "conflict":
+        lines.append(f"  skip          {target}  (already has its own memory protocol)")
+        lines.append(
+            "  WARNING: appending a second set of memory rules to a file loaded in "
+            "every session would leave two possibly-conflicting protocols. Nothing "
+            "was written. Re-run with --adopt to wrap the existing section in "
+            f"{BEGIN_MARKER} / {END_MARKER} automatically, or do it by hand — "
+            "future runs then refresh it in place."
+        )
+        return lines, status
+
+    assert new_text is not None  # status is 'updated', 'appended', or 'adopted'
+    if not dry_run:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        # Refresh and adopt both rewrite bytes that already existed, so both need
+        # a safety copy. Appending leaves every prior byte in place and needs none.
+        if status in ("updated", "adopted"):
+            target.with_suffix(target.suffix + ".bak").write_text(existing)
+        target.write_text(new_text)
+
+    if status == "adopted":
+        verb = "would adopt" if dry_run else "adopted"
+        detail = "wrapped your existing section, then refreshed it to the managed template"
+    elif status == "updated":
+        verb = "would refresh" if dry_run else "refreshed"
+        detail = "managed block only; your own rules untouched"
+    else:
+        verb = "would append" if dry_run else "appended"
+        detail = "managed block added below your existing rules" if existing.strip() else "new file"
+    lines.append(f"  {verb:<13} {target}  ({detail})")
+    if status in ("updated", "adopted") and not dry_run:
+        lines.append(f"  backup        {target.name}.bak")
+    return lines, status
+
+
+def init_global_rules(*, dry_run: bool, adopt: bool = False, path: Path | None = None) -> list[str]:
     """Install or refresh the managed protocol block in the user-level rules file.
 
     Never fails the run: this is an additive step inside the repo bootstrap, so a
@@ -117,45 +249,43 @@ def init_global_rules(*, dry_run: bool, path: Path | None = None) -> list[str]:
     protocol = read_template("rules_protocol.md.tmpl")
     existing = safe_read(target) if target.exists() else ""
 
-    new_text, status = merge_block(existing, protocol)
-
-    if status == "current":
-        results.append(f"  no change  {target}  (managed block already current)")
-        return results
-
+    lines, status = _apply_protocol(target, existing, protocol, dry_run=dry_run, adopt=adopt)
+    results.extend(lines)
     if status == "conflict":
-        results.append(f"  skip      {target}  (already has its own memory protocol)")
-        results.append(
-            "  WARNING: appending a second set of memory rules to a file loaded in "
-            "every session would leave two possibly-conflicting protocols. Nothing "
-            "was written, and no flag overrides this. To hand management to "
-            f"gingugu, wrap your existing section in {BEGIN_MARKER} and "
-            f"{END_MARKER} — future runs then refresh it in place."
-        )
         return results
-
-    assert new_text is not None  # status is 'updated' or 'appended'
-    if not dry_run:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        # Only the refresh path rewrites bytes that already existed, so that is
-        # the only path that needs a safety copy. Appending leaves every prior
-        # byte in place and needs none.
-        if status == "updated":
-            target.with_suffix(target.suffix + ".bak").write_text(existing)
-        target.write_text(new_text)
-
-    if status == "updated":
-        verb = "would refresh" if dry_run else "refreshed"
-        detail = "managed block only; your own rules untouched"
-    else:
-        verb = "would append" if dry_run else "appended"
-        detail = "managed block added below your existing rules" if existing.strip() else "new file"
-    results.append(f"  {verb:<13} {target}  ({detail})")
-    if status == "updated" and not dry_run:
-        results.append(f"  backup        {target.name}.bak")
 
     results.append("")
     results.append(
         "Re-run `gingugu init` after upgrading gingugu to refresh the protocol in place."
     )
+    return results
+
+
+REPO_RULES_FILES = ("CLAUDE.md", "AGENTS.md")
+
+
+def init_repo_rules(target: Path, *, dry_run: bool, adopt: bool = False) -> list[str]:
+    """Merge the managed protocol block into the repo's own CLAUDE.md / AGENTS.md.
+
+    Only touches files that already exist — creating an AGENTS.md where none
+    exists would be presumptuous, and the SessionStart hook already carries the
+    protocol into every session regardless of whether a rules file mentions it.
+    Same rationale as the global file: hand-authored, loaded every session, no
+    ``--force``, and per-repo memory sections are not uniform (a shared block
+    can only ever carry the generic protocol — repo-specific rules outside the
+    markers can still drift).
+    """
+    protocol = read_template("rules_protocol.md.tmpl")
+    results: list[str] = ["Repo rules files (CLAUDE.md / AGENTS.md):"]
+    found = False
+    for name in REPO_RULES_FILES:
+        rules_path = target / name
+        if not rules_path.exists():
+            continue
+        found = True
+        existing = safe_read(rules_path)
+        lines, _ = _apply_protocol(rules_path, existing, protocol, dry_run=dry_run, adopt=adopt)
+        results.extend(lines)
+    if not found:
+        results.append(f"  none present ({', '.join(REPO_RULES_FILES)}); nothing to do")
     return results
