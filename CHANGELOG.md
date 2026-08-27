@@ -52,6 +52,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`memory_context`'s recency bucket now orders by write recency, not read
+  recency.** That bucket exists so a freshly-stored, never-accessed memory
+  survives the cut - the "where we left off" signal. It ordered by
+  `last_accessed`, which is a *read* timestamp, so it actually ranked by
+  familiarity: the opposite of what it is for. Anything merely looked at
+  outranked anything newly written.
+
+  It also fed itself. `memory_context` refreshes `last_accessed` on everything
+  it surfaces, to keep those memories out of dormancy, so every session-start
+  load promoted its own output into the next load's bucket and converged on
+  what it had already shown.
+
+  Measured on a 295-memory namespace, the old ordering returned a
+  chronologically scrambled window that omitted both the newest handoff memory
+  and the current planning note entirely; the new ordering returns them at
+  positions 2 and 4, with only 4 of 10 rows in common.
+
+  The bucket now orders by `updated_at`. Reads never move it, so the feedback
+  loop is closed at the source rather than patched downstream. **No schema
+  change:** `last_accessed` keeps its own job - dormancy and the access signal,
+  both of which it was always right for. The two questions simply stop sharing
+  one column. A deliberate edit does lift a memory here, which is intended.
+
+  Ties stay unspecified, and deliberately so. A timestamp is only as fine as
+  the clock that wrote it - Windows resolved `datetime.now()` to 15.6ms before
+  Python 3.13 - so two memories stored in the same tick share an `updated_at`
+  byte for byte. Nothing stored records *write* order to break that with:
+  `rowid` is creation order and an edit never moves it, so ordering by it would
+  answer "created later", the question this fix exists to stop asking. Which of
+  two memories written inside one tick is newer is not knowable from the data.
+
 - **`memory_import` now embeds the memories it writes.** Restored memories were
   reachable by keyword only. The FTS5 index has triggers and keeps itself in
   step with `memories`; `memory_embeddings` has none, so a vector exists only

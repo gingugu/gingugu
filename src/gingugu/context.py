@@ -8,8 +8,8 @@ memory_context):
 
 1. Task-relevant (if ``task_hint``) — FTS5 search scoped to namespace,
    ranked by composite relevance.
-2. Recently active in this namespace — by ``last_accessed`` (pure recency),
-   excluding deprecated.
+2. Recently written in this namespace - by ``updated_at`` (pure write
+   recency), excluding deprecated.
 3. Cross-namespace high-confidence patterns — pattern/preference + verified,
    ranked by ``access_count``.
 
@@ -136,7 +136,7 @@ def build_context(
             embedder=embedder,
         )
 
-    # Bucket 2: recently active in this namespace, ordered by last_accessed DESC.
+    # Bucket 2: recently written in this namespace, ordered by updated_at DESC.
     recent_bucket = recently_active(conn, namespace_id, limit)
     for mem in recent_bucket:
         mem.score = _score(mem, weights, decay_lambda, relevance=0.5)
@@ -195,7 +195,11 @@ def build_context(
     # Comparing scores WITHIN a bucket is sound - every row got its relevance
     # the same way. Comparing them ACROSS buckets is not, which is why this sort
     # is per-bucket and never global.
-    recent_bucket.sort(key=lambda m: (m.last_accessed, best[m.id].score or 0.0, m.id), reverse=True)
+    # Sorted on the same signal the bucket was SELECTED by (``updated_at``, a
+    # write timestamp). Re-sorting it on any other key here would undo the SQL
+    # ordering that defines the bucket - which is how the last presentation bug
+    # got in.
+    recent_bucket.sort(key=lambda m: (m.updated_at, best[m.id].score or 0.0, m.id), reverse=True)
     cross_bucket.sort(key=lambda m: (m.access_count, best[m.id].score or 0.0, m.id), reverse=True)
 
     # Guaranteed-quota selection. Fill recency FIRST - it's the intent the old
@@ -245,7 +249,7 @@ def build_context(
     # though it had never matched the query at all.
     #
     # Each bucket is emitted in its own native order (search relevance,
-    # last_accessed, access_count), which is the ordering that actually means
+    # updated_at, access_count), which is the ordering that actually means
     # something within it.
     #
     # Do NOT re-sort this by composite score. The buckets are scored on

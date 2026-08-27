@@ -27,17 +27,46 @@ _COLUMNS = memory_columns_sql()
 
 
 def recently_active(conn: sqlite3.Connection, namespace_id: str, limit: int) -> list[Memory]:
-    """Most recently touched memories, excluding this namespace's pins.
+    """Most recently *written* memories, excluding this namespace's pins.
+
+    Ordered by ``updated_at``, a write timestamp, because this bucket exists so
+    that a freshly-stored, never-read memory survives the cut - the "where we
+    left off" signal. It used to order by ``last_accessed``, which is a *read*
+    timestamp, and so answered the opposite question: not "is this new to me?"
+    but "have I seen this lately?". The two are anti-correlated by definition,
+    and the bucket whose whole job is discovery was ranked by familiarity.
+
+    Reading never moves ``updated_at``, which is what makes it safe here. Of the
+    three statements that write this table, two touch only ``last_accessed``
+    (``record_accesses`` and ``touch_many``) and the third is an explicit edit.
+    That matters because ``memory_context`` itself touches everything it
+    surfaces: on the old sort key each session-start load promoted its own
+    output into the next load's bucket, so the bucket converged on what it had
+    already shown and newly-stored memories could never break in.
+
+    ``last_accessed`` is untouched and still correct for what it is actually
+    for - dormancy and the access signal. The two questions get two columns
+    rather than one column meaning both things.
 
     Pins are filtered in SQL rather than afterwards in Python because ``LIMIT``
     applies first: fetching N rows and *then* dropping the pinned ones yields
     fewer than N ranked candidates, so a full pin tier would quietly starve the
     recency bucket it was supposed to sit alongside.
+
+    Ties are left unspecified, deliberately. Two memories can share an
+    ``updated_at`` byte for byte when the clock is coarse - Windows resolved
+    ``datetime.now()`` to 15.6ms before Python 3.13 - and there is no second
+    column that records *write* order to break such a tie with. ``rowid`` is
+    creation order and an edit never moves it, so ordering by it would answer
+    "created later", which is the question this bucket was just fixed for not
+    asking. Which of two memories written inside the same tick is newer is not
+    knowable from what is stored, and pretending otherwise would rank by
+    creation under a name that promises writes.
     """
     rows = conn.execute(
         f"SELECT {_COLUMNS} FROM memories "
         "WHERE namespace_id = ? AND confidence != 'deprecated' AND pinned = 0 "
-        "ORDER BY last_accessed DESC LIMIT ?",
+        "ORDER BY updated_at DESC LIMIT ?",
         (namespace_id, limit),
     ).fetchall()
     return [Memory(**dict(r)) for r in rows]

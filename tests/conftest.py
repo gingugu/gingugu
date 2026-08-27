@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+
 import keyring
 import pytest
 from keyring.backend import KeyringBackend
@@ -109,6 +112,34 @@ def store(db: Database) -> MemoryStore:
 @pytest.fixture
 def namespaces(db: Database, config: Config) -> NamespaceManager:
     return NamespaceManager(db.conn, config)
+
+
+@pytest.fixture
+def backdate(db: Database) -> Callable[..., None]:
+    """Stamp memories with explicit, well-separated past ``updated_at`` values.
+
+    Any test that asserts an ordering by write time has to *own* its
+    timestamps. Storing two memories back to back and trusting them to differ
+    is a race against the clock's resolution, and on a coarse one they tie:
+    Windows resolved ``datetime.now()`` to 15.6ms until Python 3.13 moved to
+    ``GetSystemTimePreciseAsFileTime``, so the same test can pass on every
+    developer machine and fail only on that leg of CI.
+
+    Memories are stamped in the order given, one day apart, ending a day in the
+    past - so a subsequent real ``store.update()`` lands strictly later than
+    every stamp and an edit genuinely leads.
+    """
+
+    def _backdate(*memory_ids: str) -> None:
+        base = datetime.now(UTC) - timedelta(days=len(memory_ids))
+        for offset, memory_id in enumerate(memory_ids):
+            db.conn.execute(
+                "UPDATE memories SET updated_at = ? WHERE id = ?",
+                ((base + timedelta(days=offset)).isoformat(), memory_id),
+            )
+        db.conn.commit()
+
+    return _backdate
 
 
 @pytest.fixture
