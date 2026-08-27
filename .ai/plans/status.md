@@ -1,12 +1,73 @@
 # Project Status
 
-_Last updated: 2026-08-26_
+_Last updated: 2026-08-27_
 
 ## In Flight
 
-**The `memory_context` recency bucket orders by write recency -
-`fix/recency-bucket-write-recency`, PR #61 (open).** 663 tests green (was 658),
-`ruff` + `black` clean. Board item #1, the correctness bug that has sat at the
+**`bench/` gains real call-depth coverage and a hybrid (embeddings) pass, and
+runs in CI - `feature/bench-ci-embeddings`.** 666 tests green (was 663), `ruff`
++ `black` clean. Board item #1 - the item that was #7 through most of the
+board's history, promoted to #1 once #61 (below) merged and closed the
+correctness bug that had been sitting above it.
+
+**The harness had never issued a `limit=1` call in its life.**
+`run_benchmark` computed recall@1/@5/@10 by slicing one `search()` call made at
+`limit=max(ks)`, so PR #55's relevance-depends-on-`limit` fix has no regression
+guard: a benchmark that only ever calls at the deepest cutoff cannot see a class
+of bug defined entirely by what changes when the cutoff is shallower. Fixed by
+issuing one `search()` call per `k` in `ks`; `recall@k`/`precision@k` now come
+from that `k`'s own call, not a slice of a deeper one. `mrr` and the token
+estimate still use the deepest call, which is unaffected by the change.
+
+**The fixture was too small and bm25-only to exercise it.** 14 memories / 8
+questions scored recall@5 = 1.0 by design, and `build_fixture_db` hardcoded
+`NullEmbeddingProvider`, so the fixture never ran hybrid retrieval at all. Grew
+to 34 memories / 20 questions (a third namespace, `billing-service`, plus
+several paraphrased questions and near-miss distractors per topic) and added an
+opt-in `--embeddings` CLI flag / `embedder` param on `build_fixture_db` so a
+run can also score with the real `fastembed` provider (`MemoryStore.create`
+embeds synchronously, so no plumbing changes needed there). Fixture-mode
+default stays offline/bm25-only; embeddings are opt-in, matching the existing
+`--db`-mode default asymmetry deliberately (a plain `uv run python -m bench`
+should not surprise a developer with an 80MB download).
+
+**Proof the call-depth fix is real, not cosmetic:** the fixture's two `multi`
+questions each have two relevant memories, so `recall@1` can never reach 1.0 for
+them while `recall@5` can. `test_fixture_run_end_to_end` now asserts
+`by_kind["multi"]["recall@1"] < by_kind["multi"]["recall@5"]` - a benchmark that
+still sliced one deep call would show these equal.
+
+**Wiring into CI, and the fastembed-hang lesson from PR #36 governs the
+shape.** The suite's `offline_embeddings` autouse fixture (`tests/conftest.py`)
+forces `MEMORY_EMBEDDINGS_ENABLED=false` for every test, added after an
+unguarded fastembed download once hung a CI job for 10+ minutes (v0.12.0, PR
+#36). `test_fixture_run_with_real_embeddings` constructs `FastEmbedProvider`
+directly rather than through config, so that guard does not reach it - it is
+the deliberate, explicitly-opted-in exception that incident's fix anticipated,
+carrying its own `@pytest.mark.timeout(180)` and a new `bench_embeddings`
+pytest marker. The main CI matrix now runs `pytest -m "not bench_embeddings"`;
+a new single-cell `bench-embeddings` job (`ubuntu-latest`, Python 3.13) runs
+just that one test, with `actions/cache` keyed on the model name caching
+`~/.cache/fastembed` so only the first run ever downloads it. One job rather
+than folding into the 3x3 matrix, because retrieval scoring is pure arithmetic
+over SQLite + vectors - not OS- or interpreter-specific - so the existing
+matrix already covers whether `fastembed` installs and imports cleanly on every
+cell; re-downloading and re-scoring the same fixture nine times would be pure
+waste.
+
+**Not yet pushed; CI has not run this branch.** Verified locally: full suite
+green under both `pytest -m "not bench_embeddings"` and `pytest -m
+bench_embeddings` alone, `ruff`/`black` clean, both `uv run python -m bench`
+and `uv run python -m bench --embeddings` run to completion end to end
+(model downloads and caches correctly). Windows/macOS behavior of the new
+`bench-embeddings` job is unexercised since it only runs on `ubuntu-latest` by
+design.
+
+## Shipped to `main`, awaiting release in v0.18.0
+
+**The `memory_context` recency bucket orders by write recency - PR #61,
+merged `b9a6ba0` (2026-08-27).** 663 tests green (was 658), `ruff` + `black`
+clean, 9/9 CI. Board item #1, the correctness bug that had sat at the
 top of the board since 2026-08-21.
 
 `context_buckets.recently_active()` ordered by `last_accessed`. That is a

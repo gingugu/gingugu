@@ -51,12 +51,17 @@ class BenchReport:
     by_kind: dict[str, dict[str, float]] = field(default_factory=dict)
 
 
-def build_fixture_db(dataset: GoldenDataset) -> tuple[sqlite3.Connection, dict[str, str]]:
+def build_fixture_db(
+    dataset: GoldenDataset, *, embedder: EmbeddingProvider | None = None
+) -> tuple[sqlite3.Connection, dict[str, str]]:
     """Create an ephemeral in-memory DB from a fixture dataset.
 
     Returns the connection and a {memory key -> generated uuid} map so
     question labels can be translated to real ids. Embeddings are left
-    empty (Null provider) so CI runs are deterministic and offline.
+    empty (Null provider, the default) so CI runs are deterministic and
+    offline; pass a real ``embedder`` to also exercise hybrid retrieval -
+    ``MemoryStore.create`` embeds synchronously, so vectors are ready
+    immediately for the search calls that follow.
     """
     from gingugu.config import Config
     from gingugu.namespaces import NamespaceManager
@@ -75,7 +80,7 @@ def build_fixture_db(dataset: GoldenDataset) -> tuple[sqlite3.Connection, dict[s
         decay_lambda=0.01,
     )
     namespaces = NamespaceManager(conn, cfg)
-    store = MemoryStore(conn, embedder=NullEmbeddingProvider())
+    store = MemoryStore(conn, embedder=embedder or NullEmbeddingProvider())
 
     key_to_id: dict[str, str] = {}
     for fm in dataset.memories:
@@ -124,7 +129,14 @@ def run_benchmark(
     ks: tuple[int, ...] = DEFAULT_KS,
     key_to_id: dict[str, str] | None = None,
 ) -> BenchReport:
-    """Run every question through the live recall path and score it."""
+    """Run every question through the live recall path and score it.
+
+    Issues one ``search()`` call per cutoff in ``ks`` rather than slicing a
+    single deep call - recall@1 must exercise a real ``limit=1`` call, not a
+    slice of a ``limit=10`` result. Relevance was a function of ``limit``
+    until PR #55; a benchmark that only ever calls at ``max(ks)`` cannot
+    catch that class of regression coming back.
+    """
     depth = max(ks)
     hybrid = bool(embedder is not None and getattr(embedder, "enabled", False))
     results: list[QuestionResult] = []
@@ -132,23 +144,33 @@ def run_benchmark(
     for q in dataset.questions:
         relevant = [key_to_id.get(r, r) for r in q.relevant] if key_to_id else list(q.relevant)
         ns_ids = _namespace_ids(conn, q.namespaces)
-        memories = search_mod.search(
-            conn,
-            query=q.query,
-            namespace_id=ns_ids if ns_ids is None or len(ns_ids) > 1 else ns_ids[0],
-            limit=depth,
-            weights=weights,
-            decay_lambda=decay_lambda,
-            embedder=embedder,
-        )
-        retrieved = [m.id for m in memories]
-        scores: dict[str, float] = {"mrr": mrr(relevant, retrieved)}
+        ns_arg = ns_ids if ns_ids is None or len(ns_ids) > 1 else ns_ids[0]
+
+        retrieved_by_k: dict[int, list[str]] = {}
+        deepest: list = []
         for k in ks:
-            scores[f"recall@{k}"] = recall_at_k(relevant, retrieved, k)
-            scores[f"precision@{k}"] = precision_at_k(relevant, retrieved, k)
-        tokens = estimate_tokens([f"{m.title}\n{m.content}" for m in memories[:depth]])
+            memories_k = search_mod.search(
+                conn,
+                query=q.query,
+                namespace_id=ns_arg,
+                limit=k,
+                weights=weights,
+                decay_lambda=decay_lambda,
+                embedder=embedder,
+            )
+            retrieved_by_k[k] = [m.id for m in memories_k]
+            if k == depth:
+                deepest = memories_k
+
+        scores: dict[str, float] = {"mrr": mrr(relevant, retrieved_by_k[depth])}
+        for k in ks:
+            scores[f"recall@{k}"] = recall_at_k(relevant, retrieved_by_k[k], k)
+            scores[f"precision@{k}"] = precision_at_k(relevant, retrieved_by_k[k], k)
+        tokens = estimate_tokens([f"{m.title}\n{m.content}" for m in deepest])
         results.append(
-            QuestionResult(id=q.id, kind=q.kind, retrieved=retrieved, scores=scores, tokens=tokens)
+            QuestionResult(
+                id=q.id, kind=q.kind, retrieved=retrieved_by_k[depth], scores=scores, tokens=tokens
+            )
         )
 
     return BenchReport(
