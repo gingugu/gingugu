@@ -9,6 +9,8 @@ asserted at the only layer where it is actually decided.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from gingugu.context_buckets import recently_active
 from gingugu.models import Confidence, MemoryType
 from gingugu.namespaces import NamespaceManager
@@ -16,7 +18,7 @@ from gingugu.storage import MemoryStore
 
 
 def test_recently_active_orders_by_write_not_read(
-    store: MemoryStore, namespaces: NamespaceManager
+    store: MemoryStore, namespaces: NamespaceManager, backdate: Callable[..., None]
 ) -> None:
     # The sort key guard. This bucket exists so a freshly-stored, never-read
     # memory survives the cut, so it must order by a WRITE timestamp. It used to
@@ -29,6 +31,9 @@ def test_recently_active_orders_by_write_not_read(
     newer = store.create(
         namespace_id=ns_id, type=MemoryType.FACT, title="newer", content="written second"
     )
+    # `backdate` supplies the write order rather than the clock: consecutive
+    # stores tie on a coarse one, and the tie is not what is under test here.
+    backdate(older.id, newer.id)
     # Read the older one repeatedly. Reads move `last_accessed` and nothing else.
     for _ in range(20):
         store.record_accesses([older.id])
@@ -36,29 +41,8 @@ def test_recently_active_orders_by_write_not_read(
     assert [m.id for m in rows] == [newer.id, older.id]
 
 
-def test_recently_active_breaks_a_timestamp_tie_toward_the_later_write(
-    store: MemoryStore, namespaces: NamespaceManager
-) -> None:
-    # A timestamp is only as fine as the clock that made it: Windows resolved
-    # `datetime.now()` to 15.6ms before Python 3.13, so two stores in one tick
-    # share an `updated_at` byte for byte. The tie is forced here rather than
-    # raced for, because on a microsecond clock it never occurs at all - and an
-    # unspecified tie sorts rowid ASCENDING, returning the older memory first.
-    ns_id = namespaces.get_or_create("test-ns").id
-    first = store.create(
-        namespace_id=ns_id, type=MemoryType.FACT, title="first", content="same tick"
-    )
-    second = store.create(
-        namespace_id=ns_id, type=MemoryType.FACT, title="second", content="same tick"
-    )
-    store.conn.execute("UPDATE memories SET updated_at = '2026-01-01T00:00:00+00:00'")
-    store.conn.commit()
-    rows = recently_active(store.conn, ns_id, limit=10)
-    assert [m.id for m in rows] == [second.id, first.id]
-
-
 def test_recently_active_lifts_an_edited_memory(
-    store: MemoryStore, namespaces: NamespaceManager
+    store: MemoryStore, namespaces: NamespaceManager, backdate: Callable[..., None]
 ) -> None:
     # The flip side: an edit IS a write, so it must re-surface the memory.
     # Without this the bucket would only ever track creation order.
@@ -66,7 +50,12 @@ def test_recently_active_lifts_an_edited_memory(
     revised = store.create(
         namespace_id=ns_id, type=MemoryType.FACT, title="revised", content="first draft"
     )
-    store.create(namespace_id=ns_id, type=MemoryType.FACT, title="untouched", content="left alone")
+    untouched = store.create(
+        namespace_id=ns_id, type=MemoryType.FACT, title="untouched", content="left alone"
+    )
+    # `revised` is stamped as the OLDER of the two, so leading the bucket
+    # afterwards can only be the edit's doing and not creation order surviving.
+    backdate(revised.id, untouched.id)
     store.update(revised.id, content="rewritten with what we actually learned")
     rows = recently_active(store.conn, ns_id, limit=10)
     assert rows[0].id == revised.id

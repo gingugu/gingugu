@@ -5,7 +5,7 @@ _Last updated: 2026-08-26_
 ## In Flight
 
 **The `memory_context` recency bucket orders by write recency -
-`fix/recency-bucket-write-recency`, PR #61 (open).** 664 tests green (was 658),
+`fix/recency-bucket-write-recency`, PR #61 (open).** 663 tests green (was 658),
 `ruff` + `black` clean. Board item #1, the correctness bug that has sat at the
 top of the board since 2026-08-21.
 
@@ -60,22 +60,39 @@ against the unfixed code. It could not fail, because that load also touches the
 newcomer. The burial needs reads of *other* memories after the write, which is
 exactly what the surviving high-access test proves.
 
-**A red CI run then found the same inversion one scale down.** The first push
-went green on ubuntu and macOS and red on `windows-latest` 3.11 and 3.12, on
-the new bucket test alone. Both memories in it had been stored inside a single
-clock tick: Windows resolved `datetime.now()` to 15.6ms until Python 3.13
-switched to `GetSystemTimePreciseAsFileTime` (hence 3.13 green beside 3.11 and
-3.12 red), so their `updated_at` values were byte-identical and `ORDER BY
-updated_at DESC` alone left the tie unspecified. SQLite settled it by rowid
-**ascending** and returned the older memory first.
+**A red CI run then exposed four tests that were racing the clock.** The first
+push went green on ubuntu and macOS and red on `windows-latest` 3.11 and 3.12.
+Windows resolved `datetime.now()` to 15.6ms until Python 3.13 switched to
+`GetSystemTimePreciseAsFileTime`, which is why 3.13 sat green beside 3.11 and
+3.12 red - a version boundary, not a flake. Consecutive `store.create()` calls
+land inside one tick there and come out with a byte-identical `updated_at`, so
+every test that stored memories and then asserted an ordering by write time was
+asserting a coin flip.
 
-That is the bug this PR exists to fix, reappearing below the resolution of the
-sort key. The fix is `ORDER BY updated_at DESC, rowid DESC` (insertion order,
-so "last written wins" continues to hold once the timestamp runs out of
-digits), not a loosened assertion. A fifth bucket test forces the tie by
-writing an identical `updated_at` rather than racing the clock, so it is
-asserted on every platform instead of only where the clock is coarse; it fails
-against the untied ordering.
+**A `rowid DESC` tiebreak was tried first and was wrong.** It turned the
+originally-failing test green and broke two others, which is the useful part:
+`rowid` is *creation* order and an edit never moves it, so on a tie it answers
+"created later" - the exact question this bucket was just fixed for not asking.
+The edit tests had been passing on rowid-ascending ties by accident. Nothing
+stored records write order, so there is no correct tiebreak to reach for, and
+the ordering now documents the tie as unspecified rather than resolving it
+wrongly. Which of two memories written inside one tick is newer is not knowable
+from the data.
+
+**The tests supply their own timestamps instead.** A `backdate` fixture
+(`tests/conftest.py`) stamps memories with well-separated past `updated_at`
+values, ending a day in the past so a subsequent real `store.update()` lands
+strictly later and an edit genuinely leads. `tests/test_context_ordering.py`
+carries a local equivalent because it reaches the server over MCP rather than
+through the `store` fixture.
+
+**Verified by simulating the failing platform**, not by re-running CI: a
+throwaway autouse fixture monkeypatched `utcnow_iso` to a 15.6ms-granular clock
+and ran the full suite. It reproduced the Windows failures on macOS, and caught
+two more clock-dependent tests that Windows CI had passed only by luck
+(`test_context_fresh_memory_survives_high_access_competition`,
+`test_freshest_memory_is_not_buried_by_its_placeholder_score`). Suite is green
+under both the simulated coarse clock and the real one.
 
 `pinned()` and `cross_namespace_patterns()` sort on `last_confirmed`/
 `created_at` and `access_count` respectively and have the same unspecified-tie

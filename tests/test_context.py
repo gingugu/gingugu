@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
 
 from gingugu import context
@@ -76,7 +78,7 @@ def test_context_type_boost(store: MemoryStore, namespaces: NamespaceManager) ->
 
 
 def test_context_fresh_memory_survives_high_access_competition(
-    store: MemoryStore, namespaces: NamespaceManager
+    store: MemoryStore, namespaces: NamespaceManager, backdate: Callable[..., None]
 ) -> None:
     # Regression: a freshly-stored, never-accessed memory (the "where we left
     # off" signal) used to be evicted past the limit by older, heavily-accessed
@@ -96,6 +98,9 @@ def test_context_fresh_memory_survives_high_access_competition(
     fresh = store.create(
         namespace_id=ns_id, type=MemoryType.BUG, title="traefik outage", content="root cause found"
     )
+    # `fresh` has to be unambiguously the newest WRITE for this to test anything,
+    # and eleven consecutive stores do not out-run a coarse clock.
+    backdate(*(m.id for m in competitors), fresh.id)
     # Hammer the competitors AFTER `fresh` is stored. This ordering is the whole
     # point: it makes every competitor newer than `fresh` on `last_accessed`
     # while `fresh` stays newest on `updated_at`. Reading is not writing, so a
@@ -110,7 +115,7 @@ def test_context_fresh_memory_survives_high_access_competition(
 
 
 def test_context_recency_bucket_follows_edits(
-    store: MemoryStore, namespaces: NamespaceManager
+    store: MemoryStore, namespaces: NamespaceManager, backdate: Callable[..., None]
 ) -> None:
     # The flip side of ignoring reads: a real edit IS a write and must resurface
     # the memory. Without this the bucket would only ever track creation order.
@@ -119,10 +124,15 @@ def test_context_recency_bucket_follows_edits(
     revised = store.create(
         namespace_id=ns_id, type=MemoryType.FACT, title="revised", content="first draft"
     )
-    for i in range(limit):
+    newer = [
         store.create(
             namespace_id=ns_id, type=MemoryType.FACT, title=f"newer-{i}", content="written after"
         )
+        for i in range(limit)
+    ]
+    # `revised` is stamped oldest of the four, so the edit has to do real work
+    # to lift it - it cannot ride a clock tie with the memories written after.
+    backdate(revised.id, *(m.id for m in newer))
     store.update(revised.id, content="rewritten with what we actually learned")
     results = context.build_context(store.conn, namespace_id=ns_id, limit=limit, weights=WEIGHTS)
     assert results[0].id == revised.id, "an edited memory did not lead the recency bucket"

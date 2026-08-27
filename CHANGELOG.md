@@ -75,13 +75,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   both of which it was always right for. The two questions simply stop sharing
   one column. A deliberate edit does lift a memory here, which is intended.
 
-  Ties resolve to the later write. A timestamp is only as fine as the clock
-  that wrote it, and Windows resolved `datetime.now()` to 15.6ms before Python
-  3.13, so two memories stored in the same tick carried a byte-identical
-  `updated_at`. An unspecified tie sorts by rowid *ascending* and returned the
-  older one first - the same inversion, at sub-tick scale. The ordering now
-  names `rowid DESC` as its tiebreak, which is insertion order, so "last
-  written wins" holds after the timestamp runs out of digits.
+  Ties stay unspecified, and deliberately so. A timestamp is only as fine as
+  the clock that wrote it - Windows resolved `datetime.now()` to 15.6ms before
+  Python 3.13 - so two memories stored in the same tick share an `updated_at`
+  byte for byte. Nothing stored records *write* order to break that with:
+  `rowid` is creation order and an edit never moves it, so ordering by it would
+  answer "created later", the question this fix exists to stop asking. Which of
+  two memories written inside one tick is newer is not knowable from the data.
 
 - **`memory_import` now embeds the memories it writes.** Restored memories were
   reachable by keyword only. The FTS5 index has triggers and keeps itself in
