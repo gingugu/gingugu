@@ -471,12 +471,21 @@ It installs:
   whatever you already wrote, only the block's own contents are ever rewritten
   on a re-run, and if the file already contains a memory protocol that `init`
   doesn't manage it writes nothing and tells you how to opt in.
+- **The same, for the repo's own `CLAUDE.md` / `AGENTS.md`** — only files that
+  already exist (it never creates one), same append-only / marked-block rules.
 
 It's idempotent (re-run any time — that's how you pick up protocol changes after
 upgrading), `--dry-run` previews without writing, and `--force` overwrites
 existing hook files **in the target repo only** — it never authorizes appending
 to your user-level rules file. Anything `--force` replaces is copied to
 `<name>.bak` first, including a `--client` rules file you wrote yourself.
+
+If a rules file already carries its own hand-written protocol, `init` refuses
+to touch it (see above) — pass **`--adopt`** to wrap that existing section in
+the managed markers and refresh it to the template in one step, backing up the
+original first. It finds the section by its heading's own title, so it wraps
+the right span even when a neighboring subsection just happens to mention a
+tool name in passing.
 
 The first line of output is the resolved `target` directory. Check it: `--path`
 defaults to the current directory, and some wrappers change that for you. `uv run
