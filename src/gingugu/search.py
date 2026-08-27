@@ -193,7 +193,7 @@ def search(
             continue
         mem = Memory(**{k: row[k] for k in row.keys() if k != "bm25_score"})
         if weights is not None:
-            mem.score = decay.score_memory(
+            mem.score_parts = decay.score_parts(
                 relevance=relevance,
                 last_confirmed=mem.last_confirmed,
                 updated_at=mem.updated_at,
@@ -203,7 +203,11 @@ def search(
                 weights=weights,
                 decay_lambda=decay_lambda,
             )
+            mem.score = sum(mem.score_parts.values())
         else:
+            # A bare fused relevance, not a composite: there is nothing to
+            # decompose, so no breakdown is reported rather than a fake
+            # one-term one.
             mem.score = relevance
         results.append(mem)
 

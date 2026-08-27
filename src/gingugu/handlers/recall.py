@@ -21,13 +21,12 @@ from . import ServerContext
 from .helpers import (
     _attach_review_hints,
     _collect_related,
-    _compact_summary,
     _err,
-    _memory_summary,
     _resolve_namespaces,
     _split_csv,
     _spread_activation,
     _stamp_namespace_names,
+    _summarizer,
 )
 
 logger = logging.getLogger(__name__)
@@ -84,6 +83,7 @@ def register(mcp, ctx: ServerContext) -> None:
         include_deprecated: bool = False,
         include_related: bool = False,
         compact: bool = False,
+        explain: bool = False,
     ) -> dict:
         """Search memories by relevance using hybrid BM25 + semantic ranking. Use for
         natural-language queries when you want the best-matching memories for a topic.
@@ -107,7 +107,14 @@ def register(mcp, ctx: ServerContext) -> None:
         a minimum confidence threshold (verified > inferred > stale > deprecated).
         ``include_deprecated`` also returns deprecated memories (stale ones are always
         included). ``include_related`` also surfaces memories directly linked to the top
-        hits via spreading activation — useful for pulling in a related cluster."""
+        hits via spreading activation: useful for pulling in a related cluster.
+
+        ``explain=True`` adds a ``score_breakdown`` to each hit: the weighted
+        ``relevance``/``freshness``/``access``/``confidence`` terms that ``score``
+        is the sum of. Use it to answer "why did this rank here?": a result
+        carried by ``confidence`` and ``freshness`` with a near-zero relevance
+        term matched the query barely or not at all. Off by default because it
+        is a diagnostic, not something worth paying for on every read."""
         try:
             if type is not None:
                 try:
@@ -151,7 +158,7 @@ def register(mcp, ctx: ServerContext) -> None:
             )
             ctx.store.load_tags(results)
             seed_ids = [m.id for m in results]
-            summarize = _compact_summary if compact else _memory_summary
+            summarize = _summarizer(compact=compact, explain=explain)
             summaries = [_attach_review_hints(summarize(m), m) for m in results]
             if include_related:
                 summaries.extend(_collect_related(ctx, seed_ids, compact=compact))
@@ -179,6 +186,7 @@ def register(mcp, ctx: ServerContext) -> None:
         task_hint: str | None = None,
         limit: int | None = None,
         compact: bool = False,
+        explain: bool = False,
     ) -> dict:
         """Load the most relevant memories for the current session. Call this at session
         start with a brief description of the current task to prime the agent with
@@ -204,7 +212,16 @@ def register(mcp, ctx: ServerContext) -> None:
         A surfaced memory may carry ``review_hints`` — advisory signals that
         its content describes point-in-time state (an open PR, a "waiting on"
         note, a passed expiry date) that hasn't been confirmed recently.
-        Reconcile with memory_update / memory_forget if it's no longer true."""
+        Reconcile with memory_update / memory_forget if it's no longer true.
+
+        ``explain=True`` adds a ``score_breakdown`` to each memory: the weighted
+        terms ``score`` is the sum of, plus ``type_boost`` where the
+        architecture/decision boost applied. It is the way to see which bucket a
+        memory came from: the recency and cross-namespace buckets are scored
+        with a synthetic relevance, so a constant relevance term across several
+        hits means they were selected for recency or reach, not for matching the
+        task hint. Pinned memories carry no breakdown: they never entered the
+        ranking at all."""
         try:
             requested = _split_csv(namespace)
             ns_names = list(dict.fromkeys(requested)) or [ctx.namespaces.resolve_name(None)]
@@ -257,9 +274,10 @@ def register(mcp, ctx: ServerContext) -> None:
             _spread_activation(ctx, seed_ids)
 
             ns_name_by_id = {n.id: n.name for n in ctx.namespaces.list()}
+            summarize = _summarizer(compact=compact, explain=explain)
             summaries = []
             for mem in results:
-                summary = _compact_summary(mem) if compact else _memory_summary(mem)
+                summary = summarize(mem)
                 summary["namespace"] = ns_name_by_id.get(mem.namespace_id, mem.namespace_id)
                 summaries.append(_attach_review_hints(summary, mem))
 

@@ -62,11 +62,13 @@
 | `embeddings.py` | Semantic vector generation; owns `embedding_input()`, the one text recipe the write path and any compare path must share |
 | `embedding_sync.py` | Keeps `memory_embeddings` in step with `memories`. Extracted from `storage.py` because the invariant belongs to whoever writes a memory row, and `MemoryStore` is not the only one - `memory_import` writes them too. There are NO triggers for embeddings; a vector exists only where code deliberately wrote one |
 | `similarity.py` | ABSOLUTE payload-vs-memory similarity for the write-time hints: cosine, or token Jaccard without embeddings. Cutoffs are calibrated against a real corpus, never inherited from a ranking score |
-| `context.py` | Session priming (`memory_context`): the pinned tier + three quota'd intent buckets, plus spreading activation |
+| `context.py` | Session priming (`memory_context`): the pinned tier + three quota'd intent buckets, plus spreading activation. Decides how buckets are scored, quota'd and presented |
+| `context_buckets.py` | Where those buckets' rows come from: one SQL fetcher per intent (recency, pins, cross-namespace), each ordered by its own native signal. Split from `context.py` when it crossed 300 lines; the seam is "where rows come from" vs "how they are combined" |
+| `excerpt.py` | Reading *inside* one memory: `clamp_range`, `find_matches`, `line_of`. Literal substring scanning and character offsets - no ranking, no stemming, no model, same answer every time |
 | `relations.py` | Typed graph edges + hub-dampened 1-hop traversal (`dampened_neighbour_ids`) and enumeration (`list_edges`) |
 | `relation_repair.py` | Edge repair mixed into `RelationManager`: `retype_relation`, `reverse_relation`, `delete_relation`, `delete_edges`. Every op is an UPDATE/DELETE on the existing row, so id / `created_at` / metadata survive a correction |
 | `consolidation.py` | merge / summarize / deduplicate clusters |
-| `decay.py` | Composite scoring, the `reference_timestamp()` freshness anchor (MAX, not COALESCE), dormancy as a resting signal (never auto-forgets), and `relative_age()`/`age_label()` — the derived-at-read `age` string |
+| `decay.py` | Composite scoring, the `reference_timestamp()` freshness anchor (MAX, not COALESCE), dormancy as a resting signal (never auto-forgets), and `relative_age()`/`age_label()`, the derived-at-read `age` string. `composite_score`/`score_memory` are summed from `composite_parts`/`score_parts`, so the `explain` breakdown and the score it explains are the same arithmetic |
 | `stats.py` | Health stats (counts, confidence, dormancy, hygiene, review sweep) |
 | `graph_stats.py` | Relation-graph health: edges, degree, type mix, orphans, and edges stranded past `SPREAD_PER_SEED`. Also `orphan_sample` (the orphans behind the count, costliest first) and the shared `orphan_filter()` predicate behind `memory_search(orphans=True)` |
 | `staleness.py` | Advisory review hints for point-in-time memories |
@@ -77,7 +79,7 @@
 | `namespaces.py` | Namespace CRUD; a `default_repo` change re-derives that namespace's claims (best-effort) so the declaration is not inert |
 | `credentials.py` | OS-keychain credential vault |
 | `portability.py` | Export / import a namespace. `import_data` takes an `embedder` and embeds what it writes; vectors are recomputed, never carried in the payload (they are model-specific and derived) |
-| `handlers/` | MCP tool handlers: `memory.py` (store/update), `forget.py` (the one destructive tool), `hints.py` (write-time similar/relation hints), `recall.py` (recall/context), `search.py`, `relations.py` (relate/edges/unrelate) with `relation_ops.py` (batch parsing + per-edge dispatch), `consolidate.py`, `admin.py`, `credentials.py`, `helpers.py` |
+| `handlers/` | MCP tool handlers: `memory.py` (store/update), `forget.py` (the one destructive tool), `hints.py` (write-time similar/relation hints), `recall.py` (recall/context), `search.py`, `excerpt.py` (`memory_excerpt`: one memory, never ranked), `relations.py` (relate/edges/unrelate) with `relation_ops.py` (batch parsing + per-edge dispatch), `consolidate.py`, `admin.py`, `credentials.py`, `helpers.py` |
 
 Dev-only tooling at the repo root (never shipped in the wheel): **`bench/`** —
 golden-set retrieval benchmark (Recall@K, MRR, precision, token cost;
@@ -90,7 +92,9 @@ Run: `uv run python -m bench [--db <real-brain.db>]`.
 ## MCP Tool Surface
 
 - **Memory:** `memory_store`, `memory_update`, `memory_forget`, `memory_recall`,
-  `memory_search`, `memory_context`, `memory_stats`
+  `memory_search`, `memory_context`, `memory_excerpt`, `memory_stats`
+  (the three read surfaces take `explain=True` for a per-hit `score_breakdown`;
+  `memory_excerpt` searches or slices inside one memory by character offset)
 - **Graph:** `memory_relate`, `memory_edges` (enumerate, read-only),
   `memory_unrelate` (retype / reverse / remove, single or batch, `dry_run`)
 - **Lifecycle:** `memory_consolidate`, `memory_export`, `memory_import`,

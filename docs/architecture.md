@@ -233,6 +233,19 @@ For non-search retrieval (e.g. `memory_context`), `relevance` defaults to
 score = w_r·relevance + w_f·freshness + w_a·access + w_c·confidence
 ```
 
+Each read surface can return those four terms alongside the blended number.
+`memory_recall`, `memory_search` and `memory_context` take `explain=True` and
+add a `score_breakdown` per hit: the **weighted** contributions, so they sum to
+`score` and a caller can see which signal produced a result without knowing the
+configured weights. `memory_context` adds a `type_boost` term wherever the
+architecture/decision boost applied.
+
+The score is summed from the breakdown rather than computed beside it
+(`composite_score` = `sum(composite_parts(...))`), so the two cannot drift. A
+result with no composite behind it carries no breakdown: pinned memories never
+entered the ranking, an `ids` fetch was not ranked, and a bare fused relevance
+has nothing to decompose.
+
 Default weights (sum to 1.0, tunable via env):
 
 | Weight | Default | Env var |
@@ -934,6 +947,34 @@ Advanced search with full filter support, plus a precise fetch-by-ID path.
   and only where a directional fact exists to record; an orphan is better left
   alone than wired up with an invented edge. Ignored on the `ids` path.
 
+### `memory_excerpt`
+Read *inside* one memory. Retrieval answers "which memory?"; this answers
+"where in it?", the question with no answer between a full body and a
+~200-char compact summary.
+
+- `memory_id` (required): the memory to read into.
+- `query` (optional): literal substring scan, case-insensitive unless
+  `case_sensitive=true`. Each match returns `start`/`end` character offsets, a
+  1-indexed `line`, and an `excerpt` carrying `context_chars` of surrounding
+  text on each side. Matches come back in the order they appear in the text,
+  never by relevance.
+- `start` / `end` (optional): read an exact character range. Omitted bounds
+  mean start-of-body and end-of-body; out-of-range values clamp and inverted
+  bounds swap.
+- Passing both searches only inside the range, with offsets still reported
+  absolute against the full body, so a match can be fed straight back as a
+  range read.
+- Passing neither returns `length` and `lines` only: a cheap way to size a
+  memory before deciding how to read it.
+- `total_matches` is the true count even when `max_matches` (default 10, cap
+  100) truncates the list, so a caller can distinguish "that was all of them"
+  from "that was the first 10 of 300"; `truncated` says which.
+
+The scan is literal and deterministic (no ranking, no stemming, no model), so
+the same call returns the same answer every time. Reading a memory this way
+credits a real access, like naming it in `memory_search(ids=…)`. No spreading
+activation: it traverses no relations.
+
 ### `memory_export`
 Export memories to a portable JSON payload (backup/transfer). Credentials are
 intentionally excluded — their secrets live in the OS keychain.
@@ -1163,9 +1204,11 @@ src/gingugu/
 ├── search_filters.py     # advanced_search: picks the strategy sort_by asks for
 ├── search_listing.py     # ordered retrieval: by column, by score, by match set, by id
 ├── relations.py          # Relationship management
-├── decay.py              # Decay scoring + staleness detection
+├── decay.py              # Decay scoring (+ the parts behind it) + staleness detection
+├── excerpt.py            # Reading inside one memory: offsets + literal matches
 ├── consolidation.py      # Merge/summarize/deduplicate logic
 ├── context.py            # Auto-context generation for session start
+├── context_buckets.py    # Where memory_context's buckets get their rows
 ├── namespaces.py         # Namespace CRUD + auto-detection
 └── credentials.py        # Credential vault: CRUD + keyring integration
 ```

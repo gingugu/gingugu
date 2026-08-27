@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 
 from .. import decay, staleness
 from ..context import PINNED_HARD_CAP
@@ -191,6 +192,32 @@ def _compact_summary(mem: Memory) -> dict:
     if mem.score is not None:
         data["score"] = round(mem.score, 4)
     return data
+
+
+def _summarizer(compact: bool = False, explain: bool = False) -> Callable[[Memory], dict]:
+    """Pick the payload shape for a read surface.
+
+    ``explain`` adds ``score_breakdown`` - the weighted terms ``score`` is the
+    sum of. Opt-in rather than always-on because it is a diagnostic, and every
+    always-on field is paid for on every hit of every read: the question "why
+    did this rank here?" is asked rarely and deliberately.
+
+    A memory with no ``score_parts`` simply carries no breakdown. That is not a
+    gap to paper over - pins never entered the ranking, and a bare relevance or
+    a column-ordered listing has no composite behind it, so there is genuinely
+    nothing to decompose.
+    """
+    base = _compact_summary if compact else _memory_summary
+    if not explain:
+        return base
+
+    def explained(mem: Memory) -> dict:
+        data = base(mem)
+        if mem.score_parts:
+            data["score_breakdown"] = {k: round(v, 4) for k, v in mem.score_parts.items()}
+        return data
+
+    return explained
 
 
 def _attach_review_hints(summary: dict, mem: Memory) -> dict:

@@ -175,6 +175,29 @@ def confidence_score(confidence: str) -> float:
     return _CONFIDENCE_WEIGHT.get(confidence, 0.0)
 
 
+def composite_parts(
+    *,
+    relevance: float,
+    freshness_val: float,
+    access_val: float,
+    confidence_val: float,
+    weights: dict[str, float],
+) -> dict[str, float]:
+    """The four *weighted* terms of the composite, keyed by component.
+
+    Weighted contributions, not raw components, because these sum to the
+    score: reading them answers "which term put this memory here?" without
+    the caller knowing the configured weights. The raw component divides
+    back out; the ranking consequence does not.
+    """
+    return {
+        "relevance": weights["relevance"] * relevance,
+        "freshness": weights["freshness"] * freshness_val,
+        "access": weights["access"] * access_val,
+        "confidence": weights["confidence"] * confidence_val,
+    }
+
+
 def composite_score(
     *,
     relevance: float,
@@ -183,12 +206,48 @@ def composite_score(
     confidence_val: float,
     weights: dict[str, float],
 ) -> float:
-    """Additive blend of the four normalized components."""
-    return (
-        weights["relevance"] * relevance
-        + weights["freshness"] * freshness_val
-        + weights["access"] * access_val
-        + weights["confidence"] * confidence_val
+    """Additive blend of the four normalized components.
+
+    Summed from ``composite_parts`` so a reported breakdown and the score it
+    explains can never disagree - a breakdown that does not add up to the
+    number it explains is worse than none at all.
+    """
+    return sum(
+        composite_parts(
+            relevance=relevance,
+            freshness_val=freshness_val,
+            access_val=access_val,
+            confidence_val=confidence_val,
+            weights=weights,
+        ).values()
+    )
+
+
+def score_parts(
+    *,
+    relevance: float,
+    last_confirmed: str | None,
+    updated_at: str | None,
+    created_at: str | None,
+    access_count: int,
+    confidence: str,
+    weights: dict[str, float],
+    decay_lambda: float,
+    now: datetime | None = None,
+) -> dict[str, float]:
+    """The weighted terms behind a memory row's composite score.
+
+    Same inputs and arithmetic as ``score_memory``, which is summed from this.
+    Callers wanting both should call this once and sum it, not call both.
+    """
+    anchor = reference_timestamp(last_confirmed, updated_at, created_at)
+    fresh = freshness(days_between(anchor, now), decay_lambda)
+    return composite_parts(
+        relevance=relevance,
+        freshness_val=fresh,
+        access_val=access_score(access_count),
+        confidence_val=confidence_score(confidence),
+        weights=weights,
     )
 
 
@@ -205,14 +264,18 @@ def score_memory(
     now: datetime | None = None,
 ) -> float:
     """Compute the full composite score for a memory row."""
-    anchor = reference_timestamp(last_confirmed, updated_at, created_at)
-    fresh = freshness(days_between(anchor, now), decay_lambda)
-    return composite_score(
-        relevance=relevance,
-        freshness_val=fresh,
-        access_val=access_score(access_count),
-        confidence_val=confidence_score(confidence),
-        weights=weights,
+    return sum(
+        score_parts(
+            relevance=relevance,
+            last_confirmed=last_confirmed,
+            updated_at=updated_at,
+            created_at=created_at,
+            access_count=access_count,
+            confidence=confidence,
+            weights=weights,
+            decay_lambda=decay_lambda,
+            now=now,
+        ).values()
     )
 
 

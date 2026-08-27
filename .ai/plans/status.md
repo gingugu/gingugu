@@ -1,11 +1,74 @@
 # Project Status
 
-_Last updated: 2026-08-21_
+_Last updated: 2026-08-26_
 
 ## In Flight
 
-**`memory_import` embeds what it writes -
-`fix/import-persists-embeddings`.** 634 tests green (was 627), `ruff` +
+**Per-hit score breakdown + `memory_excerpt` -
+`feature/score-breakdown-and-excerpt`.** 658 tests green (was 634), `ruff` +
+`black` clean. Board items #2 and #3, shipped together: both are arithmetic and
+string handling on the retrieval surface, and neither needs a migration.
+
+**The breakdown is an instrument, not a feature.** Every read surface can now
+return `score_breakdown` under `explain=True`: the weighted
+`relevance`/`freshness`/`access`/`confidence` terms that `score` is the sum of,
+plus `type_boost` where `memory_context`'s architecture/decision boost applied.
+Diagnosing the ranking defect currently at the top of the board took a backup of
+the live database and driving `build_context` from source, because a single
+blended float says nothing about which term produced it. The same class of
+question is now answerable from an ordinary tool call.
+
+`composite_score` is summed from a new `composite_parts`, and `score_memory`
+from a new `score_parts`, so a reported breakdown and the score it explains
+cannot drift - they are the same arithmetic, not two implementations of it.
+The terms are weighted contributions rather than raw components for the same
+reason: they add up to the number they are explaining, and a caller reading
+them does not have to know the configured weights.
+
+**What the breakdown makes visible immediately:** the recency and
+cross-namespace buckets are scored on a synthetic `relevance=0.5`, so several
+hits sharing one identical relevance term did not match the task hint at all -
+they were selected for recency or reach. That was true before and invisible.
+`test_synthetic_relevance_is_visible_as_a_flat_term` pins it.
+
+It is opt-in because every always-on field is paid for on every hit of every
+read, and "why did this rank here?" is asked rarely and deliberately. Results
+with no ranking behind them carry no breakdown rather than a fabricated one:
+pins never entered the ranking, an `ids` fetch was not ranked, and a bare fused
+relevance has no composite to decompose.
+
+**`memory_excerpt` reads inside one memory.** Between a full body and a
+~200-char compact summary there was nothing, and our memories run to several KB
+- asking whether one mentions the release policy, and where, meant pulling every
+byte of it into context. Two composable modes: `query` for a literal
+case-insensitive scan returning each match with offsets, 1-indexed line, and
+surrounding context; `start`/`end` for an exact character slice. Passing both
+searches inside the range with offsets still absolute, so a hit can be fed
+straight back as a range read. `total_matches` reports the true count even when
+`max_matches` caps the payload, which is what lets a caller tell "that was all
+of them" from "that was the first 10 of 300".
+
+Deliberately dumb: literal substring matching, no ranking, no stemming, no
+model. Asking twice gives the same answer in the same order.
+
+**Structural, and it is pre-existing debt paid down:** `context.py` was already
+over the 300-line limit on `main` (305) and this work pushed it to 320. The
+three bucket-fetch queries moved to a new `context_buckets.py`, leaving
+`context.py` at 271 - the split falls on a real seam, since that module decides
+how buckets are combined and quota'd while the new one only says where their
+rows come from. `test_memory_columns.py`'s private-copy guard follows the SQL.
+
+**Regression evidence:** `tests/test_score_breakdown.py` (10 tests) and
+`tests/test_excerpt.py` (14 tests). The load-bearing ones are the sum
+invariants - the reported terms must add up to the score they explain, at the
+arithmetic layer and over the live tool surface - and `type_boost` being its own
+term rather than folded into another, since a breakdown that does not add up is
+worse than no breakdown at all.
+
+## Shipped to `main`, awaiting release in v0.18.0
+
+**`memory_import` embeds the memories it writes - PR #59,
+merged `0cabfdf` (2026-08-21).** 634 tests green (was 627), `ruff` +
 `black` clean.
 
 Everything restored from a backup was reachable by keyword only. The FTS5 index
@@ -54,8 +117,6 @@ storage layer. The other four are guards - the no-embedder path, the broken-
 embedder path, the skip path (a skip wrote nothing, so it must not claim to
 have embedded anything), and `embed_ids` clearing 70 ids where `backfill`
 clears 32.
-
-## Recently merged
 
 **Write-time hints report an absolute similarity, not a rank artifact - PR #58,
 merged `3ebe9f2` (2026-08-21).** 627 tests green (was 619), `ruff` +
@@ -119,8 +180,6 @@ under 300. `embeddings.py` gained `embedding_input()`, the single text recipe
 the write path and the compare path must share; a drift between them would not
 raise, it would quietly compare vectors built from different text.
 
-## Recently merged
-
 **`memory_context` presents what it selected, instead of re-sorting it - PR #57,
 merged `4169980` (2026-08-21).** 619 tests green (was 614), `ruff` +
 `black` clean.
@@ -177,8 +236,6 @@ one (`test_second_namespace_is_interleaved_not_appended`) passes against the old
 code too and says so in its docstring - the old global sort also mixed
 namespaces, so it guards the replacement merge rather than the defect.
 
-## Shipped to `main`, awaiting release in v0.18.0
-
 **`sort_by` sorts the corpus, not a pool truncated on another axis - PR #56,
 merged `5229dce` (2026-08-21).** 614 tests green at merge, 9/9 CI.
 
@@ -223,8 +280,6 @@ that should have won is absent rather than mis-ranked. The eighth
 (`test_score_sort_without_weights_falls_back_to_listing_order`) passes against
 the old code too and says so in a comment - it pins a new fallback branch and is
 not a regression guard.
-
-## Shipped to `main`, awaiting release in v0.18.0
 
 **Recall relevance no longer depends on `limit` - PR #55, merged `1e84260`
 (2026-08-21).** 606 tests green at merge, 9/9 CI.
@@ -496,7 +551,6 @@ package does not carry.
   record, not marketing copy), and the FAQ entry on editor built-ins (it exists
   to explain what `gingugu init` gives you, not to rank a competitor).
 
-
 - **Claims enumeration (#47, squash `5b0a304`)** — closes a product gap
   found by dogfooding, not by a test: `memory_stats.claims.sample` reported a
   count of open claims and then listed only the _contradicted_ subset, so the
@@ -523,7 +577,6 @@ package does not carry.
 
   499 tests passing (13 new in `tests/test_claim_enumeration.py`), ruff + black
   clean.
-
 
 ## Shipped in v0.15.0 (2026-08-13)
 

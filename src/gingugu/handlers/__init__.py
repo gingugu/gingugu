@@ -24,12 +24,23 @@ class ServerContext:
 
 def register_all(mcp, ctx: ServerContext) -> None:
     """Register every handler module's tools onto the FastMCP instance."""
-    from . import admin, consolidate, credentials, forget, memory, recall, relations, search
+    from . import (
+        admin,
+        consolidate,
+        credentials,
+        excerpt,
+        forget,
+        memory,
+        recall,
+        relations,
+        search,
+    )
 
     memory.register(mcp, ctx)
     forget.register(mcp, ctx)
     recall.register(mcp, ctx)
     search.register(mcp, ctx)
+    excerpt.register(mcp, ctx)
     relations.register(mcp, ctx)
     consolidate.register(mcp, ctx)
     admin.register(mcp, ctx)

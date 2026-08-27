@@ -672,8 +672,8 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | Tool | Purpose |
 |------|---------|
 | `memory_store` | Save a new memory |
-| `memory_recall` | Search + retrieve (ranked by relevance × freshness; one or many namespaces; optional compact mode) |
-| `memory_context` | Auto-surface relevant memories (one or many namespaces, deduped; optional compact mode) |
+| `memory_recall` | Search + retrieve (ranked by relevance × freshness; one or many namespaces; optional compact mode; `explain` for a per-hit score breakdown) |
+| `memory_context` | Auto-surface relevant memories (one or many namespaces, deduped; optional compact mode; `explain` for a per-hit score breakdown) |
 | `memory_update` | Update content, type, confidence, or metadata; `resolve_claims` reconciles a stale PR/MR claim without editing the prose |
 | `memory_relate` | Create relationships between memories |
 | `memory_edges` | List edges with both endpoints' titles, namespaces, and degree; filter by namespace, type, or memory |
@@ -684,7 +684,8 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_export` | Export memories + tags + relations to portable JSON |
 | `memory_import` | Restore a JSON export (skip or replace on conflict) |
 | `memory_stats` | Health overview (dormancy, counts, coverage, review sweep, the `claims` backlog, and a relation-graph block whose `orphan_sample` names the memories no edge reaches — `review_limit` raises every sample's cap) |
-| `memory_search` | Advanced filtered search (type, tags, confidence, dates; one or many namespaces; optional compact mode; fetch by exact `ids`; `claims` to work the reconciliation backlog or read refs the prose never resolved, `orphans` to work the graph backlog) |
+| `memory_search` | Advanced filtered search (type, tags, confidence, dates; one or many namespaces; optional compact mode; fetch by exact `ids`; `claims` to work the reconciliation backlog or read refs the prose never resolved, `orphans` to work the graph backlog; `explain` for a per-hit score breakdown) |
+| `memory_excerpt` | Read inside ONE memory: find literal matches with their character offsets, line numbers and surrounding context, and/or slice an exact character range |
 | `credential_store` | Store/update a service credential bundle |
 | `credential_get` | Retrieve credentials (secrets from OS Keychain) |
 | `credential_list` | List services + expiry status (no secrets shown) |
