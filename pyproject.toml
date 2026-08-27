@@ -67,6 +67,9 @@ select = ["E", "F", "I", "W", "UP", "B"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "bench_embeddings: exercises the real fastembed model (network on a cold cache); excluded from the main matrix, run once in its own CI job",
+]
 # Repo root on the path so tests can import the dev-only bench/ package
 # (src/gingugu installs normally; bench/ is never shipped).
 pythonpath = ["."]

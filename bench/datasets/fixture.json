@@ -84,6 +84,86 @@
       "tags": ["networking", "configuration"]
     },
     {
+      "key": "jwt-auth",
+      "namespace": "checkout-service",
+      "type": "architecture",
+      "title": "checkout-api authenticates requests via short-lived JWTs",
+      "content": "Every checkout-api request carries a JWT signed by the identity service. Tokens expire after 15 minutes; the client refreshes via the identity service's /token endpoint before expiry. The API validates the signature and expiry on every request, no session lookup needed.",
+      "tags": ["auth", "jwt", "identity"]
+    },
+    {
+      "key": "jwt-rotation",
+      "namespace": "checkout-service",
+      "type": "fact",
+      "title": "JWT signing keys rotate every 90 days",
+      "content": "The identity service rotates its JWT signing keys every 90 days, publishing the new public key to its JWKS endpoint a week ahead of the switch so checkout-api's cached key set overlaps cleanly. No downtime observed across three rotations so far.",
+      "tags": ["auth", "jwt", "rotation", "identity"]
+    },
+    {
+      "key": "feature-flag-rollout",
+      "namespace": "checkout-service",
+      "type": "workflow",
+      "title": "New checkout flows ship behind LaunchDarkly flags",
+      "content": "Every new checkout flow ships behind a LaunchDarkly flag, default off in production. Rollout is staged: internal users, then 5%, 25%, 100%, each held for at least 24h before promoting. This is how the one-click-reorder flow shipped without an incident.",
+      "tags": ["feature-flags", "launchdarkly", "rollout"]
+    },
+    {
+      "key": "flag-cleanup-checkout",
+      "namespace": "checkout-service",
+      "type": "context",
+      "title": "Stale checkout flags older than 90 days are auto-archived",
+      "content": "A cron job archives (does not delete) any LaunchDarkly flag in the checkout-api project untouched for 90+ days, to keep the flag list navigable. Archiving is reversible; deletion is a separate, manual step requiring code review to confirm the flag path is actually dead.",
+      "tags": ["feature-flags", "launchdarkly", "cleanup"]
+    },
+    {
+      "key": "db-migration-tool",
+      "namespace": "checkout-service",
+      "type": "workflow",
+      "title": "checkout-api schema migrations run via Alembic",
+      "content": "Schema changes for rds-checkout-prod are written as Alembic revisions and applied by the deploy pipeline before traffic cutover to the new version. A failed migration blocks the deploy; the pipeline never promotes a version whose migration didn't apply cleanly.",
+      "tags": ["database", "migration", "alembic", "deploy"]
+    },
+    {
+      "key": "distractor-migration-rollback",
+      "namespace": "checkout-service",
+      "type": "context",
+      "title": "A botched migration once required a manual rollback script",
+      "content": "In 2025-08 a migration dropped a column still read by an in-flight deploy of the previous version. Recovery required a hand-written rollback SQL script run against production. This predates the current pre-cutover migration gate and is not expected to recur.",
+      "tags": ["database", "migration", "incident"]
+    },
+    {
+      "key": "rate-limit-config",
+      "namespace": "checkout-service",
+      "type": "decision",
+      "title": "Checkout submission is rate-limited to 5 requests/min per user",
+      "content": "checkout-api enforces 5 checkout-submission requests per minute per user via a Redis token bucket keyed on user id. Exceeding the limit returns 429 with a Retry-After header. Limit chosen to stop accidental double-submits without blocking a legitimate retry.",
+      "tags": ["rate-limit", "redis", "configuration"]
+    },
+    {
+      "key": "distractor-rate-limit-abuse",
+      "namespace": "checkout-service",
+      "type": "context",
+      "title": "Q2 abuse spike prompted the checkout token-bucket limiter",
+      "content": "A Q2 2025 scripted-abuse spike hammering checkout submission is what originally prompted building a rate limiter. The incident itself resolved once WAF rules blocked the source IPs; the token bucket shipped afterward as a durable safeguard, not as the incident fix.",
+      "tags": ["rate-limit", "incident", "abuse"]
+    },
+    {
+      "key": "monitoring-alert",
+      "namespace": "checkout-service",
+      "type": "decision",
+      "title": "On-call pages when checkout p99 latency exceeds 800ms for 5 minutes",
+      "content": "A Datadog monitor pages the on-call rotation when checkout-api's p99 latency stays above 800ms for a sustained 5-minute window. Threshold chosen from six months of baseline data; anything shorter than 5 minutes paged on routine traffic blips.",
+      "tags": ["monitoring", "datadog", "on-call", "latency"]
+    },
+    {
+      "key": "distractor-monitoring-dashboard",
+      "namespace": "checkout-service",
+      "type": "context",
+      "title": "Grafana dashboard tracks checkout funnel conversion",
+      "content": "A separate Grafana dashboard tracks checkout funnel conversion (cart -> submit -> confirm) for product analytics. It is not wired to any alert; nobody gets paged off of it. Distinct from the Datadog latency monitor used for on-call.",
+      "tags": ["monitoring", "grafana", "analytics"]
+    },
+    {
       "key": "wisdom-verify-tags",
       "namespace": "platform-wisdom",
       "type": "preference",
@@ -114,6 +194,86 @@
       "title": "Terraform S3 backend bootstrap is a chicken-and-egg",
       "content": "Terraform cannot manage its own remote state bucket; create the bucket with the CLI before terraform init. Standard bootstrap sequence documented in the platform runbook.",
       "tags": ["terraform", "aws", "bootstrap"]
+    },
+    {
+      "key": "wisdom-incident-postmortem",
+      "namespace": "platform-wisdom",
+      "type": "preference",
+      "title": "Every production incident gets a blameless postmortem within 48 hours",
+      "content": "Hard rule: any incident that pages on-call gets a written, blameless postmortem within 48 hours, linked from the incident's Slack channel. Late postmortems lose detail fast; the 48-hour window exists because memory of the timeline decays quickly.",
+      "tags": ["rule", "incident", "postmortem"]
+    },
+    {
+      "key": "wisdom-secrets-rotation",
+      "namespace": "platform-wisdom",
+      "type": "preference",
+      "title": "Rotate a credential that touched a shared channel even if not confirmed leaked",
+      "content": "Hard rule: if a credential was ever pasted into a shared Slack channel, ticket, or doc - even briefly, even if deleted - rotate it. Do not wait for confirmation that someone actually read it; the cost of rotating is far lower than the cost of guessing wrong.",
+      "tags": ["rule", "credentials", "rotation", "security"]
+    },
+    {
+      "key": "wisdom-flag-cleanup-rule",
+      "namespace": "platform-wisdom",
+      "type": "preference",
+      "title": "Delete feature flags within 30 days of full rollout",
+      "content": "Hard rule across all services: once a feature flag reaches 100% rollout and has held for a full deploy cycle, delete the flag and its dead branches within 30 days. Flags left in place past that window are the single biggest source of combinatorial test debt.",
+      "tags": ["rule", "feature-flags", "cleanup"]
+    },
+    {
+      "key": "distractor-wisdom-oncall",
+      "namespace": "platform-wisdom",
+      "type": "context",
+      "title": "On-call rotation swaps require 24h notice",
+      "content": "Anyone swapping an on-call shift with a teammate must post the swap in the on-call calendar at least 24 hours ahead, so paging routes to the right person. Unrelated to postmortems or incident handling itself.",
+      "tags": ["on-call", "process"]
+    },
+    {
+      "key": "billing-invoice-retry",
+      "namespace": "billing-service",
+      "type": "workflow",
+      "title": "billing-service retries a failed invoice charge 3 times with backoff",
+      "content": "When an invoice charge fails, billing-service retries it 3 times with exponential backoff (1h, 6h, 24h) before flagging the invoice for manual review. Retries stop immediately if the processor returns a hard decline (stolen card, closed account) rather than a soft one.",
+      "tags": ["billing", "retry", "invoicing"]
+    },
+    {
+      "key": "billing-currency",
+      "namespace": "billing-service",
+      "type": "decision",
+      "title": "billing-service stores amounts in minor units (cents)",
+      "content": "All monetary amounts in billing-service are stored as integer cents, never floating-point dollars, to avoid rounding drift across currency conversions and repeated arithmetic. Display formatting to dollars happens only at the API boundary.",
+      "tags": ["billing", "currency", "data-modeling"]
+    },
+    {
+      "key": "distractor-billing-webhook",
+      "namespace": "billing-service",
+      "type": "fact",
+      "title": "Stripe webhooks are verified via HMAC signature",
+      "content": "Every incoming Stripe webhook to billing-service is verified against its HMAC signature header before the payload is processed; unsigned or mismatched requests are rejected with 400. Unrelated to retry logic or currency storage.",
+      "tags": ["billing", "stripe", "webhooks", "security"]
+    },
+    {
+      "key": "billing-dunning",
+      "namespace": "billing-service",
+      "type": "workflow",
+      "title": "Dunning emails go out on day 1, 3, and 7 after a failed charge",
+      "content": "After a charge fails, billing-service's dunning sequence sends emails on day 1, day 3, and day 7, then suspends the subscription if the balance is still unpaid. The schedule is tuned from churn data: shorter gaps drove complaints without recovering more revenue.",
+      "tags": ["billing", "dunning", "retry"]
+    },
+    {
+      "key": "distractor-billing-tax",
+      "namespace": "billing-service",
+      "type": "fact",
+      "title": "Sales tax calculation is delegated to a third-party tax API",
+      "content": "billing-service does not compute sales tax in-house; every invoice line item is sent to a third-party tax API which returns the applicable rate and amount. Unrelated to retry or reconciliation logic.",
+      "tags": ["billing", "tax"]
+    },
+    {
+      "key": "billing-reconciliation",
+      "namespace": "billing-service",
+      "type": "workflow",
+      "title": "Nightly job reconciles billing-service's ledger against processor settlement",
+      "content": "A nightly job compares billing-service's internal ledger against the payment processor's settlement report, flagging any invoice whose recorded status doesn't match what actually settled. Discrepancies page a shared billing-ops channel, not on-call.",
+      "tags": ["billing", "reconciliation", "ledger"]
     }
   ],
   "questions": [
@@ -179,6 +339,100 @@
       "relevant": ["wisdom-verify-tags"],
       "kind": "single",
       "notes": "Multi-namespace search: deploy-migration and distractors share deploy vocabulary."
+    },
+    {
+      "id": "q-jwt-auth",
+      "query": "how do checkout requests get authenticated",
+      "namespaces": ["checkout-service"],
+      "relevant": ["jwt-auth"],
+      "kind": "single",
+      "notes": "Paraphrase: query never says JWT. jwt-rotation shares auth/jwt/identity vocabulary as a near-miss."
+    },
+    {
+      "id": "q-jwt-rotation",
+      "query": "how often do the signing keys for checkout auth change",
+      "namespaces": ["checkout-service"],
+      "relevant": ["jwt-rotation"],
+      "kind": "single",
+      "notes": "Paraphrase of 'rotate'; jwt-auth is the near-miss (same topic, wrong fact)."
+    },
+    {
+      "id": "q-feature-flags",
+      "query": "how do we ship new checkout flows safely",
+      "namespaces": ["checkout-service"],
+      "relevant": ["feature-flag-rollout"],
+      "kind": "single",
+      "notes": "Paraphrase: no 'LaunchDarkly' or 'flag' in the query. flag-cleanup-checkout is the in-namespace near-miss."
+    },
+    {
+      "id": "q-flag-cleanup-cross-ns",
+      "query": "when should feature flags be deleted",
+      "namespaces": ["platform-wisdom", "checkout-service"],
+      "relevant": ["wisdom-flag-cleanup-rule"],
+      "kind": "single",
+      "notes": "Cross-namespace: flag-cleanup-checkout (archiving, not deleting) is a same-vocabulary near-miss in the other namespace."
+    },
+    {
+      "id": "q-schema-migrations",
+      "query": "what tool applies checkout-api's database schema changes",
+      "namespaces": ["checkout-service"],
+      "relevant": ["db-migration-tool"],
+      "kind": "single",
+      "notes": "distractor-migration-rollback shares migration/database vocabulary but answers a different question (an incident, not the tool)."
+    },
+    {
+      "id": "q-rate-limit",
+      "query": "what's the checkout submission rate limit per user",
+      "namespaces": ["checkout-service"],
+      "relevant": ["rate-limit-config"],
+      "kind": "single",
+      "notes": "distractor-rate-limit-abuse shares rate-limit vocabulary but answers 'why it was built', not 'what the limit is'."
+    },
+    {
+      "id": "q-paging-threshold",
+      "query": "when does on-call get paged for checkout",
+      "namespaces": ["checkout-service"],
+      "relevant": ["monitoring-alert"],
+      "kind": "single",
+      "notes": "Paraphrase: query says nothing about latency or Datadog. distractor-monitoring-dashboard is the near-miss (monitoring, but not the paging alert)."
+    },
+    {
+      "id": "q-postmortem-timing",
+      "query": "how soon after an incident do we need a postmortem",
+      "namespaces": ["platform-wisdom"],
+      "relevant": ["wisdom-incident-postmortem"],
+      "kind": "single"
+    },
+    {
+      "id": "q-secret-rotation-policy",
+      "query": "do we need to rotate a credential if we're not sure anyone actually saw it",
+      "namespaces": ["platform-wisdom"],
+      "relevant": ["wisdom-secrets-rotation"],
+      "kind": "single",
+      "notes": "Paraphrase of 'confirmed leaked'."
+    },
+    {
+      "id": "q-billing-retry",
+      "query": "how does billing handle a failed charge",
+      "namespaces": ["billing-service"],
+      "relevant": ["billing-invoice-retry", "billing-dunning"],
+      "kind": "multi",
+      "notes": "Both the retry schedule and the dunning sequence are part of 'how a failed charge is handled'."
+    },
+    {
+      "id": "q-billing-units",
+      "query": "why does billing store money in cents instead of dollars",
+      "namespaces": ["billing-service"],
+      "relevant": ["billing-currency"],
+      "kind": "single"
+    },
+    {
+      "id": "q-billing-reconciliation",
+      "query": "how do we make sure billing's ledger matches what the payment processor actually settled",
+      "namespaces": ["billing-service"],
+      "relevant": ["billing-reconciliation"],
+      "kind": "single",
+      "notes": "distractor-billing-webhook and distractor-billing-tax share 'billing' vocabulary but answer unrelated questions."
     }
   ]
 }

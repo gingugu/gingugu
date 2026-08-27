@@ -11,6 +11,7 @@ from bench.dataset import load_dataset
 from bench.metrics import estimate_tokens, mean, mrr, precision_at_k, recall_at_k
 from bench.runner import FIXTURE_WEIGHTS as WEIGHTS
 from bench.runner import build_fixture_db, run_benchmark
+from gingugu.embeddings import FastEmbedProvider
 
 FIXTURE = Path(__file__).parent.parent / "bench" / "datasets" / "fixture.json"
 
@@ -103,6 +104,11 @@ def test_fixture_run_end_to_end():
     # useless. This is a floor against total regression, not a quality bar.
     assert report.aggregates["recall@5"] > 0.5
     assert set(report.by_kind) == {"single", "multi"}
+    # "multi" questions have two relevant memories each: recall@1 can never
+    # reach 1.0 for them (only one slot), while recall@5 can. A benchmark
+    # that only ever calls at max(ks) and slices would show these equal -
+    # this is the assertion that proves separate calls per k are happening.
+    assert report.by_kind["multi"]["recall@1"] < report.by_kind["multi"]["recall@5"]
 
 
 def test_fixture_run_is_deterministic():
@@ -118,6 +124,40 @@ def test_fixture_run_is_deterministic():
             conn.close()
 
     assert one_run() == one_run()
+
+
+@pytest.mark.bench_embeddings
+@pytest.mark.timeout(180)  # cold-cache model download; see the fastembed CI-hang lesson
+def test_fixture_run_with_real_embeddings():
+    """Hybrid pass over the fixture with the real fastembed provider.
+
+    Excluded from the default matrix run (``-m "not bench_embeddings"``) and
+    run once in a dedicated CI job instead - nine matrix cells re-downloading
+    an 80MB model on every push is pure waste, and this suite has already
+    hung once on an unguarded fastembed fetch (v0.12.0, PR #36). This test is
+    the deliberate, explicitly-opted-in exception that incident's fix
+    anticipated, not a reopening of it: the default ``offline_embeddings``
+    autouse fixture in conftest.py is untouched for every other test.
+    """
+    ds = load_dataset(FIXTURE)
+    embedder = FastEmbedProvider()
+    conn, key_to_id = build_fixture_db(ds, embedder=embedder)
+    try:
+        report = run_benchmark(
+            ds,
+            conn,
+            weights=WEIGHTS,
+            decay_lambda=0.01,
+            embedder=embedder,
+            ks=(1, 5),
+            key_to_id=key_to_id,
+        )
+    finally:
+        conn.close()
+
+    assert report.retrieval == "hybrid"
+    assert report.aggregates["recall@5"] > 0.5
+    assert report.by_kind["multi"]["recall@1"] < report.by_kind["multi"]["recall@5"]
 
 
 def test_benchmark_does_not_mutate_access_counts():
