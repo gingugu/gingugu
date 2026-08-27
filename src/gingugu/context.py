@@ -45,8 +45,20 @@ import math
 import sqlite3
 
 from . import decay, search
+from .context_buckets import (
+    PINNED_HARD_CAP,
+    cross_namespace_patterns,
+    recently_active,
+)
+from .context_buckets import (
+    pinned as pinned_bucket,
+)
 from .embeddings import EmbeddingProvider
-from .models import Memory, memory_columns_sql
+from .models import Memory
+
+# Re-exported: ``PINNED_HARD_CAP`` is part of this module's public surface for
+# the handlers and tests that enforce the pin budget.
+__all__ = ["PINNED_HARD_CAP", "build_context"]
 
 _BOOST_TYPES = {"architecture", "decision"}
 _BOOST_AMOUNT = 0.1
@@ -59,19 +71,16 @@ _TASK_RATIO = 0.5
 _RECENT_RATIO = 0.3
 _CROSS_NS_QUOTA = 3
 
-# Hard ceiling on pinned memories loaded per namespace. Pins bypass ranking
-# entirely, so this is the only thing bounding their context cost — it is a
-# safety limit, not a target. A tier this size stays scannable at a glance;
-# past it, pinning has degraded into a second unranked pile and the right fix
-# is to unpin, not to raise the cap.
-PINNED_HARD_CAP = 20
-
-_COLUMNS = memory_columns_sql()
-
 
 def _score(mem: Memory, weights: dict[str, float], decay_lambda: float, relevance: float) -> float:
-    """Composite score without the type boost (applied once, later, for all buckets)."""
-    return decay.score_memory(
+    """Composite score without the type boost (applied once, later, for all buckets).
+
+    Also stamps ``score_parts`` so an ``explain`` read can show which term
+    carried the memory. Note what the breakdown reveals here: the recency and
+    cross-namespace buckets are scored with a synthetic ``relevance``, so their
+    relevance term is a constant no matter how well they match anything.
+    """
+    mem.score_parts = decay.score_parts(
         relevance=relevance,
         last_confirmed=mem.last_confirmed,
         updated_at=mem.updated_at,
@@ -81,56 +90,7 @@ def _score(mem: Memory, weights: dict[str, float], decay_lambda: float, relevanc
         weights=weights,
         decay_lambda=decay_lambda,
     )
-
-
-def _recently_active(conn: sqlite3.Connection, namespace_id: str, limit: int) -> list[Memory]:
-    """Most recently touched memories, excluding this namespace's pins.
-
-    Pins are filtered in SQL rather than afterwards in Python because ``LIMIT``
-    applies first: fetching N rows and *then* dropping the pinned ones yields
-    fewer than N ranked candidates, so a full pin tier would quietly starve the
-    recency bucket it was supposed to sit alongside.
-    """
-    rows = conn.execute(
-        f"SELECT {_COLUMNS} FROM memories "
-        "WHERE namespace_id = ? AND confidence != 'deprecated' AND pinned = 0 "
-        "ORDER BY last_accessed DESC LIMIT ?",
-        (namespace_id, limit),
-    ).fetchall()
-    return [Memory(**dict(r)) for r in rows]
-
-
-def _pinned(conn: sqlite3.Connection, namespace_id: str, limit: int) -> list[Memory]:
-    """Pinned memories for a namespace, newest-confirmed first.
-
-    Deprecated memories are excluded: a pin says "never let me miss this", and
-    deprecating a memory says "this is no longer true". The latter wins — the
-    pin is simply ignored until someone unpins or re-verifies it.
-
-    Ordering only decides who survives ``PINNED_HARD_CAP``, so it favours the
-    most recently reconfirmed. ``COALESCE`` keeps never-confirmed pins ordered
-    by creation instead of sorting them last under NULL.
-    """
-    rows = conn.execute(
-        f"SELECT {_COLUMNS} FROM memories "
-        "WHERE namespace_id = ? AND pinned = 1 AND confidence != 'deprecated' "
-        "ORDER BY COALESCE(last_confirmed, created_at) DESC LIMIT ?",
-        (namespace_id, limit),
-    ).fetchall()
-    return [Memory(**dict(r)) for r in rows]
-
-
-def _cross_namespace_patterns(
-    conn: sqlite3.Connection, exclude_ns: str, limit: int = 3
-) -> list[Memory]:
-    rows = conn.execute(
-        f"SELECT {_COLUMNS} FROM memories "
-        "WHERE type IN ('pattern', 'preference') AND confidence = 'verified' "
-        "AND namespace_id != ? "
-        "ORDER BY access_count DESC LIMIT ?",
-        (exclude_ns, limit),
-    ).fetchall()
-    return [Memory(**dict(r)) for r in rows]
+    return sum(mem.score_parts.values())
 
 
 def build_context(
@@ -156,7 +116,7 @@ def build_context(
     ``limit`` memories. They are excluded from the ranked buckets so a pin
     never consumes a discovery slot it was going to get for free.
     """
-    pinned = _pinned(conn, namespace_id, PINNED_HARD_CAP)
+    pinned = pinned_bucket(conn, namespace_id, PINNED_HARD_CAP)
     pinned_ids = {m.id for m in pinned}
 
     # Bucket 1: task-relevant, already composite-scored and ordered by search().
@@ -177,12 +137,12 @@ def build_context(
         )
 
     # Bucket 2: recently active in this namespace, ordered by last_accessed DESC.
-    recent_bucket = _recently_active(conn, namespace_id, limit)
+    recent_bucket = recently_active(conn, namespace_id, limit)
     for mem in recent_bucket:
         mem.score = _score(mem, weights, decay_lambda, relevance=0.5)
 
     # Bucket 3: cross-namespace verified patterns/preferences, by access_count.
-    cross_bucket = _cross_namespace_patterns(conn, exclude_ns=namespace_id)
+    cross_bucket = cross_namespace_patterns(conn, exclude_ns=namespace_id)
     for mem in cross_bucket:
         mem.score = _score(mem, weights, decay_lambda, relevance=0.5)
 
@@ -204,9 +164,17 @@ def build_context(
 
     # Apply the architecture/decision boost exactly once, after de-dup. The
     # boost is uniform, so it never changes which instance won the max above.
+    #
+    # It is recorded as its own term rather than folded into an existing one:
+    # the boost is not a property of the memory's relevance or freshness, it is
+    # a thumb on the scale for two types at session start. A breakdown that hid
+    # it would leave the terms not summing to the score, which is the one thing
+    # a breakdown must never do.
     for mem in best.values():
         if mem.type.value in _BOOST_TYPES and mem.score is not None:
             mem.score += _BOOST_AMOUNT
+            if mem.score_parts is not None:
+                mem.score_parts = {**mem.score_parts, "type_boost": _BOOST_AMOUNT}
 
     # Give each SQL-ordered bucket a deterministic total order: native signal
     # first, composite score to break ties, id only as a last resort.

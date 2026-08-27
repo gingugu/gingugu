@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gingugu import context, portability, search_common, search_filters, storage
+from gingugu import context_buckets, portability, search_common, search_filters, storage
 from gingugu.database import Database
 from gingugu.models import (
     MEMORY_COLUMNS,
@@ -56,7 +56,8 @@ def test_no_module_keeps_a_private_copy():
     """Every consumer derives its SQL from the one tuple."""
     expected = memory_columns_sql()
     assert storage._COLUMNS == expected
-    assert context._COLUMNS == expected
+    # The context bucket SQL lives in context_buckets; the guard follows it.
+    assert context_buckets._COLUMNS == expected
     assert portability._MEMORY_COLUMNS == expected
     assert search_common.BASE_COLUMNS == expected
     assert search_common.COLUMNS == memory_columns_sql("m.")

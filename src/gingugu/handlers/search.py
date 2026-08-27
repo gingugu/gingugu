@@ -11,13 +11,12 @@ from ..models import Confidence, MemoryType
 from . import ServerContext
 from .helpers import (
     _attach_review_hints,
-    _compact_summary,
     _err,
-    _memory_summary,
     _resolve_namespaces,
     _single_namespace_not_found,
     _split_csv,
     _stamp_namespace_names,
+    _summarizer,
 )
 
 logger = logging.getLogger(__name__)
@@ -42,6 +41,7 @@ def register(mcp, ctx: ServerContext) -> None:
         ids: str | None = None,
         claims: str | None = None,
         orphans: bool = False,
+        explain: bool = False,
     ) -> dict:
         """Advanced filtered search across memories with full control over filters and
         sort order. Use when you need to filter by type, date range, confidence level, or
@@ -98,13 +98,19 @@ def register(mcp, ctx: ServerContext) -> None:
         without a query, so ``orphans=True, namespace="crow", sort_by="accessed"``
         walks the ones costing the most first. Reconnect them with
         ``memory_relate`` — and only where a directional fact exists to record;
-        an orphan is better left alone than wired up with an invented edge."""
+        an orphan is better left alone than wired up with an invented edge.
+
+        ``explain=True`` adds a ``score_breakdown`` to each hit: the weighted
+        terms ``score`` is the sum of. Results with no ranking behind them carry
+        none: an ``ids`` fetch and a ``created``/``accessed`` sort were not
+        ranked, and a listing with no query scores every row on the same flat
+        relevance, which the breakdown shows as an identical relevance term."""
         try:
             id_list = _split_csv(ids)
             if id_list:
                 results, missing = search_mod.fetch_by_ids(ctx.conn, id_list)
                 ctx.store.load_tags(results)
-                summarize = _compact_summary if compact else _memory_summary
+                summarize = _summarizer(compact=compact, explain=explain)
                 summaries = [_attach_review_hints(summarize(m), m) for m in results]
                 ctx.store.record_accesses([m.id for m in results])
                 _stamp_namespace_names(ctx, summaries)
@@ -158,7 +164,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 embedder=ctx.store.embedder,
             )
             ctx.store.load_tags(results)
-            summarize = _compact_summary if compact else _memory_summary
+            summarize = _summarizer(compact=compact, explain=explain)
             summaries = [_attach_review_hints(summarize(m), m) for m in results]
             # Credit the returned seeds as a real access (bumps access_count,
             # refreshes last_accessed, writes access_log row). Spreading-

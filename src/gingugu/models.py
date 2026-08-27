@@ -94,11 +94,15 @@ class Memory(BaseModel):
     tags: list[str] = Field(default_factory=list)
     # Populated only on search/recall results; not stored.
     score: float | None = Field(default=None, exclude=True)
+    # The weighted terms `score` is the sum of, for the `explain` read mode.
+    # Set wherever `score` is set from a composite; None where the score is a
+    # bare relevance or absent, because then there is nothing to decompose.
+    score_parts: dict[str, float] | None = Field(default=None, exclude=True)
 
 
 # ``Memory`` fields that are NOT columns on the `memories` table: `tags` is read
-# from `memory_tags`, `score` exists only on a search result.
-NON_COLUMN_FIELDS: frozenset[str] = frozenset({"tags", "score"})
+# from `memory_tags`, `score`/`score_parts` exist only on a search result.
+NON_COLUMN_FIELDS: frozenset[str] = frozenset({"tags", "score", "score_parts"})
 
 # The `memories` table columns, in schema order. THE one canonical list.
 #

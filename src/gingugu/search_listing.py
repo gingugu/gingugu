@@ -52,21 +52,22 @@ def fetch_by_ids(conn: sqlite3.Connection, ids: list[str]) -> tuple[list[Memory]
     return found, missing
 
 
-def no_query_score(
+def no_query_parts(
     row: sqlite3.Row,
     weights: dict[str, float] | None,
     decay_lambda: float,
-) -> float:
-    """Composite score for a listing row.
+) -> dict[str, float] | None:
+    """The weighted terms behind a listing row's composite score.
 
     With no query there is nothing to be relevant *to*, so relevance is a
     flat 0.5 and freshness, access and confidence are what actually order
-    the result. Without ``weights`` there is no composite to compute and
-    every row scores that same 0.5.
+    the result - which the breakdown makes plain, since the relevance term
+    is then identical on every row. Returns ``None`` without ``weights``:
+    there is no composite to decompose.
     """
     if not weights:
-        return 0.5
-    return decay.score_memory(
+        return None
+    return decay.score_parts(
         relevance=0.5,
         last_confirmed=row["last_confirmed"],
         updated_at=row["updated_at"],
@@ -76,6 +77,16 @@ def no_query_score(
         weights=weights,
         decay_lambda=decay_lambda,
     )
+
+
+def no_query_score(
+    row: sqlite3.Row,
+    weights: dict[str, float] | None,
+    decay_lambda: float,
+) -> float:
+    """Composite score for a listing row; 0.5 flat without ``weights``."""
+    parts = no_query_parts(row, weights, decay_lambda)
+    return 0.5 if parts is None else sum(parts.values())
 
 
 def list_by_column(
@@ -103,7 +114,8 @@ def list_by_column(
     out: list[Memory] = []
     for row in rows:
         mem = Memory(**dict(row))
-        mem.score = no_query_score(row, weights, decay_lambda)
+        mem.score_parts = no_query_parts(row, weights, decay_lambda)
+        mem.score = 0.5 if mem.score_parts is None else sum(mem.score_parts.values())
         out.append(mem)
     return out
 
@@ -151,6 +163,20 @@ def list_by_score(
     found, _ = fetch_by_ids(conn, [mid for _, mid in ranked])
     for mem in found:
         mem.score = score_by_id[mem.id]
+        # Decomposed for the winners only, from the same inputs and the same
+        # function that produced the score above. The ranking pass deliberately
+        # keeps no per-row dict: it walks the whole matching corpus, and the
+        # breakdown is only ever read for rows that survive the cut.
+        mem.score_parts = decay.score_parts(
+            relevance=0.5,
+            last_confirmed=mem.last_confirmed,
+            updated_at=mem.updated_at,
+            created_at=mem.created_at,
+            access_count=mem.access_count,
+            confidence=mem.confidence.value,
+            weights=weights,
+            decay_lambda=decay_lambda,
+        )
     return found
 
 
