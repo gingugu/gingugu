@@ -27,7 +27,26 @@ _COLUMNS = memory_columns_sql()
 
 
 def recently_active(conn: sqlite3.Connection, namespace_id: str, limit: int) -> list[Memory]:
-    """Most recently touched memories, excluding this namespace's pins.
+    """Most recently *written* memories, excluding this namespace's pins.
+
+    Ordered by ``updated_at``, a write timestamp, because this bucket exists so
+    that a freshly-stored, never-read memory survives the cut - the "where we
+    left off" signal. It used to order by ``last_accessed``, which is a *read*
+    timestamp, and so answered the opposite question: not "is this new to me?"
+    but "have I seen this lately?". The two are anti-correlated by definition,
+    and the bucket whose whole job is discovery was ranked by familiarity.
+
+    Reading never moves ``updated_at``, which is what makes it safe here. Of the
+    three statements that write this table, two touch only ``last_accessed``
+    (``record_accesses`` and ``touch_many``) and the third is an explicit edit.
+    That matters because ``memory_context`` itself touches everything it
+    surfaces: on the old sort key each session-start load promoted its own
+    output into the next load's bucket, so the bucket converged on what it had
+    already shown and newly-stored memories could never break in.
+
+    ``last_accessed`` is untouched and still correct for what it is actually
+    for - dormancy and the access signal. The two questions get two columns
+    rather than one column meaning both things.
 
     Pins are filtered in SQL rather than afterwards in Python because ``LIMIT``
     applies first: fetching N rows and *then* dropping the pinned ones yields
@@ -37,7 +56,7 @@ def recently_active(conn: sqlite3.Connection, namespace_id: str, limit: int) -> 
     rows = conn.execute(
         f"SELECT {_COLUMNS} FROM memories "
         "WHERE namespace_id = ? AND confidence != 'deprecated' AND pinned = 0 "
-        "ORDER BY last_accessed DESC LIMIT ?",
+        "ORDER BY updated_at DESC LIMIT ?",
         (namespace_id, limit),
     ).fetchall()
     return [Memory(**dict(r)) for r in rows]

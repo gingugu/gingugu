@@ -643,9 +643,12 @@ memories — the "where we left off" signal — at session start.
 
 1. **Task-relevant (if `task_hint` provided)** — FTS5 search scoped to
    `namespace`, ranked by composite score. Quota `ceil(limit × 0.5)`.
-2. **Recently active in this namespace** — memories ordered by
-   `last_accessed DESC` (pure recency), excluding `deprecated`. Quota
-   `ceil(limit × 0.3)`.
+2. **Recently written in this namespace** - memories ordered by
+   `updated_at DESC` (pure write recency), excluding `deprecated`. Quota
+   `ceil(limit × 0.3)`. Ordered by a *write* timestamp, not `last_accessed`,
+   so a freshly-stored memory nobody has read yet still surfaces - which is
+   the whole reason this bucket exists. `last_accessed` remains the signal
+   for dormancy and access counting.
 3. **Cross-namespace high-confidence patterns** — `type IN ('pattern',
    'preference')` with `confidence='verified'`, ranked by `access_count`.
    Quota 3. Lets a pattern learned in repo A surface in repo B.
