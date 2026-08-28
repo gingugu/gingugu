@@ -28,7 +28,7 @@ def test_bare_ref_uses_the_namespace_default() -> None:
 
 def test_bare_ref_dropped_without_a_namespace_default() -> None:
     """A cross-project namespace must not mis-key a bare ref: gingugu#12 and
-    VersatermTechPlatform#12 are different objects."""
+    platform-infra#12 are different objects."""
     assert cm.extract_claims("", "PR #12 is still open", namespace_default=None) == []
 
 
@@ -43,14 +43,14 @@ def test_url_beats_the_namespace_default() -> None:
 
 def test_named_repo_alias_beats_the_namespace_default() -> None:
     (claim,) = cm.extract_claims(
-        "", "VTP PR #947 still open, waiting on Joe", namespace_default="devex-ai-gateway"
+        "", "PINF PR #947 still open, waiting on Joe", namespace_default="api-gateway"
     )
-    assert claim.ref == "VersatermTechPlatform#947"
+    assert claim.ref == "platform-infra#947"
 
 
 def test_merge_request_is_its_own_kind() -> None:
-    (claim,) = cm.extract_claims("", "MR !9 is open", namespace_default="keycloakify")
-    assert (claim.kind, claim.ref) == ("mr", "keycloakify#9")
+    (claim,) = cm.extract_claims("", "MR !9 is open", namespace_default="ui-theme")
+    assert (claim.kind, claim.ref) == ("mr", "ui-theme#9")
 
 
 # --- extraction: a citation is not an assertion -----------------------------
@@ -79,10 +79,10 @@ def test_a_memory_titled_resolved_does_not_inherit_an_open_claim_from_a_link() -
     (claim,) = cm.extract_claims(
         "RESOLVED: internal gateway crashloop was the burstable RDS",
         "The guardrail PR #155 can now be re-pointed to k8s/internal and tested here. "
-        "See [[DESI-52 guardrails: PR #155 OPEN, merge HELD until DESI-58 tests it]].",
-        namespace_default="devex-ai-gateway",
+        "See [[PROJ-52 guardrails: PR #155 OPEN, merge HELD until PROJ-58 tests it]].",
+        namespace_default="api-gateway",
     )
-    assert claim.ref == "devex-ai-gateway#155"
+    assert claim.ref == "api-gateway#155"
     assert claim.state == cm.STATE_UNVERIFIED  # named in its own prose, never asserted
 
 
@@ -127,16 +127,16 @@ def test_resolved_wins_within_one_memory() -> None:
     """Real regression: a memory TITLED "PR #174 MERGED" that also narrates
     "Opened + merged same day" asserts resolution, not openness."""
     (claim,) = cm.extract_claims(
-        "PR #174 MERGED (Jul 27 2026): DESI-52 master switch",
+        "PR #174 MERGED (Jul 27 2026): PROJ-52 master switch",
         'PR #174 "fix: master switch". Opened + merged the same day.',
-        namespace_default="devex-ai-gateway",
+        namespace_default="api-gateway",
     )
     assert claim.state == cm.STATE_RESOLVED
 
 
 def test_title_is_scanned_not_just_content() -> None:
     (claim,) = cm.extract_claims(
-        "PR #65 SHIPPED", "the onboarding work landed", namespace_default="OKREngine"
+        "PR #65 SHIPPED", "the onboarding work landed", namespace_default="metrics-engine"
     )
     assert claim.state == cm.STATE_RESOLVED
 
@@ -145,7 +145,7 @@ def test_held_counts_as_open() -> None:
     (claim,) = cm.extract_claims(
         "",
         "PR #166 OPEN + HELD - do NOT merge until the router is tested",
-        namespace_default="devex-ai-gateway",
+        namespace_default="api-gateway",
     )
     assert claim.state == cm.STATE_OPEN
 
@@ -173,11 +173,11 @@ def test_the_motivating_corpus_case_a_ref_under_a_deliverables_list() -> None:
     (claim,) = cm.extract_claims(
         "",
         "- Branch weasyprint-ca-rca, commit 2bcb2cd, PR #1: "
-        "https://github.com/Versaterm-Public-Safety/devex-on-call-notes/pull/1\n"
+        "https://github.com/example-org/oncall-notes/pull/1\n"
         "- Updated README.md incident index, .ai/memory.md",
-        namespace_default="devex-on-call-notes",
+        namespace_default="oncall-notes",
     )
-    assert claim.ref == "devex-on-call-notes#1"
+    assert claim.ref == "oncall-notes#1"
     assert claim.state == cm.STATE_UNVERIFIED
 
 
@@ -285,8 +285,8 @@ def test_empty_default_repo_declares_the_namespace_is_not_a_repo(conn) -> None:
 
 def test_explicit_default_repo_wins_over_the_namespace_name(conn) -> None:
     """Lets a namespace named differently from its repo slug key bare refs."""
-    conn.execute("UPDATE namespaces SET default_repo = 'litellm' WHERE id = 'ns1'")
-    assert cs.namespace_default_repo(conn, "ns1") == "litellm"
+    conn.execute("UPDATE namespaces SET default_repo = 'gateway' WHERE id = 'ns1'")
+    assert cs.namespace_default_repo(conn, "ns1") == "gateway"
 
 
 def test_a_missing_namespace_drops_bare_refs(conn) -> None:
@@ -328,7 +328,7 @@ def test_setting_an_explicit_default_repo_rekeys_existing_claims() -> None:
     c.row_factory = sqlite3.Row
     migrate(c)
     manager = NamespaceManager(c, None)
-    ns = manager.get_or_create("devex")
+    ns = manager.get_or_create("platform")
     _mem(c, "m1", ns.id, "Notes", "PR #166 is still open")
     c.commit()
     from gingugu import claim_rederive
@@ -336,9 +336,9 @@ def test_setting_an_explicit_default_repo_rekeys_existing_claims() -> None:
     claim_rederive.rederive_claims(c)
     c.commit()
 
-    manager.update("devex", default_repo="devex-ai-gateway")
+    manager.update("platform", default_repo="api-gateway")
 
-    assert [r[0] for r in c.execute("SELECT ref FROM memory_claims")] == ["devex-ai-gateway#166"]
+    assert [r[0] for r in c.execute("SELECT ref FROM memory_claims")] == ["api-gateway#166"]
 
 
 def test_a_namespace_update_that_leaves_default_repo_alone_does_not_touch_claims() -> None:
@@ -545,7 +545,7 @@ def test_superseded_pending_a_decision_is_still_open() -> None:
     claims = cm.extract_claims(
         "",
         "MR !4 now appears redundant/superseded; needs a decision (close, or rebase)",
-        namespace_default="keycloakify",
+        namespace_default="ui-theme",
     )
     assert all(c.state != cm.STATE_RESOLVED for c in claims)
 
@@ -560,6 +560,101 @@ def test_not_merged_yet_is_open_not_resolved() -> None:
     ):
         (claim,) = cm.extract_claims("", phrasing, namespace_default="gingugu")
         assert claim.state == cm.STATE_OPEN, phrasing
+
+
+def test_bare_pr_ordinal_without_a_sigil_is_not_a_ref() -> None:
+    """ "PR 1" in prose names a POSITION in a planned series, not an identity.
+
+    Measured: five such ordinals produced 33 claim rows across the corpus, and
+    an existence check cannot catch them because PRs #1-#5 really do exist.
+    """
+    assert cm.extract_claims("", "PR 1 - The collision fix.", namespace_default="gingugu") == []
+    assert cm.extract_claims("", "do not go looking for a PR 5", namespace_default="gingugu") == []
+
+
+def test_a_ref_never_spans_a_line_break() -> None:
+    """A list item ending "NO PR" bound to the "2." opening the next item and
+    produced a claim asserting the exact opposite of the prose."""
+    text = "1. `router-eng.html` - done, NO PR\n2. `router.html` - same"
+    assert cm.extract_claims("", text, namespace_default="api-gateway") == []
+
+
+def test_an_explicitly_named_repo_is_never_replaced_by_the_default() -> None:
+    """The extractor used to read this repo, fail to recognize it, then discard
+    it and key the claim to the namespace instead."""
+    (claim,) = cm.extract_claims(
+        "", "documented in VendorOS PR #115", namespace_default="api-gateway"
+    )
+    assert claim.ref == "VendorOS#115"
+
+
+def test_a_known_repo_beats_the_writing_namespace() -> None:
+    """A memory saved in `gingugu` can talk about `gingugu.com`, and the store
+    knows gingugu.com is a repo because it is a namespace here."""
+    (claim,) = cm.extract_claims(
+        "",
+        "shipped as gingugu.com PR #2 the following day",
+        namespace_default="gingugu",
+        known_repos=frozenset({"gingugu", "gingugu.com"}),
+    )
+    assert claim.ref == "gingugu.com#2"
+
+
+def test_a_bare_ref_reuses_a_repo_the_same_memory_already_named() -> None:
+    """One PR named twice is one claim. Qualifying each occurrence alone emitted
+    a phantom second ref against a repo where that PR does not exist."""
+    claims = cm.extract_claims(
+        "",
+        "platform-infra PR #873 created to fix it. " "Fixed in PR #873 by replacing the em dash.",
+        namespace_default="api-gateway",
+    )
+    assert [c.ref for c in claims] == ["platform-infra#873"]
+
+
+def test_a_ticket_id_is_not_a_repo() -> None:
+    """PROJ-8 sits next to refs constantly in this corpus. It is hyphenated, so
+    a naive shape test reads it as a repo name."""
+    (claim,) = cm.extract_claims(
+        "", "PROJ-8 PR #65 awaiting reviewer", namespace_default="api-gateway"
+    )
+    assert claim.ref == "api-gateway#65"
+
+
+@pytest.mark.parametrize("token", ["docs-only", "re-point"])
+def test_a_hyphenated_english_word_is_not_a_repo(token: str) -> None:
+    """Measured regressions: a single hyphen invented `docs-only#168` and
+    `re-point#155` out of ordinary prose."""
+    (claim,) = cm.extract_claims("", f"{token} PR #168 landed", namespace_default="api-gateway")
+    assert claim.ref == "api-gateway#168"
+
+
+def test_a_path_segment_is_not_a_repo() -> None:
+    """ "branch feature/serve-transport. PR #10" - the tail of a path is
+    hyphenated and would otherwise pass every shape test."""
+    (claim,) = cm.extract_claims(
+        "", "Built on branch feature/serve-transport. PR #10, open", namespace_default="gingugu"
+    )
+    assert claim.ref == "gingugu#10"
+
+
+def test_a_repo_named_after_the_ref_qualifies_it() -> None:
+    """ "PR #132 (api-gateway)" - the qualifier trails the ref, so no
+    lookbehind can reach it. Both PINF#132 and api-gateway#132 exist, which
+    is why an existence check cannot catch this one either."""
+    (claim,) = cm.extract_claims(
+        "",
+        "PR #132 (api-gateway): removed the duplicate SERVICE_LOG",
+        namespace_default="platform-infra",
+        known_repos=frozenset({"platform-infra", "api-gateway"}),
+    )
+    assert claim.ref == "api-gateway#132"
+
+
+def test_ordinary_prose_after_a_ref_is_not_a_repo() -> None:
+    """The trailing-qualifier rule must not read the next word of a sentence as
+    a repo: "PR #20 is still open" names no repo at all."""
+    (claim,) = cm.extract_claims("", "PR #20 is still open", namespace_default="gingugu")
+    assert claim.ref == "gingugu#20"
 
 
 # --- the write-time hook on the tool surface --------------------------------

@@ -71,17 +71,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-# Explicit URL wins over everything — it names the repo unambiguously.
-_URL = re.compile(
-    r"https?://(?:www\.)?(?:github|gitlab)\.com/([\w.-]+(?:/[\w.-]+)*?)/"
-    r"(?:pull|-/merge_requests|merge_requests)/(\d+)",
-    re.I,
-)
-
-_REF = re.compile(
-    r"(?:(?P<repo>[A-Za-z][\w.-]{2,30})\s+)?"
-    r"\b(?P<kind>PR|MR|pull request|merge request)\s*[#!]?(?P<num>\d+)"
-)
+from .claim_qualify import _REF, _document_bindings, _qualify
 
 # Resolved beats open when both appear for the same ref in one memory: a memory
 # titled "PR #174 MERGED" that also narrates "Opened + merged same day" is
@@ -136,30 +126,6 @@ class Claim:
     evidence: str
 
 
-def _qualify(text: str, match: re.Match[str], namespace_default: str | None) -> str | None:
-    """Repo-qualify a ref, or return None when it cannot be done safely.
-
-    Precedence: an explicit URL naming the same number, then a repo word
-    immediately preceding the ref, then the namespace's default repo.
-    """
-    for url in _URL.finditer(text):
-        if url.group(2) == match.group("num"):
-            return url.group(1).split("/")[-1]
-    named = (match.group("repo") or "").strip().rstrip(":,.").lower()
-    if named and namespace_default and named == namespace_default.lower():
-        return namespace_default
-    if named in _KNOWN_REPO_ALIASES:
-        return _KNOWN_REPO_ALIASES[named]
-    return namespace_default
-
-
-# Short forms that appear next to refs and unambiguously name a repo.
-_KNOWN_REPO_ALIASES: dict[str, str] = {
-    "vtp": "VersatermTechPlatform",
-    "versatermtechplatform": "VersatermTechPlatform",
-}
-
-
 def _blank_wikilinks(text: str) -> str:
     """Replace ``[[...]]`` spans with blanks, preserving length and newlines.
 
@@ -196,7 +162,11 @@ def _normalize_kind(raw: str) -> str:
 
 
 def extract_claims(
-    title: str, content: str, *, namespace_default: str | None = None
+    title: str,
+    content: str,
+    *,
+    namespace_default: str | None = None,
+    known_repos: frozenset[str] = frozenset(),
 ) -> list[Claim]:
     """Claims asserted by a memory — at most one per (kind, ref).
 
@@ -211,12 +181,17 @@ def extract_claims(
     memory's namespace. Pass None for cross-project namespaces so bare refs
     are dropped rather than mis-keyed.
 
+    ``known_repos`` are repo names this store already knows - the caller's
+    namespace names. A ref qualified with one of them is keyed to it verbatim
+    rather than to this memory's own namespace.
+
     Refs inside ``[[wiki-links]]`` are ignored — see the module docs.
     """
     text = _blank_wikilinks(f"{title}\n{content}")
+    bindings = _document_bindings(text, namespace_default, known_repos)
     best: dict[tuple[str, str], Claim] = {}
     for match in _REF.finditer(text):
-        repo = _qualify(text, match, namespace_default)
+        repo = _qualify(text, match, namespace_default, known_repos, bindings)
         if repo is None:
             continue
         if _is_quoted(text, match):

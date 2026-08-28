@@ -4,6 +4,47 @@ _Last updated: 2026-08-28_
 
 ## In Flight
 
+**Claim-extraction precision: four defects fixed, awaiting review.** Branch
+`fix/claim-extraction-precision`. Found by reconciling the whole `unverified`
+claim backlog (244 rows across 10 namespaces) rather than by reading the code:
+200 rows resolved against the live forges, and every one of the 45 that could
+not be resolved turned out to be an extractor defect rather than unfinished
+work.
+
+1. An explicitly named repo was read, found to be off a two-entry alias list,
+   then **discarded and replaced with the namespace default** - the worst of
+   the four, since it produces a confident claim against a repo where the PR
+   does not exist. Namespace names now count as known repos.
+2. A bare `PR #N` ignored bindings the same memory had already made, emitting
+   a phantom second ref for one PR.
+3. The `#` sigil was optional, so `PR 1` meaning "first PR of the plan" became
+   a reference. 33 spurious rows.
+4. Whitespace between kind and number spanned newlines, binding "NO PR" to the
+   next list item and inverting the claim.
+5. A repo named *after* a ref never qualified it - only text to the left was
+   consulted - so `PR #132 (api-gateway)` kept the writing namespace. This
+   is the shape the original bug report named, and it is the one the
+   document-bindings fix does **not** reach on its own.
+
+Migration 010 re-derives stored claims, preserving resolution as 007 and 009
+do. Measured on a WAL-consistent copy of the live corpus: 569 -> 540 claims,
+66 wrong rows removed, 37 re-attributed, **no claim's asserted state changed**,
+backlog 48 -> 33. The 11 dropped resolutions all belonged to rows that were
+never valid refs.
+
+The shape test that identifies an unknown repo name was narrowed twice against
+that replay - the first version invented `PROJ-8#65`, `docs-only#168` and
+`re-point#155` out of ordinary prose. It still declines `PR #122 gateway`:
+"gateway" is a nickname, and falling back to the namespace beats inventing a
+repo.
+
+Repo qualification moved to a new `claim_qualify.py` to stay under the
+300-line limit. 703 tests green, `ruff` + `black` clean.
+
+**Known, not fixed:** `staleness.py:43` carries its own copy of the ref regex
+with the same optional-sigil defect. It drives review hints rather than
+claims, so it is left for a separate change.
+
 **v0.18.0 released.** Twelve PRs (#53-#64) ship together: seven correctness
 fixes, one new tool (`memory_excerpt`), per-hit score breakdowns, and repo-level
 rules management for `gingugu init`. The release policy had held tagging until
@@ -888,7 +929,7 @@ package does not carry.
   - **Deliberately unchanged:** contradiction detection stays namespace-scoped.
     Bare refs key off the namespace's default repo, so cross-namespace matching
     would pair two different repos' `PR #12`. A real cross-namespace
-    contradiction (devex-ai-gateway vs OKREngine, seen during the sweep) stays
+    contradiction (api-gateway vs metrics-engine, seen during the sweep) stays
     invisible — accepted: a missed one is silent, a fabricated one teaches the
     reader to ignore the metric.
 
@@ -961,7 +1002,7 @@ v0.2.0).
 
 - **Roll the new startup contract out to installed repos.** The template fix
   below only reaches a repo when `gingugu init --force` runs there. Seven repos
-  carry the hook; `keycloakify` and `ogre` are also still on a pre-v0.11.1
+  carry the hook; `ui-theme` and `ogre` are also still on a pre-v0.11.1
   `stop.py`.
 
 - ~~**Spreading activation is blind to `relation_type`.**~~ **BUILT, in
@@ -988,9 +1029,9 @@ v0.2.0).
   item in the cleanup arc, and the only one not started. ~540 memories across
   12 namespaces were verified green **by instrument** during steps 1 and 2 and
   never actually read; 3A read every `crow` edge but only memory *titles*, so
-  crow's bodies are unread too. Best leads: `devex-on-call-notes` (59 memories,
+  crow's bodies are unread too. Best leads: `oncall-notes` (59 memories,
   worst connectivity in the store, and runbook detail rots silently) and
-  `ds-base-images` (both memories still `inferred`). Prioritize with the new
+  `base-images` (both memories still `inferred`). Prioritize with the new
   orphan enumeration — that was the argument for building it first.
 
 - **Over the 300-line rule:** `storage.py` (495), `database.py` (485),
@@ -1317,7 +1358,7 @@ section.
 
   1. **Refs inside `[[wiki-links]]` were read as assertions.** A link to a
      memory titled `PR #10 open: …` is a citation, not a claim. 11 wrong
-     claims, **8 of them in `devex-ai-gateway`** — a namespace whose default
+     claims, **8 of them in `api-gateway`** — a namespace whose default
      repo was perfectly correct, so the existing namespace-containment
      guarantee never covered this one. Worst case: a memory titled
      `RESOLVED: internal gateway crashloop` asserting `#155 open`.
@@ -1350,11 +1391,11 @@ section.
 
 - **Reconciliation backlog cleared (2026-07-30)** — the 10 claims that
   materialized when migration 006 ran against the live brain were resolved with
-  `memory_update(resolve_claims=…)`, prose byte-identical: `devex-ai-gateway`
+  `memory_update(resolve_claims=…)`, prose byte-identical: `api-gateway`
   #151/#166/#168, `gingugu` #11/#12(×2)/#13/#16/#20, `gingugu.com#1`. Open
   claims 30 → 20, contradicted 12 → 2. Every PR was verified merged with `gh`
   first — and three were nearly resolved against the **wrong repo**, since
-  `Versaterm-Public-Safety/VersatermTechPlatform` also has merged PRs
+  `example-org/platform-infra` also has merged PRs
   #151/#166/#168 for entirely different work. The namespace name is not the
   repo slug; check the PR title matches the memory.
 
@@ -1533,7 +1574,7 @@ section.
   fixed in 1e05867 (staleness regex hardening, empty-namespace guard,
   suggest-gate tightening, modal-dim embedding filter, stats prefilter,
   hook state-root + write-tool set, threshold 0.85 → 0.9). 237 tests.
-  Real-brain DESI-54 dupe pair consolidated (backup taken first).
+  Real-brain PROJ-54 dupe pair consolidated (backup taken first).
 - **2026-07-07** - Save discipline + dupe surfacing (PR C of the feedback
   arc): `memory_consolidate` suggest mode (read-only pairwise-embedding
   near-dupe scan, title-only fallback, 1000-memory cap) and a
