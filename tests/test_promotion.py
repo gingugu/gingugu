@@ -76,14 +76,14 @@ def test_contains_secret_clean_text():
 
 
 def test_provenance_shape():
-    mem = _mem(id="src-42", _source_namespace="devex")
+    mem = _mem(id="src-42", _source_namespace="platform")
     stamp = provenance(
         mem, instance="laptop", contributor="brian", when="2026-06-29T00:00:00+00:00"
     )
     pf = stamp["promoted_from"]
     assert pf == {
         "instance": "laptop",
-        "namespace": "devex",
+        "namespace": "platform",
         "id": "src-42",
         "contributor": "brian",
         "promoted_at": "2026-06-29T00:00:00+00:00",

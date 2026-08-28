@@ -440,7 +440,7 @@ because the primitive was missing.
 Three things the extractor has to get right, all measured against a live corpus
 before the code was written:
 
-- **Refs are not globally unique.** `gingugu#12` and `VersatermTechPlatform#12`
+- **Refs are not globally unique.** `gingugu#12` and `platform-infra#12`
   are different objects, and memories routinely cite another repo's PRs.
   Qualification is URL, then a repo named beside the ref, then the namespace's
   `default_repo`. Unqualifiable refs are dropped rather than guessed. That

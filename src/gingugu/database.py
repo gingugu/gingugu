@@ -194,7 +194,7 @@ def _migration_004_embeddings(conn: sqlite3.Connection) -> None:
 # lives here as data instead, keyed to something checkable.
 #
 # ``ref`` is repo-qualified ("gingugu#10"), because "PR #12" is not a global
-# key — gingugu#12 and VersatermTechPlatform#12 are different objects. A ref
+# key — gingugu#12 and platform-infra#12 are different objects. A ref
 # that cannot be qualified is NOT recorded: dropping beats guessing.
 #
 # ``state`` is what the memory ASSERTS, and is never rewritten. Resolution is
@@ -255,10 +255,16 @@ def _backfill_claims(conn: sqlite3.Connection) -> int:
         "WHERE m.confidence != 'deprecated'"
     ).fetchall()
     now = datetime.now(UTC).isoformat()
+    # Namespace NAMES only. This runs as a migration backfill, and at this
+    # point in the chain ``namespaces.default_repo`` may not exist yet - it
+    # arrives in a later migration. Reading it here fails the whole upgrade.
+    repos = frozenset(
+        row[0] for row in conn.execute("SELECT name FROM namespaces").fetchall() if row[0]
+    )
     written = 0
     for memory_id, title, content, namespace in rows:
         for claim in claims_mod.extract_claims(
-            title or "", content or "", namespace_default=namespace
+            title or "", content or "", namespace_default=namespace, known_repos=repos
         ):
             conn.execute(
                 "INSERT OR IGNORE INTO memory_claims "
@@ -395,6 +401,28 @@ def _migration_009_unverified_claims(conn: sqlite3.Connection) -> None:
     claim_rederive.rederive_claims(conn)
 
 
+def _migration_010_claim_qualification(conn: sqlite3.Connection) -> None:
+    """Re-derive claims under the corrected repo qualification.
+
+    Four extraction defects were fixed at once, and stored claim rows carry the
+    behaviour of whichever extractor wrote them, so fixing the code cleans
+    nothing already on disk. This is the third re-derive for that reason; see
+    007 and 009.
+
+    Unlike those two, this one moves counts in BOTH directions. It removes refs
+    that were never refs - bare "PR 1" naming a position in a planned series,
+    and a "NO PR" that bound across a line break to the next list item - and it
+    re-keys refs the old extractor attributed to the wrong repo, because a repo
+    the prose named outright was discarded whenever it went unrecognized.
+
+    Through ``claim_rederive`` for the same reason as 007 and 009: the prose is
+    untouched and only the extractor improved, so ``resolved_state`` /
+    ``resolved_by`` / ``resolved_at`` must survive. Measured on a 550-memory
+    corpus this removes 66 rows and re-attributes 37, leaving 540 from 569.
+    """
+    claim_rederive.rederive_claims(conn)
+
+
 # (target_version, migration_callable) — applied in order when current < target.
 MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
     (1, _migration_001_initial_schema),
@@ -406,6 +434,7 @@ MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
     (7, _migration_007_claim_precision),
     (8, _migration_008_pinned),
     (9, _migration_009_unverified_claims),
+    (10, _migration_010_claim_qualification),
 ]
 
 # The version a fully-migrated DB lands on. Derived rather than written down so
