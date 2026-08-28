@@ -9,8 +9,14 @@ defect. ``AGENTS.md`` used to describe ``related_to`` as "most common — use
 liberally"; the result, measured 2026-08-04 on a real 909-memory brain, was
 1369 edges of which 69% were ``related_to``. Those edges encode only topical
 adjacency, which hybrid search already derives for free, and because
-``dampened_neighbour_ids`` does not weight by relation type they competed for
+``dampened_neighbour_ids`` was then blind to relation type they competed for
 (and won) the per-seed budget of 3 against edges carrying real signal.
+
+The traversal now weights by type, so those edges lose the slot instead of
+taking it. That fixes the retrieval damage, not the framing: an edge nobody can
+name a directional fact for is still a wasted write, and precise edges still
+compete with each other for a budget of 3. The guidance below must keep saying
+so.
 
 So these tests pin the framing, not just the plumbing: a regression here is a
 regression in what the brain records.
@@ -91,11 +97,19 @@ def test_memory_relate_description_ranks_related_to_last(descriptions):
     assert "cannot infer" in doc or "for free" in doc
 
 
-def test_memory_relate_description_warns_that_spread_is_type_blind(descriptions):
-    """The crowding-out mechanism is the whole reason restraint pays off."""
+def test_memory_relate_description_states_the_traversal_weights_by_type(descriptions):
+    """The budget mechanism is the whole reason restraint pays off.
+
+    It must describe what the traversal actually does. Claiming type-blindness
+    after ``dampened_neighbour_ids`` started weighting by type would tell the
+    calling model a vague edge *steals* a slot, when in fact it *forfeits* one -
+    a different, and weaker, reason not to write it. The honest reason is that
+    the edge buys nothing and the budget is still only 3.
+    """
     doc = descriptions["memory_relate"].lower()
     assert "3 neighbours per" in doc
-    assert "not weight by relation type" in doc or "does not weight by type" in doc
+    assert "weights by relation type" in doc
+    assert "not weight by relation type" not in doc and "does not weight by type" not in doc
 
 
 def test_hint_descriptions_frame_candidates_as_examine_not_link(descriptions):

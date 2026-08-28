@@ -4,9 +4,86 @@ _Last updated: 2026-08-27_
 
 ## In Flight
 
-**`gingugu init` now manages a repo's own `CLAUDE.md` / `AGENTS.md`, and
-gained `--adopt` - branch not yet pushed, PR not yet opened.** 749 tests
-green, `ruff` + `black` clean. Board item #1 (renamed from the 15th sail's
+**Spreading activation weights by relation type, and stops spending two slots
+on one neighbour - branch not yet pushed, PR not yet opened.** 692 tests green
+(was 683), `ruff` + `black` clean. Board item #1, ungated for three sails.
+
+`dampened_neighbour_ids` (`relations.py`) now sorts candidates by confidence,
+then `models.RELATION_WEIGHT`, then low degree, then recency, then id. The
+weight table is two tiers - 1 for every directional type, 0 for `related_to` -
+because nothing measured ranks `supersedes` above `caused_by`, and inventing
+that order would encode a guess as a ranking rule. Confidence deliberately
+stays *above* type: `supersedes` habitually points at the deprecated memory it
+replaced, so weighting type first would turn every such edge into a channel for
+surfacing exactly what the graph records as no longer true.
+`graph_stats.HIGH_SIGNAL_TYPES` is now derived from the same table, so the stat
+and the sort cannot drift.
+
+**A latent bug in the same function, found by reading and then reproduced
+against shipped code.** The `seen` guard was evaluated as candidates were
+*built*, while `seen.add` happens in the *emit* loop - so it could never catch
+a duplicate arising within one seed. The SELECT returns one row per *edge*, so
+a pair joined by two edges (two types, or one row each direction) produced two
+identical candidates: the neighbour consumed two of the three per-seed slots
+and was emitted twice. Repro at the shipped `per_seed=3` returned
+`['c', 'b', 'b']`; at `per_seed=2` the slice hides it, which is why the suite
+never caught it. 22 such pairs exist in the maintainer's live brain. Fixed by
+grouping candidates per neighbour and scoring a pair by its strongest edge -
+which type-weighting required anyway.
+
+**The gate as written could not have been satisfied, and that was the larger
+half of the work.** *Blocked / Pending* said to bench this against
+`bench/local/brain-v1.json` and compare to the hybrid baselines. But
+`bench/runner.py` calls `search()` directly and said so in its own docstring
+("no spreading activation"); `dampened_neighbour_ids` is reachable only from
+`handlers/helpers.py`. Running the prescribed gate before and after would have
+produced byte-identical numbers and read as a pass. So `bench` gained
+`--spread`, which measures what spreading activation surfaces around each
+question's seeds, and the fixture dataset gained a `relations` block so the CI
+floor exercises the traversal path at all rather than only `search()`.
+
+Measured with only the sort differing (old `relations.py` restored from
+`HEAD`), `__pycache__` cleared between runs and the loaded weights printed from
+inside each run as proof of which code executed:
+
+| | before | after |
+|---|---|---|
+| real brain - high-signal share of the spread budget | 67.7% | **73.0%** |
+| real brain - neighbours surfaced | 10.000 | 10.000 |
+| real brain - mrr / recall@1 / recall@5 / recall@10 | 0.850 / 0.644 / 0.939 / 0.956 | unchanged |
+| fixture - high-signal share | 71.7% | 73.6% |
+
+The neighbour count is flat at the `SPREAD_TOTAL` cap in both arms, so the
+share moved because the *mix* improved, not because the neighbourhood shrank -
+that control is why the count is reported alongside the share and never alone.
+Retrieval metrics are byte-identical because `search()` is untouched, which is
+the no-regression half of the gate.
+
+Base rate for context: the live brain is **66.3% directional by edge count**
+(663 `related_to` of 1,970). The old traversal surfaced 67.7% - i.e. it simply
+mirrored the edge mix and expressed no preference at all. The new one surfaces
+73.0%, now favouring signal over the base rate. The prize is smaller than the
+2026-08-04 note implied (69% `related_to` then, 33.7% now) because the guidance
+fix shipped since has already improved what gets written; this change is what
+finally makes the *reading* side prefer it too.
+
+**One measurement trap worth recording**, because it produced a far more
+flattering number than the truth: the first A/B simulated "before" by zeroing
+`RELATION_WEIGHT`, but the new metric computed "high signal" by reading that
+same table - so it reported 0.0% -> 73.0%, an artifact end to end. The metric
+now defines "directional" against `RelationType` (anything that is not the
+fallback), which the intervention cannot touch.
+
+**Not done yet:** this PR.
+
+## Shipped to `main`, awaiting release in v0.18.0
+
+**`gingugu init` manages a repo's own `CLAUDE.md` / `AGENTS.md`, and gained
+`--adopt` - PR #63, merged `52bc6cf` (2026-08-27).** 683 tests green
+(682 passed + 1 deselected on all nine CI legs; that PR's body and an earlier
+note in this file both said 749, which CI contradicted on the day - see run
+`33041989863`), `ruff` + `black` clean.
+Board item #1 (renamed from the 15th sail's
 item 6, "`--adopt` + manage repo CLAUDE.md / AGENTS.md" - fixes a drift
 *class*, not one instance).
 
@@ -865,26 +942,22 @@ v0.2.0).
   carry the hook; `keycloakify` and `ogre` are also still on a pre-v0.11.1
   `stop.py`.
 
-- **Spreading activation is blind to `relation_type`.** `dampened_neighbour_ids`
-  (`relations.py`) selects neighbours by confidence rank, then _low_ degree, then
-  recency, then id — the `SELECT` never fetches `relation_type` at all. So with
-  `SPREAD_PER_SEED = 3`, a memory carrying 5 `related_to` edges and 2
-  `supersedes` edges can surface three `related_to` neighbours and hide the
-  `supersedes` entirely. The low-signal majority actively out-competes the
-  high-signal minority on every recall.
+- ~~**Spreading activation is blind to `relation_type`.**~~ **BUILT, in
+  _In Flight_ above** (2026-08-27, 13th sail). `dampened_neighbour_ids` now
+  weights by `models.RELATION_WEIGHT` within a confidence tier. The
+  no-bulk-prune decision stands and was never revisited: the sort fix made the
+  `related_to` edges stop winning slots, so nothing needed deleting.
 
-  Found 2026-08-04 while writing the relation-discipline guidance. The guidance
-  fix only changes what gets written _going forward_; this is the reason the
-  existing 943 `related_to` edges still degrade retrieval today. A type-weighted
-  term in that sort is a small diff and fixes past and future at once.
-
-  **Gated on benchmark evidence** per `.ai/standards/01-code-and-testing.md` —
-  this is a ranking change. Run the fixture floor plus a real-brain pass against
-  `bench/local/brain-v1.json` and compare to the hybrid baselines before
-  shipping. **Decision already taken:** do _not_ bulk-prune the existing 943
-  `related_to` edges. Deleting a third of the graph is destructive and
-  irreversible; fix the sort so they stop winning slots instead. Pruning returns
-  to the table only if the bench says type-weighting is insufficient.
+  **The gate recorded here was not satisfiable and had to be built first.** It
+  said to run the fixture floor plus a real-brain pass and compare to the hybrid
+  baselines. But `bench/runner.py` calls `search()` directly — its own docstring
+  said "no spreading activation" — and `dampened_neighbour_ids` is reachable
+  only from `handlers/helpers.py`. Both arms would have printed identical
+  numbers and read as a pass. `bench --spread` and a `relations` block in the
+  fixture dataset close that hole. **Lesson for the next ranking item on this
+  list: before running a gate a previous session wrote, confirm the harness
+  actually executes the function being changed.** A gate is not
+  self-validating.
 
 - **`gingugu ui --host` exposes an unauthenticated full-DB export.** Found
   2026-08-03, still unfiled as an issue.

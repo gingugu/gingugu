@@ -49,15 +49,38 @@
   `uv run python -m bench` (fixture floor) and a real-brain run against the
   recorded baseline (see `docs/roadmap.md` Phase 5.75). Grading is
   deterministic math only — never LLM-as-judge (design law, 2026-07-18).
-- **Know what the bench cannot see, and say so.** The fixture run reports
-  `retrieval: bm25-only`, so it is structurally blind to any change in the
-  semantic cohort, the entry threshold, or the fusion of the two - a green
-  fixture run is evidence about BM25 and about nothing else. It also issues a
-  single call at `limit=max(ks)` and slices, so it cannot see behaviour that
-  varies with call depth. Two real defects lived in those blind spots. When a
-  change lands in one of them, measure it directly against a copy of a real
-  brain and report that, rather than quoting a benchmark that never exercised
-  the code.
+- **Know what the bench cannot see, and say so.** The default fixture run
+  reports `retrieval: bm25-only`, so it is structurally blind to any change in
+  the semantic cohort, the entry threshold, or the fusion of the two - a green
+  fixture run is evidence about BM25 and about nothing else (pass
+  `--embeddings` for a hybrid pass). Real defects have lived in that blind
+  spot. When a change lands in one, measure it directly against a copy of a
+  real brain and report that, rather than quoting a benchmark that never
+  exercised the code.
+- **Confirm the harness executes the changed function before quoting a
+  delta.** A gate recorded by a past session is not self-validating. The
+  type-weighted spreading activation item (2026-08-27) carried an explicit
+  instruction to bench against `bench/local/brain-v1.json` and compare to the
+  hybrid baselines - but `run_benchmark` calls `search()`, and the changed
+  function was reachable only from `handlers/helpers.py`. Both arms would have
+  printed identical numbers and read as a clean pass. Trace the call path
+  first; if the harness cannot reach the code, extending it is part of the
+  work, not scope creep around it. `bench --spread` exists for exactly this
+  path, and the fixture dataset carries a `relations` block so the CI floor
+  exercises it at all.
+- **A metric must not read the knob the change turns.** In that same item, the
+  first A/B simulated "before" by zeroing `RELATION_WEIGHT` while the new
+  metric derived "high signal" from that same table - producing a flawless
+  0.0% -> 73.0% that was pure artifact. Define the measurement against
+  something the intervention cannot touch (there: `RelationType` itself). An
+  implausibly clean delta is a reason to audit the instrument, not to
+  celebrate. Honest figure once fixed: 67.7% -> 73.0%.
+- **Stamp each A/B arm with proof of which code ran.** Swapping a file between
+  runs can land inside Python's one-second `.pyc` mtime granularity, and if the
+  two variants are the same size the stale bytecode is silently reused - the
+  file on disk and the running process disagree. Clear `__pycache__` between
+  arms and print the loaded value from inside the process as the run's first
+  line.
 - **Reintroduce the defect to prove the test is a guard.** A test written to
   prevent a recurrence is not finished until it has been seen to fail against
   the old behaviour. Twice this has caught a test that proved nothing: a

@@ -51,8 +51,11 @@ _POOL_MULTIPLIER = 2
 # caller's expense. What earns an edge is a directional fact similarity cannot
 # see: supersedes, contradicts, caused_by, parent_of/child_of. Measured
 # 2026-08-04, before this framing landed: 69% of a 1369-edge real brain was
-# `related_to`, and because spreading activation is type-blind those edges were
-# out-competing the 31% that carried real signal for a per-seed budget of 3.
+# `related_to`, and because spreading activation was then type-blind those edges
+# were out-competing the 31% that carried real signal for a per-seed budget of 3.
+# The traversal now weights by `RELATION_WEIGHT`, so such edges lose the slot
+# rather than take it - which makes writing one a wasted write, not a harmful
+# one. Restraint here is still what keeps the graph worth traversing.
 
 
 def _candidates(

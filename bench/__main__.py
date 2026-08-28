@@ -47,6 +47,12 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         help="also embed the fixture with the real (fastembed) provider for a hybrid run "
         "(downloads the model on a cold cache; default fixture run stays bm25-only/offline)",
     )
+    parser.add_argument(
+        "--spread",
+        action="store_true",
+        help="also measure what spreading activation surfaces around each question's seeds "
+        "(the relation-traversal path; plain runs never reach it)",
+    )
     parser.add_argument("--json", type=Path, help="also write the full report as JSON")
     return parser.parse_args(argv)
 
@@ -73,6 +79,14 @@ def _print_report(report: BenchReport) -> None:
     for label, scores in means.items():
         row = f"{'MEAN':<{id_w}}{label:<8}" + "".join(f"{scores[n]:>{col_w}.3f}" for n in names)
         print(row + f"{scores.get('tokens', 0.0):>9.0f}")
+
+    extras = report.aggregates.get("spread_extras")
+    if extras:
+        # Pooled, not a mean of per-question shares: a question that surfaced
+        # one neighbour must not weigh the same as one that surfaced ten.
+        share = report.aggregates["spread_high_signal"] / extras
+        print()
+        print(f"spread: {share:.1%} of surfaced neighbours reached by a directional edge")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -121,6 +135,7 @@ def main(argv: list[str] | None = None) -> int:
             embedder=embedder,
             ks=ks,
             key_to_id=key_to_id,
+            measure_spread=args.spread,
         )
     finally:
         conn.close()
