@@ -7,30 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
-
-### Changed
-
-- **Spreading activation now prefers directional relations.** Recall surfaces
-  at most three neighbours per seed memory, and until now it chose them without
-  looking at what kind of edge connected them — so on a memory carrying more
-  edges than that budget, `related_to` links meaning only "same topic" could
-  take every slot and hide the `supersedes` or `caused_by` link that actually
-  said something. Neighbour selection now ranks a directional edge above the
-  `related_to` fallback. Confidence still ranks first, deliberately: a
-  `supersedes` edge usually points at the deprecated memory it replaced, and
-  that memory should not be promoted over a live one. On a real 542-memory
-  brain the share of the surfaced neighbourhood reached by a directional edge
-  rose from 67.7% to 73.0%, with the same number of neighbours returned and
-  every search metric unchanged.
-
-### Fixed
-
-- **A memory joined to a seed by two relations no longer takes two of its three
-  neighbour slots, or appears twice in the payload.** Two memories can legitimately
-  carry several edges — different types, or one in each direction — and each was
-  being counted as a separate neighbour. Such a pair is now one candidate, scored
-  by its strongest edge.
+## [0.18.0] - 2026-08-28
 
 ### Added
 
@@ -84,7 +61,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   entered the ranking, an `ids` fetch was not ranked, and a bare relevance has
   no composite to decompose.
 
+### Changed
+
+- **Spreading activation now prefers directional relations.** Recall surfaces
+  at most three neighbours per seed memory, and until now it chose them without
+  looking at what kind of edge connected them — so on a memory carrying more
+  edges than that budget, `related_to` links meaning only "same topic" could
+  take every slot and hide the `supersedes` or `caused_by` link that actually
+  said something. Neighbour selection now ranks a directional edge above the
+  `related_to` fallback. Confidence still ranks first, deliberately: a
+  `supersedes` edge usually points at the deprecated memory it replaced, and
+  that memory should not be promoted over a live one. On a real 542-memory
+  brain the share of the surfaced neighbourhood reached by a directional edge
+  rose from 67.7% to 73.0%, with the same number of neighbours returned and
+  every search metric unchanged.
+
 ### Fixed
+
+- **A memory joined to a seed by two relations no longer takes two of its three
+  neighbour slots, or appears twice in the payload.** Two memories can legitimately
+  carry several edges — different types, or one in each direction — and each was
+  being counted as a separate neighbour. Such a pair is now one candidate, scored
+  by its strongest edge.
 
 - **`memory_context`'s recency bucket now orders by write recency, not read
   recency.** That bucket exists so a freshly-stored, never-accessed memory

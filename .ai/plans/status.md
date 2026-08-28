@@ -1,12 +1,34 @@
 # Project Status
 
-_Last updated: 2026-08-27_
+_Last updated: 2026-08-28_
 
 ## In Flight
 
+**v0.18.0 released.** Twelve PRs (#53-#64) ship together: seven correctness
+fixes, one new tool (`memory_excerpt`), per-hit score breakdowns, and repo-level
+rules management for `gingugu init`. The release policy had held tagging until
+the board was clear; with the board down to two non-urgent items and the fix
+tranche soaked locally for a full week, the release was cut ahead of them.
+692 tests green, `ruff` + `black` clean.
+
+Board carried into the next cycle, both non-urgent:
+
+1. Transaction context + atomic consolidation. `consolidate()` performs
+   `1 + 2N` separate commits with no enclosing transaction, so a mid-run
+   failure leaves a partial consolidation - and with `keep_originals=False`,
+   permanent loss of the originals already deleted. No reported failure:
+   single-writer local SQLite with `busy_timeout=30000` (`database.py:505`)
+   absorbs the realistic contention path.
+2. Hygiene: concurrency test, `promote.py` coverage, recall's silent `default`
+   namespace fallback, finish the `storage.py` split. The product-spec
+   "(unreleased)" drift that also sat on this item is **cleared** - cutting the
+   release resolved all 19 markers.
+
+## Shipped in v0.18.0 (2026-08-28)
+
 **Spreading activation weights by relation type, and stops spending two slots
-on one neighbour - branch not yet pushed, PR not yet opened.** 692 tests green
-(was 683), `ruff` + `black` clean. Board item #1, ungated for three sails.
+on one neighbour.** Merged as PR #64 (`4502ec2`). 692 tests green (was 683),
+`ruff` + `black` clean.
 
 `dampened_neighbour_ids` (`relations.py`) now sorts candidates by confidence,
 then `models.RELATION_WEIGHT`, then low degree, then recency, then id. The
@@ -76,7 +98,7 @@ fallback), which the intervention cannot touch.
 
 **Not done yet:** this PR.
 
-## Shipped to `main`, awaiting release in v0.18.0
+## Shipped in v0.18.0 (2026-08-28)
 
 **`gingugu init` manages a repo's own `CLAUDE.md` / `AGENTS.md`, and gained
 `--adopt` - PR #63, merged `52bc6cf` (2026-08-27).** 683 tests green
@@ -138,7 +160,7 @@ isolated scratch copies of the real files before touching them live again.
 
 **Not done yet:** this PR.
 
-## Shipped to `main`, awaiting release in v0.18.0
+## Shipped in v0.18.0 (2026-08-28)
 
 **`bench/` gains real call-depth coverage and a hybrid (embeddings) pass, and
 runs in CI - PR #62, merged `cfa89d0` (2026-08-27).** 666 tests green (was
@@ -300,7 +322,7 @@ under both the simulated coarse clock and the real one.
 `created_at` and `access_count` respectively and have the same unspecified-tie
 class. Deliberately out of scope here; worth a board item.
 
-## Shipped to `main`, awaiting release in v0.18.0
+## Shipped in v0.18.0 (2026-08-28)
 
 **Per-hit score breakdown + `memory_excerpt` - PR #60, merged `b9fc4f1`
 (2026-08-26).** 658 tests green (was 634), `ruff` + `black` clean. Board items #2 and #3, shipped together: both are arithmetic and
