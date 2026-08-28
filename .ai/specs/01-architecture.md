@@ -329,8 +329,30 @@ AI client (Claude Code / Cursor / Windsurf / …)
   and guidance is written to optimize edge quality rather than edge count.
   Measured 2026-08-04, when the guidance still said "use liberally": 69% of a
   real brain's 1369 edges were `related_to`, and since `dampened_neighbour_ids`
-  ignores `relation_type` those edges were out-competing high-signal ones for a
-  per-seed budget of 3.
+  then ignored `relation_type` those edges were out-competing high-signal ones
+  for a per-seed budget of 3.
+- **Retrieval prefers directional edges, but confidence outranks type.**
+  (2026-08-27.) `dampened_neighbour_ids` sorts neighbours by confidence rank,
+  then `models.RELATION_WEIGHT`, then low degree, then recency, then id.
+  The weight table is deliberately **two tiers** — 1 for every directional
+  type, 0 for `related_to` — because nothing measured ranks `supersedes` above
+  `caused_by`, and a finer order would encode a guess as a ranking rule.
+  Confidence stays *above* type for a concrete reason: `supersedes` habitually
+  points at the deprecated memory it replaced, so ranking type first would make
+  every such edge a channel for surfacing what the graph records as no longer
+  true. `graph_stats.HIGH_SIGNAL_TYPES` derives from the same table so the
+  health stat and the ranking cannot drift apart.
+  Measured on the real brain (only the sort differing): the share of the spread
+  budget reached by a directional edge went 67.7% → 73.0%, with the neighbour
+  count flat at the `SPREAD_TOTAL` cap and every retrieval metric unchanged.
+  Context for the size of that move — the brain is 66.3% directional by edge
+  count, so the old traversal was merely mirroring the edge mix and expressing
+  no preference at all.
+- **A neighbour is a memory, not an edge.** Two memories may be joined by
+  several edges (different types, or one row in each direction); the pair is
+  scored by its strongest. Before 2026-08-27 the traversal grouped per edge, so
+  such a pair spent two of a seed's three slots and appeared twice in the
+  payload.
 - **Server resilience over strictness.** Handlers fail soft (structured errors)
   so a bad call never takes down the client's memory layer.
 

@@ -276,6 +276,21 @@
       "tags": ["billing", "reconciliation", "ledger"]
     }
   ],
+  "relations": [
+    {"source": "pool-config-fix", "target": "redis-incident", "type": "caused_by"},
+    {"source": "redis-incident", "target": "distractor-redis-cache", "type": "related_to"},
+    {"source": "redis-incident", "target": "distractor-postgres-pool", "type": "related_to"},
+    {"source": "redis-incident", "target": "distractor-alb-timeout", "type": "related_to"},
+    {"source": "redis-incident", "target": "session-storage", "type": "related_to"},
+    {"source": "distractor-redis-cache", "target": "redis-incident", "type": "related_to"},
+    {"source": "customer-api-reuse", "target": "pool-config-fix", "type": "child_of"},
+    {"source": "jwt-rotation", "target": "jwt-auth", "type": "supersedes"},
+    {"source": "flag-cleanup-checkout", "target": "feature-flag-rollout", "type": "child_of"},
+    {"source": "wisdom-flag-cleanup-rule", "target": "flag-cleanup-checkout", "type": "parent_of"},
+    {"source": "billing-dunning", "target": "billing-invoice-retry", "type": "caused_by"},
+    {"source": "billing-reconciliation", "target": "billing-currency", "type": "related_to"},
+    {"source": "wisdom-incident-postmortem", "target": "redis-incident", "type": "related_to"}
+  ],
   "questions": [
     {
       "id": "q-incident-cause",

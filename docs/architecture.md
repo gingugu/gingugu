@@ -346,6 +346,30 @@ a *different* memory sparks it — the cluster lights up together. Implemented i
 best-effort, so a failure never breaks a read. Tag-based spreading is a planned
 follow-up.
 
+**Which neighbours.** A seed's whole cluster is not surfaced — one
+highly-connected memory would otherwise drag its entire neighbourhood into
+every recall. `RelationManager.dampened_neighbour_ids` picks at most
+`SPREAD_PER_SEED` (3) per seed and `SPREAD_TOTAL` (10) overall, filling in seed
+order so the best-ranked seeds' clusters win. Candidates are grouped per
+**neighbour**, not per edge — two memories may be joined by several edges, and
+the pair is scored by its strongest — then ranked by:
+
+1. **confidence rank** (desc)
+2. **relation weight** — every directional type outranks the `related_to`
+   fallback (`models.RELATION_WEIGHT`)
+3. **low relation degree** — a focused memory carries more specific signal than
+   a generic hub
+4. **recency**, then **id** for full determinism
+
+Confidence sits above relation weight on purpose: `supersedes` habitually
+points at the deprecated memory it replaced, so ranking type first would turn
+every such edge into a channel for surfacing exactly what the graph records as
+no longer true. The weight table is two tiers rather than six because nothing
+measured ranks `supersedes` above `caused_by`.
+
+The same dampened set is what surfaces as `via_relation` extras when
+`include_related=True`, so the payload and the reactivation never disagree.
+
 ### Review Hints
 
 Never-forget means nothing is auto-demoted - but a **point-in-time** memory
@@ -717,11 +741,14 @@ direction and time: which memory *replaced* which, what *caused* what, what
 connection none of those describe, never as shorthand for "similar".
 
 **Quality beats volume.** [Spreading activation](#spreading-activation) surfaces
-at most `SPREAD_PER_SEED` (3) neighbours per seed memory and does **not** weight
-by relation type, so every low-signal edge competes for a slot against a
-high-signal one. A handful of precise edges retrieves better than a dense mesh
-of vague ones. Measured on a real 909-memory brain in August 2026, while the
-guidance still called `related_to` the common case: 69% of 1369 edges were
+at most `SPREAD_PER_SEED` (3) neighbours per seed memory and **weights by
+relation type**, so a `related_to` edge forfeits its slot to a directional one
+rather than taking it. A vague edge is therefore not merely low-value; on any
+memory carrying more than three edges it is likely never to fire at all. And
+precise edges still compete with each other for those three slots, so a handful
+of them retrieves better than a dense mesh of vague ones. Measured on a real
+909-memory brain in August 2026, while the guidance still called `related_to`
+the common case and the traversal was still type-blind: 69% of 1369 edges were
 `related_to`, crowding out the 31% that carried real signal.
 
 **Wrong edges are repairable** — see [`memory_unrelate`](#memory_unrelate).
@@ -742,8 +769,10 @@ Enumerate graph edges. Read-only; nothing is written and no access is credited.
 Each row carries `source_id`/`target_id`, both titles, both namespaces, the
 relation type, `created_at`, and `source_degree`/`target_degree`. Degree is
 what decides reachability: [spreading activation](#spreading-activation) visits
-at most `SPREAD_PER_SEED` neighbours and does not rank them by type, so edges
-on a high-degree memory may never fire however well labelled.
+at most `SPREAD_PER_SEED` neighbours, so edges on a high-degree memory may never
+fire however well labelled. It ranks candidates by confidence then relation
+type, so the edges dropped there are `related_to` first — which is what makes a
+high-degree, mostly-`related_to` memory the best target for a repair sweep.
 
 `memory_stats.graph` reports *that* a graph is mostly `related_to`; this reports
 *which* edges those are, which is the difference between a metric and a work

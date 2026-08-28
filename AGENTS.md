@@ -67,8 +67,10 @@ semantic similarity, so "same topic" is knowledge the index has for free. Use
 (this replaces that), `contradicts`, `caused_by`, `parent_of`/`child_of`. Treat
 `related_to` as a fallback for a real connection none of those describe — never
 as shorthand for "similar". Spreading activation surfaces at most 3 neighbours
-per memory and does not weight by type, so a vague edge crowds out a useful one.
-If you can't name the directional fact an edge records, don't create it.
+per memory and ranks them by relation type, so a vague edge loses its slot to a
+directional one and buys you nothing. Precise edges still compete with each
+other for those 3 slots. If you can't name the directional fact an edge records,
+don't create it.
 
 ### Credentials
 Gingugu carries an OS-keychain vault, so secrets never belong in files or chat.

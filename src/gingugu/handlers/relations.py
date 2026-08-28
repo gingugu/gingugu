@@ -37,10 +37,13 @@ def register(mcp, ctx: ServerContext) -> None:
         those describe - it is the fallback, not the default.
 
         Quality over volume: spreading activation surfaces at most 3 neighbours per
-        seed memory, and it does NOT weight by relation type. Every low-signal edge
-        therefore competes for a slot against a high-signal one, so a handful of
-        precise edges retrieves better than a dense mesh of vague ones. If you cannot
-        name the directional fact an edge records, do not create it.
+        seed memory, and it weights by relation type - a directional edge outranks
+        ``related_to``, so on any memory with more than 3 edges the ``related_to``
+        ones are what lose their slot. A vague edge is therefore not merely
+        low-value, it is likely to never fire at all; and precise edges still
+        compete against each other for those 3 slots, so a handful of them
+        retrieves better than a dense mesh. If you cannot name the directional fact
+        an edge records, do not create it.
 
         A mislabelled edge is repairable: ``memory_unrelate`` retypes or removes one.
 
@@ -77,8 +80,10 @@ def register(mcp, ctx: ServerContext) -> None:
         Each row carries both endpoints' ids, titles and namespaces, the relation
         type, and each endpoint's ``degree`` (total edges touching it). Degree is the
         one that decides reachability: spreading activation visits at most 3
-        neighbours per seed and does not rank them by type, so edges on a
-        high-degree memory may never fire no matter how well labelled.
+        neighbours per seed, so edges on a high-degree memory may never fire. It
+        ranks candidates by confidence then relation type, so the ones dropped
+        there are ``related_to`` first - which is what makes a high-degree,
+        mostly-``related_to`` memory the best target for a repair sweep.
 
         ``namespace`` matches an edge when **either** endpoint lives there, since
         relations legitimately cross namespaces. ``relation_type`` filters to one

@@ -59,6 +59,21 @@ CONFIDENCE_RANK: dict[str, int] = {
     Confidence.DEPRECATED.value: 0,
 }
 
+# Retrieval weight per relation type: 1 for edges recording direction or
+# causality, 0 for the ``related_to`` fallback. Spreading activation sorts by
+# this, so a directional edge cannot be crowded out of a seed's budget by
+# topical-adjacency edges the hybrid index already infers for free.
+# Two tiers, not six: nothing measured ranks ``supersedes`` above ``caused_by``,
+# and inventing that order would encode a guess as a ranking rule.
+RELATION_WEIGHT: dict[str, int] = {
+    RelationType.SUPERSEDES.value: 1,
+    RelationType.CONTRADICTS.value: 1,
+    RelationType.CAUSED_BY.value: 1,
+    RelationType.PARENT_OF.value: 1,
+    RelationType.CHILD_OF.value: 1,
+    RelationType.RELATED_TO.value: 0,
+}
+
 
 class Namespace(BaseModel):
     id: str

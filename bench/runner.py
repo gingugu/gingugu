@@ -2,10 +2,18 @@
 
 Mirrors the live ``memory_recall`` retrieval path exactly —
 ``search.search()`` with composite weights and the configured embedder —
-but never mutates the target: no access recording, no spreading
-activation, no dormancy touches. A benchmark run must not change the
-ranking signals it measures, and a real brain is opened read-only at the
-SQLite level as a hard guarantee.
+but never mutates the target: no access recording, no dormancy touches. A
+benchmark run must not change the ranking signals it measures, and a real
+brain is opened read-only at the SQLite level as a hard guarantee.
+
+``measure_spread`` additionally reports what spreading activation would
+surface around each question's seeds. It calls the *selection* half of that
+path (``dampened_neighbour_ids``, pure SELECT) and never the reactivation
+half (``touch_many``), so the no-mutation guarantee is unchanged. Without it
+the harness cannot see this path at all: relation traversal is reached only
+from ``handlers/helpers.py``, never from ``search()``. Any claim about a
+ranking change inside ``dampened_neighbour_ids`` that cites a plain bench run
+is measuring code the change cannot reach.
 """
 
 from __future__ import annotations
@@ -18,7 +26,8 @@ from gingugu import search as search_mod
 from gingugu.config import _DEFAULT_WEIGHTS
 from gingugu.database import migrate
 from gingugu.embeddings import EmbeddingProvider, NullEmbeddingProvider
-from gingugu.models import Confidence, MemoryType
+from gingugu.models import Confidence, MemoryType, RelationType
+from gingugu.relations import RelationManager
 
 from .dataset import GoldenDataset
 from .metrics import estimate_tokens, mean, mrr, precision_at_k, recall_at_k
@@ -94,6 +103,14 @@ def build_fixture_db(
             tags=fm.tags or None,
         )
         key_to_id[fm.key] = mem.id
+
+    rel_mgr = RelationManager(conn)
+    for fr in dataset.relations:
+        rel_mgr.relate(
+            source_id=key_to_id[fr.source],
+            target_id=key_to_id[fr.target],
+            relation_type=RelationType(fr.type),
+        )
     return conn, key_to_id
 
 
@@ -128,6 +145,7 @@ def run_benchmark(
     embedder: EmbeddingProvider | None = None,
     ks: tuple[int, ...] = DEFAULT_KS,
     key_to_id: dict[str, str] | None = None,
+    measure_spread: bool = False,
 ) -> BenchReport:
     """Run every question through the live recall path and score it.
 
@@ -166,6 +184,10 @@ def run_benchmark(
         for k in ks:
             scores[f"recall@{k}"] = recall_at_k(relevant, retrieved_by_k[k], k)
             scores[f"precision@{k}"] = precision_at_k(relevant, retrieved_by_k[k], k)
+        if measure_spread:
+            # Seeded from the deepest call: that is what the live recall path
+            # hands spreading activation.
+            scores.update(_spread_composition(conn, retrieved_by_k[depth]))
         tokens = estimate_tokens([f"{m.title}\n{m.content}" for m in deepest])
         results.append(
             QuestionResult(
@@ -182,6 +204,43 @@ def run_benchmark(
         aggregates=_aggregate(results),
         by_kind=_aggregate_by_kind(results),
     )
+
+
+def _spread_composition(conn: sqlite3.Connection, seed_ids: list[str]) -> dict[str, float]:
+    """What spreading activation would surface around these seeds.
+
+    Returns the neighbour count and how many of those neighbours won their
+    slot on a directional edge. The share of the budget carried by real signal
+    is the quantity type-weighting is meant to move; the count is what says
+    whether a share moved because the mix improved or because the
+    neighbourhood shrank. Both are reported so neither can be read alone.
+
+    "Directional" is defined here against ``RelationType`` — everything that is
+    not ``related_to`` — and deliberately NOT against ``RELATION_WEIGHT``. A
+    metric that read the same table the traversal ranks by would move whenever
+    that table was tuned, reporting a win for any change to it including one
+    that made retrieval worse. The measurement has to survive the knob.
+    """
+    if not seed_ids:
+        return {"spread_extras": 0.0, "spread_high_signal": 0.0}
+
+    neighbours = RelationManager(conn).dampened_neighbour_ids(seed_ids)
+    seeds = set(seed_ids)
+    high = 0
+    for nid in neighbours:
+        rows = conn.execute(
+            "SELECT relation_type, source_id, target_id FROM relations "
+            "WHERE source_id = ? OR target_id = ?",
+            (nid, nid),
+        ).fetchall()
+        # Only edges joining this neighbour to the SEED set can have won it a
+        # slot; its other edges are irrelevant to how it was reached.
+        joining = [
+            r["relation_type"] for r in rows if (r["source_id"] in seeds or r["target_id"] in seeds)
+        ]
+        if any(t != RelationType.RELATED_TO.value for t in joining):
+            high += 1
+    return {"spread_extras": float(len(neighbours)), "spread_high_signal": float(high)}
 
 
 def _metric_names(results: list[QuestionResult]) -> list[str]:

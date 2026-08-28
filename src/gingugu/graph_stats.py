@@ -12,21 +12,24 @@ Three signals matter, and each maps to a concrete retrieval failure:
   is mostly ``related_to`` encodes little that the text/semantic index does not
   already infer for free.
 * **over-cap memories** — spreading activation visits at most
-  ``SPREAD_PER_SEED`` neighbours and does *not* rank them by relation type, so
-  edges beyond that cap on a given memory are structurally unreachable. A high
-  count here means edges were written that can never fire.
+  ``SPREAD_PER_SEED`` neighbours, so edges beyond that cap on a given memory are
+  structurally unreachable. A high count here means edges were written that can
+  never fire. Since the traversal now ranks candidates by ``RELATION_WEIGHT``,
+  the edges losing that race are the ``related_to`` ones first.
 """
 
 from __future__ import annotations
 
 import sqlite3
 
-from .models import CONFIDENCE_RANK
+from .models import CONFIDENCE_RANK, RELATION_WEIGHT
 from .relations import SPREAD_PER_SEED
 
 # Edge types that record direction/causality — the ones a text index cannot
 # infer. Everything else (i.e. ``related_to``) is the low-signal fallback.
-HIGH_SIGNAL_TYPES = ("supersedes", "contradicts", "caused_by", "parent_of", "child_of")
+# Derived from the weight table spreading activation ranks by, so what this
+# stat calls "high signal" and what retrieval actually prefers cannot drift.
+HIGH_SIGNAL_TYPES = tuple(t for t, weight in RELATION_WEIGHT.items() if weight)
 
 # Mirrors the review/claim sample caps: the full count is always reported, and
 # a sweep raises the sample (via ``memory_stats(review_limit=...)``) to

@@ -15,7 +15,7 @@ import logging
 import sqlite3
 import uuid
 
-from .models import CONFIDENCE_RANK, RelationType, utcnow_iso
+from .models import CONFIDENCE_RANK, RELATION_WEIGHT, RelationType, utcnow_iso
 from .relation_repair import RelationRepairMixin
 
 logger = logging.getLogger(__name__)
@@ -106,14 +106,21 @@ class RelationManager(RelationRepairMixin):
         """Hub-dampened 1-hop neighbourhood of the seeds.
 
         Each seed contributes at most ``per_seed`` neighbours, chosen by
-        confidence rank (desc), then **low** relation degree (a
-        highly-connected "generic hub" memory carries less specific signal
-        than a focused one), then recency, then id for full determinism.
-        ``total`` caps the whole set, filled in seed order so the
-        highest-ranked seeds' clusters win. Seeds are never included.
-        Budgets are tuned against the real-brain benchmark (bench/):
+        confidence rank (desc), then **relation weight** (a directional edge
+        beats the ``related_to`` fallback — see ``models.RELATION_WEIGHT``),
+        then **low** relation degree (a highly-connected "generic hub" memory
+        carries less specific signal than a focused one), then recency, then
+        id for full determinism. ``total`` caps the whole set, filled in seed
+        order so the highest-ranked seeds' clusters win. Seeds are never
+        included. Budgets are tuned against the real-brain benchmark (bench/):
         unbounded traversal averaged ~19 extras (~9.4k tokens) per
         10-seed recall on a ~530-memory brain; dampened ≤ 10.
+
+        Confidence still leads, deliberately: ``supersedes`` habitually points
+        *at* the memory it replaced, so weighting type above confidence would
+        promote deprecated memories over live ones. Type only decides within a
+        confidence tier — which is where the crowding-out actually happens,
+        since a healthy brain is almost entirely ``verified``.
         """
         seen = set(seed_ids)
         out: list[str] = []
@@ -121,7 +128,7 @@ class RelationManager(RelationRepairMixin):
             if len(out) >= total:
                 break
             rows = self._conn.execute(
-                "SELECT m.id, m.confidence, "
+                "SELECT m.id, m.confidence, r.relation_type, "
                 # Freshness anchor — the LATEST of the three, matching
                 # decay.reference_timestamp. created_at/updated_at are NOT NULL,
                 # so only last_confirmed needs the null guard; MAX() would
@@ -135,20 +142,27 @@ class RelationManager(RelationRepairMixin):
                 "WHERE r.source_id = ? OR r.target_id = ?",
                 (sid, sid, sid),
             ).fetchall()
-            candidates = sorted(
-                (
-                    (
-                        CONFIDENCE_RANK.get(row["confidence"], 0),
-                        -row["degree"],
-                        row["ts"],
-                        row["id"],
-                    )
-                    for row in rows
-                    if row["id"] not in seen
-                ),
-                reverse=True,
-            )
-            for _, _, _, other_id in candidates[:per_seed]:
+            # One entry per NEIGHBOUR, not per edge. Two memories may be joined
+            # by several edges (different types, or one in each direction), and
+            # the pair is worth its strongest. Grouping here is also what stops
+            # such a neighbour spending one slot per edge and being emitted more
+            # than once — ``seen`` is evaluated as candidates are built, so it
+            # never caught a duplicate arising within a single seed.
+            best: dict[str, tuple] = {}
+            for row in rows:
+                if row["id"] in seen:
+                    continue
+                key = (
+                    CONFIDENCE_RANK.get(row["confidence"], 0),
+                    RELATION_WEIGHT.get(row["relation_type"], 0),
+                    -row["degree"],
+                    row["ts"],
+                    row["id"],
+                )
+                if key > best.get(row["id"], ()):
+                    best[row["id"]] = key
+            candidates = sorted(best.values(), reverse=True)
+            for *_, other_id in candidates[:per_seed]:
                 if len(out) >= total:
                     break
                 seen.add(other_id)
