@@ -4,6 +4,9 @@ A dataset is a JSON file with hand-labeled questions. Two shapes:
 
 - **Fixture dataset**: carries a ``memories`` list; questions reference
   memories by their ``key``. The runner builds an ephemeral DB from them.
+  An optional ``relations`` list gives that ephemeral brain a graph, which
+  is what lets the fixture floor exercise the relation-traversal path
+  (``--spread``) rather than only ``search()``.
 - **Real-brain dataset**: no ``memories``; questions reference real
   memory UUIDs in the target DB. Keep these under ``bench/local/``
   (gitignored) — they describe a private brain.
@@ -27,6 +30,14 @@ _VALID_TYPES = (
     "context",
 )
 _VALID_CONFIDENCES = ("verified", "inferred", "stale", "deprecated")
+_VALID_RELATIONS = (
+    "supersedes",
+    "contradicts",
+    "caused_by",
+    "parent_of",
+    "child_of",
+    "related_to",
+)
 
 
 @dataclass(frozen=True)
@@ -40,6 +51,15 @@ class FixtureMemory:
     content: str
     confidence: str = "verified"
     tags: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class FixtureRelation:
+    """One edge in the ephemeral brain, endpoints given by memory ``key``."""
+
+    source: str
+    target: str
+    type: str
 
 
 @dataclass(frozen=True)
@@ -60,6 +80,7 @@ class GoldenDataset:
     description: str
     questions: list[Question]
     memories: list[FixtureMemory] = field(default_factory=list)
+    relations: list[FixtureRelation] = field(default_factory=list)
 
     @property
     def is_fixture(self) -> bool:
@@ -87,11 +108,21 @@ def load_dataset(path: Path) -> GoldenDataset:
         )
         _require(bool(m.title and m.content and m.namespace), f"memory {m.key!r}: empty field")
 
+    key_set = set(keys)
+    relations = [FixtureRelation(**r) for r in raw.get("relations", [])]
+    for rel in relations:
+        _require(
+            rel.type in _VALID_RELATIONS,
+            f"relation {rel.source}->{rel.target}: bad type {rel.type!r}",
+        )
+        _require(rel.source != rel.target, f"relation on {rel.source!r}: self-edge")
+        unknown = [e for e in (rel.source, rel.target) if e not in key_set]
+        _require(not unknown, f"relation {rel.source}->{rel.target}: unknown memory keys {unknown}")
+
     questions = [Question(**q) for q in raw.get("questions", [])]
     _require(bool(questions), "no questions")
     qids = [q.id for q in questions]
     _require(len(qids) == len(set(qids)), "duplicate question ids")
-    key_set = set(keys)
     for q in questions:
         _require(bool(q.query.strip()), f"question {q.id!r}: empty query")
         _require(bool(q.relevant), f"question {q.id!r}: no relevant ids")
@@ -105,4 +136,5 @@ def load_dataset(path: Path) -> GoldenDataset:
         description=raw.get("description", ""),
         questions=questions,
         memories=memories,
+        relations=relations,
     )

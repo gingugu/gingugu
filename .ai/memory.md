@@ -65,7 +65,7 @@
 | `context.py` | Session priming (`memory_context`): the pinned tier + three quota'd intent buckets, plus spreading activation. Decides how buckets are scored, quota'd and presented |
 | `context_buckets.py` | Where those buckets' rows come from: one SQL fetcher per intent (recency, pins, cross-namespace), each ordered by its own native signal. Split from `context.py` when it crossed 300 lines; the seam is "where rows come from" vs "how they are combined" |
 | `excerpt.py` | Reading *inside* one memory: `clamp_range`, `find_matches`, `line_of`. Literal substring scanning and character offsets - no ranking, no stemming, no model, same answer every time |
-| `relations.py` | Typed graph edges + hub-dampened 1-hop traversal (`dampened_neighbour_ids`) and enumeration (`list_edges`) |
+| `relations.py` | Typed graph edges + hub-dampened 1-hop traversal (`dampened_neighbour_ids`: per-neighbour, ranked confidence ▸ `RELATION_WEIGHT` ▸ low degree ▸ recency ▸ id) and enumeration (`list_edges`) |
 | `relation_repair.py` | Edge repair mixed into `RelationManager`: `retype_relation`, `reverse_relation`, `delete_relation`, `delete_edges`. Every op is an UPDATE/DELETE on the existing row, so id / `created_at` / metadata survive a correction |
 | `consolidation.py` | merge / summarize / deduplicate clusters |
 | `decay.py` | Composite scoring, the `reference_timestamp()` freshness anchor (MAX, not COALESCE), dormancy as a resting signal (never auto-forgets), and `relative_age()`/`age_label()`, the derived-at-read `age` string. `composite_score`/`score_memory` are summed from `composite_parts`/`score_parts`, so the `explain` breakdown and the score it explains are the same arithmetic |

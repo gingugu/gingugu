@@ -51,10 +51,12 @@ An empty hint list is the **common** case and the signal working.
 candidate is found; what justifies an edge is a fact similarity cannot see
 (`supersedes`, `contradicts`, `caused_by`, `parent_of`/`child_of`). Recall
 already ranks by hybrid text + semantic score, so a `related_to` edge meaning
-"same topic" duplicates the index and — because spreading activation caps at 3
-neighbours per seed and ignores `relation_type` — crowds out an edge that
-carries signal. Measured 2026-08-04 before the guidance was reversed: 69% of a
-real brain's 1369 edges were `related_to`.
+"same topic" duplicates the index and buys nothing: spreading activation caps
+at 3 neighbours per seed and now ranks them by `relation_type`, so such an edge
+forfeits its slot to a directional one. Measured 2026-08-04, before the
+guidance was reversed and while the traversal was still type-blind: 69% of a
+real brain's 1369 edges were `related_to`, and they were actively crowding out
+the edges that carried signal.
 
 Both are **always compact** (title + ~200-char `summary`), unlike the `memory`
 the caller just wrote, which returns in full. A hint is a pointer: enough to
@@ -290,6 +292,14 @@ namespace at the write path instead. Deprecation beats a pin.
 memory_relate(source_id, target_id, relation_type)
   → relations.py writes a directed typed edge
   → later recall/context traverse edges so one hit surfaces its cluster
+
+dampened_neighbour_ids(seeds)                       → who wakes, and who is shown
+  per seed, grouped per NEIGHBOUR (not per edge — a pair joined by several
+  edges is one candidate, scored by its strongest), ranked by:
+    confidence rank ▸ RELATION_WEIGHT ▸ low degree ▸ recency ▸ id
+  ≤ SPREAD_PER_SEED (3) per seed, ≤ SPREAD_TOTAL (10) overall, seeds excluded
+  → _collect_related   → via_relation extras in the payload
+  → _spread_activation → touch_many, resets the dormancy clock (no access credit)
 
 memory_edges(namespace|relation_type|memory_id)     → read the graph
 memory_unrelate(... new_relation_type? reverse?)    → repair it
