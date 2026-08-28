@@ -9,6 +9,8 @@ memory_store(content, title, type, namespace, tags, confidence)
   → FTS5 trigger mirrors the row into the full-text index
   → embeddings.py computes the semantic vector
   → claim_sync.sync() derives state claims from title+content into `memory_claims`
+     (claim_qualify resolves each ref's repo: URL > repo named beside the ref >
+      a binding stated elsewhere in this same memory > the namespace default)
   → dedupe/relation check → returns { ok, memory, similar_memories[],
                                       suggested_relations[], contradicted_memories[]? }
 ```

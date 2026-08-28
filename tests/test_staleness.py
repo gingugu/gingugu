@@ -223,7 +223,7 @@ def test_waiting_on_technical_event_does_not_fire() -> None:
 def test_waiting_on_still_fires_for_a_named_agent() -> None:
     assert "waiting-on" in _signals("blocked on Joseph to finish the tofu cleanup")
     assert "waiting-on" in _signals("awaiting PR #947 before the flip")
-    assert "waiting-on" in _signals("blocked on DESI-52 sign-off")
+    assert "waiting-on" in _signals("blocked on PROJ-52 sign-off")
 
 
 def test_quoted_waiting_phrase_does_not_fire() -> None:

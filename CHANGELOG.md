@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Claim extraction no longer discards a repo the prose names.** When a memory
+  wrote "documented in VendorOS PR #115", the extractor read that repo,
+  failed to find it on a two-entry alias list, then dropped it and keyed the
+  claim to the writing memory's own namespace - so the claim pointed at a repo
+  where that PR does not exist, and no correct claim was recorded at all.
+  Explicitly named repos are now authoritative, and every namespace in the
+  store is recognized as a repo name.
+
+- **A bare `PR #N` now reuses a repo the same memory already named.** One
+  memory carried both `platform-infra#873` and a phantom
+  `api-gateway#873` for the same pull request, because each mention was
+  qualified in isolation. Extraction now collects the repo bindings a document
+  states and consults them before falling back to the namespace.
+
+- **`PR 1` without a `#` is no longer read as a reference.** Bare `PR <n>` in
+  prose names a position in a planned series ("PR 0 - Python CI workflow"),
+  not an identity. The sigil is now required. Five such ordinals accounted for
+  33 spurious claim rows, and an existence check could not catch them because
+  the matching PR numbers genuinely exist.
+
+- **A reference can no longer span a line break.** A list item ending "NO PR"
+  bound to the `2.` opening the next item, producing a claim that asserted the
+  exact opposite of the prose.
+
+- **A repo named *after* a ref now qualifies it.** `PR #132 (api-gateway)`
+  keyed to the writing namespace, because only the text to the left of a ref
+  was ever consulted. Both repos had a #132, so the wrong claim pointed at a
+  real pull request - the kind of error nothing later contradicts.
+
+Migration 010 re-derives stored claims under the corrected extractor;
+resolution state survives, as with migrations 007 and 009. Measured over the
+569-claim live corpus: 66 wrong rows removed, 37 re-attributed to the repo the
+prose names, no claim's asserted state changed, and the unreconciled backlog
+falls from 48 to 33. The eleven resolutions dropped all belonged to rows that
+were never valid refs.
+
+### Changed
+
+- Repo qualification moved from `claims.py` into a new `claim_qualify.py`,
+  keeping both modules inside the 300-line limit. No behavior depends on the
+  split.
+
+---
+
 ## [0.18.0] - 2026-08-28
 
 ### Added

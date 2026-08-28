@@ -52,6 +52,19 @@ def namespace_default_repo(conn: sqlite3.Connection, namespace_id: str) -> str |
     return declared or None
 
 
+def known_repos(conn: sqlite3.Connection) -> frozenset[str]:
+    """Repo names this store already knows - its namespaces, and any repo they
+    declare.
+
+    A ref the prose qualifies with one of these is keyed to it verbatim rather
+    than to the writing memory's own namespace: "gingugu.com PR #2" saved in
+    the ``gingugu`` namespace is about gingugu.com, and the store knows that
+    because gingugu.com is a namespace here.
+    """
+    rows = conn.execute("SELECT name, default_repo FROM namespaces").fetchall()
+    return frozenset(value for row in rows for value in (row[0], row[1]) if value)
+
+
 def sync(conn: sqlite3.Connection, mem: Memory, now: str) -> None:
     """Re-derive a memory's state claims from its current text."""
     try:
@@ -59,6 +72,7 @@ def sync(conn: sqlite3.Connection, mem: Memory, now: str) -> None:
             mem.title,
             mem.content,
             namespace_default=namespace_default_repo(conn, mem.namespace_id),
+            known_repos=known_repos(conn),
         )
         sync_claims(conn, mem.id, extracted, now=now)
     except Exception:  # noqa: BLE001 - never fail a write over a hint
@@ -79,6 +93,7 @@ def contradicted(conn: sqlite3.Connection, mem: Memory) -> list[dict]:
             mem.title,
             mem.content,
             namespace_default=namespace_default_repo(conn, mem.namespace_id),
+            known_repos=known_repos(conn),
         )
         return find_contradicted(
             conn,

@@ -48,6 +48,7 @@ def rederive_claims(
     is only consulted at extraction time, so without a re-derive the
     declaration changes nothing that already exists.
     """
+    from . import claim_sync  # local import: no cycle at module scope
     from . import claims as claims_mod  # stdlib-only module; no import cycle
 
     sql = (
@@ -61,6 +62,7 @@ def rederive_claims(
         params = (namespace_id,)
     rows = conn.execute(sql, params).fetchall()
     now = datetime.now(UTC).isoformat()
+    repos = claim_sync.known_repos(conn)
     pruned = written = 0
 
     for memory_id, title, content, ns_name, declared in rows:
@@ -68,6 +70,7 @@ def rederive_claims(
             title or "",
             content or "",
             namespace_default=_default_repo(ns_name, declared),
+            known_repos=repos,
         )
         pruned += _prune(conn, memory_id, {(c.kind, c.ref) for c in extracted})
         written += _upsert(conn, memory_id, extracted, now)

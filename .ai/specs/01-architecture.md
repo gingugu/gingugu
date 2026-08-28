@@ -67,7 +67,16 @@ AI client (Claude Code / Cursor / Windsurf / …)
   claim re-sync and embedding re-encode. Retypes, tag edits and metadata writes
   assert nothing about truth and leave the clock alone.
 - **State claims:** `claims.py` extracts repo-qualified PR/MR references and the
-  state a memory asserts about them into `memory_claims` (migration 005;
+  state a memory asserts about them into `memory_claims`, with
+  `claim_qualify.py` answering *which repo* a ref names. That question is
+  separable and got its own module once precision work pushed `claims.py` past
+  the 300-line limit. Its rules are each pinned to a measured misfire: the
+  `#`/`!` sigil is required, because bare "PR 1" in prose names a position in a
+  planned series rather than an identity; a ref may not span a line break; a
+  repo the prose names is authoritative even when unrecognized, rather than
+  being discarded in favour of the namespace default; and a bare ref reuses a
+  binding the same memory already stated, so one PR is not counted twice under
+  two repos (migration 005;
   migration 006 re-runs the backfill for DBs stranded at v5; migration 007
   re-derives everything under the corrected extractor; migration 009 re-derives
   again for the `unverified` state below).
