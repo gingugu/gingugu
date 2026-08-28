@@ -179,13 +179,24 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.17.0** (PyPI). Adds the `unverified` claim state (a ref
-  a memory names without ever saying what became of it - excluded from
-  `claims.open` and read via `memory_search(claims="unverified")`) and the
-  orphan-enumeration + edge-reversal work (`graph.orphan_sample`,
-  `memory_search(orphans=True)`, `memory_unrelate(reverse=True)`). Public repo
-  `gingugu/gingugu`.
-- Previous: **0.16.0** - edge repair: `memory_unrelate` (retype in place or
+- Current version: **0.18.0** (PyPI). The largest release to date: twelve PRs,
+  seven of them correctness fixes. Adds `memory_excerpt` (read inside one
+  memory by literal `query` scan and/or a `start`/`end` character range),
+  `explain=True` per-hit score breakdowns on all three read paths, and repo
+  `CLAUDE.md`/`AGENTS.md` management plus `--adopt` for `gingugu init`.
+  Spreading activation now prefers directional relation types. Fixes:
+  `gingugu init --force` backs up what it replaces (a data-loss defect in
+  0.17.0 and earlier), `sort_by` orders the corpus instead of a pool truncated
+  on another axis, relevance no longer varies with `limit`, `memory_context`
+  presents pins first and orders its recency bucket by write recency, write-time
+  hints report an absolute `similarity`, and `memory_import` embeds what it
+  writes. Public repo `gingugu/gingugu`.
+- Previous: **0.17.0** - the `unverified` claim state (a ref a memory names
+  without ever saying what became of it - excluded from `claims.open` and read
+  via `memory_search(claims="unverified")`) and the orphan-enumeration +
+  edge-reversal work (`graph.orphan_sample`, `memory_search(orphans=True)`,
+  `memory_unrelate(reverse=True)`).
+- **0.16.0** - edge repair: `memory_unrelate` (retype in place or
   remove) and `memory_edges` (enumerate a memory's relations).
 - **0.15.0** - pinned memories: `memory_update(pinned=True)` marks a memory as
   unconditionally loaded by `memory_context`, exempt from ranking.
@@ -197,8 +208,8 @@ gap between the count and the rows.
   instead of a COALESCE; a title/content rewrite now advances
   `last_confirmed`), the relation-discipline guidance reversal, and two
   `gingugu init` bootstrap fixes. Existing installs need `gingugu init --force`
-  to pick up template changes - and as of the current unreleased fix, that
-  command backs up anything it replaces.
+  to pick up template changes - and as of the 0.18.0 fix, that command backs up
+  anything it replaces.
 - **0.13.0** - introduced the derived `age` payload field and fixed the
   startup contract's workspace inference.
 - Two-layer namespace convention (`crow` + project) is live.
