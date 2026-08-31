@@ -1,11 +1,52 @@
 # Project Status
 
-_Last updated: 2026-08-28_
+_Last updated: 2026-08-30_
 
 ## In Flight
 
-**Atomic consolidation: `memory_consolidate` applies whole or not at all.**
-Branch `fix/atomic-consolidation`. Board item 1, which had sat at the top
+**Access-log session id: the log learns who asked.** Branch
+`feature/access-log-session-id`. `access_log.context` had existed since the
+first schema and had never once been written - NULL on all 8,479 rows in the
+live brain, measured, not assumed. Without a grouping key the log can say
+_when_ a memory was read but never _alongside what_, so co-access ("these are
+retrieved together") was not derivable at all.
+
+New `session.py` resolves a stable id for the MCP session serving the current
+request. Three decisions worth keeping:
+
+- **Read from the SDK's request `ContextVar`, not a handler argument.** A
+  `Context` parameter would have to be threaded through every retrieval
+  handler, and the tool schema is a published surface not worth touching for a
+  bookkeeping field. One module changed (`storage.record_accesses`); zero
+  handler churn.
+- **Key on the MCP session object, held weakly.** Correct for both transports
+  with no special-casing: stdio is one session per process, `gingugu serve` is
+  one per client. A process-level id under HTTP would manufacture co-access
+  between clients that never shared a conversation. Raw `id()` was rejected
+  because CPython reuses addresses after collection.
+- **`NULL` outside a request, never a placeholder.** Tests, CLI paths and
+  background maintenance have no session, and a shared constant would collapse
+  them into one enormous false session. Unknown beats wrong.
+
+731 tests green (was 720), `ruff` + `black` clean. The three co-access tests
+were verified to fail without the change.
+
+**Known ceiling, and it shapes what comes next:** `prune_access_log` trims the
+log to a rolling 90 days (`ACCESS_LOG_RETENTION_DAYS`). Co-access is therefore
+a moving window, not a permanent record, and the existing 8,479 rows start
+aging out from roughly 2026-09-13. Anything built on this signal must
+accumulate its own durable aggregate rather than plan to re-derive history from
+the log.
+
+**Hygiene note, not fixed here:** the change takes `storage.py` from 393 to 401
+lines, past the repo's 300-line limit. The file was already 93 lines over
+before this branch and its split is a standing board item; `database.py` is
+worse at 547 and is not yet boarded. Splitting either here would have buried a
+small diff.
+
+**Atomic consolidation: `memory_consolidate` applies whole or not at all.
+MERGED as `ac2ee53` (#66).** Branch `fix/atomic-consolidation`, 10/10 CI green
+across ubuntu/macos/windows x 3.11-3.13. Board item 1, which had sat at the top
 across several cycles. New `transactions.py` provides `atomic()`: one
 `BEGIN IMMEDIATE` across components sharing a connection, with each
 participant's own `commit()` gated off for the duration.

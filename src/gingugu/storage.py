@@ -19,6 +19,7 @@ from .models import (
     normalize_tag,
     utcnow_iso,
 )
+from .session import current_session_id
 from .transactions import TransactionParticipant
 
 logger = logging.getLogger(__name__)
@@ -238,14 +239,21 @@ class MemoryStore(TransactionParticipant):
         neighbours go through ``touch_many`` instead — that path refreshes the
         dormancy clock without inflating access counts. Returns the number of
         memories whose row was updated.
+
+        Every row of one call shares a ``context``: the id of the MCP session
+        that asked. That is the grouping key co-access analysis needs, and one
+        call is the tightest honest bucket - these memories were returned
+        together, by one query, to one client. It is NULL when no session is in
+        flight; see ``session.current_session_id``.
         """
         ids = list(dict.fromkeys(mid for mid in memory_ids if mid))
         if not ids:
             return 0
         now = utcnow_iso()
+        session_id = current_session_id()
         self._conn.executemany(
-            "INSERT INTO access_log(id, memory_id, accessed_at) VALUES (?, ?, ?)",
-            [(str(uuid.uuid4()), mid, now) for mid in ids],
+            "INSERT INTO access_log(id, memory_id, accessed_at, context) VALUES (?, ?, ?, ?)",
+            [(str(uuid.uuid4()), mid, now, session_id) for mid in ids],
         )
         placeholders = ", ".join("?" for _ in ids)
         cur = self._conn.execute(
