@@ -10,12 +10,14 @@ delete-and-recreate, so an edge's id, ``created_at`` and ``metadata`` survive
 being relabelled or turned around. The graph should record when a link was
 first drawn, not when it was last corrected.
 
-Mixed into ``RelationManager``; it uses only ``self._conn``.
+Mixed into ``RelationManager``; it uses only ``self._conn`` and the
+``_commit`` gate that ``TransactionParticipant`` supplies there.
 """
 
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Callable
 
 from .models import RelationType
 
@@ -25,6 +27,10 @@ class RelationRepairMixin:
 
     _conn: sqlite3.Connection
 
+    # Supplied by TransactionParticipant on the concrete RelationManager: honors
+    # an enclosing ``atomic()`` block instead of committing outright.
+    _commit: Callable[[], None]
+
     def delete_relation(
         self, *, source_id: str, target_id: str, relation_type: RelationType
     ) -> bool:
@@ -32,7 +38,7 @@ class RelationRepairMixin:
             "DELETE FROM relations WHERE source_id = ? AND target_id = ? AND relation_type = ?",
             (source_id, target_id, relation_type.value),
         )
-        self._conn.commit()
+        self._commit()
         return cur.rowcount > 0
 
     def delete_edges(self, *, source_id: str, target_id: str) -> list[str]:
@@ -50,7 +56,7 @@ class RelationRepairMixin:
                 "DELETE FROM relations WHERE source_id = ? AND target_id = ?",
                 (source_id, target_id),
             )
-            self._conn.commit()
+            self._commit()
         return types
 
     def retype_relation(
@@ -85,7 +91,7 @@ class RelationRepairMixin:
                 "DELETE FROM relations WHERE source_id = ? AND target_id = ? AND relation_type = ?",
                 (source_id, target_id, old_type.value),
             )
-            self._conn.commit()
+            self._commit()
             return "merged"
 
         self._conn.execute(
@@ -93,7 +99,7 @@ class RelationRepairMixin:
             "WHERE source_id = ? AND target_id = ? AND relation_type = ?",
             (new_type.value, source_id, target_id, old_type.value),
         )
-        self._conn.commit()
+        self._commit()
         return "retyped"
 
     def reverse_relation(
@@ -136,7 +142,7 @@ class RelationRepairMixin:
                 "DELETE FROM relations WHERE source_id = ? AND target_id = ? AND relation_type = ?",
                 (source_id, target_id, relation_type.value),
             )
-            self._conn.commit()
+            self._commit()
             return "merged"
 
         self._conn.execute(
@@ -144,7 +150,7 @@ class RelationRepairMixin:
             "WHERE source_id = ? AND target_id = ? AND relation_type = ?",
             (target_id, source_id, final_type.value, source_id, target_id, relation_type.value),
         )
-        self._conn.commit()
+        self._commit()
         return "reversed"
 
     def _edge_exists(self, source_id: str, target_id: str, relation_type: RelationType) -> bool:

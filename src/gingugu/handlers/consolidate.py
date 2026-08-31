@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from .. import consolidation
+from .. import consolidation, duplicate_scan
 from ..relations import RelationManager
 from . import ServerContext
 from .helpers import _err, _single_namespace_not_found
@@ -28,7 +28,7 @@ def register(mcp, ctx: ServerContext) -> None:
         strategy: str = "merge",
         keep_originals: bool = True,
         namespace: str | None = None,
-        min_similarity: float = consolidation.SUGGEST_MIN_SIMILARITY,
+        min_similarity: float = duplicate_scan.SUGGEST_MIN_SIMILARITY,
     ) -> dict:
         """Combine multiple memories into one to reduce redundancy and knowledge bloat.
         Use when several related memories about the same topic have accumulated over time.
@@ -58,7 +58,7 @@ def register(mcp, ctx: ServerContext) -> None:
                     # Read-only scan must not bootstrap a namespace (matches
                     # memory_recall's explicit-unknown-namespace behavior).
                     return _single_namespace_not_found(ns_name)
-                result = consolidation.find_duplicate_clusters(
+                result = duplicate_scan.find_duplicate_clusters(
                     ctx.conn, namespace_id=ns.id, min_similarity=min_similarity
                 )
                 # Fall back to exact-title clusters when embeddings can't see
@@ -67,7 +67,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 if result["scanned"] == 0 or (
                     not result["clusters"] and result["skipped_no_embedding"] > 0
                 ):
-                    result = consolidation.find_title_duplicate_clusters(
+                    result = duplicate_scan.find_title_duplicate_clusters(
                         ctx.conn, namespace_id=ns.id
                     )
                 return {"ok": True, "namespace": ns_name, **result}

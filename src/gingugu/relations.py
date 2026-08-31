@@ -17,6 +17,7 @@ import uuid
 
 from .models import CONFIDENCE_RANK, RELATION_WEIGHT, RelationType, utcnow_iso
 from .relation_repair import RelationRepairMixin
+from .transactions import TransactionParticipant
 
 logger = logging.getLogger(__name__)
 
@@ -27,13 +28,10 @@ SPREAD_PER_SEED = 3
 SPREAD_TOTAL = 10
 
 
-class RelationManager(RelationRepairMixin):
+class RelationManager(RelationRepairMixin, TransactionParticipant):
     def __init__(self, conn: sqlite3.Connection) -> None:
+        super().__init__()
         self._conn = conn
-
-    @property
-    def conn(self) -> sqlite3.Connection:
-        return self._conn
 
     def _exists(self, memory_id: str) -> bool:
         return (
@@ -65,7 +63,7 @@ class RelationManager(RelationRepairMixin):
             "ON CONFLICT(source_id, target_id, relation_type) DO NOTHING",
             (relation_id, source_id, target_id, relation_type.value, now, metadata),
         )
-        self._conn.commit()
+        self._commit()
         return {
             "source_id": source_id,
             "target_id": target_id,
