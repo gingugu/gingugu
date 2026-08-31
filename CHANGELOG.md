@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`memory_consolidate` now applies whole or not at all.** A consolidation is
+  `1 + 2N` database writes - create the survivor, then write a `supersedes`
+  edge and retire an original for each member - and every one of them committed
+  on its own. A failure partway through left some originals retired and some
+  not. With `keep_originals=False`, where retirement is a hard delete, the
+  memories already deleted were gone for good while the ones behind them
+  survived. The whole operation now runs in a single transaction and rolls back
+  intact.
+
+- **`deduplicate` no longer loses the tag union on a failed run.** The union of
+  every member's tags was folded into the survivor *after* the others were
+  retired, so an interruption between the two destroyed the only copy of those
+  tags. The union is now applied first.
+
 - **Claim extraction no longer discards a repo the prose names.** When a memory
   wrote "documented in VendorOS PR #115", the extractor read that repo,
   failed to find it on a two-entry alias list, then dropped it and keyed the

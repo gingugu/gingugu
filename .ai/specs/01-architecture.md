@@ -134,6 +134,39 @@ AI client (Claude Code / Cursor / Windsurf / …)
   parsing and per-edge dispatch out of `handlers/relations.py` into
   `handlers/relation_ops.py`, leaving the handler owning the MCP surface alone.
 
+## Transactions
+
+Nearly every write here is a single statement that commits itself, which is the
+right default: a store call should be durable when it returns. `consolidation`
+is the exception - it is `1 + 2N` writes (create, then a `supersedes` edge and a
+retirement per original), and a partial application is worse than none. Under
+`keep_originals=False` the retirement is a hard delete, so a failure halfway
+through the loop destroys memories the surviving record never absorbed.
+
+`transactions.atomic()` takes components that share a connection, closes a gate
+on each so its internal `commit()` becomes a no-op, and wraps the block in one
+`BEGIN IMMEDIATE`. `MemoryStore` and `RelationManager` participate via the
+`TransactionParticipant` mixin. The gate reopens on the way out, so ordinary
+single-statement writes are untouched.
+
+Two decisions worth keeping:
+
+- **Embeddings stay outside the transaction.** `embedding_sync` is best-effort
+  by design - an encode failure logs and moves on - and that must not become a
+  reason to roll back real memories. A vector written inside the block would
+  also strand an orphan row if the block later aborts. So `_persist_embedding`
+  routes through `_after_commit`, which queues the write while the gate is
+  closed and drains it once the data is durable. A failure during that drain is
+  logged, never raised: the commit already happened, and reporting a committed
+  consolidation as failed would be a lie.
+- **`atomic()` does not nest.** A nested call raises rather than silently
+  degrading the inner block into a no-op. SQLite would need savepoints for real
+  nesting, and nothing here needs them yet.
+
+The same pass split `duplicate_scan.py` out of `consolidation.py` - the
+read-only suggest half against the write half - to keep both under the
+300-line limit.
+
 ## Retrieval
 
 - `memory_recall` blends **BM25** (FTS5 lexical) with **semantic** similarity

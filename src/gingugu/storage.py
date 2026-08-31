@@ -19,6 +19,7 @@ from .models import (
     normalize_tag,
     utcnow_iso,
 )
+from .transactions import TransactionParticipant
 
 logger = logging.getLogger(__name__)
 
@@ -55,22 +56,19 @@ def _normalize_metadata(metadata: str | None) -> str | None:
     return json.dumps(parsed, sort_keys=True, ensure_ascii=False)
 
 
-class MemoryStore:
+class MemoryStore(TransactionParticipant):
     def __init__(
         self,
         conn: sqlite3.Connection,
         embedder: EmbeddingProvider | None = None,
     ) -> None:
+        super().__init__()
         self._conn = conn
         self._embedder = embedder or NullEmbeddingProvider()
 
     @property
     def embedder(self) -> EmbeddingProvider:
         return self._embedder
-
-    @property
-    def conn(self) -> sqlite3.Connection:
-        return self._conn
 
     @staticmethod
     def _row_to_model(row: sqlite3.Row) -> Memory:
@@ -119,7 +117,7 @@ class MemoryStore:
         if tags:
             self.set_tags(mem.id, tags, commit=False)
         claim_sync.sync(self._conn, mem, now)
-        self._conn.commit()
+        self._commit()
         mem.tags = self.get_tags(mem.id)
         self._persist_embedding(mem.id, mem.title, mem.content)
         logger.info("Stored memory %s (%s)", mem.id, mem.title)
@@ -215,7 +213,7 @@ class MemoryStore:
         if text_changed:
             existing.title, existing.content = new_title, new_content
             claim_sync.sync(self._conn, existing, now)
-        self._conn.commit()
+        self._commit()
         # Re-encode only when the text the embedding was derived from actually
         # changed — confidence/metadata updates don't invalidate the vector.
         if text_changed:
@@ -225,7 +223,7 @@ class MemoryStore:
     def delete(self, memory_id: str) -> bool:
         cur = self._conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
         self._prune_orphan_tags()
-        self._conn.commit()
+        self._commit()
         return cur.rowcount > 0
 
     def _record_access(self, memory_id: str) -> None:
@@ -255,7 +253,7 @@ class MemoryStore:
             f"WHERE id IN ({placeholders})",
             (now, *ids),
         )
-        self._conn.commit()
+        self._commit()
         return cur.rowcount
 
     def touch_many(self, memory_ids: list[str]) -> int:
@@ -276,7 +274,7 @@ class MemoryStore:
             f"UPDATE memories SET last_accessed = ? WHERE id IN ({placeholders})",
             (now, *ids),
         )
-        self._conn.commit()
+        self._commit()
         return cur.rowcount
 
     # --- Tags ---------------------------------------------------------------
@@ -312,7 +310,7 @@ class MemoryStore:
             )
         self._prune_orphan_tags()
         if commit:
-            self._conn.commit()
+            self._commit()
         return normalized
 
     def _prune_orphan_tags(self) -> None:
@@ -330,7 +328,7 @@ class MemoryStore:
                 (memory_id, tag_id),
             )
         if commit:
-            self._conn.commit()
+            self._commit()
         return self.get_tags(memory_id)
 
     def get_tags(self, memory_id: str) -> list[str]:
@@ -358,7 +356,14 @@ class MemoryStore:
     _embedding_input = staticmethod(emb.embedding_input)
 
     def _persist_embedding(self, memory_id: str, title: str, content: str) -> None:
-        embedding_sync.persist_one(self._conn, self._embedder, memory_id, title, content)
+        # Deferred inside an `atomic()` block: the vector write commits on its
+        # own, and a row whose memory the block later rolls back is an orphan.
+        # See transactions.py → deferred side effects.
+        self._after_commit(
+            lambda: embedding_sync.persist_one(
+                self._conn, self._embedder, memory_id, title, content
+            )
+        )
 
     def get_embedding(self, memory_id: str) -> list[float] | None:
         """The stored vector for a memory, or None if absent or from another model."""
