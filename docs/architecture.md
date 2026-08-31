@@ -173,11 +173,24 @@ CREATE TABLE access_log (
     id          TEXT PRIMARY KEY,
     memory_id   TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
     accessed_at TEXT NOT NULL,
-    context     TEXT  -- what triggered the access
+    context     TEXT  -- MCP session id; NULL when no session is in flight
 );
 
 CREATE INDEX idx_access_log_memory_time ON access_log(memory_id, accessed_at);
 ```
+
+**`context` is the co-access grouping key.** Every row written by one
+`record_accesses` call carries the id of the MCP session that asked, so the log
+can answer "which memories are retrieved *together*" and not just "when was
+this read". The identity is the MCP session object itself, which is the correct
+unit for both transports without special-casing: stdio runs one session per
+process, and `gingugu serve` gives each client its own, so a process-level id
+would manufacture co-access between clients that never shared a conversation.
+
+It is `NULL` whenever no session is in flight - tests, CLI paths, background
+maintenance. That is deliberate: a shared placeholder would group unrelated
+rows into one enormous false session, and "unknown" is true where "these belong
+together" would not be.
 
 **Retention:** `access_log` is pruned to a rolling 90-day window opportunistically
 on **both** `memory_stats` calls and write operations (`memory_store` /
@@ -1240,6 +1253,7 @@ src/gingugu/
 ├── excerpt.py            # Reading inside one memory: offsets + literal matches
 ├── consolidation.py      # Merge/summarize/deduplicate logic
 ├── duplicate_scan.py     # Read-only near-duplicate cluster detection
+├── session.py            # Per-session id for access_log's co-access key
 ├── transactions.py       # atomic(): one transaction across store + relations
 ├── context.py            # Auto-context generation for session start
 ├── context_buckets.py    # Where memory_context's buckets get their rows

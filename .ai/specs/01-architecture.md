@@ -134,6 +134,27 @@ AI client (Claude Code / Cursor / Windsurf / …)
   parsing and per-edge dispatch out of `handlers/relations.py` into
   `handlers/relation_ops.py`, leaving the handler owning the MCP surface alone.
 
+## Session identity
+
+`access_log` rows carry the id of the MCP session that requested them
+(`access_log.context`), which turns a log of *when* into a log of *alongside
+what*. `session.current_session_id` reads the SDK's request `ContextVar`
+rather than taking a `Context` handler argument, so no retrieval handler
+signature and no published tool schema changes for a bookkeeping field.
+
+The key is the MCP session object, held weakly. That is correct for both
+transports with no special-casing: stdio is one session per process, while
+`gingugu serve` gives each client its own, and a process-level id there would
+manufacture co-access between clients that never shared a conversation. Raw
+`id()` was rejected because CPython reuses addresses after collection.
+
+Outside a request the value is `NULL`, never a placeholder: "unknown" is true,
+where "these belong together" would not be.
+
+Note the ceiling this inherits. `access_log` is pruned to a rolling 90-day
+window, so co-access is a moving picture. Anything built on it has to keep its
+own durable aggregate.
+
 ## Transactions
 
 Nearly every write here is a single statement that commits itself, which is the

@@ -246,6 +246,19 @@ clock, via `touch_many`) but do **not** bump `access_count` or write
 `access_log` rows - those are reserved for `memory_recall`/`memory_search`
 hits, so session-start loads can't inflate the access ranking signal.
 
+That reservation is what makes `access_log` a clean record of _deliberate_
+retrieval, and since 2026-08-30 each row also carries the id of the MCP session
+that asked (`access_log.context`, from `session.current_session_id`). Rows from
+one session share a key, so the log answers "which memories are retrieved
+together" and not only "when was this read" - the co-access signal, derived
+from behaviour rather than authored. It is `NULL` when no session is in flight;
+a placeholder would fake co-access between unrelated rows.
+
+**The signal is a rolling window, not a permanent record.** `prune_access_log`
+deletes rows past `ACCESS_LOG_RETENTION_DAYS` (90), so anything built on
+co-access must accumulate its own durable aggregate rather than expecting to
+re-derive the full history from the log later.
+
 That refresh is also why the recency bucket must not be ordered by
 `last_accessed`. It was, until 2026-08-26, and the result was a feedback loop:
 each load refreshed the clock on everything it surfaced, lifting exactly those
