@@ -1239,6 +1239,8 @@ src/gingugu/
 ├── decay.py              # Decay scoring (+ the parts behind it) + staleness detection
 ├── excerpt.py            # Reading inside one memory: offsets + literal matches
 ├── consolidation.py      # Merge/summarize/deduplicate logic
+├── duplicate_scan.py     # Read-only near-duplicate cluster detection
+├── transactions.py       # atomic(): one transaction across store + relations
 ├── context.py            # Auto-context generation for session start
 ├── context_buckets.py    # Where memory_context's buckets get their rows
 ├── namespaces.py         # Namespace CRUD + auto-detection

@@ -4,8 +4,42 @@ _Last updated: 2026-08-28_
 
 ## In Flight
 
-**Claim-extraction precision: four defects fixed, awaiting review.** Branch
-`fix/claim-extraction-precision`. Found by reconciling the whole `unverified`
+**Atomic consolidation: `memory_consolidate` applies whole or not at all.**
+Branch `fix/atomic-consolidation`. Board item 1, which had sat at the top
+across several cycles. New `transactions.py` provides `atomic()`: one
+`BEGIN IMMEDIATE` across components sharing a connection, with each
+participant's own `commit()` gated off for the duration.
+`MemoryStore` and `RelationManager` participate via a `TransactionParticipant`
+mixin, and `consolidate()` wraps its whole `1 + 2N` write sequence in it.
+
+Two findings sharpened the item while implementing it:
+
+- The severity was concentrated in one strategy, not all three. `merge` and
+  `summarize` build the combined content _before_ creating the survivor, so a
+  mid-run failure loses the originals' rows but not their prose. `deduplicate`
+  is the real hole: the losers' content survives nowhere.
+- `deduplicate` folded the tag union in _after_ retiring the others, so an
+  interruption between the two destroyed the only copy of those tags. The
+  union now happens first. That ordering was a latent bug independent of
+  transactions.
+
+Embeddings are deliberately excluded from the transaction and queued to run
+after it commits: `embedding_sync` is best-effort by design, and a vector
+written for a row the block later rolls back is an orphan. A failure while
+draining that queue is logged rather than raised - the data is already
+durable, and reporting a committed consolidation as failed would be wrong.
+
+The change pushed `consolidation.py` to 302 lines, so the read-only suggest
+half moved to `duplicate_scan.py` (`find_duplicate_clusters`,
+`find_title_duplicate_clusters`) rather than trimming comments to duck the
+limit. Callers in `handlers/consolidate.py` updated; no tool surface change.
+
+720 tests green (was 703), `ruff` + `black` clean. The 17 new tests in
+`tests/test_transactions.py` were verified to fail without the fix: the six
+consolidation rollback cases lose a memory outright, `assert 2 == 3`.
+
+**Claim-extraction precision: five defects fixed. MERGED as `da86d0d` (#65).**
+Branch `fix/claim-extraction-precision`. Found by reconciling the whole `unverified`
 claim backlog (244 rows across 10 namespaces) rather than by reading the code:
 200 rows resolved against the live forges, and every one of the 45 that could
 not be resolved turned out to be an extractor defect rather than unfinished
@@ -43,7 +77,8 @@ Repo qualification moved to a new `claim_qualify.py` to stay under the
 
 **Known, not fixed:** `staleness.py:43` carries its own copy of the ref regex
 with the same optional-sigil defect. It drives review hints rather than
-claims, so it is left for a separate change.
+claims, so it is left for a separate change. Now board item 2 below, where a
+closer read found it carries _two_ of the defects, not one.
 
 **v0.18.0 released.** Twelve PRs (#53-#64) ship together: seven correctness
 fixes, one new tool (`memory_excerpt`), per-hit score breakdowns, and repo-level
@@ -52,18 +87,91 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-Board carried into the next cycle, both non-urgent:
+Board carried into the next cycle, all non-urgent. Transaction context +
+atomic consolidation came **off the top** this cycle - see In Flight above.
+Two new items entered (3 and 4), both found by porting the brain to other
+harnesses rather than by reading our own code.
 
-1. Transaction context + atomic consolidation. `consolidate()` performs
-   `1 + 2N` separate commits with no enclosing transaction, so a mid-run
-   failure leaves a partial consolidation - and with `keep_originals=False`,
-   permanent loss of the originals already deleted. No reported failure:
-   single-writer local SQLite with `busy_timeout=30000` (`database.py:505`)
-   absorbs the realistic contention path.
-2. Hygiene: concurrency test, `promote.py` coverage, recall's silent `default`
-   namespace fallback, finish the `storage.py` split. The product-spec
-   "(unreleased)" drift that also sat on this item is **cleared** - cutting the
-   release resolved all 19 markers.
+1. Hygiene: concurrency test, `promote.py` coverage, recall's silent `default`
+   namespace fallback, finish the `storage.py` split (393 lines). The
+   product-spec "(unreleased)" drift that also sat on this item is **cleared** -
+   cutting the release resolved all 19 markers.
+2. `staleness.py:43` duplicates the ref regex that `claim_qualify.py:33` owns,
+   and carries two of the five defects PR #65 fixed: the `[#!]` sigil is
+   optional, so "PR 1" meaning "first PR of the plan" is a reference, and the
+   separator is `\s*` rather than `[ \t]*`, so a kind at the end of one line
+   binds to a number at the start of the next. Consequence is a false
+   `open-pr-reference` review hint rather than a bad claim row, which is why
+   #65 left it. The fix is one regex, but the real question is whether the two
+   modules should share a single definition - `staleness.py` wants only the
+   `kind`/`num` shape, not repo qualification, so a shared constant is
+   plausible where a shared pattern is not.
+3. **A memory cannot tell a reader whether it is still true.** Found by
+   pointing two non-Anthropic models at a copy of the brain on 2026-08-28.
+   Both read faithfully; both repeated point-in-time state as current fact. One
+   told the user "migration 010 has not run against the live brain" - false for
+   hours by then, and read verbatim from a `RESUME` memory nobody had
+   corrected. Nothing in the record marked it as spent.
+
+   This is not a model failure. A handoff memory, a board of record and a
+   durable pattern are indistinguishable on read: same shape, same confidence,
+   same claim to currency. `staleness.py` review hints are the closest thing we
+   have and they are advisory, keyed on regex over prose, and invisible to a
+   consumer that only calls `memory_recall`.
+
+   Worth considering, none decided: a first-class "point-in-time vs durable"
+   distinction rather than inferring it from `type`; surfacing the review-hint
+   signal on every read path, not just `memory_context` and `memory_stats`;
+   and a supersession chain a reader can follow forward from any stale record
+   to its live replacement. The failure mode is quiet and it compounds - a
+   stale memory read by an agent becomes a stale statement to the user.
+4. `gingugu init --client windsurf` writes `.windsurfrules`
+   (`bootstrap/__init__.py:24-28` knows only windsurf/cursor/cline). Windsurf
+   was renamed **Devin Desktop** on 2026-06-02 and rules moved to
+   `.devin/rules/*.md` (12,000 chars per file, `trigger:` frontmatter:
+   `always_on`, `model_decision`, `glob`, `manual`), with `.windsurfrules` kept
+   only as a legacy fallback. Our own bootstrap now targets a deprecated path.
+   Needs a `devin` client; the root `AGENTS.md` route the repo rules manager
+   already handles is the other half of the answer, since it carries no size
+   limit.
+5. **Two unused protocol-layer levers for session-start reliability.** Every
+   attempt to guarantee the memory protocol runs has been aimed at the harness
+   (hooks), where our options genuinely are limited. These two sit in the
+   protocol layer we own, and apply to every client at once.
+
+   **5a. `FastMCP` accepts `instructions`; `server.py:61` passes none.**
+   Verified: the SDK signature is `instructions: str | None = None`, and the
+   MCP spec (2025-06-18) carries the field in `InitializeResult` - "Instructions
+   describing how to use the server and its features... It can be thought of
+   like a 'hint' to the model. For example, this information **MAY** be added to
+   the system prompt."
+
+   Research verdict: **real, but MAY not MUST, so support is patchy.** Claude
+   Code processes it (fixed in `anthropics/claude-code#3312`). claude.ai web
+   silently ignores it. The Agent SDK does not process it
+   (`claude-agent-sdk-typescript#174`). LangChain4j receives it at handshake and
+   never exposes it (`langchain4j#5421`). Cursor, Devin Local and ChatGPT
+   desktop: **unmeasured** - the fastest way to settle each is a raw
+   `initialize` probe, the same one that proved the credential gating.
+
+   Not a universal fix. But it is one string, it costs nothing where
+   unsupported (the field is simply dropped), and it works in the harness we
+   use most. Cheap enough that the research was the expensive part.
+
+   **5b. Our own tool responses are a channel nothing can ignore.** Every
+   gingugu tool returns a dict we control, and the model always sees tool
+   results - that is true by construction in every harness, unlike anything in
+   5a. If the first call of a session is not `memory_context`, the response can
+   carry a "memory not loaded this session" marker.
+
+   **The wrinkle to design around:** this needs session identity. Under stdio
+   that is free, since the client spawns one process per session. Under
+   `gingugu serve` it is not - one process serves many clients, so "first call
+   of a session" has to key off the streamable-HTTP `Mcp-Session-Id` rather
+   than process lifetime. Do not build 5b assuming process-per-session, or the
+   hosted transport gets a nudge that fires once and then never again for
+   anyone. Also worth bounding: a marker on every response is noise, so it
+   should fire once and stop.
 
 ## Shipped in v0.18.0 (2026-08-28)
 

@@ -67,7 +67,9 @@
 | `excerpt.py` | Reading *inside* one memory: `clamp_range`, `find_matches`, `line_of`. Literal substring scanning and character offsets - no ranking, no stemming, no model, same answer every time |
 | `relations.py` | Typed graph edges + hub-dampened 1-hop traversal (`dampened_neighbour_ids`: per-neighbour, ranked confidence ▸ `RELATION_WEIGHT` ▸ low degree ▸ recency ▸ id) and enumeration (`list_edges`) |
 | `relation_repair.py` | Edge repair mixed into `RelationManager`: `retype_relation`, `reverse_relation`, `delete_relation`, `delete_edges`. Every op is an UPDATE/DELETE on the existing row, so id / `created_at` / metadata survive a correction |
-| `consolidation.py` | merge / summarize / deduplicate clusters |
+| `consolidation.py` | merge / summarize / deduplicate clusters. The whole `1 + 2N` write runs inside `transactions.atomic()`, so a consolidation applies whole or not at all |
+| `duplicate_scan.py` | The read-only *suggest* half: pairwise-cosine near-duplicate clusters, with an exact-title fallback when a namespace has no embeddings. Nothing here writes |
+| `transactions.py` | `atomic()` - one `BEGIN IMMEDIATE` across components sharing a connection, with each participant's own `commit()` gated off for the duration. Embedding writes are queued to `_after_commit` instead of joining the transaction: they are best-effort by design, and a vector written for a row the block later rolls back is an orphan |
 | `decay.py` | Composite scoring, the `reference_timestamp()` freshness anchor (MAX, not COALESCE), dormancy as a resting signal (never auto-forgets), and `relative_age()`/`age_label()`, the derived-at-read `age` string. `composite_score`/`score_memory` are summed from `composite_parts`/`score_parts`, so the `explain` breakdown and the score it explains are the same arithmetic |
 | `stats.py` | Health stats (counts, confidence, dormancy, hygiene, review sweep) |
 | `graph_stats.py` | Relation-graph health: edges, degree, type mix, orphans, and edges stranded past `SPREAD_PER_SEED`. Also `orphan_sample` (the orphans behind the count, costliest first) and the shared `orphan_filter()` predicate behind `memory_search(orphans=True)` |

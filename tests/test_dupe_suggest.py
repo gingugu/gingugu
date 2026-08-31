@@ -7,7 +7,7 @@ import json
 import pytest
 
 from gingugu import embeddings as emb
-from gingugu.consolidation import find_duplicate_clusters, find_title_duplicate_clusters
+from gingugu.duplicate_scan import find_duplicate_clusters, find_title_duplicate_clusters
 from gingugu.models import MemoryType, utcnow_iso
 
 # --- semantic scan (unit level, hand-stamped embeddings) ---------------------
@@ -193,7 +193,7 @@ async def test_title_fallback_when_embeddings_sparse(server, monkeypatch) -> Non
     assert one["ok"] and two["ok"]
 
     monkeypatch.setattr(
-        consolidate_handler.consolidation,
+        consolidate_handler.duplicate_scan,
         "find_duplicate_clusters",
         lambda conn, **kw: {
             "mode": "semantic",
