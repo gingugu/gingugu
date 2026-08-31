@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The access log now records which memories were retrieved together.** Every
+  `access_log` row carries the id of the MCP session that asked for it, so the
+  log answers "these were read alongside each other" and not only "this was
+  read at 14:02". The column existed and had never been written; the signal is
+  behavioural, earned by use rather than authored. Nothing about the tool
+  surface changes. The id is `NULL` when no session is in flight, deliberately:
+  a shared placeholder would group unrelated reads into one false session.
+
 ### Fixed
 
 - **`memory_consolidate` now applies whole or not at all.** A consolidation is
