@@ -4,8 +4,13 @@ _Last updated: 2026-08-30_
 
 ## In Flight
 
-**Access-log session id: the log learns who asked.** Branch
-`feature/access-log-session-id`. `access_log.context` had existed since the
+Nothing. Both branches of 2026-08-30 are merged and `main` is clean at
+`b28c1dc`. The board below is the next work.
+
+## Recently Completed
+
+**Access-log session id: the log learns who asked. MERGED as `b28c1dc` (#67).**
+10/10 CI green. `access_log.context` had existed since the
 first schema and had never once been written - NULL on all 8,479 rows in the
 live brain, measured, not assumed. Without a grouping key the log can say
 _when_ a memory was read but never _alongside what_, so co-access ("these are
@@ -128,91 +133,235 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-Board carried into the next cycle, all non-urgent. Transaction context +
-atomic consolidation came **off the top** this cycle - see In Flight above.
-Two new items entered (3 and 4), both found by porting the brain to other
-harnesses rather than by reading our own code.
+## The Board (resequenced 2026-08-30)
 
-1. Hygiene: concurrency test, `promote.py` coverage, recall's silent `default`
-   namespace fallback, finish the `storage.py` split (393 lines). The
-   product-spec "(unreleased)" drift that also sat on this item is **cleared** -
-   cutting the release resolved all 19 markers.
-2. `staleness.py:43` duplicates the ref regex that `claim_qualify.py:33` owns,
-   and carries two of the five defects PR #65 fixed: the `[#!]` sigil is
-   optional, so "PR 1" meaning "first PR of the plan" is a reference, and the
-   separator is `\s*` rather than `[ \t]*`, so a kind at the end of one line
-   binds to a number at the start of the next. Consequence is a false
-   `open-pr-reference` review hint rather than a bad claim row, which is why
-   #65 left it. The fix is one regex, but the real question is whether the two
-   modules should share a single definition - `staleness.py` wants only the
-   `kind`/`num` shape, not repo qualification, so a shared constant is
-   plausible where a shared pattern is not.
-3. **A memory cannot tell a reader whether it is still true.** Found by
-   pointing two non-Anthropic models at a copy of the brain on 2026-08-28.
-   Both read faithfully; both repeated point-in-time state as current fact. One
-   told the user "migration 010 has not run against the live brain" - false for
-   hours by then, and read verbatim from a `RESUME` memory nobody had
-   corrected. Nothing in the record marked it as spent.
+**Two items discharged, four added, one unblocked.** Atomic consolidation
+merged as `ac2ee53` (#66) and the access-log session id as `b28c1dc` (#67) -
+the second was never on the board, having entered and shipped inside one
+session because it gates everything in items 1 to 4.
 
-   This is not a model failure. A handoff memory, a board of record and a
-   durable pattern are indistinguishable on read: same shape, same confidence,
-   same claim to currency. `staleness.py` review hints are the closest thing we
-   have and they are advisory, keyed on regex over prose, and invisible to a
-   consumer that only calls `memory_recall`.
+The four new items are one commissioned program, listed in dependency order.
+They take the top because they are the direction the project is now pointed:
+making memory constitutive rather than merely retrievable. Everything below
+them is unchanged in substance from the previous board.
 
-   Worth considering, none decided: a first-class "point-in-time vs durable"
-   distinction rather than inferring it from `type`; surfacing the review-hint
-   signal on every read path, not just `memory_context` and `memory_stats`;
-   and a supersession chain a reader can follow forward from any stale record
-   to its live replacement. The failure mode is quiet and it compounds - a
-   stale memory read by an agent becomes a stale statement to the user.
-4. `gingugu init --client windsurf` writes `.windsurfrules`
-   (`bootstrap/__init__.py:24-28` knows only windsurf/cursor/cline). Windsurf
-   was renamed **Devin Desktop** on 2026-06-02 and rules moved to
-   `.devin/rules/*.md` (12,000 chars per file, `trigger:` frontmatter:
-   `always_on`, `model_decision`, `glob`, `manual`), with `.windsurfrules` kept
-   only as a legacy fallback. Our own bootstrap now targets a deprecated path.
-   Needs a `devin` client; the root `AGENTS.md` route the repo rules manager
-   already handles is the other half of the answer, since it carries no size
-   limit.
-5. **Two unused protocol-layer levers for session-start reliability.** Every
-   attempt to guarantee the memory protocol runs has been aimed at the harness
-   (hooks), where our options genuinely are limited. These two sit in the
-   protocol layer we own, and apply to every client at once.
+### 1. Identity core: curate the pin tier
 
-   **5a. `FastMCP` accepts `instructions`; `server.py:61` passes none.**
-   Verified: the SDK signature is `instructions: str | None = None`, and the
-   MCP spec (2025-06-18) carries the field in `InitializeResult` - "Instructions
-   describing how to use the server and its features... It can be thought of
-   like a 'hint' to the model. For example, this information **MAY** be added to
-   the system prompt."
+**No code. The cheapest item on the board and the highest leverage.**
 
-   Research verdict: **real, but MAY not MUST, so support is patchy.** Claude
-   Code processes it (fixed in `anthropics/claude-code#3312`). claude.ai web
-   silently ignores it. The Agent SDK does not process it
-   (`claude-agent-sdk-typescript#174`). LangChain4j receives it at handshake and
-   never exposes it (`langchain4j#5421`). Cursor, Devin Local and ChatGPT
-   desktop: **unmeasured** - the fastest way to settle each is a raw
-   `initialize` probe, the same one that proved the credential gating.
+The pin mechanism shipped in migration 008 and works: pins bypass ranking
+entirely, cap at 20 per namespace, and (since #57) sit at the top of every
+load. Measured 2026-08-30 against the live brain: **8 pins in `crow`, 0 in
+`gingugu`, 0 everywhere else.**
 
-   Not a universal fix. But it is one string, it costs nothing where
-   unsupported (the field is simply dropped), and it works in the harness we
-   use most. Cheap enough that the research was the expensive part.
+The defect is composition, not machinery. **Seven of the eight pins are
+prohibitions** - never sign commits, never store secrets, never reference work
+repos, no em dashes, plus two cautionary tales. The eighth is a scoring
+diagnostic. Nothing describes who the user is, how we work, or anything
+relational. The tier that is unconditionally present every session is a
+compliance fence with no person in it, and nobody's core is a list of things
+not to do.
 
-   **5b. Our own tool responses are a channel nothing can ignore.** Every
-   gingugu tool returns a dict we control, and the model always sees tool
-   results - that is true by construction in every harness, unlike anything in
-   5a. If the first call of a session is not `memory_context`, the response can
-   carry a "memory not loaded this session" marker.
+Twelve free slots in `crow`, twenty in `gingugu`. Split by subject: entries
+about the user are his to write or dictate; entries about how we work are mine
+to draft and his to approve.
 
-   **The wrinkle to design around:** this needs session identity. Under stdio
-   that is free, since the client spawns one process per session. Under
-   `gingugu serve` it is not - one process serves many clients, so "first call
-   of a session" has to key off the streamable-HTTP `Mcp-Session-Id` rather
-   than process lifetime. Do not build 5b assuming process-per-session, or the
-   hosted transport gets a nudge that fires once and then never again for
-   anyone. Also worth bounding: a marker on every response is noise, so it
-   should fire once and stop.
+### 2. Involuntary recall: surface memories without being asked
+
+A `UserPromptSubmit` hook that embeds each prompt, sweeps the graph, and
+injects anything over a high similarity bar. No tool call, no decision by the
+agent - memory that arrives rather than memory that is fetched.
+
+**Not speculative.** The write path already does this: `memory_store`'s dedupe
+and relation hints fire unrequested, and the record shows four separate
+occasions where an unrequested hint caught what deliberate recall had missed -
+including, on 2026-08-30, the pin-ordering bug that would have made item 1
+pointless. The 26th-sail reflection states it plainly: _the write path is
+currently a better retriever than the read path_. This extends a proven
+mechanism to every turn.
+
+Engineering it needs, and does not yet have: a prompt-length floor (short
+messages like "go" produce garbage similarity), a per-session suppression set
+so one memory does not stutter across ten turns, a warm embedder so the hook
+does not cold-load a model per message, and threshold tuning that will take
+several sessions to settle. Costs are real: latency on every message and a
+permanent context tax.
+
+### 3. The dream pass: deterministic background consolidation, on cron
+
+A scheduled pass that runs while nobody is present. **Pure math, and it writes
+to a proposal queue rather than to memories.** The governing constraint is the
+user's, verbatim: _no AI decides what's in our brain_. Math finds structure;
+structure is not content.
+
+Allowed unattended, because all of it is counting: co-access (Hebbian) edges
+from `access_log.context`, centrality over the relation graph (a **computed**
+answer to "what is core", better than an authored guess), cluster detection,
+orphan detection, decay arithmetic, and claim reconciliation against git as
+ground truth.
+
+Queued for human decision, never written: naming what a cluster means, choosing
+an edge's relation **type**, writing any prose, deciding what counts as
+identity-core.
+
+**Design constraint discovered while shipping #67:** `prune_access_log` trims
+the log to a rolling 90 days, so co-access is a moving window and the existing
+8,479 rows age out from roughly 2026-09-13. The pass must accumulate its own
+durable co-access aggregate rather than plan to re-read history from the log.
+Aggregates outlive the events they summarize.
+
+### 4. Governance bands on the proposal queue
+
+Earned auto-approval, modelled on ForgeSmith's governance layer, which already
+proved the pattern: authority bands raised by counted approvals and dropped
+instantly on a rejection, a calibration gate that blocks until a track record
+exists, and hard guardrails that block at any band.
+
+**This does not violate the no-AI rule, because the learning is arithmetic.**
+Approvals move a scalar, the scalar crosses a threshold, the threshold gates a
+class. No model judges anything. The one place it must diverge from ForgeSmith:
+trust there is scoped per spec file, and here the scope unit is the **proposal
+class** - "co-access edges above 0.9" earns its own band and buys nothing for
+"orphan reconnections". ForgeSmith lists per-pattern trust as roadmap; we would
+be building it correctly from the start.
+
+Also unlike ForgeSmith: its confidence scorer has LLM-judged dimensions and
+ours cannot. Every input to a band calculation has to be countable.
+
+Hard guardrails, absolute at every band: anything writing prose, anything
+touching a pinned memory, anything that forgets or deletes, any edge typed
+`supersedes` or `contradicts`, any cross-namespace write.
+
+**Sequenced last on purpose.** Thresholds cannot be learned from zero
+decisions, and the calibration gate needs runs to calibrate against.
+
+### 5. Hygiene
+
+Concurrency test, `promote.py` coverage, recall's silent `default` namespace
+fallback, and the module-size problem, which is **worse than this item has been
+recording**. Measured on `main` at `b28c1dc`: `database.py` **547** lines and
+`storage.py` **401** (up from 393; #67 added 8), against a 300-line limit. Five
+more sit between 283 and 299 and will cross on their next edit: `decay.py`,
+`handlers/recall.py`, `handlers/helpers.py`, `bootstrap/global_rules.py`,
+`handlers/memory.py`. `database.py` is nearly double the limit and had never
+been named on this item at all. The product-spec "(unreleased)" drift that also
+sat here is **cleared** - cutting the release resolved all 19 markers.
+
+### 6. `staleness.py:43` ref-regex duplication
+
+`staleness.py:43` duplicates the ref regex that `claim_qualify.py:33` owns,
+and carries two of the five defects PR #65 fixed: the `[#!]` sigil is
+optional, so "PR 1" meaning "first PR of the plan" is a reference, and the
+separator is `\s*` rather than `[ \t]*`, so a kind at the end of one line
+binds to a number at the start of the next. Consequence is a false
+`open-pr-reference` review hint rather than a bad claim row, which is why PR
+#65 left it. The fix is one regex, but the real question is whether the two
+modules should share a single definition - `staleness.py` wants only the
+`kind`/`num` shape, not repo qualification, so a shared constant is
+plausible where a shared pattern is not.
+
+Re-verified 2026-08-30 on `main`: `_PR_REF` at line 43 still carries both
+defects.
+
+### 7. A memory cannot tell a reader whether it is still true
+
+Found by pointing two non-Anthropic models at a copy of the brain on
+2026-08-28. Both read faithfully; both repeated point-in-time state as current
+fact. One told the user "migration 010 has not run against the live brain" -
+false for hours by then, and read verbatim from a `RESUME` memory nobody had
+corrected. Nothing in the record marked it as spent.
+
+This is not a model failure. A handoff memory, a board of record and a durable
+pattern are indistinguishable on read: same shape, same confidence, same claim
+to currency. `staleness.py` review hints are the closest thing we have and they
+are advisory, keyed on regex over prose, and invisible to a consumer that only
+calls `memory_recall`.
+
+Worth considering, none decided: a first-class "point-in-time vs durable"
+distinction rather than inferring it from `type`; surfacing the review-hint
+signal on every read path, not just `memory_context` and `memory_stats`; and a
+supersession chain a reader can follow forward from any stale record to its
+live replacement. The failure mode is quiet and it compounds - a stale memory
+read by an agent becomes a stale statement to the user.
+
+**Overlaps item 3.** Claim reconciliation against git as ground truth is one of
+the dream pass's deterministic jobs, and it is a partial answer here: a
+scheduled pass that checks every open claim and queues the spent ones closes
+the loop without waiting for this item's larger design question. Do item 3
+first and re-scope this against what is left.
+
+### 8. `gingugu init` targets a deprecated rules path
+
+`gingugu init --client windsurf` writes `.windsurfrules`
+(`bootstrap/__init__.py:24-28` knows only windsurf/cursor/cline). Windsurf
+was renamed **Devin Desktop** on 2026-06-02 and rules moved to
+`.devin/rules/*.md` (12,000 chars per file, `trigger:` frontmatter:
+`always_on`, `model_decision`, `glob`, `manual`), with `.windsurfrules` kept
+only as a legacy fallback. Our own bootstrap now targets a deprecated path.
+Needs a `devin` client; the root `AGENTS.md` route the repo rules manager
+already handles is the other half of the answer, since it carries no size
+limit.
+
+Re-verified 2026-08-30 on `main`: `CLIENT_RULES_FILES` still maps
+`"windsurf": ".windsurfrules"`. Note the repo's own `.windsurfrules` was
+deleted in #66, so the tool now writes a file the project itself has abandoned.
+
+### 9. Two unused protocol-layer levers for session-start reliability
+
+Every attempt to guarantee the memory protocol runs has been aimed at the
+harness (hooks), where our options genuinely are limited. These two sit in the
+protocol layer we own, and apply to every client at once.
+
+**9a. `FastMCP` accepts `instructions`; `server.py:61` passes none.**
+Verified: the SDK signature is `instructions: str | None = None`, and the
+MCP spec (2025-06-18) carries the field in `InitializeResult` - "Instructions
+describing how to use the server and its features... It can be thought of
+like a 'hint' to the model. For example, this information **MAY** be added to
+the system prompt."
+
+Research verdict: **real, but MAY not MUST, so support is patchy.** Claude
+Code processes it (fixed in `anthropics/claude-code#3312`). claude.ai web
+silently ignores it. The Agent SDK does not process it
+(`claude-agent-sdk-typescript#174`). LangChain4j receives it at handshake and
+never exposes it (`langchain4j#5421`). Cursor, Devin Local and ChatGPT
+desktop: **unmeasured** - the fastest way to settle each is a raw
+`initialize` probe, the same one that proved the credential gating.
+
+Not a universal fix. But it is one string, it costs nothing where
+unsupported (the field is simply dropped), and it works in the harness we
+use most. Cheap enough that the research was the expensive part.
+
+Re-verified 2026-08-30 on `main`: `server.py:61` is still a bare
+`FastMCP("gingugu")`.
+
+**9b. Our own tool responses are a channel nothing can ignore.** Every
+gingugu tool returns a dict we control, and the model always sees tool
+results - that is true by construction in every harness, unlike anything in
+9a. If the first call of a session is not `memory_context`, the response can
+carry a "memory not loaded this session" marker.
+
+**This item's blocker is GONE as of #67.** It needed session identity: free
+under stdio, but not under `gingugu serve`, where one process serves many
+clients and "first call of a session" cannot key off process lifetime. That is
+exactly what `session.current_session_id()` now provides, correct for both
+transports without special-casing. 9b is unblocked and is the cheapest
+remaining protocol lever.
+
+Still worth bounding: a marker on every response is noise, so it should fire
+once per session and stop.
+
+### 10. Repo-wide em dashes
+
+Measured 2026-08-30: essentially every module carries them (17 in
+`database.py`, 16 in `bootstrap/global_rules.py`), against a hard style rule
+that forbids them. Neither #66 nor #67 added any, and #66 stripped the five
+that rode along into `duplicate_scan.py` during a file split - the move-vs-author
+distinction is the trap here, since a split relocates prose that no diff shows
+as added.
+
+A sweep is mechanical but touches nearly every file, so it must be its own PR
+with no logic in it. Low urgency, zero risk, and it should not ride along with
+feature work where it would bury the real diff.
 
 ## Shipped in v0.18.0 (2026-08-28)
 
