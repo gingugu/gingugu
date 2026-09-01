@@ -55,15 +55,20 @@ def _merge_namespace_context(
     out: list[Memory] = []
     seen: set[str] = set()
 
-    def emit(mem: Memory) -> None:
+    def emit(mem: Memory, *, authoritative: bool = False) -> None:
         # A memory surfacing in two namespaces is emitted once, at its earliest
         # position, using whichever instance won de-duplication.
+        #
+        # A pin is emitted as ITSELF. De-dup keeps the highest-scoring instance
+        # and a pin scores None, so a scored duplicate from another namespace's
+        # cross-namespace bucket wins - and scorelessness is precisely how a
+        # caller knows the memory bypassed ranking.
         if mem.id not in seen:
             seen.add(mem.id)
-            out.append(best.get(mem.id, mem))
+            out.append(mem if authoritative else best.get(mem.id, mem))
 
     for mem in pins:
-        emit(mem)
+        emit(mem, authoritative=True)
     for rank in range(max((len(t) for t in tails), default=0)):
         for tail in tails:
             if rank < len(tail):

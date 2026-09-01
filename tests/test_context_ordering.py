@@ -224,3 +224,59 @@ async def test_identical_timestamps_break_deterministically(server, tmp_path) ->
         "architecture must win a last_accessed tie via the type boost; "
         f"order was {[m['title'] for m in memories]}"
     )
+
+
+def _mem(mid: str, *, namespace_id: str, score: float | None, pinned: bool):
+    from gingugu.models import Memory
+
+    t = "2026-01-01T00:00:00+00:00"
+    return Memory(
+        id=mid,
+        namespace_id=namespace_id,
+        type="preference",
+        title=f"memory {mid}",
+        content="body",
+        created_at=t,
+        updated_at=t,
+        last_accessed=t,
+        pinned=pinned,
+        score=score,
+    )
+
+
+def test_pin_survives_dedup_against_a_scored_duplicate() -> None:
+    """A pin must be emitted as ITSELF, not traded for a scored duplicate.
+
+    De-duplication keeps the highest-scoring instance of a memory, and a pin
+    scores ``None``. On a multi-namespace load the same memory can reach a
+    second namespace's cross-namespace bucket WITH a score, so the scored
+    instance wins de-dup and the pin arrives carrying a score.
+
+    That is not a position bug - the surrounding tests cover position, and it
+    lands in the right place. It is an identity bug: scorelessness is how a
+    caller knows a memory bypassed ranking, so a pin that arrives scored is
+    indistinguishable from an ordinary ranked hit.
+
+    Asserted at the merge rather than over the tool surface on purpose: which
+    memories the cross-namespace bucket happens to reach is a ranking
+    heuristic, and a test that depends on it would assert the contract only by
+    luck.
+    """
+    from gingugu.handlers.recall import _merge_namespace_context
+
+    pin = _mem("shared", namespace_id="crow", score=None, pinned=True)
+    scored_duplicate = _mem("shared", namespace_id="crow", score=0.775, pinned=True)
+    other = _mem("other", namespace_id="ship", score=0.9, pinned=False)
+
+    # What the handler builds: the pin came from crow's pin tier, while ship's
+    # ranked tail reached the same memory and scored it.
+    best = {"shared": scored_duplicate, "other": other}
+    out = _merge_namespace_context([pin], [[other, scored_duplicate]], best)
+
+    emitted = {m.id: m for m in out}
+    assert [m.id for m in out] == ["shared", "other"], "pin still leads, emitted once"
+    assert emitted["shared"].score is None, (
+        "a pin must arrive scoreless; de-dup traded it for the scored duplicate "
+        f"(score={emitted['shared'].score})"
+    )
+    assert emitted["other"].score == 0.9, "ranked entries still take their best instance"

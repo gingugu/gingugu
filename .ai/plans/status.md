@@ -282,7 +282,13 @@ recording**. Measured on `main` at `b28c1dc`: `database.py` **547** lines and
 more sit between 283 and 299 and will cross on their next edit: `decay.py`,
 `handlers/recall.py`, `handlers/helpers.py`, `bootstrap/global_rules.py`,
 `handlers/memory.py`. `database.py` is nearly double the limit and had never
-been named on this item at all. The product-spec "(unreleased)" drift that also
+been named on this item at all.
+
+**That prediction landed on 2026-08-31.** Fixing item 11 took
+`handlers/recall.py` from 293 to 301, and it was held under only by shortening
+the comment that explained the fix, which is the limit trading documentation
+for a line count rather than buying anything. It sits at 298 and the next edit
+crosses it again. This item is now blocking real work, not just tidiness. The product-spec "(unreleased)" drift that also
 sat here is **cleared** - cutting the release resolved all 19 markers.
 
 ### 6. `staleness.py:43` ref-regex duplication
@@ -423,7 +429,7 @@ and a non-prose glyph in a table cell takes a hyphen. Fix as a reviewed list.
 Grep the HTML entity `&#8212;` as well as the literal. Its own PR, no logic in
 it.
 
-### 11. A pinned memory loses its pin identity on a multi-namespace load
+### 11. A pinned memory loses its pin identity on a multi-namespace load - FIXED 2026-08-31
 
 Found 2026-08-31 while verifying item 1 through the tool surface, and
 reproduced with two unrelated task hints before being written down.
@@ -445,10 +451,27 @@ the pin block - but the pin contract says pins bypass ranking, and on this path
 one does not. A caller cannot tell it is pinned, and its position is held by
 luck of its score rather than by guarantee. Every session start uses this path.
 
-The fix is that de-duplication must prefer the pinned copy, and it needs a test
-asserting a pinned memory returns with no score on a multi-namespace load.
-**Read the de-duplication in `context.py` before fixing** - the mechanism above
-is inferred from payload behaviour, not from source.
+**FIXED 2026-08-31.** The inference above was confirmed in source, and it was
+not in `context.py` at all - it is `handlers/recall.py`. De-duplication keeps
+the highest-scoring instance via `(mem.score or 0.0)`, so a pin's `None` scores
+as 0.0 and loses to any scored duplicate; the merge then emitted
+`best.get(mem.id, mem)` for pins as well as for ranked entries.
+
+The fix is that the pin loop emits its own instance and `best` continues to
+govern only the ranked tails. Scoping it to the pin loop rather than changing
+`best` itself preserves the existing behaviour for a memory pinned in a
+namespace the caller did not ask for: it still arrives as an ordinary ranked
+hit, which is correct, because it is not part of the requested namespace's
+unconditional tier.
+
+Covered by `test_pin_survives_dedup_against_a_scored_duplicate`, asserted at
+the merge rather than over the tool surface because which memories the
+cross-namespace bucket reaches is a ranking heuristic - a payload-level test
+would assert the contract only by luck. Confirmed to fail without the fix,
+carrying the same 0.775 seen live.
+
+Not yet verified against the running server, which is on installed code rather
+than this branch. Re-check after a restart.
 
 ### 12. The pin tier is invisible to the tool surface
 
