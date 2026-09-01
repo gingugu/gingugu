@@ -145,26 +145,64 @@ They take the top because they are the direction the project is now pointed:
 making memory constitutive rather than merely retrievable. Everything below
 them is unchanged in substance from the previous board.
 
-### 1. Identity core: curate the pin tier
+### 1. Identity core: curate the pin tier - DONE 2026-08-31
 
-**No code. The cheapest item on the board and the highest leverage.**
+**No code, as scoped.** The pin mechanism shipped in migration 008 and works:
+pins bypass ranking entirely, cap at 20 per namespace, and (since #57) sit at
+the top of every load. The defect was composition, not machinery.
 
-The pin mechanism shipped in migration 008 and works: pins bypass ranking
-entirely, cap at 20 per namespace, and (since #57) sit at the top of every
-load. Measured 2026-08-30 against the live brain: **8 pins in `crow`, 0 in
-`gingugu`, 0 everywhere else.**
+The item as written found one defect. Executing it found a second, and the
+second turned out to be the one that mattered.
 
-The defect is composition, not machinery. **Seven of the eight pins are
-prohibitions** - never sign commits, never store secrets, never reference work
-repos, no em dashes, plus two cautionary tales. The eighth is a scoring
-diagnostic. Nothing describes who the user is, how we work, or anything
-relational. The tier that is unconditionally present every session is a
-compliance fence with no person in it, and nobody's core is a list of things
-not to do.
+**Composition, as boarded:** 8 pins, all in `crow`, seven of them prohibitions,
+one a scoring diagnostic, none relational.
 
-Twelve free slots in `crow`, twenty in `gingugu`. Split by subject: entries
-about the user are his to write or dictate; entries about how we work are mine
-to draft and his to approve.
+**Size, found on execution:** the tier was **25,952 characters**, and **two pins
+were 65% of it**. Both were a one-sentence rule followed by an appended
+instance log that grew on every repeat offence - unbounded, and fastest for the
+rules broken most often. That is the exact inversion of the frame behind this
+program, which asks the tier to hold what the episodes made rather than the
+episodes themselves. Adding good pins without fixing this would have doubled an
+already-oversized tier.
+
+**What was applied:**
+
+- **Split** both oversized pins. The rule and its operative check stay pinned;
+  the instance log moved to an unpinned child linked `child_of`. Nothing lost,
+  and the rules stop growing.
+- **Unpinned** the scoring diagnostic - a debugging technique, not identity.
+- **Pinned 8 constitutive memories.** Six in `crow`: how to address the user,
+  his observed working style, the standing directive to push back rather than
+  agree, the counterpart directive to make technical calls with authority, the
+  product-audience rule, and the conceptual frame behind items 1 to 4. Two in
+  `gingugu`, which had no unconditional core at all despite 341 memories: the
+  design law that truth status is math rather than model judgment, and the
+  constraint that the background pass proposes rather than writes.
+
+**Result: 15 pins across two namespaces, 28,327 characters.** Measured, not
+projected - an earlier estimate of half the weight was arithmetic that had
+never been run, and the tier is in fact byte-neutral: 28,363 before, 28,327
+after.
+
+The win is not size, it is SHAPE. The split freed 13,922 characters (em dash
+11,561 to 2,054; risk tolerance 7,664 to 3,249) and the eight new pins spent
+15,528. What changed is the distribution:
+
+| | before | after |
+|---|---|---|
+| pins | 8 | 15 |
+| largest single pin | 11,561 (41%) | 3,249 (11%) |
+| top two as share of tier | 65% | 23% |
+| prohibitions | 7 of 8 | 7 of 15 |
+
+No pin now exceeds 3,249 characters, and the append-on-every-instance growth
+mechanism that produced the two outliers is gone - instances are filed as their
+own memories and linked. That is what stops the tier from ratcheting; holding
+the byte count flat while adding seven entries is the evidence it worked.
+
+One entry is time-boxed on purpose: the conceptual frame is pinned because items
+2 to 4 are live, and should be unpinned when that program discharges. A tier
+that only ever grows has become retrieval again.
 
 ### 2. Involuntary recall: surface memories without being asked
 
@@ -350,18 +388,90 @@ remaining protocol lever.
 Still worth bounding: a marker on every response is noise, so it should fire
 once per session and stop.
 
-### 10. Repo-wide em dashes
+### 10. Em dashes in published documentation
 
-Measured 2026-08-30: essentially every module carries them (17 in
-`database.py`, 16 in `bootstrap/global_rules.py`), against a hard style rule
-that forbids them. Neither #66 nor #67 added any, and #66 stripped the five
-that rode along into `duplicate_scan.py` during a file split - the move-vs-author
-distinction is the trap here, since a split relocates prose that no diff shows
-as added.
+**Rescoped 2026-08-31.** The style rule was recorded far broader than it was
+ever stated, and this item inherited the overstatement. The rule covers what a
+person reads as prose: README, CHANGELOG, `docs/`, site copy, PR bodies, commit
+messages. It does **not** cover code comments, docstrings, or memory content.
 
-A sweep is mechanical but touches nearly every file, so it must be its own PR
-with no logic in it. Low urgency, zero risk, and it should not ride along with
-feature work where it would bury the real diff.
+That inverts the item rather than shrinking it. Its original evidence was 17
+occurrences in `database.py` and 16 in `bootstrap/global_rules.py` - both code,
+both now out of scope, along with the other 333 across `src/`, `tests/` and
+`bench/`. Those are not defects and no work should be boarded against them.
+
+The real violation is the half that was never counted. Measured 2026-08-31:
+
+| File | Count |
+|---|---|
+| `docs/architecture.md` | 169 |
+| `CHANGELOG.md` | 102 |
+| `README.md` | 64 |
+| `docs/roadmap.md` | 23 |
+| `docs/future-architecture.md` | 8 |
+
+366 occurrences in files published to PyPI and GitHub and read by people who
+have never met this project. `README.md` is the PyPI landing page.
+
+`.ai/`, `CLAUDE.md` and `AGENTS.md` carry a further 245. They are agent-facing
+rather than published prose, so they sit outside this item unless a call is made
+to include them.
+
+A sweep is mechanical, but it is not a substitution: a paired parenthetical dash
+becomes real parentheses, prose takes a comma or a full stop as sense requires,
+and a non-prose glyph in a table cell takes a hyphen. Fix as a reviewed list.
+Grep the HTML entity `&#8212;` as well as the literal. Its own PR, no logic in
+it.
+
+### 11. A pinned memory loses its pin identity on a multi-namespace load
+
+Found 2026-08-31 while verifying item 1 through the tool surface, and
+reproduced with two unrelated task hints before being written down.
+
+On `memory_context(namespace="crow,gingugu", ...)`, fourteen of the fifteen pins
+come back scoreless, which is correct - pins bypass ranking and so carry no
+`score`. One comes back **with** a score, sorted into the ranked run, and the
+payload reports a de-duplication. The same memory on a single-namespace call
+comes back scoreless and correct.
+
+The score was byte-identical across both hints, which is the signature of a
+synthetic relevance rather than a real match: the memory is surfacing twice, once
+from the pinned bucket and once from a bucket that scores with a fixed
+relevance, and de-duplication is keeping the ranked copy. It is the highest
+access-count memory in the store, which is what earns it the second slot.
+
+Blast radius is small today - the memory is still returned, still adjacent to
+the pin block - but the pin contract says pins bypass ranking, and on this path
+one does not. A caller cannot tell it is pinned, and its position is held by
+luck of its score rather than by guarantee. Every session start uses this path.
+
+The fix is that de-duplication must prefer the pinned copy, and it needs a test
+asserting a pinned memory returns with no score on a multi-namespace load.
+**Read the de-duplication in `context.py` before fixing** - the mechanism above
+is inferred from payload behaviour, not from source.
+
+### 12. The pin tier is invisible to the tool surface
+
+Also found executing item 1, and the reason that work needed raw SQLite.
+
+`memory_search` filters on type, tags, confidence, dates, ids, claims and
+orphans. **There is no `pinned` filter**, so there is no way to ask what is
+pinned across namespaces. `memory_context` returns the tier but capped by
+`limit`, mixed with ranked buckets, and scoped per namespace.
+
+`memory_stats` reports counts, confidence, dormancy, graph, hygiene, review and
+claims. **It reports no sizes at all.** Pins are paid for on every session start
+before any ranking, so their character cost is the most consequential number in
+the store, and it is not observable through the tool.
+
+Both fixes are small and mirror what already exists: `pinned: bool | None` on
+`memory_search` alongside `orphans`, and a `size` block on `memory_stats`
+carrying total, mean, and `pinned_chars`.
+
+Worth stating plainly, because it is the real lesson: this project's quality
+mechanism is dogfooding, and routing around the tool with SQL breaks that
+mechanism silently. Both gaps were hit and worked around before either was
+written down.
 
 ## Shipped in v0.18.0 (2026-08-28)
 
