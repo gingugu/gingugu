@@ -275,3 +275,59 @@ def test_review_skips_timeless_types(store: MemoryStore, namespaces: NamespaceMa
     review = stats.compute_stats(store.conn)["review"]
     assert review["review_suggested"] == 1
     assert review["sample"][0]["id"] == workflow.id
+
+
+def test_size_reports_pinned_cost_and_skew(
+    store: MemoryStore, namespaces: NamespaceManager
+) -> None:
+    """Counts hide the number that matters: what loads unconditionally.
+
+    A tier can be correct in composition and still be dominated by one entry,
+    which no count shows. ``largest_pinned_chars`` is what makes that visible.
+    """
+    ns_id = namespaces.get_or_create("test-ns").id
+    big = store.create(
+        namespace_id=ns_id, type=MemoryType.PREFERENCE, title="rule", content="x" * 500
+    )
+    small = store.create(
+        namespace_id=ns_id, type=MemoryType.PREFERENCE, title="rule", content="y" * 100
+    )
+    store.create(namespace_id=ns_id, type=MemoryType.FACT, title="note", content="z" * 300)
+    for mem in (big, small):
+        store.update(mem.id, pinned=True)
+
+    size = stats.compute_stats(store.conn)["size"]
+
+    title = len("rule")
+    assert size["pinned_chars"] == (title + 500) + (title + 100)
+    assert size["largest_pinned_chars"] == title + 500
+    assert size["total_chars"] == size["pinned_chars"] + (len("note") + 300)
+    assert size["mean_chars"] == round(size["total_chars"] / 3)
+
+
+def test_size_is_zero_without_pins(store: MemoryStore, namespaces: NamespaceManager) -> None:
+    """An empty tier must report 0, not None - callers do arithmetic on this."""
+    ns_id = namespaces.get_or_create("test-ns").id
+    store.create(namespace_id=ns_id, type=MemoryType.FACT, title="note", content="z" * 50)
+
+    size = stats.compute_stats(store.conn)["size"]
+
+    assert size["pinned_chars"] == 0
+    assert size["largest_pinned_chars"] == 0
+    assert size["total_chars"] == len("note") + 50
+
+
+def test_size_is_namespace_scoped(store: MemoryStore, namespaces: NamespaceManager) -> None:
+    ns_a = namespaces.get_or_create("ns-a").id
+    ns_b = namespaces.get_or_create("ns-b").id
+    mine = store.create(namespace_id=ns_a, type=MemoryType.PREFERENCE, title="r", content="x" * 40)
+    store.update(mine.id, pinned=True)
+    theirs = store.create(
+        namespace_id=ns_b, type=MemoryType.PREFERENCE, title="r", content="y" * 90
+    )
+    store.update(theirs.id, pinned=True)
+
+    size = stats.compute_stats(store.conn, namespace_id=ns_a)["size"]
+
+    assert size["pinned_chars"] == len("r") + 40
+    assert size["largest_pinned_chars"] == len("r") + 40

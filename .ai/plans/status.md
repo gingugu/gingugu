@@ -473,7 +473,7 @@ carrying the same 0.775 seen live.
 Not yet verified against the running server, which is on installed code rather
 than this branch. Re-check after a restart.
 
-### 12. The pin tier is invisible to the tool surface
+### 12. The pin tier is invisible to the tool surface - DONE 2026-08-31
 
 Also found executing item 1, and the reason that work needed raw SQLite.
 
@@ -487,14 +487,30 @@ claims. **It reports no sizes at all.** Pins are paid for on every session start
 before any ranking, so their character cost is the most consequential number in
 the store, and it is not observable through the tool.
 
-Both fixes are small and mirror what already exists: `pinned: bool | None` on
-`memory_search` alongside `orphans`, and a `size` block on `memory_stats`
-carrying total, mean, and `pinned_chars`.
+**DONE 2026-08-31.** Both landed as scoped.
 
-Worth stating plainly, because it is the real lesson: this project's quality
-mechanism is dogfooding, and routing around the tool with SQL breaks that
-mechanism silently. Both gaps were hit and worked around before either was
-written down.
+`pinned` is tri-state on `memory_search` - None ignores the flag, True keeps
+pins, False keeps the rest - implemented as a parameter-free WHERE fragment in
+`build_filters` beside `claim_filter` and `orphan_filter`. Because
+`advanced_search` passes one shared `filters` dict to all four search paths,
+the single addition covers query-ranked, query-with-column-sort, listing-by-
+score and listing-by-column alike.
+
+`size` on `memory_stats` carries `total_chars`, `mean_chars`, `pinned_chars`
+and `largest_pinned_chars`. It lives in a new `size_stats.py` rather than in
+`stats.py`, which mirrors `graph_stats.py` and is also what kept `stats.py`
+under the line limit - it had reached 306 with the block inline.
+
+Six tests added across `test_pinned.py` and `test_stats.py`: enumeration
+returns exactly the pins and nothing else, `pinned=False` its complement,
+omitting it ignores the flag, the filter composes with a namespace scope, an
+empty tier reports 0 rather than None, and the block is namespace-scoped.
+
+Worth stating plainly, because it is the real lesson and it outlives both
+fixes: this project's quality mechanism is dogfooding, and routing around the
+tool with SQL breaks that mechanism silently. Both gaps were hit and worked
+around during item 1 before either was written down, and would have shipped
+unrecorded had the workaround not been questioned.
 
 ## Shipped in v0.18.0 (2026-08-28)
 

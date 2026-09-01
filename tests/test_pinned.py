@@ -194,3 +194,59 @@ def test_hard_cap_bounds_what_loads(store: MemoryStore, namespaces: NamespaceMan
 
     results = _ctx(store, ns_id, limit=5)
     assert sum(1 for m in results if m.pinned) == context.PINNED_HARD_CAP
+
+
+def test_search_can_enumerate_the_tier(store: MemoryStore, namespaces: NamespaceManager) -> None:
+    """The tier must be answerable through search, not only through SQL.
+
+    ``memory_context`` returns pins but capped by ``limit``, mixed into ranked
+    buckets and scoped per namespace, so "what is pinned" had no answer on the
+    tool surface and curating the tier meant reaching around it.
+    """
+    from gingugu.search_filters import advanced_search
+
+    ns_a = namespaces.get_or_create("ns-a").id
+    ns_b = namespaces.get_or_create("ns-b").id
+    pins = set()
+    for ns_id, n in ((ns_a, 2), (ns_b, 1)):
+        for i in range(n):
+            mem = store.create(
+                namespace_id=ns_id, type=MemoryType.PREFERENCE, title=f"rule {i}", content="body"
+            )
+            store.update(mem.id, pinned=True)
+            pins.add(mem.id)
+    loose = {
+        store.create(namespace_id=ns_a, type=MemoryType.FACT, title=f"note {i}", content="body").id
+        for i in range(4)
+    }
+
+    # Namespace omitted: the whole store, which is the read curation needs.
+    found = {m.id for m in advanced_search(store.conn, pinned=True, limit=50)}
+    assert found == pins, "pinned=True must return every pin and nothing else"
+
+    unpinned = {m.id for m in advanced_search(store.conn, pinned=False, limit=50)}
+    assert unpinned == loose, "pinned=False must return only unpinned memories"
+
+    both = {m.id for m in advanced_search(store.conn, limit=50)}
+    assert both == pins | loose, "omitting pinned must ignore the flag entirely"
+
+
+def test_search_pinned_composes_with_namespace(
+    store: MemoryStore, namespaces: NamespaceManager
+) -> None:
+    """A param-free WHERE fragment must compose like every other filter."""
+    from gingugu.search_filters import advanced_search
+
+    ns_a = namespaces.get_or_create("ns-a").id
+    ns_b = namespaces.get_or_create("ns-b").id
+    a_pin = store.create(
+        namespace_id=ns_a, type=MemoryType.PREFERENCE, title="a rule", content="body"
+    )
+    b_pin = store.create(
+        namespace_id=ns_b, type=MemoryType.PREFERENCE, title="b rule", content="body"
+    )
+    for mem in (a_pin, b_pin):
+        store.update(mem.id, pinned=True)
+
+    scoped = {m.id for m in advanced_search(store.conn, namespace_id=ns_a, pinned=True, limit=50)}
+    assert scoped == {a_pin.id}

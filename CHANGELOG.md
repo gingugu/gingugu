@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`memory_search(pinned=...)` can enumerate the always-present tier.** Pins
+  load unconditionally at every session start, so they are the memories most
+  worth auditing, and until now they were the one set the tool surface could
+  not list: `memory_context` returns them mixed into ranked buckets, capped by
+  `limit` and scoped per namespace. The filter is tri-state, so `True` returns
+  only pins, `False` only unpinned memories, and omitting it ignores the flag.
+  It composes with every other filter and works with or without a query, so
+  `pinned=True` with no namespace enumerates every pin in the store.
+
+- **`memory_stats` reports character cost in a new `size` block.** Counts are
+  the metric that is easy to get, so counts were the only metric reported, and
+  a store can be correct in composition while a single entry eats the budget.
+  `size` carries `total_chars`, `mean_chars`, `pinned_chars` and
+  `largest_pinned_chars`. `pinned_chars` is the one to watch: pins are the only
+  part of the store paid for on every call regardless of relevance.
+  `largest_pinned_chars` is the skew check, because a tier dominated by one
+  entry is not improved by adding better ones to it.
+
 - **The access log now records which memories were retrieved together.** Every
   `access_log` row carries the id of the MCP session that asked for it, so the
   log answers "these were read alongside each other" and not only "this was
