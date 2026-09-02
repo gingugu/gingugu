@@ -152,6 +152,13 @@ def init_claude_code(target: Path, *, force: bool, dry_run: bool, adopt: bool = 
         results=results,
     )
     _write_file(
+        hooks_dir / "user_prompt_recall.py",
+        _read_template("user_prompt_recall.py.tmpl"),
+        force=force,
+        dry_run=dry_run,
+        results=results,
+    )
+    _write_file(
         commands_dir / "sink-the-ship.md",
         _read_template("sink-the-ship.md.tmpl"),
         force=force,

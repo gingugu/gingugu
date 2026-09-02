@@ -332,6 +332,44 @@ memory_stats → stats.size    → total_chars, mean_chars, pinned_chars,
                                never by adding better pins alongside it
 ```
 
+## Involuntary recall (the prompt is the query)
+
+```
+UserPromptSubmit event  →  .claude/hooks/user_prompt_recall.py (pure stdlib)
+  → length floor HERE, before the package is imported: ~44% of real prompts
+    are acknowledgements, and rejecting them costs bare interpreter startup
+    instead of ~410ms of package + ~500ms of encoder
+  → survivors piped to `gingugu hook prompt`
+      → strip_affect(): greetings/interjections/emoji removed, because they
+        carry REGISTER and the corpus is full of reflections written in the
+        user's own voice. Matching voice is the dominant false positive.
+      → encode → cosine sweep over crow + <cwd-derived project>
+          EXCLUDED IN SQL: deprecated; pinned (already loaded unconditionally
+          at session start, so injecting one pays twice); superseded (the
+          store has already recorded it as replaced)
+      → BM25 over the same prompt: a hit must ALSO match lexically
+      → gate: bar 0.78 AND (score - median of the full sweep) >= 0.15
+      → cap 3, minus anything already injected this session
+  → hookSpecificOutput.additionalContext, or silence
+```
+
+**The margin is the mechanism, not the bar.** An absolute threshold admitted
+so much that the cap was doing the selecting: 207 of 224 firings hit it. A
+threshold that only ever truncates a larger set is not a filter. Scoring each
+hit against the median of its OWN sweep makes the test relative, so a prompt
+with nothing distinctive to say fires nothing however high its absolute scores
+drift. The median must come from the full sweep - taken over an already
+filtered head it would describe the winners rather than the field they beat.
+
+The asymmetry driving every choice here: a miss costs nothing, because the turn
+proceeds exactly as it would have. A false positive costs real damage, because
+injected context arrives with the authority of the system rather than the
+tentativeness of a search result, and nothing downstream marks it as a guess.
+So each stage REJECTS, and none of it is a judgement call - the same rule that
+governs truth status governs this.
+
+`bench/gate.py` reproduces the sweep against a real corpus. Read `cap3`.
+
 ## Relations + spreading activation
 
 ```
