@@ -144,6 +144,32 @@ AI client (Claude Code / Cursor / Windsurf / …)
   composes independent measurements and each owns its SQL - and that split is
   what kept `stats.py` under the 300-line limit when the block was added.
 
+  **Involuntary recall** is the first retrieval path that is not an MCP tool
+  at all. It runs as a Claude Code `UserPromptSubmit` hook, so it answers a
+  question no tool can be asked: what should have surfaced without anyone
+  requesting it. That inverts the usual precision/recall trade-off, because
+  the result is injected rather than returned, and injected context carries
+  the authority of the system instead of the tentativeness of a search hit.
+  A miss is free; a false positive misleads. Every stage is therefore a
+  rejection.
+
+  The split is `recall_gate.py` (pure arithmetic, no I/O, unit-testable
+  without a brain) and `recall_sweep.py` (everything that touches the world),
+  with `prompt_hook.py` as the entry point. The same seam as `graph_stats` and
+  `size_stats`: the decision and its evidence are separable, so separate them.
+
+  The load-bearing idea is the **margin**, not the threshold. An absolute bar
+  admitted enough candidates that the 3-memory cap was doing the selecting,
+  and a threshold that only ever truncates is not filtering. Comparing each
+  hit to the median of its own sweep makes the test relative and self-scaling.
+  Pinned and superseded memories are excluded in SQL rather than scored: the
+  first already loads unconditionally every session, and the second is
+  knowledge the store has itself recorded as replaced.
+
+  `bench/gate.py` exists because the unit tests cannot answer whether the
+  thresholds are the right ones - only a real corpus against a real brain can,
+  and neither belongs in a public repo. Harness committed, corpus not.
+
   Edge repair lives in `relation_repair.py`, mixed into `RelationManager`:
   `retype_relation` and `reverse_relation` are the two halves of "the pair is
   right, the label or the arrow is not", and both UPDATE the existing row so an

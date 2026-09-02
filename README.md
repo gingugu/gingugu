@@ -458,9 +458,20 @@ It installs:
   project namespace is derived from the repo's folder name automatically.
 - **`.claude/hooks/stop.py`** — a `Stop` hook that blocks once if a working
   session never saved anything, guarding the "unsaved session vanishes" trap.
+- **`.claude/hooks/user_prompt_recall.py`** — a `UserPromptSubmit` hook for
+  **involuntary recall**: memories that arrive because of what you typed, with
+  no tool call and no decision by the assistant. Every other retrieval path
+  answers "what did you ask for"; this one answers "what should have arrived
+  anyway". Injected context reads as authoritative, so the design is built
+  around refusing: a memory must clear a length floor, a similarity bar, a
+  margin above the median of its own sweep, a keyword match on the same
+  prompt, and not have been surfaced already this session. Pinned memories are
+  skipped (they already load every session) and so are superseded ones. On a
+  548-prompt sample it fires on about 5% of turns. Set `MEMORY_RECALL_HOOK=off`
+  to disable it.
 - **`.claude/commands/sink-the-ship.md`** — a `/sink-the-ship` command to flush
   everything worth keeping before you close a session.
-- Both hooks wired into `.claude/settings.json`, **merged non-destructively** —
+- All three hooks wired into `.claude/settings.json`, **merged non-destructively** —
   any existing config is backed up (`settings.json.bak`) and preserved.
 - The runtime artifacts the hooks generate (`logs/`, `.claude/data/`,
   `.claude/settings.local.json`) appended to your `.gitignore` — so a session

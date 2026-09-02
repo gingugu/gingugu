@@ -11,6 +11,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Involuntary recall: memories that arrive without being asked for.**
+  `gingugu init` now installs a `UserPromptSubmit` hook, and `gingugu hook
+  prompt` decides what it surfaces. Every other retrieval path answers "what
+  did you ask for"; this one answers "what should have arrived anyway", on
+  every turn, with no tool call and no decision by the agent.
+
+  Because injected context arrives wearing the authority of the system rather
+  than the tentativeness of a search result, the whole design is built around
+  refusing. A miss costs nothing. A false positive misleads. So a memory has
+  to clear five independent gates: a length floor, an absolute cosine bar, a
+  **margin above the median of its own sweep**, a BM25 match on the same
+  prompt, and not having been surfaced already this session. Pinned and
+  superseded memories are excluded outright - the first is already in context
+  unconditionally, the second is knowledge the store has recorded as replaced.
+
+  The margin is the part that matters. A flat threshold admitted so much that
+  the 3-memory cap was doing the selecting: 207 of 224 firings hit it. Judging
+  each hit against the median of its own sweep makes the test relative, so a
+  prompt with nothing distinctive to say surfaces nothing however high its
+  absolute scores drift. Measured on 548 real prompts, the shipped
+  configuration fires on 5% of turns with a mean of 1.7 memories, and only 8
+  of 28 firings reach the cap.
+
+  Nothing about it can break a session: every failure path exits 0 in silence,
+  the database is opened read-only, and roughly 44% of prompts are rejected on
+  length before the encoder is ever imported. `MEMORY_RECALL_HOOK=off`
+  disables it; the bar, margin, cap and floor are each env-tunable.
+
+- **`bench/gate.py` replays a real prompt corpus through that gate.** The unit
+  tests pin the arithmetic but cannot tell you whether the thresholds are the
+  right ones, which is only answerable against real prompts and a real brain.
+  The harness is committed; the corpus is not, and belongs somewhere already
+  gitignored.
+
 - **`memory_search(pinned=...)` can enumerate the always-present tier.** Pins
   load unconditionally at every session start, so they are the memories most
   worth auditing, and until now they were the one set the tool surface could

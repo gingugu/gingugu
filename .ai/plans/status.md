@@ -4,6 +4,37 @@ _Last updated: 2026-09-02_
 
 ## In Flight
 
+**`feature/involuntary-recall`** - board item 2, the first real build in the
+identity-core program. `main` is clean at `619828f` (PR #68 merged).
+
+A `UserPromptSubmit` hook that surfaces memories the prompt woke. New modules
+`recall_gate.py` (pure decision arithmetic), `recall_sweep.py` (read-only I/O),
+`prompt_hook.py` (`gingugu hook prompt`), a packaged hook template, and
+`bench/gate.py`.
+
+**What the measurement changed about the design.** The item as boarded said
+"embed each prompt, inject over a high similarity bar." Replaying 548 real
+logged prompts showed a flat bar does not work: at 0.72 it fired on 41% of
+turns and 207 of 224 firings hit the 3-memory cap, meaning the cap was doing
+the selecting and the threshold was only truncating. The fix is a **margin
+against the median of each prompt's own sweep**, which is relative and so
+self-scaling. Two structural exclusions came out of the same pass and are
+plain defects in the original plan: pinned memories already load every session
+(injecting one pays twice) and superseded memories are knowledge the store has
+recorded as replaced. Requiring a BM25 match alongside the cosine was the
+largest precision gain - the dominant false positive was the encoder matching
+the user's REGISTER against reflections written in that same voice.
+
+Shipped config fires on 5% of turns, mean 1.7 memories, 8 of 28 firings at the
+cap. Cost is ~0.9s on a firing turn, ~0.03s on the 44% rejected on length
+before the package loads, against a 30s hook budget.
+
+780 tests green, `ruff` + `black` clean. The margin gate was verified
+load-bearing by disabling it: a uniform field injects 3 without it, 0 with it.
+
+**Open question for review:** the gate is on by default once `gingugu init`
+runs. `MEMORY_RECALL_HOOK=off` disables it.
+
 **`feature/identity-core-pin-tier`** - the first three board items of the
 identity-core program, in review as one PR. `main` is clean at `b28c1dc` and
 untouched.
@@ -226,11 +257,24 @@ One entry is time-boxed on purpose: the conceptual frame is pinned because items
 2 to 4 are live, and should be unpinned when that program discharges. A tier
 that only ever grows has become retrieval again.
 
-### 2. Involuntary recall: surface memories without being asked
+### 2. Involuntary recall: surface memories without being asked - BUILT 2026-09-02
+
+**Status: built on `feature/involuntary-recall`, in review.** See In Flight.
 
 A `UserPromptSubmit` hook that embeds each prompt, sweeps the graph, and
 injects anything over a high similarity bar. No tool call, no decision by the
 agent - memory that arrives rather than memory that is fetched.
+
+**The "high similarity bar" half of that description did not survive contact
+with the data**, and the correction is the item's main finding. Replayed
+against 548 real prompts, a flat bar of 0.72 fired on 41% of turns with 207 of
+224 firings pinned at the 3-memory cap - the cap was selecting and the
+threshold was only truncating. What works is a margin against the median of
+each prompt's own sweep, plus a required BM25 match, plus excluding pinned
+(already loaded) and superseded (already replaced) memories. The dominant
+false positive was never a wrong topic: it was the encoder matching the user's
+conversational REGISTER against session reflections written in that same
+voice.
 
 **Not speculative.** The write path already does this: `memory_store`'s dedupe
 and relation hints fire unrequested, and the record shows four separate

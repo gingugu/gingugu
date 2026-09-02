@@ -13,11 +13,17 @@ from pathlib import Path
 
 SESSION_START_CMD = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/session_start.py"
 STOP_CMD = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/stop.py --check-memory-saves"
+PROMPT_RECALL_CMD = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/user_prompt_recall.py"
 
 # (event name, command, timeout, marker used to detect an existing entry)
+#
+# UserPromptSubmit gets 20s rather than the event's 30s default: the hook is
+# sequential and the user is waiting on it, so a hung encoder should surrender
+# the turn well before Claude Code would give up on it.
 _HOOKS = [
     ("SessionStart", SESSION_START_CMD, 15, "session_start.py"),
     ("Stop", STOP_CMD, 30, "stop.py"),
+    ("UserPromptSubmit", PROMPT_RECALL_CMD, 20, "user_prompt_recall.py"),
 ]
 
 
@@ -28,6 +34,7 @@ _HOOKS = [
 _KNOWN_FLAGS = {
     "session_start.py": set(),
     "stop.py": {"--check-memory-saves", "--min-tool-calls"},
+    "user_prompt_recall.py": set(),
 }
 
 # `parser.add_argument("--flag"` / `'--flag'`, across line breaks.
