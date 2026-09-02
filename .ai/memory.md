@@ -74,6 +74,7 @@
 | `decay.py` | Composite scoring, the `reference_timestamp()` freshness anchor (MAX, not COALESCE), dormancy as a resting signal (never auto-forgets), and `relative_age()`/`age_label()`, the derived-at-read `age` string. `composite_score`/`score_memory` are summed from `composite_parts`/`score_parts`, so the `explain` breakdown and the score it explains are the same arithmetic |
 | `stats.py` | Health stats (counts, confidence, dormancy, hygiene, review sweep) |
 | `graph_stats.py` | Relation-graph health: edges, degree, type mix, orphans, and edges stranded past `SPREAD_PER_SEED`. Also `orphan_sample` (the orphans behind the count, costliest first) and the shared `orphan_filter()` predicate behind `memory_search(orphans=True)` |
+| `size_stats.py` | Character cost the counts do not show: `total_chars`, `mean_chars`, `pinned_chars`, `largest_pinned_chars`. `pinned_chars` is the only recurring context cost in the store, since pins load at every session start exempt from ranking; `largest_pinned_chars` is the skew check, because a tier dominated by one entry is not fixed by adding better ones |
 | `staleness.py` | Advisory review hints for point-in-time memories |
 | `claims.py` | Extracts checkable state claims (repo-qualified PR/MR refs) from prose; ignores refs inside `[[wiki-links]]` |
 | `claim_qualify.py` | Decides **which repo** a ref names: URL, then a repo the prose names next to it, then a binding stated elsewhere in the same memory, then the namespace default. Requires the `#`/`!` sigil so plan ordinals ("PR 1") are not refs |

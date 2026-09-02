@@ -233,6 +233,8 @@ memory_context(namespace | "ns1,ns2,…", task_hint, limit, compact)
   → multi-namespace calls de-dupe across loads (highest-scoring instance wins);
     each namespace's pins lead, then the ranked tails interleave by rank;
     each memory is stamped with its home namespace
+  → the pin loop emits its OWN instance; "highest-scoring wins" governs only
+    the ranked tails, so a pin never arrives carrying another bucket's score
   → spreading activation wakes related dormant memories
   → returns the working set the agent should hold for the session
     (compact=true: title + ~200-char summary instead of full content,
@@ -300,6 +302,35 @@ entirely - it is not scored, not quota'd, and not evictable - and is returned
 _in addition to_ `limit`, because a tier that truncates under contention
 recreates the failure it exists to fix. Bounded by `PINNED_HARD_CAP = 20` per
 namespace at the write path instead. Deprecation beats a pin.
+
+**Scorelessness is the pin's identity, not a cosmetic detail.** The absence of
+a score is how a caller knows a memory bypassed ranking, so a pin that arrives
+scored is indistinguishable from an ordinary ranked hit and its place at the
+top reads as earned rather than guaranteed. Until 2026-08-31 the multi-namespace
+merge broke exactly that: de-duplication keeps the highest-scoring instance,
+`(mem.score or 0.0)` reads a pin's `None` as 0.0, and any scored duplicate won.
+A memory pinned in one namespace that also reached a second namespace's
+cross-namespace bucket therefore came back wearing that bucket's score.
+Position was never wrong; identity was. Single-namespace loads never showed it,
+because the pin surfaces once and there is no duplicate to lose to. A memory
+pinned in a namespace the caller did not ask for still arrives as a ranked hit,
+which is correct: it is not part of the requested namespace's unconditional tier.
+
+**Auditing the tier** is a read path of its own, since the tier is the one set
+paid for on every call:
+
+```
+memory_search(pinned=True)   → every pin, any namespace; tri-state, so
+                               False returns the complement and omitting it
+                               ignores the flag. Composes with every other
+                               filter, with or without a query
+memory_stats → stats.size    → total_chars, mean_chars, pinned_chars,
+                               largest_pinned_chars. pinned_chars is the only
+                               recurring cost in the store; largest_pinned_chars
+                               is the skew check, since a tier dominated by one
+                               entry IS that entry and is fixed by splitting it,
+                               never by adding better pins alongside it
+```
 
 ## Relations + spreading activation
 

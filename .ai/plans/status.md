@@ -1,11 +1,38 @@
 # Project Status
 
-_Last updated: 2026-08-30_
+_Last updated: 2026-09-02_
 
 ## In Flight
 
-**Access-log session id: the log learns who asked.** Branch
-`feature/access-log-session-id`. `access_log.context` had existed since the
+**`feature/identity-core-pin-tier`** - the first three board items of the
+identity-core program, in review as one PR. `main` is clean at `b28c1dc` and
+untouched.
+
+Four commits, one program: item 1 curated the pin tier (docs only, as scoped),
+and executing it found items 11 and 12, both fixed here.
+
+- `9a1f008` docs: resequence the board after #66 and #67
+- `11338a9` docs: discharge item 1 and record what executing it found
+- `c97878d` fix: a pin no longer arrives scored on a multi-namespace load
+- `bf0789d` feat: `memory_search(pinned=)` + `memory_stats.size`
+
+One PR rather than a stack, deliberately: all four commits came out of item 1
+and all four edit this file at the same anchor, which is the exact collision
+stacking exists to avoid.
+
+737 tests green (counted from `--collect-only`, exit 0, zero `FAILED`/`ERROR`
+lines), `ruff` + `black` clean. Both fixes were confirmed to fail without their
+change.
+
+**Worth knowing while this is open:** the local MCP server runs
+`uv --directory <repo> run gingugu`, off the working tree, so a restart with
+this branch checked out serves unmerged code to the live brain. All three
+changes are read-path only.
+
+## Recently Completed
+
+**Access-log session id: the log learns who asked. MERGED as `b28c1dc` (#67).**
+10/10 CI green. `access_log.context` had existed since the
 first schema and had never once been written - NULL on all 8,479 rows in the
 live brain, measured, not assumed. Without a grouping key the log can say
 _when_ a memory was read but never _alongside what_, so co-access ("these are
@@ -128,91 +155,384 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-Board carried into the next cycle, all non-urgent. Transaction context +
-atomic consolidation came **off the top** this cycle - see In Flight above.
-Two new items entered (3 and 4), both found by porting the brain to other
-harnesses rather than by reading our own code.
+## The Board (resequenced 2026-08-30)
 
-1. Hygiene: concurrency test, `promote.py` coverage, recall's silent `default`
-   namespace fallback, finish the `storage.py` split (393 lines). The
-   product-spec "(unreleased)" drift that also sat on this item is **cleared** -
-   cutting the release resolved all 19 markers.
-2. `staleness.py:43` duplicates the ref regex that `claim_qualify.py:33` owns,
-   and carries two of the five defects PR #65 fixed: the `[#!]` sigil is
-   optional, so "PR 1" meaning "first PR of the plan" is a reference, and the
-   separator is `\s*` rather than `[ \t]*`, so a kind at the end of one line
-   binds to a number at the start of the next. Consequence is a false
-   `open-pr-reference` review hint rather than a bad claim row, which is why
-   #65 left it. The fix is one regex, but the real question is whether the two
-   modules should share a single definition - `staleness.py` wants only the
-   `kind`/`num` shape, not repo qualification, so a shared constant is
-   plausible where a shared pattern is not.
-3. **A memory cannot tell a reader whether it is still true.** Found by
-   pointing two non-Anthropic models at a copy of the brain on 2026-08-28.
-   Both read faithfully; both repeated point-in-time state as current fact. One
-   told the user "migration 010 has not run against the live brain" - false for
-   hours by then, and read verbatim from a `RESUME` memory nobody had
-   corrected. Nothing in the record marked it as spent.
+**Two items discharged, four added, one unblocked.** Atomic consolidation
+merged as `ac2ee53` (#66) and the access-log session id as `b28c1dc` (#67) -
+the second was never on the board, having entered and shipped inside one
+session because it gates everything in items 1 to 4.
 
-   This is not a model failure. A handoff memory, a board of record and a
-   durable pattern are indistinguishable on read: same shape, same confidence,
-   same claim to currency. `staleness.py` review hints are the closest thing we
-   have and they are advisory, keyed on regex over prose, and invisible to a
-   consumer that only calls `memory_recall`.
+The four new items are one commissioned program, listed in dependency order.
+They take the top because they are the direction the project is now pointed:
+making memory constitutive rather than merely retrievable. Everything below
+them is unchanged in substance from the previous board.
 
-   Worth considering, none decided: a first-class "point-in-time vs durable"
-   distinction rather than inferring it from `type`; surfacing the review-hint
-   signal on every read path, not just `memory_context` and `memory_stats`;
-   and a supersession chain a reader can follow forward from any stale record
-   to its live replacement. The failure mode is quiet and it compounds - a
-   stale memory read by an agent becomes a stale statement to the user.
-4. `gingugu init --client windsurf` writes `.windsurfrules`
-   (`bootstrap/__init__.py:24-28` knows only windsurf/cursor/cline). Windsurf
-   was renamed **Devin Desktop** on 2026-06-02 and rules moved to
-   `.devin/rules/*.md` (12,000 chars per file, `trigger:` frontmatter:
-   `always_on`, `model_decision`, `glob`, `manual`), with `.windsurfrules` kept
-   only as a legacy fallback. Our own bootstrap now targets a deprecated path.
-   Needs a `devin` client; the root `AGENTS.md` route the repo rules manager
-   already handles is the other half of the answer, since it carries no size
-   limit.
-5. **Two unused protocol-layer levers for session-start reliability.** Every
-   attempt to guarantee the memory protocol runs has been aimed at the harness
-   (hooks), where our options genuinely are limited. These two sit in the
-   protocol layer we own, and apply to every client at once.
+### 1. Identity core: curate the pin tier - DONE 2026-08-31
 
-   **5a. `FastMCP` accepts `instructions`; `server.py:61` passes none.**
-   Verified: the SDK signature is `instructions: str | None = None`, and the
-   MCP spec (2025-06-18) carries the field in `InitializeResult` - "Instructions
-   describing how to use the server and its features... It can be thought of
-   like a 'hint' to the model. For example, this information **MAY** be added to
-   the system prompt."
+**No code, as scoped.** The pin mechanism shipped in migration 008 and works:
+pins bypass ranking entirely, cap at 20 per namespace, and (since #57) sit at
+the top of every load. The defect was composition, not machinery.
 
-   Research verdict: **real, but MAY not MUST, so support is patchy.** Claude
-   Code processes it (fixed in `anthropics/claude-code#3312`). claude.ai web
-   silently ignores it. The Agent SDK does not process it
-   (`claude-agent-sdk-typescript#174`). LangChain4j receives it at handshake and
-   never exposes it (`langchain4j#5421`). Cursor, Devin Local and ChatGPT
-   desktop: **unmeasured** - the fastest way to settle each is a raw
-   `initialize` probe, the same one that proved the credential gating.
+The item as written found one defect. Executing it found a second, and the
+second turned out to be the one that mattered.
 
-   Not a universal fix. But it is one string, it costs nothing where
-   unsupported (the field is simply dropped), and it works in the harness we
-   use most. Cheap enough that the research was the expensive part.
+**Composition, as boarded:** 8 pins, all in `crow`, seven of them prohibitions,
+one a scoring diagnostic, none relational.
 
-   **5b. Our own tool responses are a channel nothing can ignore.** Every
-   gingugu tool returns a dict we control, and the model always sees tool
-   results - that is true by construction in every harness, unlike anything in
-   5a. If the first call of a session is not `memory_context`, the response can
-   carry a "memory not loaded this session" marker.
+**Size, found on execution:** the tier was **25,952 characters**, and **two pins
+were 65% of it**. Both were a one-sentence rule followed by an appended
+instance log that grew on every repeat offence - unbounded, and fastest for the
+rules broken most often. That is the exact inversion of the frame behind this
+program, which asks the tier to hold what the episodes made rather than the
+episodes themselves. Adding good pins without fixing this would have doubled an
+already-oversized tier.
 
-   **The wrinkle to design around:** this needs session identity. Under stdio
-   that is free, since the client spawns one process per session. Under
-   `gingugu serve` it is not - one process serves many clients, so "first call
-   of a session" has to key off the streamable-HTTP `Mcp-Session-Id` rather
-   than process lifetime. Do not build 5b assuming process-per-session, or the
-   hosted transport gets a nudge that fires once and then never again for
-   anyone. Also worth bounding: a marker on every response is noise, so it
-   should fire once and stop.
+**What was applied:**
+
+- **Split** both oversized pins. The rule and its operative check stay pinned;
+  the instance log moved to an unpinned child linked `child_of`. Nothing lost,
+  and the rules stop growing.
+- **Unpinned** the scoring diagnostic - a debugging technique, not identity.
+- **Pinned 8 constitutive memories.** Six in `crow`: how to address the user,
+  his observed working style, the standing directive to push back rather than
+  agree, the counterpart directive to make technical calls with authority, the
+  product-audience rule, and the conceptual frame behind items 1 to 4. Two in
+  `gingugu`, which had no unconditional core at all despite 341 memories: the
+  design law that truth status is math rather than model judgment, and the
+  constraint that the background pass proposes rather than writes.
+
+**Result: 15 pins across two namespaces, 28,327 characters.** Measured, not
+projected - an earlier estimate of half the weight was arithmetic that had
+never been run, and the tier is in fact byte-neutral: 28,363 before, 28,327
+after.
+
+The win is not size, it is SHAPE. The split freed 13,922 characters (em dash
+11,561 to 2,054; risk tolerance 7,664 to 3,249) and the eight new pins spent
+15,528. What changed is the distribution:
+
+| | before | after |
+|---|---|---|
+| pins | 8 | 15 |
+| largest single pin | 11,561 (41%) | 3,249 (11%) |
+| top two as share of tier | 65% | 23% |
+| prohibitions | 7 of 8 | 7 of 15 |
+
+No pin now exceeds 3,249 characters, and the append-on-every-instance growth
+mechanism that produced the two outliers is gone - instances are filed as their
+own memories and linked. That is what stops the tier from ratcheting; holding
+the byte count flat while adding seven entries is the evidence it worked.
+
+One entry is time-boxed on purpose: the conceptual frame is pinned because items
+2 to 4 are live, and should be unpinned when that program discharges. A tier
+that only ever grows has become retrieval again.
+
+### 2. Involuntary recall: surface memories without being asked
+
+A `UserPromptSubmit` hook that embeds each prompt, sweeps the graph, and
+injects anything over a high similarity bar. No tool call, no decision by the
+agent - memory that arrives rather than memory that is fetched.
+
+**Not speculative.** The write path already does this: `memory_store`'s dedupe
+and relation hints fire unrequested, and the record shows four separate
+occasions where an unrequested hint caught what deliberate recall had missed -
+including, on 2026-08-30, the pin-ordering bug that would have made item 1
+pointless. The 26th-sail reflection states it plainly: _the write path is
+currently a better retriever than the read path_. This extends a proven
+mechanism to every turn.
+
+Engineering it needs, and does not yet have: a prompt-length floor (short
+messages like "go" produce garbage similarity), a per-session suppression set
+so one memory does not stutter across ten turns, a warm embedder so the hook
+does not cold-load a model per message, and threshold tuning that will take
+several sessions to settle. Costs are real: latency on every message and a
+permanent context tax.
+
+### 3. The dream pass: deterministic background consolidation, on cron
+
+A scheduled pass that runs while nobody is present. **Pure math, and it writes
+to a proposal queue rather than to memories.** The governing constraint is the
+user's, verbatim: _no AI decides what's in our brain_. Math finds structure;
+structure is not content.
+
+Allowed unattended, because all of it is counting: co-access (Hebbian) edges
+from `access_log.context`, centrality over the relation graph (a **computed**
+answer to "what is core", better than an authored guess), cluster detection,
+orphan detection, decay arithmetic, and claim reconciliation against git as
+ground truth.
+
+Queued for human decision, never written: naming what a cluster means, choosing
+an edge's relation **type**, writing any prose, deciding what counts as
+identity-core.
+
+**Design constraint discovered while shipping #67:** `prune_access_log` trims
+the log to a rolling 90 days, so co-access is a moving window and the existing
+8,479 rows age out from roughly 2026-09-13. The pass must accumulate its own
+durable co-access aggregate rather than plan to re-read history from the log.
+Aggregates outlive the events they summarize.
+
+### 4. Governance bands on the proposal queue
+
+Earned auto-approval, modelled on ForgeSmith's governance layer, which already
+proved the pattern: authority bands raised by counted approvals and dropped
+instantly on a rejection, a calibration gate that blocks until a track record
+exists, and hard guardrails that block at any band.
+
+**This does not violate the no-AI rule, because the learning is arithmetic.**
+Approvals move a scalar, the scalar crosses a threshold, the threshold gates a
+class. No model judges anything. The one place it must diverge from ForgeSmith:
+trust there is scoped per spec file, and here the scope unit is the **proposal
+class** - "co-access edges above 0.9" earns its own band and buys nothing for
+"orphan reconnections". ForgeSmith lists per-pattern trust as roadmap; we would
+be building it correctly from the start.
+
+Also unlike ForgeSmith: its confidence scorer has LLM-judged dimensions and
+ours cannot. Every input to a band calculation has to be countable.
+
+Hard guardrails, absolute at every band: anything writing prose, anything
+touching a pinned memory, anything that forgets or deletes, any edge typed
+`supersedes` or `contradicts`, any cross-namespace write.
+
+**Sequenced last on purpose.** Thresholds cannot be learned from zero
+decisions, and the calibration gate needs runs to calibrate against.
+
+### 5. Hygiene
+
+Concurrency test, `promote.py` coverage, recall's silent `default` namespace
+fallback, and the module-size problem, which is **worse than this item has been
+recording**. Measured on `main` at `b28c1dc`: `database.py` **547** lines and
+`storage.py` **401** (up from 393; #67 added 8), against a 300-line limit. Five
+more sit between 283 and 299 and will cross on their next edit: `decay.py`,
+`handlers/recall.py`, `handlers/helpers.py`, `bootstrap/global_rules.py`,
+`handlers/memory.py`. `database.py` is nearly double the limit and had never
+been named on this item at all.
+
+**That prediction landed on 2026-08-31.** Fixing item 11 took
+`handlers/recall.py` from 293 to 301, and it was held under only by shortening
+the comment that explained the fix, which is the limit trading documentation
+for a line count rather than buying anything. It sits at 298 and the next edit
+crosses it again. This item is now blocking real work, not just tidiness. The product-spec "(unreleased)" drift that also
+sat here is **cleared** - cutting the release resolved all 19 markers.
+
+### 6. `staleness.py:43` ref-regex duplication
+
+`staleness.py:43` duplicates the ref regex that `claim_qualify.py:33` owns,
+and carries two of the five defects PR #65 fixed: the `[#!]` sigil is
+optional, so "PR 1" meaning "first PR of the plan" is a reference, and the
+separator is `\s*` rather than `[ \t]*`, so a kind at the end of one line
+binds to a number at the start of the next. Consequence is a false
+`open-pr-reference` review hint rather than a bad claim row, which is why PR
+#65 left it. The fix is one regex, but the real question is whether the two
+modules should share a single definition - `staleness.py` wants only the
+`kind`/`num` shape, not repo qualification, so a shared constant is
+plausible where a shared pattern is not.
+
+Re-verified 2026-08-30 on `main`: `_PR_REF` at line 43 still carries both
+defects.
+
+### 7. A memory cannot tell a reader whether it is still true
+
+Found by pointing two non-Anthropic models at a copy of the brain on
+2026-08-28. Both read faithfully; both repeated point-in-time state as current
+fact. One told the user "migration 010 has not run against the live brain" -
+false for hours by then, and read verbatim from a `RESUME` memory nobody had
+corrected. Nothing in the record marked it as spent.
+
+This is not a model failure. A handoff memory, a board of record and a durable
+pattern are indistinguishable on read: same shape, same confidence, same claim
+to currency. `staleness.py` review hints are the closest thing we have and they
+are advisory, keyed on regex over prose, and invisible to a consumer that only
+calls `memory_recall`.
+
+Worth considering, none decided: a first-class "point-in-time vs durable"
+distinction rather than inferring it from `type`; surfacing the review-hint
+signal on every read path, not just `memory_context` and `memory_stats`; and a
+supersession chain a reader can follow forward from any stale record to its
+live replacement. The failure mode is quiet and it compounds - a stale memory
+read by an agent becomes a stale statement to the user.
+
+**Overlaps item 3.** Claim reconciliation against git as ground truth is one of
+the dream pass's deterministic jobs, and it is a partial answer here: a
+scheduled pass that checks every open claim and queues the spent ones closes
+the loop without waiting for this item's larger design question. Do item 3
+first and re-scope this against what is left.
+
+### 8. `gingugu init` targets a deprecated rules path
+
+`gingugu init --client windsurf` writes `.windsurfrules`
+(`bootstrap/__init__.py:24-28` knows only windsurf/cursor/cline). Windsurf
+was renamed **Devin Desktop** on 2026-06-02 and rules moved to
+`.devin/rules/*.md` (12,000 chars per file, `trigger:` frontmatter:
+`always_on`, `model_decision`, `glob`, `manual`), with `.windsurfrules` kept
+only as a legacy fallback. Our own bootstrap now targets a deprecated path.
+Needs a `devin` client; the root `AGENTS.md` route the repo rules manager
+already handles is the other half of the answer, since it carries no size
+limit.
+
+Re-verified 2026-08-30 on `main`: `CLIENT_RULES_FILES` still maps
+`"windsurf": ".windsurfrules"`. Note the repo's own `.windsurfrules` was
+deleted in #66, so the tool now writes a file the project itself has abandoned.
+
+### 9. Two unused protocol-layer levers for session-start reliability
+
+Every attempt to guarantee the memory protocol runs has been aimed at the
+harness (hooks), where our options genuinely are limited. These two sit in the
+protocol layer we own, and apply to every client at once.
+
+**9a. `FastMCP` accepts `instructions`; `server.py:61` passes none.**
+Verified: the SDK signature is `instructions: str | None = None`, and the
+MCP spec (2025-06-18) carries the field in `InitializeResult` - "Instructions
+describing how to use the server and its features... It can be thought of
+like a 'hint' to the model. For example, this information **MAY** be added to
+the system prompt."
+
+Research verdict: **real, but MAY not MUST, so support is patchy.** Claude
+Code processes it (fixed in `anthropics/claude-code#3312`). claude.ai web
+silently ignores it. The Agent SDK does not process it
+(`claude-agent-sdk-typescript#174`). LangChain4j receives it at handshake and
+never exposes it (`langchain4j#5421`). Cursor, Devin Local and ChatGPT
+desktop: **unmeasured** - the fastest way to settle each is a raw
+`initialize` probe, the same one that proved the credential gating.
+
+Not a universal fix. But it is one string, it costs nothing where
+unsupported (the field is simply dropped), and it works in the harness we
+use most. Cheap enough that the research was the expensive part.
+
+Re-verified 2026-08-30 on `main`: `server.py:61` is still a bare
+`FastMCP("gingugu")`.
+
+**9b. Our own tool responses are a channel nothing can ignore.** Every
+gingugu tool returns a dict we control, and the model always sees tool
+results - that is true by construction in every harness, unlike anything in
+9a. If the first call of a session is not `memory_context`, the response can
+carry a "memory not loaded this session" marker.
+
+**This item's blocker is GONE as of #67.** It needed session identity: free
+under stdio, but not under `gingugu serve`, where one process serves many
+clients and "first call of a session" cannot key off process lifetime. That is
+exactly what `session.current_session_id()` now provides, correct for both
+transports without special-casing. 9b is unblocked and is the cheapest
+remaining protocol lever.
+
+Still worth bounding: a marker on every response is noise, so it should fire
+once per session and stop.
+
+### 10. Em dashes in published documentation
+
+**Rescoped 2026-08-31.** The style rule was recorded far broader than it was
+ever stated, and this item inherited the overstatement. The rule covers what a
+person reads as prose: README, CHANGELOG, `docs/`, site copy, PR bodies, commit
+messages. It does **not** cover code comments, docstrings, or memory content.
+
+That inverts the item rather than shrinking it. Its original evidence was 17
+occurrences in `database.py` and 16 in `bootstrap/global_rules.py` - both code,
+both now out of scope, along with the other 333 across `src/`, `tests/` and
+`bench/`. Those are not defects and no work should be boarded against them.
+
+The real violation is the half that was never counted. Measured 2026-08-31:
+
+| File | Count |
+|---|---|
+| `docs/architecture.md` | 169 |
+| `CHANGELOG.md` | 102 |
+| `README.md` | 64 |
+| `docs/roadmap.md` | 23 |
+| `docs/future-architecture.md` | 8 |
+
+366 occurrences in files published to PyPI and GitHub and read by people who
+have never met this project. `README.md` is the PyPI landing page.
+
+`.ai/`, `CLAUDE.md` and `AGENTS.md` carry a further 245. They are agent-facing
+rather than published prose, so they sit outside this item unless a call is made
+to include them.
+
+A sweep is mechanical, but it is not a substitution: a paired parenthetical dash
+becomes real parentheses, prose takes a comma or a full stop as sense requires,
+and a non-prose glyph in a table cell takes a hyphen. Fix as a reviewed list.
+Grep the HTML entity `&#8212;` as well as the literal. Its own PR, no logic in
+it.
+
+### 11. A pinned memory loses its pin identity on a multi-namespace load - FIXED 2026-08-31
+
+Found 2026-08-31 while verifying item 1 through the tool surface, and
+reproduced with two unrelated task hints before being written down.
+
+On `memory_context(namespace="crow,gingugu", ...)`, fourteen of the fifteen pins
+come back scoreless, which is correct - pins bypass ranking and so carry no
+`score`. One comes back **with** a score, sorted into the ranked run, and the
+payload reports a de-duplication. The same memory on a single-namespace call
+comes back scoreless and correct.
+
+The score was byte-identical across both hints, which is the signature of a
+synthetic relevance rather than a real match: the memory is surfacing twice, once
+from the pinned bucket and once from a bucket that scores with a fixed
+relevance, and de-duplication is keeping the ranked copy. It is the highest
+access-count memory in the store, which is what earns it the second slot.
+
+Blast radius is small today - the memory is still returned, still adjacent to
+the pin block - but the pin contract says pins bypass ranking, and on this path
+one does not. A caller cannot tell it is pinned, and its position is held by
+luck of its score rather than by guarantee. Every session start uses this path.
+
+**FIXED 2026-08-31.** The inference above was confirmed in source, and it was
+not in `context.py` at all - it is `handlers/recall.py`. De-duplication keeps
+the highest-scoring instance via `(mem.score or 0.0)`, so a pin's `None` scores
+as 0.0 and loses to any scored duplicate; the merge then emitted
+`best.get(mem.id, mem)` for pins as well as for ranked entries.
+
+The fix is that the pin loop emits its own instance and `best` continues to
+govern only the ranked tails. Scoping it to the pin loop rather than changing
+`best` itself preserves the existing behaviour for a memory pinned in a
+namespace the caller did not ask for: it still arrives as an ordinary ranked
+hit, which is correct, because it is not part of the requested namespace's
+unconditional tier.
+
+Covered by `test_pin_survives_dedup_against_a_scored_duplicate`, asserted at
+the merge rather than over the tool surface because which memories the
+cross-namespace bucket reaches is a ranking heuristic - a payload-level test
+would assert the contract only by luck. Confirmed to fail without the fix,
+carrying the same 0.775 seen live.
+
+Not yet verified against the running server, which is on installed code rather
+than this branch. Re-check after a restart.
+
+### 12. The pin tier is invisible to the tool surface - DONE 2026-08-31
+
+Also found executing item 1, and the reason that work needed raw SQLite.
+
+`memory_search` filters on type, tags, confidence, dates, ids, claims and
+orphans. **There is no `pinned` filter**, so there is no way to ask what is
+pinned across namespaces. `memory_context` returns the tier but capped by
+`limit`, mixed with ranked buckets, and scoped per namespace.
+
+`memory_stats` reports counts, confidence, dormancy, graph, hygiene, review and
+claims. **It reports no sizes at all.** Pins are paid for on every session start
+before any ranking, so their character cost is the most consequential number in
+the store, and it is not observable through the tool.
+
+**DONE 2026-08-31.** Both landed as scoped.
+
+`pinned` is tri-state on `memory_search` - None ignores the flag, True keeps
+pins, False keeps the rest - implemented as a parameter-free WHERE fragment in
+`build_filters` beside `claim_filter` and `orphan_filter`. Because
+`advanced_search` passes one shared `filters` dict to all four search paths,
+the single addition covers query-ranked, query-with-column-sort, listing-by-
+score and listing-by-column alike.
+
+`size` on `memory_stats` carries `total_chars`, `mean_chars`, `pinned_chars`
+and `largest_pinned_chars`. It lives in a new `size_stats.py` rather than in
+`stats.py`, which mirrors `graph_stats.py` and is also what kept `stats.py`
+under the line limit - it had reached 306 with the block inline.
+
+Six tests added across `test_pinned.py` and `test_stats.py`: enumeration
+returns exactly the pins and nothing else, `pinned=False` its complement,
+omitting it ignores the flag, the filter composes with a namespace scope, an
+empty tier reports 0 rather than None, and the block is namespace-scoped.
+
+Worth stating plainly, because it is the real lesson and it outlives both
+fixes: this project's quality mechanism is dogfooding, and routing around the
+tool with SQL breaks that mechanism silently. Both gaps were hit and worked
+around during item 1 before either was written down, and would have shipped
+unrecorded had the workaround not been questioned.
 
 ## Shipped in v0.18.0 (2026-08-28)
 
