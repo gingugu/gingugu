@@ -113,6 +113,7 @@ def search(
     tags: list[str] | None = None,
     claims: str | None = None,
     orphans: bool = False,
+    pinned: bool | None = None,
     embedder: EmbeddingProvider | None = None,
 ) -> list[Memory]:
     """True hybrid search re-ranked by the composite decay score.
@@ -139,6 +140,7 @@ def search(
         tags=tags,
         claims=claims,
         orphans=orphans,
+        pinned=pinned,
     )
     # Fetch enough rows to satisfy a large request, but never fewer than the
     # cohort: the pool has two jobs and only one of them scales with `limit`.

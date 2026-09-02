@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 from . import claim_queries
 from .decay import DEPRECATE_SUGGEST_AFTER_DAYS, DORMANT_AFTER_DAYS
 from .graph_stats import compute_graph
+from .size_stats import compute_size
 from .staleness import REVIEW_HINT_AFTER_DAYS, review_signals
 
 logger = logging.getLogger(__name__)
@@ -116,6 +117,8 @@ def compute_stats(
         (deprecate_cutoff, *ns_params),
     )
 
+    size = compute_size(conn, ns_clause, ns_params)
+
     namespaces = [
         {"name": row["name"], "count": row["n"]}
         for row in conn.execute(
@@ -135,6 +138,7 @@ def compute_stats(
         "deprecation_suggested": deprecate_suggest,
         "namespaces": namespaces,
         "access_log_rows": _count(conn, "SELECT COUNT(*) FROM access_log"),
+        "size": size,
         "credentials": _credential_health(conn),
         "graph": compute_graph(conn, namespace_id=namespace_id, sample_limit=review_limit),
         "hygiene": compute_hygiene(conn, namespace_id=namespace_id),

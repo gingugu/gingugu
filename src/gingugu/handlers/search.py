@@ -41,6 +41,7 @@ def register(mcp, ctx: ServerContext) -> None:
         ids: str | None = None,
         claims: str | None = None,
         orphans: bool = False,
+        pinned: bool | None = None,
         explain: bool = False,
     ) -> dict:
         """Advanced filtered search across memories with full control over filters and
@@ -99,6 +100,15 @@ def register(mcp, ctx: ServerContext) -> None:
         walks the ones costing the most first. Reconnect them with
         ``memory_relate`` — and only where a directional fact exists to record;
         an orphan is better left alone than wired up with an invented edge.
+
+        ``pinned`` filters on the always-present tier: True returns only pins,
+        False only unpinned memories, and omitting it ignores the flag. Pins are
+        the memories loaded unconditionally at every session start, ahead of and
+        exempt from ranking, so the tier is worth auditing on its own — and
+        ``memory_context`` cannot do it, since it returns pins mixed into ranked
+        buckets, capped by ``limit`` and scoped per namespace. Pair
+        ``pinned=True`` with ``namespace=None`` to enumerate every pin in the
+        store, which is the read the tier's own curation needs.
 
         ``explain=True`` adds a ``score_breakdown`` to each hit: the weighted
         terms ``score`` is the sum of. Results with no ranking behind them carry
@@ -161,6 +171,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 tags=tag_list,
                 claims=claims,
                 orphans=orphans,
+                pinned=pinned,
                 embedder=ctx.store.embedder,
             )
             ctx.store.load_tags(results)
@@ -200,6 +211,16 @@ def register(mcp, ctx: ServerContext) -> None:
         ``stats.dormant_count`` reports memories untouched for 90+ days — a resting
         signal only, never a confidence change. Dormant memories wake automatically on
         recall via spreading activation. Memory is never auto-forgotten.
+
+        ``stats.size`` is the character cost the counts do not show: ``total_chars``,
+        ``mean_chars``, ``pinned_chars`` and ``largest_pinned_chars``.
+        ``pinned_chars`` is the one to watch — pins load unconditionally at every
+        session start, ahead of and exempt from ranking, so it is the only part of
+        the store paid for on every call regardless of relevance.
+        ``largest_pinned_chars`` is the skew check: a tier is not described by how
+        many pins it holds, and when one pin approaches the tier total, the tier IS
+        that pin. Adding well-chosen pins will not fix that; splitting the outlier
+        will. Enumerate the tier with ``memory_search(pinned=True)``.
 
         ``review_limit`` raises the ``review.sample``, ``claims.sample`` and
         ``graph.orphan_sample`` caps (default 5, max 100) so a reconciliation sweep can

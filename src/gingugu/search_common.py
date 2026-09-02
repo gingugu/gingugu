@@ -62,13 +62,15 @@ def build_filters(
     tags: list[str] | None = None,
     claims: str | None = None,
     orphans: bool = False,
+    pinned: bool | None = None,
 ) -> tuple[list[str], list[object]]:
     """Compose the standard metadata filters into WHERE fragments + params.
 
     ``claims`` is "open" or "contradicted" — see ``claim_queries.claim_filter``.
     ``orphans`` keeps only memories with no edges — see
-    ``graph_stats.orphan_filter``. Neither contributes parameters, so both
-    compose anywhere the others do.
+    ``graph_stats.orphan_filter``. ``pinned`` is tri-state: None ignores the
+    flag, True keeps only pins, False keeps only unpinned. None of the three
+    contributes parameters, so all compose anywhere the others do.
     """
     where: list[str] = []
     params: list[object] = []
@@ -99,4 +101,6 @@ def build_filters(
         where.append(claim_filter(alias, claims))
     if orphans:
         where.append(orphan_filter(alias))
+    if pinned is not None:
+        where.append(f"{alias}.pinned = {1 if pinned else 0}")
     return where, params

@@ -126,6 +126,24 @@ AI client (Claude Code / Cursor / Windsurf / …)
   `orphan_sample` alongside the count, since a metric nothing can act on
   describes a cost without offering a way to pay it down.
 
+  The **pinned tier** is the third backlog to get that treatment, and it was
+  the last to get it despite being the most consequential. `build_filters`
+  gained a tri-state `pinned` (None ignores the flag, True keeps pins, False
+  keeps the rest) as a parameter-free WHERE fragment alongside `claim_filter`
+  and `orphan_filter`, so it composes with every other filter across all four
+  search paths from one addition to the shared `filters` dict.
+
+  `size_stats.compute_size()` supplies the other half. Before it, no surface
+  reported bytes at all: `memory_stats` counted rows and `memory_context`
+  returned pins mixed into ranked buckets and capped by `limit`, so neither
+  "what is pinned" nor "what does it cost" could be asked. Pins are the only
+  part of the store paid for on every single call, ahead of and exempt from
+  ranking, which makes `pinned_chars` the most consequential number in the
+  health payload and made its absence the most expensive one. It lives in its
+  own module for the same reason `graph_stats` does - the health overview
+  composes independent measurements and each owns its SQL - and that split is
+  what kept `stats.py` under the 300-line limit when the block was added.
+
   Edge repair lives in `relation_repair.py`, mixed into `RelationManager`:
   `retype_relation` and `reverse_relation` are the two halves of "the pair is
   right, the label or the arrow is not", and both UPDATE the existing row so an

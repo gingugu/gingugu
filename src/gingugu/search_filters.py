@@ -45,6 +45,7 @@ def advanced_search(
     tags: list[str] | None = None,
     claims: str | None = None,
     orphans: bool = False,
+    pinned: bool | None = None,
     embedder: EmbeddingProvider | None = None,
 ) -> list[Memory]:
     """Filtered search. With a query, delegates to FTS5 + composite ranking;
@@ -54,6 +55,9 @@ def advanced_search(
     claims — the reconciliation backlog as a first-class corpus, usable with
     or without a query. ``orphans`` does the same for the graph backlog:
     memories no relation touches, which spreading activation can never reach.
+    ``pinned=True`` restricts to the always-present tier, which is otherwise
+    unenumerable: ``memory_context`` returns pins mixed into ranked buckets and
+    capped by ``limit``, so "what is pinned, everywhere" had no answer.
 
     A column ``sort_by`` (``created``/``accessed``) orders the *whole*
     matching corpus before the limit, so the answer is the true
@@ -72,6 +76,7 @@ def advanced_search(
         tags=tags,
         claims=claims,
         orphans=orphans,
+        pinned=pinned,
     )
     order_column = _ORDER_COLUMNS.get(sort_by)
 
