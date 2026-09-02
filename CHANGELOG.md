@@ -39,6 +39,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A pinned memory no longer arrives scored on a multi-namespace context
+  load.** De-duplication across namespaces keeps the highest-scoring instance
+  of a memory, and a pin carries no score at all, so a `None` read as `0.0`
+  lost to any scored duplicate. A memory pinned in one namespace that also
+  reached a second namespace's cross-namespace bucket came back wearing that
+  bucket's score. Its position was never wrong - the pin still led the payload -
+  but scorelessness is how a caller knows a memory bypassed ranking, so a
+  scored pin is indistinguishable from an ordinary ranked hit and its place at
+  the top reads as earned rather than guaranteed. Pins now emit their own
+  instance and the highest-scoring rule governs only the ranked tails.
+
 - **`memory_consolidate` now applies whole or not at all.** A consolidation is
   `1 + 2N` database writes - create the survivor, then write a `supersedes`
   edge and retire an original for each member - and every one of them committed

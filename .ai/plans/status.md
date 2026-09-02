@@ -1,11 +1,33 @@
 # Project Status
 
-_Last updated: 2026-08-30_
+_Last updated: 2026-09-02_
 
 ## In Flight
 
-Nothing. Both branches of 2026-08-30 are merged and `main` is clean at
-`b28c1dc`. The board below is the next work.
+**`feature/identity-core-pin-tier`** - the first three board items of the
+identity-core program, in review as one PR. `main` is clean at `b28c1dc` and
+untouched.
+
+Four commits, one program: item 1 curated the pin tier (docs only, as scoped),
+and executing it found items 11 and 12, both fixed here.
+
+- `9a1f008` docs: resequence the board after #66 and #67
+- `11338a9` docs: discharge item 1 and record what executing it found
+- `c97878d` fix: a pin no longer arrives scored on a multi-namespace load
+- `bf0789d` feat: `memory_search(pinned=)` + `memory_stats.size`
+
+One PR rather than a stack, deliberately: all four commits came out of item 1
+and all four edit this file at the same anchor, which is the exact collision
+stacking exists to avoid.
+
+737 tests green (counted from `--collect-only`, exit 0, zero `FAILED`/`ERROR`
+lines), `ruff` + `black` clean. Both fixes were confirmed to fail without their
+change.
+
+**Worth knowing while this is open:** the local MCP server runs
+`uv --directory <repo> run gingugu`, off the working tree, so a restart with
+this branch checked out serves unmerged code to the live brain. All three
+changes are read-path only.
 
 ## Recently Completed
 

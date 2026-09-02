@@ -692,8 +692,8 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo) |
 | `memory_export` | Export memories + tags + relations to portable JSON |
 | `memory_import` | Restore a JSON export (skip or replace on conflict) |
-| `memory_stats` | Health overview (dormancy, counts, coverage, review sweep, the `claims` backlog, and a relation-graph block whose `orphan_sample` names the memories no edge reaches — `review_limit` raises every sample's cap) |
-| `memory_search` | Advanced filtered search (type, tags, confidence, dates; one or many namespaces; optional compact mode; fetch by exact `ids`; `claims` to work the reconciliation backlog or read refs the prose never resolved, `orphans` to work the graph backlog; `explain` for a per-hit score breakdown) |
+| `memory_stats` | Health overview (dormancy, counts, coverage, review sweep, the `claims` backlog, a relation-graph block whose `orphan_sample` names the memories no edge reaches - `review_limit` raises every sample's cap, and a `size` block reporting the character cost of the store and of the always-loaded pinned tier) |
+| `memory_search` | Advanced filtered search (type, tags, confidence, dates; one or many namespaces; optional compact mode; fetch by exact `ids`; `claims` to work the reconciliation backlog or read refs the prose never resolved, `orphans` to work the graph backlog, `pinned` to enumerate the always-present tier; `explain` for a per-hit score breakdown) |
 | `memory_excerpt` | Read inside ONE memory: find literal matches with their character offsets, line numbers and surrounding context, and/or slice an exact character range |
 | `credential_store` | Store/update a service credential bundle |
 | `credential_get` | Retrieve credentials (secrets from OS Keychain) |
