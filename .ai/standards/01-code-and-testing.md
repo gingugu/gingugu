@@ -45,6 +45,28 @@
   needed before assuming the change broke it - and when a bug is fixed, invert
   the test that encoded it rather than deleting it, so the record shows the
   behavior was chosen and then rejected.
+- **A filter's test must assert on the set the filter produces, not on what
+  survives everything downstream.** The first version of the involuntary-recall
+  exclusion tests asked whether a pinned or superseded memory appeared in the
+  *injected* output. Both stayed green with the exclusions deleted from the SQL,
+  because the score gates happened to reject those rows anyway. Re-pointed at
+  the sweep's candidate set - the thing the `WHERE` clause actually promises -
+  both turn red the moment the clause goes. Pair the negative assertion with a
+  positive one (`target in swept`) so a query broken into returning nothing
+  cannot pass as a working filter.
+- **Prove a guard is load-bearing by removing it.** `git stash push <file>`, or
+  a scripted edit-run-restore, and confirm the test fails without the code it
+  covers. Two mechanisms in this repo were verified that way and one test was
+  found to be vacuous by exactly this check; a test that passes before *and*
+  after is documentation, not coverage.
+- **Real-model tests are marked `bench_embeddings`,** excluded from the matrix
+  (`-m "not bench_embeddings"`) and run once in their own CI job with a cached
+  model. That job is the only sanctioned exception to `offline_embeddings`. Use
+  it when a test must prove that the *pipeline* works and not merely that the
+  arithmetic does: hand-scored candidates cannot catch broken SQL, an inverted
+  cosine, or a filter that stopped applying. Keep the fixture corpus synthetic
+  and in-repo - a real brain and a real prompt log belong in the gitignored
+  `bench/local/` and `logs/`, never in a public repository.
 - **Ranking/scoring changes ship with benchmark evidence:** run
   `uv run python -m bench` (fixture floor) and a real-brain run against the
   recorded baseline (see `docs/roadmap.md` Phase 5.75). Grading is
