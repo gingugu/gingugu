@@ -4,63 +4,64 @@ _Last updated: 2026-09-02_
 
 ## In Flight
 
-**`feature/involuntary-recall`** - board item 2, the first real build in the
-identity-core program. `main` is clean at `619828f` (PR #68 merged).
+**`feature/recall-gate-ci`** - CI coverage for the involuntary-recall pipeline.
+`main` is clean at `dca4b56` (PR #69 merged, board item 2 discharged).
 
-A `UserPromptSubmit` hook that surfaces memories the prompt woke. New modules
-`recall_gate.py` (pure decision arithmetic), `recall_sweep.py` (read-only I/O),
-`prompt_hook.py` (`gingugu hook prompt`), a packaged hook template, and
-`bench/gate.py`.
+No workflow change was needed: the 43 unit tests from #69 already run in the
+matrix, and the new `bench_embeddings` job picks up marked tests automatically.
+What was missing was a test that could fail. `test_recall_gate.py` hands
+`select()` hand-scored candidates, so every one of its tests would stay green
+with `recall_sweep.py` completely broken - wrong SQL, inverted cosine, or the
+pinned/superseded exclusions not applying at all.
 
-**What the measurement changed about the design.** The item as boarded said
-"embed each prompt, inject over a high similarity bar." Replaying 548 real
-logged prompts showed a flat bar does not work: at 0.72 it fired on 41% of
-turns and 207 of 224 firings hit the 3-memory cap, meaning the cap was doing
-the selecting and the threshold was only truncating. The fix is a **margin
-against the median of each prompt's own sweep**, which is relative and so
-self-scaling. Two structural exclusions came out of the same pass and are
-plain defects in the original plan: pinned memories already load every session
-(injecting one pays twice) and superseded memories are knowledge the store has
-recorded as replaced. Requiring a BM25 match alongside the cosine was the
-largest precision gain - the dominant false positive was the encoder matching
-the user's REGISTER against reflections written in that same voice.
+`tests/test_recall_gate_e2e.py` closes that: a real fastembed encoder over a
+synthetic five-memory corpus, through the real schema, the real FTS5 triggers
+and the real query. Six tests, `bench_embeddings`-marked, 2.55s with a warm
+model cache.
 
-Shipped config fires on 5% of turns, mean 1.7 memories, 8 of 28 firings at the
-cap. Cost is ~0.9s on a firing turn, ~0.03s on the 44% rejected on length
-before the package loads, against a 30s hook budget.
+**The exclusion tests were vacuous on the first pass and only removing the code
+found it.** Asserting that a pinned memory did not appear in the *injected*
+output passed with the SQL exclusion deleted, because the score gates rejected
+that row anyway. Re-pointed at the sweep's candidate set - what the `WHERE`
+clause actually promises - all three exclusion tests now go red without it.
+Recorded in `.ai/standards/01-code-and-testing.md`.
 
-780 tests green, `ruff` + `black` clean. The margin gate was verified
-load-bearing by disabling it: a uniform field injects 3 without it, 0 with it.
-
-**Open question for review:** the gate is on by default once `gingugu init`
-runs. `MEMORY_RECALL_HOOK=off` disables it.
-
-**`feature/identity-core-pin-tier`** - the first three board items of the
-identity-core program, in review as one PR. `main` is clean at `b28c1dc` and
-untouched.
-
-Four commits, one program: item 1 curated the pin tier (docs only, as scoped),
-and executing it found items 11 and 12, both fixed here.
-
-- `9a1f008` docs: resequence the board after #66 and #67
-- `11338a9` docs: discharge item 1 and record what executing it found
-- `c97878d` fix: a pin no longer arrives scored on a multi-namespace load
-- `bf0789d` feat: `memory_search(pinned=)` + `memory_stats.size`
-
-One PR rather than a stack, deliberately: all four commits came out of item 1
-and all four edit this file at the same anchor, which is the exact collision
-stacking exists to avoid.
-
-737 tests green (counted from `--collect-only`, exit 0, zero `FAILED`/`ERROR`
-lines), `ruff` + `black` clean. Both fixes were confirmed to fail without their
-change.
-
-**Worth knowing while this is open:** the local MCP server runs
-`uv --directory <repo> run gingugu`, off the working tree, so a restart with
-this branch checked out serves unmerged code to the live brain. All three
-changes are read-path only.
+786 tests, both CI jobs green locally, `ruff` + `black` clean.
 
 ## Recently Completed
+
+**Involuntary recall: memories that arrive unasked. MERGED as `dca4b56` (#69).**
+Board item 2, the first build in the identity-core program. A `UserPromptSubmit`
+hook surfaces memories the prompt woke, with no tool call and no decision by the
+agent.
+
+The item was boarded as "inject anything over a high similarity bar" and that
+description did not survive 548 real prompts. A flat bar at 0.72 fired on 41% of
+turns with **207 of 224 firings pinned at the 3-memory cap** - the cap was doing
+the selecting and the threshold was only truncating. `cap3`, not the firing
+rate, is the diagnostic for any threshold feeding a slot limit.
+
+Four things fixed it, and two were defects in the plan rather than tuning:
+
+- A **margin against the median of each prompt's own sweep**. Relative, so it
+  self-scales: nothing distinctive means no gap means no injection.
+- A **required BM25 match**. Largest precision gain, because the dominant false
+  positive was never a wrong topic - it was the encoder matching the user's
+  conversational **register** against reflections written in that same voice.
+- **Pinned excluded in SQL**: they already load unconditionally every session.
+- **Superseded excluded in SQL**: knowledge the store already recorded as
+  replaced, arriving as current.
+
+Ships at 5% of turns, mean 1.7 memories, 8 of 28 firings at the cap. ~0.9s on a
+firing turn against a 30s hook budget; ~0.03s on the 44% of prompts rejected on
+length before the package or encoder loads. On by default, `MEMORY_RECALL_HOOK=off`
+disables it.
+
+**The pinned tier becomes inspectable. MERGED as `619828f` (#68).** Board items
+1, 11 and 12. `memory_search(pinned=...)` enumerates the always-present tier,
+`memory_stats.size` prices it, and a pin no longer arrives carrying another
+namespace's score on a multi-namespace load. The tier itself went from 8 pins to
+15 at the same byte cost, with the largest pin down from 41% of the tier to 11%.
 
 **Access-log session id: the log learns who asked. MERGED as `b28c1dc` (#67).**
 10/10 CI green. `access_log.context` had existed since the
@@ -259,7 +260,7 @@ that only ever grows has become retrieval again.
 
 ### 2. Involuntary recall: surface memories without being asked - BUILT 2026-09-02
 
-**Status: built on `feature/involuntary-recall`, in review.** See In Flight.
+**Status: DISCHARGED. Merged as `dca4b56` (PR #69).**
 
 A `UserPromptSubmit` hook that embeds each prompt, sweeps the graph, and
 injects anything over a high similarity bar. No tool call, no decision by the
