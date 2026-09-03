@@ -4,11 +4,51 @@ _Last updated: 2026-09-02_
 
 ## In Flight
 
-**`feature/recall-gate-ci`** - CI coverage for the involuntary-recall pipeline.
-`main` is clean at `dca4b56` (PR #69 merged, board item 2 discharged).
+**`refactor/split-database-module`** - board item 5, the blocking hygiene item.
+`main` is clean at `ea503c3` (PRs #68, #69, #70 merged).
+
+`database.py` was 547 lines against a 300-line limit, and the reason it grew is
+the reason a naive split would have made it worse: the file is long because
+every migration carries the measurement and the reasoning behind it. Cutting on
+a line count would have separated each migration's rationale from its
+mechanism - trading documentation for a number.
+
+So the seam is **what a migration does**, not where 300 lands:
+
+- `migrations/schema.py` (208) - structural work. Migrations 001-004 and 008:
+  tables, columns, indexes, FTS5 triggers. DDL sits beside the function that
+  applies it.
+- `migrations/claim_derivation.py` (233) - row work. Migrations 005-007, 009,
+  010 and `_backfill_claims`. Claims are stored rows, so improving the
+  extractor changes nothing already on disk; five migrations exist for that one
+  shared reason, and grouping them states it once instead of five times.
+- `migrations/__init__.py` (134) - the ordered `MIGRATIONS` registry,
+  `LATEST_SCHEMA_VERSION`, the WAL-aware pre-migration backup, and `migrate()`.
+- `database.py` (49) - the connection and its PRAGMAs, nothing else.
+
+Two placement wins fell out rather than being designed for. The FTS5 `VACUUM`
+caveat now sits with the `CREATE VIRTUAL TABLE` it warns about instead of atop
+a file where the reader could not see it; and `migrate()`'s append-only
+constraint - a released migration can never run again, which is the entire
+reason 006 exists - is now stated where the registry lives.
+
+**No behaviour change, and the registry is byte-identical in order and
+targets.** `src/` only ever imported `Database`; every migration symbol was
+test-only, so no compatibility facade was left behind and the module boundary
+is real rather than decorative. Test imports were repointed to the new homes.
+
+786 tests pass, `ruff` + `black` clean, and a built wheel confirms the new
+subpackage ships (hatchling recurses `packages = ["src/gingugu"]`).
+
+`storage.py` (401) is the remaining half of board item 5.
+
+## Recently Completed
+
+**e2e CI coverage for involuntary recall. MERGED as `ea503c3` (#70).** Not a
+board item - a follow-up to #69.
 
 No workflow change was needed: the 43 unit tests from #69 already run in the
-matrix, and the new `bench_embeddings` job picks up marked tests automatically.
+matrix, and the `bench_embeddings` job picks up marked tests automatically.
 What was missing was a test that could fail. `test_recall_gate.py` hands
 `select()` hand-scored candidates, so every one of its tests would stay green
 with `recall_sweep.py` completely broken - wrong SQL, inverted cosine, or the
@@ -25,10 +65,6 @@ output passed with the SQL exclusion deleted, because the score gates rejected
 that row anyway. Re-pointed at the sweep's candidate set - what the `WHERE`
 clause actually promises - all three exclusion tests now go red without it.
 Recorded in `.ai/standards/01-code-and-testing.md`.
-
-786 tests, both CI jobs green locally, `ruff` + `black` clean.
-
-## Recently Completed
 
 **Involuntary recall: memories that arrive unasked. MERGED as `dca4b56` (#69).**
 Board item 2, the first build in the identity-core program. A `UserPromptSubmit`

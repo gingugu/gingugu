@@ -34,8 +34,12 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `relations`, `admin`, `credentials`, plus `helpers`.
 3. **Core** — `storage`, `search`, `embeddings`, `context`, `relations`,
    `consolidation`, `decay`, `stats`, `namespaces`, `portability`.
-4. **Persistence** — `database.py` owns the SQLite connection, schema,
-   migrations, WAL, and FTS5 triggers. `config.py` resolves the DB path.
+4. **Persistence** - `database.py` owns the SQLite connection and its PRAGMAs
+   (WAL, foreign keys, busy timeout). The schema itself lives in the
+   `migrations/` package: `schema.py` for structural work (tables, columns,
+   FTS5 triggers), `claim_derivation.py` for migrations that only re-read
+   existing prose, and `__init__.py` for the ordered registry and the runner.
+   `config.py` resolves the DB path.
 
 ## Memory Model
 

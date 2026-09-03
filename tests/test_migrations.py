@@ -10,18 +10,17 @@ import sqlite3
 import uuid
 from pathlib import Path
 
-from gingugu.database import (
-    LATEST_SCHEMA_VERSION,
+from gingugu.migrations import LATEST_SCHEMA_VERSION, migrate
+from gingugu.migrations.schema import (
     _migration_001_initial_schema,
     _migration_002_credential_vault,
-    migrate,
 )
 from gingugu.models import utcnow_iso
 
 
 def _apply_through(conn: sqlite3.Connection, version: int) -> None:
     """Bring a bare connection up to `version` without running later migrations."""
-    from gingugu.database import MIGRATIONS
+    from gingugu.migrations import MIGRATIONS
 
     for target, fn in MIGRATIONS:
         if target > version:
@@ -190,7 +189,7 @@ def _strand_at_v5(conn: sqlite3.Connection) -> None:
     That is what pre-fix branch code did to a live DB: created the table and
     stamped the version, leaving nothing to trigger the backfill ever again.
     """
-    from gingugu.database import _SCHEMA_V5
+    from gingugu.migrations.claim_derivation import _SCHEMA_V5
 
     _apply_through(conn, 4)
     conn.executescript(_SCHEMA_V5)

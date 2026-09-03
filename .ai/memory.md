@@ -51,7 +51,10 @@
 | `bootstrap/_files.py` | Shared `read_template` / `safe_read` helpers, split out so `global_rules` doesn't import the package `__init__` that imports it |
 | `bootstrap/settings.py` | Non-destructive `.claude/settings.json` merge. `declared_flags()` reads a hook's real `add_argument` flags off disk, so the "wired for a different script" warning reflects the installed script rather than our template's flag set |
 | `config.py` | Config + cross-platform DB path (platformdirs); transport + credentials-flag settings |
-| `database.py` | Connection, schema, WAL, migrations (`PRAGMA user_version`), FTS5 triggers |
+| `database.py` | The SQLite connection alone: WAL, foreign keys, busy timeout. Opening one runs `migrate()`; it owns no schema |
+| `migrations/` | Schema migrations keyed off `PRAGMA user_version`. `__init__` holds the ordered `MIGRATIONS` registry, `LATEST_SCHEMA_VERSION`, the WAL-aware pre-migration backup, and `migrate()` |
+| `migrations/schema.py` | Structural migrations (001-004, 008): tables, columns, indexes, FTS5 triggers. Each keeps its DDL beside the function that applies it, so a table's rationale cannot drift from the table |
+| `migrations/claim_derivation.py` | Row migrations (005-007, 009, 010) + `_backfill_claims`. Claims are stored rows, so improving the extractor changes nothing already on disk - every fix needs a migration that re-reads prose which never changed. Five exist for that one reason |
 | `models.py` | Memory / namespace / relation data models. Also owns `MEMORY_COLUMNS` - the one declared `memories` column list - plus `memory_columns_sql()` / `memory_placeholders_sql()`. Every module that reads or inserts a memory row derives its SQL from these; private copies drifted and silently dropped `pinned` |
 | `storage.py` | Memory CRUD (store, update, forget) |
 | `search.py` | True hybrid engine: BM25 pool, RRF fusion, composite re-rank. Ties break on id, never on iteration order |
@@ -170,7 +173,7 @@ gap between the count and the rows.
   one-namespace-per-repo convention, load-bearing: 145 claims vs 26 without it);
   a slug overrides it; `""` declares the namespace is not a repo at all, so bare
   refs are dropped rather than mis-keyed. `crow` and `default` are seeded `""`.
-- Schema versioned via `PRAGMA user_version` (**currently 9**); migrations
+- Schema versioned via `PRAGMA user_version` (**currently 10**); migrations
   additive by default. Migration 006 adds no schema — it re-runs the claims
   backfill to repair DBs that reached v5 from pre-fix code and so can never
   run 005 again. Migration 007 adds `default_repo` and re-derives every claim
