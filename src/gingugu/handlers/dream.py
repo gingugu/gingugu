@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 
-from .. import dream as dream_mod
+from ..dream_schedule import SKIPPED_LOCKED, guarded_run
 from ..models import RelationType
 from ..proposals import ACCEPTED, PENDING, REJECTED, ProposalQueue
 from ..relations import RelationManager
@@ -92,11 +92,19 @@ def register(mcp, ctx: ServerContext) -> None:
 
         try:
             if action == "run":
-                report = dream_mod.run(
+                # No idle gate: asking for a run in a session IS the intent,
+                # and refusing it because the caller is demonstrably present
+                # would be absurd. The lock still applies - a hand-run racing a
+                # scheduled one wastes a core and muddles the log either way.
+                report = guarded_run(
                     ctx.conn,
+                    embedder_factory=lambda: ctx.store.embedder,
                     namespace_id=namespace_id,
-                    embedder=ctx.store.embedder,
                 )
+                if report["outcome"] == SKIPPED_LOCKED:
+                    return _err(
+                        "a scheduled dream pass is already running; try again when it finishes"
+                    )
                 return {"ok": True, "namespace": namespace, **report}
 
             if action == "list":

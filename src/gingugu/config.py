@@ -98,6 +98,10 @@ class Config:
     serve_host: str = "127.0.0.1"
     serve_port: int = 8765
     serve_token: str | None = None
+    # How long the brain must go untouched before `gingugu dream --if-idle`
+    # will run. Twenty minutes is long enough to sit outside a coffee break
+    # and short enough that an overnight scheduler gets many chances.
+    dream_idle_minutes: int = 20
 
     @property
     def resolved_namespace(self) -> str | None:
@@ -164,6 +168,7 @@ def load_config() -> Config:
         serve_host=os.environ.get("MEMORY_SERVE_HOST") or "127.0.0.1",
         serve_port=_env_int("MEMORY_SERVE_PORT", 8765),
         serve_token=os.environ.get("MEMORY_SERVE_TOKEN") or None,
+        dream_idle_minutes=_env_int("MEMORY_DREAM_IDLE_MINUTES", 20),
     )
 
 

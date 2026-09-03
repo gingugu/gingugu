@@ -350,6 +350,38 @@ live secret** - a shared brain must never become a credential leak. Each
 promoted memory carries a provenance stamp (source instance, namespace,
 contributor, timestamp).
 
+### Schedule the dream pass (optional)
+
+The consolidation pass computes structure over the relation graph - PageRank,
+communities, orphan reconnection - and stages what it finds for you to accept
+or reject. It never writes to memories, so it is safe to run unattended.
+
+There is **no daemon to install.** Your OS already knows how to run something
+every fifteen minutes; what it cannot do is tell whether you are mid-session.
+So `--if-idle` puts that judgment in the command:
+
+```bash
+# cron
+*/15 * * * * gingugu dream --if-idle
+
+# or a launchd StartInterval agent / Windows Task Scheduler trigger
+# running exactly the same command
+```
+
+Each tick opens the database, reads one row, and exits in well under a second
+unless the brain has actually gone quiet - by default 20 minutes untouched
+(`MEMORY_DREAM_IDLE_MINUTES`, or `--if-idle=45` for a one-off). A skip exits 0,
+so your scheduler stays silent instead of mailing you every quarter hour.
+
+"Untouched" means *nobody used the brain*, not *no process is running* - your
+editor keeps the MCP server alive all day whether or not you store anything,
+and that is exactly when the pass should get its turn. Come back to the
+keyboard mid-run and it stops between passes, keeping whatever it finished; the
+next run picks up the rest.
+
+Review the queue with `memory_dream(action="list")`, and accept or reject each
+finding. A run takes roughly 24 seconds on a 1,900-memory brain.
+
 ### Configure Your MCP Client
 
 Gingugu speaks standard [MCP](https://modelcontextprotocol.io) over stdio —
@@ -665,6 +697,7 @@ Environment variables (all optional):
 | `MEMORY_SERVE_HOST` | `127.0.0.1` | Bind host for `gingugu serve` (set `0.0.0.0` to accept remote connections) |
 | `MEMORY_SERVE_PORT` | `8765` | Bind port for `gingugu serve` |
 | `MEMORY_SERVE_TOKEN` | *(unset)* | Bearer token required by `gingugu serve`. If unset, a token is read from `<db-dir>/serve_token`, or generated, saved `0600`, and printed |
+| `MEMORY_DREAM_IDLE_MINUTES` | `20` | How long the brain must go untouched before `gingugu dream --if-idle` will run. Also the threshold that cancels a run in progress when you come back |
 | `MEMORY_LOG_LEVEL` | `INFO` | Logging verbosity (logs go to **stderr** — stdout is the MCP transport) |
 | `MEMORY_DEBUG` | `false` | Convenience switch for `DEBUG` logging (`MEMORY_LOG_LEVEL` wins if also set) |
 

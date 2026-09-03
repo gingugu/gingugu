@@ -55,6 +55,7 @@
 | `migrations/` | Schema migrations keyed off `PRAGMA user_version`. `__init__` holds the ordered `MIGRATIONS` registry, `LATEST_SCHEMA_VERSION`, the WAL-aware pre-migration backup, and `migrate()` |
 | `migrations/schema.py` | Structural migrations (001-004, 008): tables, columns, indexes, FTS5 triggers. Each keeps its DDL beside the function that applies it, so a table's rationale cannot drift from the table |
 | `migrations/claim_derivation.py` | Row migrations (005-007, 009, 010) + `_backfill_claims`. Claims are stored rows, so improving the extractor changes nothing already on disk - every fix needs a migration that re-reads prose which never changed. Five exist for that one reason |
+| `migrations/runtime.py` | Coordination migrations (012): `activity`, `dream_lock`. Split from `schema.py` on the line between *state about memories* and *state about the processes touching them* - these carry no knowledge, survive no export, and a store that lost them would lose nothing a person put there |
 | `models.py` | Memory / namespace / relation data models. Also owns `MEMORY_COLUMNS` - the one declared `memories` column list - plus `memory_columns_sql()` / `memory_placeholders_sql()`. Every module that reads or inserts a memory row derives its SQL from these; private copies drifted and silently dropped `pinned`. Field normalizers live here too: `normalize_tag`, `normalize_metadata` |
 | `storage.py` | CRUD for the `memories` row itself, and the transaction boundary around it. Owns nothing else |
 | `storage_derived.py` | `DerivedTables`, the delegation surface for the four satellite tables a memory drags along (tags, access log, embeddings, claims). Mixed into `MemoryStore` ahead of `TransactionParticipant`, so it declares what it borrows under `TYPE_CHECKING` only - a real stub would sit earlier in the MRO and shadow the `_commit` it means to call |
@@ -80,7 +81,10 @@
 | `dream/centrality.py` | PageRank over the graph - a computed answer to "what is core", where degree would only count neighbours. Skips what is already pinned: the finding is the memory the graph ranks alongside the tier that nobody nominated |
 | `dream/clusters.py` | Label propagation, deliberately not Louvain - Louvain's resolution parameter is a preference about coarseness dressed as a setting. Sweep order and tie-break are fixed so a run is reproducible, which published propagation deliberately is not |
 | `dream/orphans.py` | Reconnection candidates for memories no edge touches. Two stages matching `handlers/hints.py`: retrieval narrows, then `similarity.payload_similarity` rescores absolutely against the same calibrated `RELATION_MIN_SIMILARITY` floor. Proposes the pair; never the relation type |
-| `dream_cli.py` | `gingugu dream`: the pass from a shell or a cron job - the case the design was actually about |
+| `dream_cli.py` | `gingugu dream`: the pass from a shell or a scheduler. `--if-idle[=MINUTES]` is the form to schedule - it exits 0 without running when the brain is in use, so a skip is a success and a cron job stays silent |
+| `dream_schedule.py` | `guarded_run()` - the whole scheduling policy, shared by the CLI and `memory_dream`. Idle gate (scheduled runs only; a hand-run is deliberate by definition) plus the lock (always). The same threshold serves as the gate and the between-pass cancellation check, so the two cannot drift apart. The embedder arrives as a factory, called only after both guards pass: on a 15-minute timer the common outcome is a skip, and a skip must not load a model to discard it |
+| `activity.py` | The heartbeat: when the brain was last *used*. One row, stamped by the server on every tool call, because a running MCP server is not an active user - an editor holds it open all day untouched. Unknown never reads as idle: no evidence of absence is not evidence of absence, and that asymmetry is the point |
+| `dream_lock.py` | Single-instance lock for the pass. A DB row rather than a lockfile - identical on every OS, and recoverable via an expiry rather than by reasoning about orphaned file handles. Acquired under `BEGIN IMMEDIATE`; the token identifies the *lease*, not the process, so two leases from the same long-lived server cannot steal from each other |
 | `session.py` | `current_session_id()` - a stable id for the MCP session serving the current request, read from the SDK's request `ContextVar` so no handler signature or tool schema changes. Keyed on the session object (weakly), which is the right unit for both stdio and `gingugu serve`. Returns `None` outside a request, and that `None` is stored verbatim |
 | `transactions.py` | `atomic()` - one `BEGIN IMMEDIATE` across components sharing a connection, with each participant's own `commit()` gated off for the duration. Embedding writes are queued to `_after_commit` instead of joining the transaction: they are best-effort by design, and a vector written for a row the block later rolls back is an orphan |
 | `decay.py` | Composite scoring, the `reference_timestamp()` freshness anchor (MAX, not COALESCE), dormancy as a resting signal (never auto-forgets), and `relative_age()`/`age_label()`, the derived-at-read `age` string. `composite_score`/`score_memory` are summed from `composite_parts`/`score_parts`, so the `explain` breakdown and the score it explains are the same arithmetic |
@@ -121,9 +125,12 @@ Run: `uv run python -m bench [--db <real-brain.db>]`.
   `memory_namespaces`
 - **Consolidation (dream pass):** `memory_dream` (`run` / `list` / `accept` /
   `reject` / `stats`) - deterministic structure-finding over the relation
-  graph, staged to a proposal queue. Also `gingugu dream` for cron. Nothing in
-  it writes to `memories` or `relations`; accepting is where a person supplies
-  the judgment the arithmetic stopped short of
+  graph, staged to a proposal queue. Also `gingugu dream --if-idle` for a
+  scheduler - no daemon: the OS timer handles recurrence, the command decides
+  whether now is the moment, gated on an `activity` heartbeat and serialized by
+  a `dream_lock` row. Nothing in it writes to `memories` or `relations`;
+  accepting is where a person supplies the judgment the arithmetic stopped
+  short of
 - **Credentials:** `credential_list`, `credential_get`, `credential_store`, `credential_delete`
   — gated by `MEMORY_CREDENTIALS_ENABLED` (default true); a shared/central
   instance runs with it `false` to omit the vault.
@@ -187,7 +194,7 @@ gap between the count and the rows.
   one-namespace-per-repo convention, load-bearing: 145 claims vs 26 without it);
   a slug overrides it; `""` declares the namespace is not a repo at all, so bare
   refs are dropped rather than mis-keyed. `crow` and `default` are seeded `""`.
-- Schema versioned via `PRAGMA user_version` (**currently 10**); migrations
+- Schema versioned via `PRAGMA user_version` (**currently 12**); migrations
   additive by default. Migration 006 adds no schema — it re-runs the claims
   backfill to repair DBs that reached v5 from pre-fix code and so can never
   run 005 again. Migration 007 adds `default_repo` and re-derives every claim
@@ -198,7 +205,17 @@ gap between the count and the rows.
   Migration 009 adds no schema either (`state` was always unconstrained TEXT) —
   it re-derives every claim so state-less refs record as `unverified`, again
   preserving resolution. The mirror of 007: that one only removed claims, this
-  one only adds them.
+  one only adds them. Migration 011 adds the `proposals` queue the dream pass
+  stages to; its unique index uses `COALESCE(object_id, '')` because SQLite
+  treats NULLs as distinct, so a plain index would let the same single-memory
+  proposal re-insert on every run forever. Migration 012 adds `activity` and
+  `dream_lock` - runtime coordination rather than content, which is why they
+  live in `migrations/runtime.py`. Both are pinned to one row by
+  `CHECK (id = 1)`: it makes the heartbeat the cheapest write SQLite has, and
+  the lock unable to be held twice however badly a caller misuses it.
+  `activity` is **seeded** at migration time, because an empty heartbeat table
+  and a genuinely idle store are indistinguishable to a reader, and the safe
+  reading of "I have never seen activity" is not "start work now".
 
 ---
 
