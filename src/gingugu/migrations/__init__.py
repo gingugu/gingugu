@@ -38,6 +38,7 @@ from .schema import (
     _migration_003_tags_relations,
     _migration_004_embeddings,
     _migration_008_pinned,
+    _migration_011_proposals,
 )
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,7 @@ MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
     (8, _migration_008_pinned),
     (9, _migration_009_unverified_claims),
     (10, _migration_010_claim_qualification),
+    (11, _migration_011_proposals),
 ]
 
 # The version a fully-migrated DB lands on. Derived rather than written down so

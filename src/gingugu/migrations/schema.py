@@ -206,3 +206,57 @@ def _migration_008_pinned(conn: sqlite3.Connection) -> None:
     needs no trigger changes.
     """
     conn.executescript(_SCHEMA_V8)
+
+
+# --- Migration 011: the dream-pass proposal queue ----------------------------
+#
+# The queue exists so a background pass can compute structure over the graph
+# without ever writing to ``memories``. Everything the pass produces lands
+# here, pending, until a person decides on it. That separation is the whole
+# design constraint, so it is enforced by the schema rather than by convention:
+# nothing in ``dream/`` is given a write path to any other table.
+#
+# ``evidence`` is JSON holding the numbers that produced the row - the rank, the
+# similarity, the member list. A proposal a reader cannot audit is an opinion,
+# and an opinion is exactly what this pass is forbidden to have.
+
+_SCHEMA_V11 = """
+CREATE TABLE proposals (
+    id           TEXT PRIMARY KEY,
+    pass_name    TEXT NOT NULL,
+    kind         TEXT NOT NULL,
+    namespace_id TEXT REFERENCES namespaces(id) ON DELETE CASCADE,
+    subject_id   TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    object_id    TEXT REFERENCES memories(id) ON DELETE CASCADE,
+    score        REAL NOT NULL,
+    evidence     TEXT NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'pending',
+    created_at   TEXT NOT NULL,
+    decided_at   TEXT
+);
+
+CREATE UNIQUE INDEX idx_proposals_identity
+    ON proposals(kind, subject_id, COALESCE(object_id, ''));
+
+CREATE INDEX idx_proposals_status ON proposals(status, score DESC);
+"""
+
+
+def _migration_011_proposals(conn: sqlite3.Connection) -> None:
+    """Add the proposal queue the dream pass writes to.
+
+    Two details in here are load-bearing rather than incidental.
+
+    **The identity index uses ``COALESCE(object_id, '')``.** SQLite treats NULLs
+    as distinct in a unique index, so a plain three-column index would let the
+    same single-memory proposal be inserted on every run, once per night,
+    forever. Collapsing NULL to the empty string makes re-running the pass an
+    update instead of an accumulation.
+
+    **Deciding a proposal keeps the row.** A rejection is not a no-op to be
+    cleaned up: it is the record that says "this was computed, and it was
+    wrong", which is what stops the next run from proposing it again and what
+    the governance work will later count as precedent. Only a cascade from a
+    forgotten memory removes anything here.
+    """
+    conn.executescript(_SCHEMA_V11)

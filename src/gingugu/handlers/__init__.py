@@ -28,6 +28,7 @@ def register_all(mcp, ctx: ServerContext) -> None:
         admin,
         consolidate,
         credentials,
+        dream,
         excerpt,
         forget,
         memory,
@@ -43,6 +44,7 @@ def register_all(mcp, ctx: ServerContext) -> None:
     excerpt.register(mcp, ctx)
     relations.register(mcp, ctx)
     consolidate.register(mcp, ctx)
+    dream.register(mcp, ctx)
     admin.register(mcp, ctx)
     # Credential vault is opt-out: a shared/central instance runs with
     # MEMORY_CREDENTIALS_ENABLED=false so it never exposes secret tools.

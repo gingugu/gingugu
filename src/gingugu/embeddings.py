@@ -246,7 +246,21 @@ def embedding_input(title: str, content: str) -> str:
 
 
 def cosine(a: list[float], b: list[float]) -> float:
-    """Cosine similarity between two vectors. Returns 0.0 on degenerate input."""
+    """Cosine similarity between two vectors. Returns 0.0 on degenerate input.
+
+    The result is coerced to a built-in ``float``, and that is not cosmetic.
+    ``fastembed`` hands back a Python ``list`` whose *elements* are
+    ``numpy.float32``, so the arithmetic below silently produces a
+    ``numpy.float32`` and this function's annotation becomes a lie on the only
+    path that matters - the one with real embeddings, which no test exercises
+    because the suite runs offline by default.
+
+    Downstream that has two costs, and both were live. ``json.dumps`` refuses a
+    ``float32`` outright. Worse, the MCP serializer does *not*: it stringifies
+    it, so the write-time dedupe hint was reporting ``"similarity": "1.0"`` - a
+    numeric field arriving as a string, which any caller comparing it against a
+    threshold gets wrong rather than loudly.
+    """
     if not a or not b or len(a) != len(b):
         return 0.0
     dot = 0.0
@@ -258,4 +272,4 @@ def cosine(a: list[float], b: list[float]) -> float:
         nb += y * y
     if na == 0.0 or nb == 0.0:
         return 0.0
-    return dot / ((na**0.5) * (nb**0.5))
+    return float(dot / ((na**0.5) * (nb**0.5)))

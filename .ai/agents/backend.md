@@ -5,7 +5,7 @@
 The Python MCP server and its core: `server.py`, `handlers/`,
 `storage.py`/`storage_derived.py`, `tags.py`, `access.py`,
 `search.py`, `embeddings.py`, `context.py`, `relations.py`/`relation_repair.py`,
-`consolidation.py`,
+`consolidation.py`, `dream/`/`proposals.py`,
 `decay.py`, `stats.py`, `namespaces.py`, `credentials.py`, `portability.py`,
 `database.py`, `migrations/`, `config.py`, `models.py`.
 
@@ -31,6 +31,14 @@ The Python MCP server and its core: `server.py`, `handlers/`,
   through `storage_derived.DerivedTables`). When a file is long because each
   part carries its own measurement and reasoning, cutting on the line count
   separates a decision from its evidence - find the concept instead.
+- **A module allowed to run unattended gets its boundary enforced by structure,
+  not by care.** `dream/` computes over the graph and may write only to
+  `proposals`; `proposals.py` owns that table and touches nothing else.
+  Applying a finding happens in `handlers/dream.py`, through the ordinary
+  managers, after a person supplies the judgment the pass declined to make -
+  and an accept missing that judgment is refused, never defaulted. Anything
+  scheduled that could reach `memories` on its own belongs behind the same
+  shape.
 - **Async.** Handlers are async; test with `pytest-asyncio`.
 - Verify against the MCP spec, SQLite FTS5 docs, and the `mcp` SDK before
   changing transport or schema behavior.

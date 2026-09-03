@@ -4,78 +4,75 @@ _Last updated: 2026-09-02_
 
 ## In Flight
 
-**`refactor/split-database-module`** - board item 5, the blocking hygiene item.
-`main` is clean at `ea503c3` (PRs #68, #69, #70 merged).
+**`feature/dream-pass`** - board item 3, phase 1. `main` is clean at `d65cafa`
+(PR #71 merged).
 
-`database.py` was 547 lines against a 300-line limit, and the reason it grew is
-the reason a naive split would have made it worse: the file is long because
-every migration carries the measurement and the reasoning behind it. Cutting on
-a line count would have separated each migration's rationale from its
-mechanism - trading documentation for a number.
+The dream pass runs while nobody is present, computes structure over the
+relation graph, and stages what it finds for a person to decide on. The
+governing constraint is the user's, verbatim: _no AI decides what's in our
+brain_. That is not a caveat on the design, it is the design - so the guarantee
+is structural rather than careful. Nothing in `dream/` has a write path to
+`memories` or to `relations`; findings go to a new `proposals` table and wait.
 
-So the seam is **what a migration does**, not where 300 lands:
+**Three passes, all fully computable on today's graph:**
 
-- `migrations/schema.py` (208) - structural work. Migrations 001-004 and 008:
-  tables, columns, indexes, FTS5 triggers. DDL sits beside the function that
-  applies it.
-- `migrations/claim_derivation.py` (233) - row work. Migrations 005-007, 009,
-  010 and `_backfill_claims`. Claims are stored rows, so improving the
-  extractor changes nothing already on disk; five migrations exist for that one
-  shared reason, and grouping them states it once instead of five times.
-- `migrations/__init__.py` (134) - the ordered `MIGRATIONS` registry,
-  `LATEST_SCHEMA_VERSION`, the WAL-aware pre-migration backup, and `migrate()`.
-- `database.py` (49) - the connection and its PRAGMAs, nothing else.
+- `dream/centrality.py` - PageRank over the relation graph. Degree counts
+  neighbours and stops; PageRank counts them weighted by their own standing,
+  which is the difference between a memory linked by ten trivia notes and one
+  linked by three the rest of the graph leans on. Proposes the rank, not the
+  conclusion: whether structurally central means "belongs in the pinned identity
+  tier" is a call about what matters, and connectivity does not settle it.
+- `dream/clusters.py` - label propagation. Chosen over Louvain specifically
+  because Louvain needs a resolution parameter, and picking one is choosing how
+  coarse the answer should be - a preference dressed as a setting. Propagation
+  has no such knob. Proposes membership; naming the group is prose.
+- `dream/orphans.py` - reconnection candidates for memories no edge touches.
+  Two stages matching the write-time hints exactly: retrieval narrows the
+  corpus, then `payload_similarity` rescores absolutely against the same
+  calibrated `RELATION_MIN_SIMILARITY` floor. Proposes the **pair**, never the
+  relation type - a similarity score says two texts are about the same thing
+  and contains nothing about whether one superseded, caused or contains the
+  other.
 
-Two placement wins fell out rather than being designed for. The FTS5 `VACUUM`
-caveat now sits with the `CREATE VIRTUAL TABLE` it warns about instead of atop
-a file where the reader could not see it; and `migrate()`'s append-only
-constraint - a released migration can never run again, which is the entire
-reason 006 exists - is now stated where the registry lives.
+**The queue enforces the boundary it documents.** `proposals.py` owns its table
+and touches nothing else. Accepting is what supplies the judgment the pass left
+open, and `handlers/dream.py` refuses an accept without it: an `edge` needs
+`relation_type`, a `cluster` needs `tag`. That refusal is the feature - if
+accepting an untyped pair quietly wrote `related_to`, the arithmetic would have
+chosen a relation type after all, by default.
 
-**No behaviour change, and the registry is byte-identical in order and
-targets.** `src/` only ever imported `Database`; every migration symbol was
-test-only, so no compatibility facade was left behind and the module boundary
-is real rather than decorative. Test imports were repointed to the new homes.
+A decided proposal is never raised again. The row is kept rather than cleaned
+up, because a rejection is the record that stops tomorrow's identical
+computation from proposing the same thing, and it is what board item 4 will
+later count as precedent.
 
-786 tests pass, `ruff` + `black` clean, and a built wheel confirms the new
-subpackage ships (hatchling recurses `packages = ["src/gingugu"]`).
+**Measured on a real 1,891-memory brain** (read-only `.backup` copy, migration
+applied cleanly): 2,208 undirected edges, 192 orphans, one run staging 48
+proposals - 10 core, 15 clusters, 23 edges. The first draft staged **186**
+cluster proposals, which is a queue nobody works through; clusters gained a
+`MIN_DENSITY` floor (more of a group's edges must stay inside it than leave)
+and a per-run `TOP_N`, matching how the other two passes already bounded
+themselves.
 
-### `storage.py`: 401 -> 198
+**One shipped defect found on the way, unrelated to the feature.**
+`embeddings.cosine` declares `-> float` and returns `numpy.float32`, because
+fastembed hands back a list of `float32` elements. `json.dumps` refuses that
+outright - which is how the orphan pass found it - but the MCP serializer does
+not: it stringifies. So the write-time dedupe hint had been reporting
+`"similarity": "1.0"` as a string in a numeric field. Fixed at the source with
+a test that asserts on the type rather than the value, run against the broken
+code first.
 
-Same principle, different seam. A memory is one row in `memories` plus four
-satellite tables that must stay in step with it, so the cut is **the row** vs
-**what hangs off the row**:
+**What is deliberately not built.** Co-access (Hebbian) edges, the design's
+original motivation. `access_log` only began carrying session ids with #67, so
+the evidence is thin - 287 rows across 18 sessions on the live brain - and
+`prune_access_log` makes it a rolling 90-day window, so the pass will need its
+own durable aggregate rather than a re-read of history. The three passes here
+need none of that, so they ship first and the co-access evidence accumulates
+behind them.
 
-- `tags.py` (75) - the `tags` / `memory_tags` tables. This one is a
-  de-duplication, not a move: `portability.py` carried a byte-identical private
-  copy of `_get_or_create_tag`, the same drift class that once let a private
-  column list silently drop `pinned`. Both now call one function.
-- `access.py` (75) - the `access_log` table and the distinction that matters
-  more than the table: `record` is a real access and bumps `access_count`,
-  `touch` is reactivation and only refreshes the dormancy clock. Conflating
-  them lets a well-connected memory inflate its own ranking by being adjacent
-  to popular ones.
-- `storage_derived.py` (153) - `DerivedTables`, the delegation surface for all
-  four satellites, mixed into `MemoryStore`.
-- `normalize_metadata` moved to `models.py`, beside its sibling
-  `normalize_tag`.
-
-**Three dead methods removed** rather than relocated: `list_unembedded_ids`,
-`embed_memories` and `_embedding_input` had zero references anywhere in the
-repo - src, tests, UI and docs all swept. `backfill_embeddings` had a docstring
-recommending `embed_memories` to bulk importers, and no bulk importer ever took
-the advice; it now points at `embedding_sync.embed_ids`.
-
-**One real bug, caught by the suite and not by review.** `DerivedTables` first
-declared `_commit`/`_after_commit` as `NotImplementedError` stubs to document
-what it borrows. As a mixin listed before `TransactionParticipant` those stubs
-won the MRO and shadowed the real implementations. They are now declared under
-`TYPE_CHECKING` only, so the contract is stated without existing at runtime.
-
-No file in `src/gingugu/` is now over 300 lines. Board item 5 is discharged.
-
-Also swept `.ai/specs/01-architecture.md` clean of em dashes (30 -> 0), a slice
-of board item 10 in a file this PR was already editing.
+811 tests pass (was 786), `ruff` + `black` clean, and a built wheel confirms the
+new `gingugu/dream/` subpackage ships.
 
 ## Recently Completed
 
@@ -363,12 +360,24 @@ does not cold-load a model per message, and threshold tuning that will take
 several sessions to settle. Costs are real: latency on every message and a
 permanent context tax.
 
-### 3. The dream pass: deterministic background consolidation, on cron
+### 3. The dream pass: deterministic background consolidation, on cron - PHASE 1 BUILT 2026-09-02
 
 A scheduled pass that runs while nobody is present. **Pure math, and it writes
 to a proposal queue rather than to memories.** The governing constraint is the
 user's, verbatim: _no AI decides what's in our brain_. Math finds structure;
 structure is not content.
+
+**Phase 1 is built on `feature/dream-pass`** - the queue, the runner, three
+passes and the tool surface. See In Flight for the detail. The three that
+shipped (centrality, clustering, orphan reconnection) are the ones fully
+computable on the graph as it already stands. What remains of this item:
+
+- **Co-access (Hebbian) edges.** Unblocked by #67 but thin - 287 session-tagged
+  rows across 18 sessions - and subject to the rolling-window constraint below.
+  Needs a durable aggregate before it is worth building.
+- **Claim reconciliation against git as ground truth.** Overlaps item 7.
+- **Decay arithmetic**, which the existing `decay.py` already covers for
+  retrieval and has no proposal to make yet.
 
 Allowed unattended, because all of it is counting: co-access (Hebbian) edges
 from `access_log.context`, centrality over the relation graph (a **computed**
