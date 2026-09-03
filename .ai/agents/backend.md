@@ -2,11 +2,12 @@
 
 ## Scope
 
-The Python MCP server and its core: `server.py`, `handlers/`, `storage.py`,
+The Python MCP server and its core: `server.py`, `handlers/`,
+`storage.py`/`storage_derived.py`, `tags.py`, `access.py`,
 `search.py`, `embeddings.py`, `context.py`, `relations.py`/`relation_repair.py`,
 `consolidation.py`,
 `decay.py`, `stats.py`, `namespaces.py`, `credentials.py`, `portability.py`,
-`database.py`, `config.py`, `models.py`.
+`database.py`, `migrations/`, `config.py`, `models.py`.
 
 ## Rules
 
@@ -22,6 +23,14 @@ The Python MCP server and its core: `server.py`, `handlers/`, `storage.py`,
   `relations.py` + `relation_ops.py`, `admin.py`, `credentials.py`, shared
   `helpers.py`). Split along a seam the code already has — repair vs
   build/read, MCP surface vs dispatch — not at an arbitrary line number.
+  Two more seams, both from files that were long *because* they were well
+  documented: migrations split on what a migration does (structural work in
+  `migrations/schema.py` vs re-deriving rows from unchanged prose in
+  `migrations/claim_derivation.py`), and the store split on the `memories` row
+  vs the satellite tables hanging off it (`tags.py`, `access.py`, reached
+  through `storage_derived.DerivedTables`). When a file is long because each
+  part carries its own measurement and reasoning, cutting on the line count
+  separates a decision from its evidence - find the concept instead.
 - **Async.** Handlers are async; test with `pytest-asyncio`.
 - Verify against the MCP spec, SQLite FTS5 docs, and the `mcp` SDK before
   changing transport or schema behavior.

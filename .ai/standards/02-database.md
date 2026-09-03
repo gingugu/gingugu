@@ -15,8 +15,15 @@ The SQLite database is the product's durable state. Treat it with care.
 
 ## Schema changes = migrations
 
-- Keyed off **`PRAGMA user_version`**. Bump it and apply the migration in
-  `database.py` on startup, in order.
+- Keyed off **`PRAGMA user_version`**. Add the migration to the `MIGRATIONS`
+  registry in `migrations/__init__.py`; it is applied in order when a
+  connection opens. Put the function in `migrations/schema.py` if it changes
+  the schema's shape, or `migrations/claim_derivation.py` if it only re-reads
+  prose that never changed, and keep its DDL beside it.
+- **A released migration can never run again.** `migrate()` selects pending
+  work with `current < target`, so editing migration N fixes nothing on any
+  store already stamped at N - no reinstall or restart reaches it. Only a new
+  version number does, which is why migration 006 exists.
 - **Additive by default.** Destructive migrations (dropping/renaming columns,
   deleting rows) require explicit user approval.
 - **A migration that adds derived data MUST populate it.** If the new table or

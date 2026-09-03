@@ -7,6 +7,20 @@
 - **300-line file limit** per module — split early into helpers/submodules. One
   responsibility per file.
 - **Simplicity over cleverness** — no premature abstraction.
+- **In a mixin, declare what you BORROW under `TYPE_CHECKING`.** Only what the
+  mixin *provides* gets a runtime body. A stub written to document a dependency
+  (`def _commit(self): raise NotImplementedError`) sits ahead of the real base
+  in the MRO and shadows the implementation it was describing - which is how
+  `DerivedTables` briefly broke every write path in `MemoryStore`. Bare
+  attribute annotations are already safe, but keeping both inside one
+  `if TYPE_CHECKING:` block beats remembering which is which. If you cannot say
+  whether a member is borrowed or provided, the mixin boundary is wrong.
+- **A new subpackage must be proven to ship.** Adding a directory under
+  `src/gingugu/` is invisible to the test suite: tests import from the source
+  tree, so a packaging miss passes everything and breaks only for pip users.
+  Build and look: `uv build --wheel -o <tmp>` then `unzip -l <tmp>/*.whl`.
+  hatchling recurses `packages = ["src/gingugu"]`, so the answer is normally
+  yes; "normally yes" is not a measurement.
 - **Pin dependencies** in `pyproject.toml`; verify against official docs (MCP
   spec, SQLite FTS5, `mcp` SDK) before adding or upgrading.
 
