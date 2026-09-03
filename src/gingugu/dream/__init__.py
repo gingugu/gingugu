@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from collections.abc import Callable
 
 from ..embeddings import EmbeddingProvider
 from ..proposals import ProposalQueue, ordered_pair
@@ -66,6 +67,7 @@ def run(
     *,
     namespace_id: str | None = None,
     embedder: EmbeddingProvider | None = None,
+    should_continue: Callable[[], bool] | None = None,
 ) -> dict:
     """Run every pass and stage what they found. Returns a report.
 
@@ -74,6 +76,18 @@ def run(
     rather than allowed to abort the run: this is scheduled work with no one
     watching, and losing two good passes because a third hit an edge case would
     be the worst possible trade.
+
+    ``should_continue`` is consulted *between* passes and, when it returns
+    False, stops the run and reports ``cancelled``. Pass boundaries are the only
+    place it is checked, and that is a deliberate ceiling on the feature rather
+    than an unfinished version of it. A pass is the unit that produces a
+    coherent set of findings, so abandoning one mid-computation would cost the
+    work and buy nothing; at three checkpoints the granularity is already finer
+    than the reason for cancelling, which is a human returning to the keyboard.
+
+    Whatever completed before the stop is kept. Staging is per-pass and each
+    proposal is idempotent on re-run, so a cancelled run leaves a smaller queue,
+    never a corrupt one, and the next run recomputes exactly what was skipped.
     """
     graph = graph_mod.load(conn, namespace_id=namespace_id)
     queue = ProposalQueue(conn)
@@ -85,6 +99,7 @@ def run(
             "orphans": len(graph.orphans),
         },
         "passes": {},
+        "cancelled": False,
     }
 
     for name, finder in (
@@ -92,6 +107,10 @@ def run(
         ("clusters", lambda: clusters.find(graph)),
         ("orphans", lambda: orphans.find(conn, graph, embedder=embedder)),
     ):
+        if should_continue is not None and not should_continue():
+            logger.info("dream run cancelled before pass %r", name)
+            report["cancelled"] = True
+            break
         try:
             findings = finder()
         except Exception:

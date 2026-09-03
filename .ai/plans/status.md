@@ -1,11 +1,88 @@
 # Project Status
 
-_Last updated: 2026-09-02_
+_Last updated: 2026-09-03_
 
 ## In Flight
 
-**`feature/dream-pass`** - board item 3, phase 1. `main` is clean at `d65cafa`
-(PR #71 merged).
+**`feature/dream-scheduling`** - board item 3, phase 2. `main` is clean at
+`4fe3d6e` (PR #72 merged).
+
+Phase 1 built a pass that runs while nobody is present. It shipped with no way
+to actually run while nobody is present: `gingugu dream` is a command a person
+types, and the docstrings promising overnight runs described machinery that did
+not exist. This closes that.
+
+**There is no daemon, and that is the design.** The OS scheduler already solves
+"every fifteen minutes" on every platform we ship to, with restart-on-boot and
+no supervision to write. What it cannot do is decide whether _now_ is a good
+time. So the timer stays outside and the judgment moves into the command:
+`gingugu dream --if-idle` opens the DB, reads one row, and is gone in 0.42s
+unless the brain is genuinely unused. A long-lived process would have bought
+identical behaviour in exchange for a PID file, a restart policy, three
+platform-specific service definitions, and a class of bug where the daemon is
+dead and nothing says so.
+
+**Two guards, answering different questions.**
+
+- **The idle gate** - is a person using this brain right now? A new `activity`
+  table holds one row, stamped by the MCP server on every tool call. The
+  distinction it exists for: _a running server is not an active user._ An editor
+  holds the server open for eight hours whether or not anyone touches a memory,
+  so process liveness answers the wrong question. Deriving activity from
+  existing timestamps was rejected - reads live in `access_log`, writes in
+  `memories`, edges in `relations`, and `idx_access_log_memory_time` leads with
+  `memory_id`, so a bare `MAX(accessed_at)` cannot even use the index.
+- **The lock** - is another pass already running? A `dream_lock` row, taken
+  under `BEGIN IMMEDIATE`, carrying an expiry so a holder killed mid-pass costs
+  one window rather than every future run.
+
+**Preemption was scoped by measurement, not by instinct.** A full run on the
+live brain is 23.8s. Threading cancellation through three passes to reclaim at
+most 23 seconds of overlap is not worth its complexity, and the overlap is
+nearly harmless anyway: WAL readers never block and `busy_timeout` is 30s. What
+shipped instead is a check _between_ passes - three checkpoints, already a loop
+in `dream.run()` - which costs a few lines and still covers the case where the
+brain is ten times bigger and a run takes minutes. A cancelled run keeps what
+finished; staging is per-pass and every proposal is idempotent on re-run, so the
+next run recomputes exactly what was skipped.
+
+The idle threshold serves as both the gate and the cancellation check,
+deliberately: a run that would not have _started_ given current activity should
+not _continue_ either, and one number cannot drift into disagreeing with itself.
+
+**Two design errors caught by their own tests.**
+
+- The lock's holder token was `hostname:pid`, so two leases from the same
+  long-lived process shared a token and `release`'s `holder = ?` guard would
+  wave through exactly the theft it exists to prevent. A lease identifier has
+  to be per-lease; it now carries a uuid.
+- The embedder was built before the guards ran, so the overwhelmingly common
+  outcome on a fifteen-minute timer - a skip - was loading an embedding model
+  to throw it away. It now arrives as a factory called only after both guards
+  pass. Asserted in a test, because a needlessly-built embedder is slow rather
+  than wrong, and slow-not-wrong is what survives review unnoticed.
+
+**The heartbeat is installed by wrapping the `tool` decorator once**, in
+`handlers/__init__.py`, rather than editing thirteen handler modules. A tool
+added next year is instrumented by the act of registering it. That the wrapper
+stays invisible to FastMCP's schema generation is asserted against the real
+server rather than reasoned about: `functools.wraps` is _why_ it works, but a
+wrapper that flattened every tool to `(*args, **kwargs)` would still register,
+still run, and hand every client an empty parameter list.
+
+Stamping happens in a `finally`, so a failing call still counts as activity. A
+session spent hitting an error is a session with a person in it.
+
+**Verified on a copy of the live 1,900-memory brain:** migration v11 -> v12 in
+0.05s with every count intact, a gated run correctly refused on a freshly
+seeded heartbeat, a full run at 23.8s once backdated, the lock released after,
+and 49 proposals refreshed rather than duplicated.
+
+852 tests pass (was 811), `ruff` + `black` clean.
+
+## Recently Completed
+
+**The dream pass. MERGED as `4fe3d6e` (#72).** Board item 3, phase 1.
 
 The dream pass runs while nobody is present, computes structure over the
 relation graph, and stages what it finds for a person to decide on. The

@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The dream pass learns when to run: `gingugu dream --if-idle`.** The
+  consolidation pass could already run unattended; nothing arranged for it to.
+  This adds the scheduling half, and deliberately without a daemon - the OS
+  timer (cron, launchd, Task Scheduler) handles recurrence, and the command
+  itself decides whether now is the moment. A skipped tick costs 0.42s and
+  exits 0; a real run takes ~24s on a 1,900-memory brain.
+
+  Two guards, answering different questions. A new one-row `activity` table is
+  stamped by the server on every tool call, so "last active" means someone
+  *used* the brain rather than a process being alive - an editor holds the
+  server open all day without touching a memory, and that is exactly when the
+  pass should run. A `dream_lock` row, taken under `BEGIN IMMEDIATE` and
+  carrying an expiry, keeps two passes from computing the same PageRank at
+  once without leaving a crashed holder blocking every future run.
+
+  Returning to the keyboard stops a run already under way. The check sits
+  between passes rather than inside them: a pass is the unit that produces a
+  coherent set of findings, and whatever finished before the stop is kept,
+  since staging is per-pass and every proposal is idempotent on re-run.
+
+  The same threshold serves as both the gate and the cancellation check, so
+  the two cannot drift into disagreeing. Configure it with
+  `MEMORY_DREAM_IDLE_MINUTES` (default 20) or `--if-idle=MINUTES`.
+
 - **Involuntary recall: memories that arrive without being asked for.**
   `gingugu init` now installs a `UserPromptSubmit` hook, and `gingugu hook
   prompt` decides what it surfaces. Every other retrieval path answers "what

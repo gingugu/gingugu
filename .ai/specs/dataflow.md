@@ -455,8 +455,36 @@ left alone than wired up with an invented edge.
 
 ## Dream (deterministic consolidation)
 
-Runs on command (`memory_dream(action="run")`) or unattended (`gingugu dream`,
-cron). Reads the graph; writes only to `proposals`.
+Runs on command (`memory_dream(action="run")`) or unattended
+(`gingugu dream --if-idle`, on an OS timer). Reads the graph; writes only to
+`proposals`.
+
+**The guards, before any of it happens:**
+
+```
+gingugu dream --if-idle[=MINUTES]        <- cron/launchd/Task Scheduler fires this
+  -> activity.is_idle_for(conn, threshold)
+       reads ONE row: activity.last_active_at
+       stamped by every MCP tool call, in a finally  <- errors count as use too
+       unknown (no row / unparseable) -> NOT idle    <- no evidence != absence
+       future stamp (clock skew)      -> clamped 0   <- reads as busy
+     not idle -> print, exit 0, ~0.42s               <- the common case
+  -> dream_lock.acquire(conn)                        <- BEGIN IMMEDIATE, one winner
+       live holder -> exit 0, "already running"
+       expired / unparseable expiry -> take it over  <- a crash costs one window
+  -> embedder_factory()                              <- ONLY built past both guards
+  -> dream.run(..., should_continue=is_idle_for)
+       checked BETWEEN passes, same threshold as the gate
+       user returns -> stop, keep what finished, report cancelled
+  -> dream_lock.release(token)                       <- token identifies the LEASE
+```
+
+The hand-run paths (`memory_dream(action="run")`, bare `gingugu dream`) skip the
+idle gate entirely - asking for a run in a session _is_ the intent - but still
+take the lock, because two passes computing the same PageRank is waste whoever
+asked for it.
+
+**The pass itself:**
 
 ```
 gingugu dream [namespace]

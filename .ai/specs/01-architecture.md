@@ -44,7 +44,9 @@ AI client (Claude Code / Cursor / Windsurf / …)
    (WAL, foreign keys, busy timeout). The schema itself lives in the
    `migrations/` package: `schema.py` for structural work (tables, columns,
    FTS5 triggers), `claim_derivation.py` for migrations that only re-read
-   existing prose, and `__init__.py` for the ordered registry and the runner.
+   existing prose, `runtime.py` for coordination tables that describe the
+   processes touching the store rather than the memories in it (`activity`,
+   `dream_lock`), and `__init__.py` for the ordered registry and the runner.
    `config.py` resolves the DB path.
 
 ## Memory Model
@@ -291,6 +293,43 @@ read-only suggest half against the write half - to keep both under the
   order and the tie-break instead, because a pass whose findings change between
   identical runs cannot be audited, and auditability is the entire licence to
   run unattended.
+
+- **The dream pass is scheduled by the OS, not by a daemon we wrote.** Running
+  unattended needs a timer, and every platform already ships one with
+  restart-on-boot and no supervision to write. What none of them can do is
+  decide whether *now* is a good moment. So the recurrence stays outside and
+  the judgment moves into the command: `gingugu dream --if-idle` opens the DB,
+  reads one row, and exits in 0.42s unless the brain is genuinely unused.
+
+  A long-lived process was rejected explicitly. It buys identical observable
+  behaviour and costs a PID file, a restart policy, three platform-specific
+  service definitions, and a failure mode where the daemon is dead and nothing
+  says so. A program that exits has none of those.
+
+  **The gate reads an `activity` heartbeat, not process liveness**, because a
+  running MCP server is not an active user - an editor holds one open for eight
+  hours whether or not anyone touches a memory, which is exactly when the pass
+  should get its turn. Deriving activity from existing timestamps was rejected:
+  reads live in `access_log`, writes in `memories`, edges in `relations`, and
+  `idx_access_log_memory_time` leads with `memory_id`, so even the read half
+  could not use an index. The heartbeat is installed by wrapping the `tool`
+  decorator once in `handlers/__init__.py`, so a tool added later is
+  instrumented by the act of registering it, and it is stamped in a `finally`
+  because a session spent hitting errors is still a session with a person in it.
+
+  **Unknown activity never reads as idle.** A missing or unparseable heartbeat
+  means we have no evidence the user is away, and starting unattended work on
+  no evidence is the failure the table exists to prevent.
+
+  **Preemption is bounded by measurement.** A full run is ~24s on a
+  1,900-memory brain, so threading cancellation through the passes to reclaim
+  at most that would not pay for itself - and the overlap is nearly harmless
+  regardless, since WAL readers never block and `busy_timeout` is 30s. The
+  check sits *between* passes instead: a pass is the unit that yields a
+  coherent set of findings, whatever finished is kept, and every proposal is
+  idempotent on re-run, so the next run recomputes exactly what was skipped.
+  One threshold serves as both the gate and the cancellation check, so a run
+  that would not have started cannot keep running.
 
 
 - **Local-first, single file.** No server to run, no cloud dependency; the DB is

@@ -129,6 +129,25 @@
   file on disk and the running process disagree. Clear `__pycache__` between
   arms and print the loaded value from inside the process as the run's first
   line.
+- **Probing a live brain: assert the sandbox, never just print it.** Every
+  config variable in this repo is `MEMORY_*`, not `GINGUGU_*` - the rename left
+  the env surface behind. `os.environ.get` on a name that does not exist returns
+  `None` and falls through to the real database, so a wrong prefix and no
+  prefix at all are indistinguishable at runtime. A one-off script that meant to
+  read a scratch copy therefore ran against the live store, and it had printed
+  the path it was using one line above the number being read.
+
+  Printing is not checking. Assert:
+
+  ```python
+  cfg = load_config()
+  assert str(cfg.db_path) == str(expected), f"NOT SANDBOXED: {cfg.db_path}"
+  ```
+
+  Cheaper still for a read-only look: `sqlite3 "file:$DB?mode=ro"` against a
+  `.backup` copy, which cannot write to the original whatever the config says.
+  Reach for `load_config()` only when the code path itself is what is under
+  test, and assert the path first.
 - **Reintroduce the defect to prove the test is a guard.** A test written to
   prevent a recurrence is not finished until it has been seen to fail against
   the old behaviour. Twice this has caught a test that proved nothing: a
