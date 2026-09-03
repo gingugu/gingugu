@@ -71,7 +71,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   surface changes. The id is `NULL` when no session is in flight, deliberately:
   a shared placeholder would group unrelated reads into one false session.
 
+- **The dream pass: deterministic consolidation that never touches the brain.**
+  A new `memory_dream` tool and a `gingugu dream` command run three published
+  algorithms over the relation graph and stage what they find in a new
+  `proposals` table. PageRank answers "what is the graph leaning on?", label
+  propagation finds the communities the edges already form, and cosine
+  similarity finds the closest neighbour for a memory no edge touches.
+
+  Every one of them stops at the same line: **math finds structure, and
+  structure is not content.** Centrality proposes a rank, not the conclusion
+  that central means identity. Clustering proposes membership, not a name.
+  Similarity proposes a pair, not the relation type - a score says two texts
+  are about the same thing and contains nothing about whether one superseded,
+  caused, or contains the other.
+
+  So accepting a proposal is where the judgment is supplied, and the tool
+  insists on it: an `edge` accept without `relation_type` is refused, a
+  `cluster` accept without `tag` is refused. That refusal is the point. If an
+  untyped pair were quietly written as `related_to`, the arithmetic would have
+  chosen a relation type after all, by default.
+
+  Nothing in `dream/` has a write path to `memories` or `relations`, which is
+  what makes the pass safe to schedule - the worst a bad run can do is waste a
+  reader's time. Re-running refreshes pending scores and never resurfaces a
+  decided proposal, so a nightly job cannot become a nagging machine.
+
+  Measured on a 1,891-memory store: 2,208 edges, 192 orphans, one run staging
+  48 proposals. Schema migration 011.
+
 ### Fixed
+
+- **`cosine` returned a `numpy.float32` from every real-embedding call**, in
+  spite of declaring `-> float`. `fastembed` hands back a Python list whose
+  elements are `float32`, so the arithmetic silently changed type. `json.dumps`
+  refuses such a value; the MCP serializer instead stringifies it, so the
+  write-time dedupe hint had been reporting `"similarity": "1.0"` - a numeric
+  field arriving as a string, which a caller comparing it to a threshold gets
+  wrong quietly rather than loudly. The value was always correct; only its type
+  was. Found because the whole test suite runs with embeddings off, so no test
+  had ever called `cosine` with real encoder output.
 
 - **A pinned memory no longer arrives scored on a multi-namespace context
   load.** De-duplication across namespaces keeps the highest-scoring instance

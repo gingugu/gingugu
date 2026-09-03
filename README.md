@@ -699,6 +699,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_edges` | List edges with both endpoints' titles, namespaces, and degree; filter by namespace, type, or memory |
 | `memory_unrelate` | Retype an edge in place, reverse a backwards one, or remove it; one at a time or a batch, with `dry_run` |
 | `memory_consolidate` | Merge/summarize/deduplicate; call without ids for a read-only near-dupe scan |
+| `memory_dream` | Run the deterministic consolidation pass, read its proposal queue, and accept or reject a finding. PageRank, community detection and orphan reconnection over the relation graph - staged for you to decide, never written |
 | `memory_forget` | Deprecate or remove a memory |
 | `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo) |
 | `memory_export` | Export memories + tags + relations to portable JSON |

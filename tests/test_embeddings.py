@@ -408,3 +408,29 @@ def test_mismatched_dim_embedding_is_filtered(db: Database):
 
     assert store.get_embedding(mem.id) is None
     assert store.get_embeddings_for([mem.id]) == {}
+
+
+def test_cosine_returns_a_builtin_float_on_the_real_embedder_dtype() -> None:
+    """The whole suite runs offline, and this is what that hides.
+
+    ``fastembed`` returns a Python ``list`` of ``numpy.float32``, so the
+    arithmetic in ``cosine`` produces a ``float32`` and the function's declared
+    return type only holds on the paths tests actually take. Downstream,
+    ``json.dumps`` refuses that type and the MCP serializer quietly stringifies
+    it - which is how the write-time dedupe hint came to report ``similarity``
+    as ``"1.0"`` rather than ``1.0``.
+
+    Asserting on the exact type rather than the value is the point: the number
+    was always right.
+    """
+    import json
+
+    import numpy as np
+
+    vector = [np.float32(v) for v in (0.1, 0.2, 0.3, 0.4)]
+
+    result = cosine(vector, vector)
+
+    assert type(result) is float, "a float32 leaks out of every real-embedding call"
+    assert result == pytest.approx(1.0)
+    assert json.loads(json.dumps({"similarity": round(result, 4)}))["similarity"] == 1.0

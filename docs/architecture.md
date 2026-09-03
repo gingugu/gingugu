@@ -21,12 +21,14 @@ graph LR
         E[Decay Engine]
         F[Context Engine]
         G[Consolidation Engine]
+        L[Dream Pass<br/>PageRank · clusters · orphans]
         K[Credential Vault]
     end
 
     subgraph Storage
         H[(SQLite DB)]
         I[FTS5 Index]
+        P[(proposals<br/>queue)]
     end
 
     subgraph OS Secrets
@@ -39,12 +41,15 @@ graph LR
     C --> E
     C --> F
     C --> G
+    C --> L
     C --> K
     D --> H
     D --> I
     E --> H
     F --> H
     G --> H
+    L -->|reads only| H
+    L -->|writes only| P
     K --> H
     K --> J
 ```
@@ -846,6 +851,50 @@ Outcomes are reported per edge (`retyped`, `reversed`, `merged`, `deleted`,
 `outcomes` tally.
 Find the edges to repair with [`memory_edges`](#memory_edges).
 
+### `memory_dream`
+Deterministic consolidation over the relation graph. The pass computes
+structure and stages it for review; it never writes to memories.
+
+The whole design turns on one line: **math finds structure, and structure is
+not content.** Three published algorithms do the work - PageRank for
+centrality, label propagation for communities, cosine similarity for orphan
+reconnection - and each stops exactly where meaning begins. Every proposal
+carries the numbers that produced it, because a finding a reader cannot
+recheck is an opinion, and an opinion is what this pass is forbidden to have.
+
+**Parameters:**
+- `action` - `run` | `list` | `accept` | `reject` | `stats` (default `list`)
+- `namespace` (optional) - scope a run or a listing. An edge counts toward a
+  namespace's structure only when both its endpoints are inside it, so a
+  namespace's ranks cannot be inflated by how much another one leans on it.
+- `proposal_id` - required by `accept` and `reject`
+- `relation_type` - required to accept an `edge` proposal
+- `tag` - required to accept a `cluster` proposal
+- `kind` / `status` / `limit` - filters for `list`
+
+**The three kinds, and what each leaves to you:**
+
+| Kind | The pass proposes | You supply |
+|---|---|---|
+| `edge` | two memories measure as close and nothing links them | the relation type - a score cannot tell whether one supersedes, caused or contains the other |
+| `cluster` | a set of memories that link to each other more than to anything outside | the name; prose is judgment |
+| `core` | a memory the graph ranks as load-bearing | whether structurally central means it belongs in the pinned identity tier |
+
+**Accepting is where the judgment enters, and the tool insists on it.** An
+`accept` missing `relation_type` or `tag` is refused rather than defaulted.
+That refusal is the feature: if an untyped pair were quietly written as
+`related_to`, the arithmetic would have chosen a relation type after all.
+
+**Rejection is permanent.** The row is kept, not cleaned up. The same
+computation run tomorrow on the same graph reaches the same conclusion, and
+the record is what stops it being raised again - a nightly job that re-proposed
+everything you declined would be a nagging machine.
+
+Run it unattended with `gingugu dream [namespace]`, which is the case the
+design was actually about. It is safe to schedule for a structural reason
+rather than a careful one: nothing in the pass has a write path to `memories`
+or `relations`, so the worst a bad run can do is waste a reader's time.
+
 ### `memory_consolidate`
 Merge or summarize related memories into a single consolidated memory - or,
 without `memory_ids`, discover which memories are worth consolidating.
@@ -1253,6 +1302,9 @@ src/gingugu/
 ├── excerpt.py            # Reading inside one memory: offsets + literal matches
 ├── consolidation.py      # Merge/summarize/deduplicate logic
 ├── duplicate_scan.py     # Read-only near-duplicate cluster detection
+├── proposals.py          # The dream pass's queue; owns that table and nothing else
+├── dream/                # Deterministic consolidation: graph, centrality, clusters, orphans
+├── dream_cli.py          # gingugu dream: the pass from a shell or a cron job
 ├── session.py            # Per-session id for access_log's co-access key
 ├── transactions.py       # atomic(): one transaction across store + relations
 ├── context.py            # Auto-context generation for session start

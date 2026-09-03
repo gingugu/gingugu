@@ -75,6 +75,12 @@
 | `relation_repair.py` | Edge repair mixed into `RelationManager`: `retype_relation`, `reverse_relation`, `delete_relation`, `delete_edges`. Every op is an UPDATE/DELETE on the existing row, so id / `created_at` / metadata survive a correction |
 | `consolidation.py` | merge / summarize / deduplicate clusters. The whole `1 + 2N` write runs inside `transactions.atomic()`, so a consolidation applies whole or not at all |
 | `duplicate_scan.py` | The read-only *suggest* half: pairwise-cosine near-duplicate clusters, with an exact-title fallback when a namespace has no embeddings. Nothing here writes |
+| `proposals.py` | The dream pass's queue. Owns the `proposals` table and touches nothing else - that boundary is what lets the pass run unattended. A decided proposal is kept, never cleaned up: the rejection is what stops tomorrow's identical computation raising it again, and what board item 4 will count as precedent |
+| `dream/` | Deterministic consolidation. `graph.py` loads the undirected relation graph once per run (an edge counts only when BOTH endpoints are in scope, so a namespace's ranks cannot be inflated from outside it); `__init__.py` runs the passes and stages findings, skipping a pass that raises rather than losing the others |
+| `dream/centrality.py` | PageRank over the graph - a computed answer to "what is core", where degree would only count neighbours. Skips what is already pinned: the finding is the memory the graph ranks alongside the tier that nobody nominated |
+| `dream/clusters.py` | Label propagation, deliberately not Louvain - Louvain's resolution parameter is a preference about coarseness dressed as a setting. Sweep order and tie-break are fixed so a run is reproducible, which published propagation deliberately is not |
+| `dream/orphans.py` | Reconnection candidates for memories no edge touches. Two stages matching `handlers/hints.py`: retrieval narrows, then `similarity.payload_similarity` rescores absolutely against the same calibrated `RELATION_MIN_SIMILARITY` floor. Proposes the pair; never the relation type |
+| `dream_cli.py` | `gingugu dream`: the pass from a shell or a cron job - the case the design was actually about |
 | `session.py` | `current_session_id()` - a stable id for the MCP session serving the current request, read from the SDK's request `ContextVar` so no handler signature or tool schema changes. Keyed on the session object (weakly), which is the right unit for both stdio and `gingugu serve`. Returns `None` outside a request, and that `None` is stored verbatim |
 | `transactions.py` | `atomic()` - one `BEGIN IMMEDIATE` across components sharing a connection, with each participant's own `commit()` gated off for the duration. Embedding writes are queued to `_after_commit` instead of joining the transaction: they are best-effort by design, and a vector written for a row the block later rolls back is an orphan |
 | `decay.py` | Composite scoring, the `reference_timestamp()` freshness anchor (MAX, not COALESCE), dormancy as a resting signal (never auto-forgets), and `relative_age()`/`age_label()`, the derived-at-read `age` string. `composite_score`/`score_memory` are summed from `composite_parts`/`score_parts`, so the `explain` breakdown and the score it explains are the same arithmetic |
@@ -93,7 +99,7 @@
 | `namespaces.py` | Namespace CRUD; a `default_repo` change re-derives that namespace's claims (best-effort) so the declaration is not inert |
 | `credentials.py` | OS-keychain credential vault |
 | `portability.py` | Export / import a namespace. `import_data` takes an `embedder` and embeds what it writes; vectors are recomputed, never carried in the payload (they are model-specific and derived) |
-| `handlers/` | MCP tool handlers: `memory.py` (store/update), `forget.py` (the one destructive tool), `hints.py` (write-time similar/relation hints), `recall.py` (recall/context), `search.py`, `excerpt.py` (`memory_excerpt`: one memory, never ranked), `relations.py` (relate/edges/unrelate) with `relation_ops.py` (batch parsing + per-edge dispatch), `consolidate.py`, `admin.py`, `credentials.py`, `helpers.py` |
+| `handlers/` | MCP tool handlers: `memory.py` (store/update), `forget.py` (the one destructive tool), `hints.py` (write-time similar/relation hints), `recall.py` (recall/context), `search.py`, `excerpt.py` (`memory_excerpt`: one memory, never ranked), `relations.py` (relate/edges/unrelate) with `relation_ops.py` (batch parsing + per-edge dispatch), `consolidate.py`, `dream.py` (run/read/decide the proposal queue; an accept that would need a judgment the pass declined to make is REFUSED, not defaulted), `admin.py`, `credentials.py`, `helpers.py` |
 
 Dev-only tooling at the repo root (never shipped in the wheel): **`bench/`** —
 golden-set retrieval benchmark (Recall@K, MRR, precision, token cost;
@@ -113,6 +119,11 @@ Run: `uv run python -m bench [--db <real-brain.db>]`.
   `memory_unrelate` (retype / reverse / remove, single or batch, `dry_run`)
 - **Lifecycle:** `memory_consolidate`, `memory_export`, `memory_import`,
   `memory_namespaces`
+- **Consolidation (dream pass):** `memory_dream` (`run` / `list` / `accept` /
+  `reject` / `stats`) - deterministic structure-finding over the relation
+  graph, staged to a proposal queue. Also `gingugu dream` for cron. Nothing in
+  it writes to `memories` or `relations`; accepting is where a person supplies
+  the judgment the arithmetic stopped short of
 - **Credentials:** `credential_list`, `credential_get`, `credential_store`, `credential_delete`
   — gated by `MEMORY_CREDENTIALS_ENABLED` (default true); a shared/central
   instance runs with it `false` to omit the vault.
