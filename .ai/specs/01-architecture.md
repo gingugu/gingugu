@@ -270,6 +270,28 @@ read-only suggest half against the write half - to keep both under the
   `memory_stats(review_limit=...)` for review sweeps.
 
 ## Key Decisions
+- **The dream pass computes structure and is forbidden from writing content.**
+  A scheduled pass (`dream/`, `gingugu dream`, `memory_dream`) runs PageRank,
+  label propagation and cosine similarity over the relation graph and stages
+  what it finds in a `proposals` table. The governing constraint is the owner's:
+  no AI decides what is in the brain. It resolves cleanly because **math finds
+  structure, and structure is not content** - centrality proposes a rank, not
+  the conclusion that central means identity; clustering proposes membership,
+  not a name; similarity proposes a pair, not a relation type.
+
+  The guarantee is structural rather than careful: nothing in `dream/` has a
+  write path to `memories` or `relations`, and `proposals.py` owns its table
+  and nothing else. Applying a proposal happens in `handlers/dream.py`, through
+  the ordinary managers, only after a person supplies the judgment the pass
+  declined to make - and an accept missing that judgment is refused rather than
+  defaulted. A default would be the arithmetic choosing after all.
+
+  Determinism is a requirement, not a nicety. Published label propagation
+  randomises node order to sample different local optima; ours fixes the sweep
+  order and the tie-break instead, because a pass whose findings change between
+  identical runs cannot be audited, and auditability is the entire licence to
+  run unattended.
+
 
 - **Local-first, single file.** No server to run, no cloud dependency; the DB is
   portable and inspectable. Trade-off: no built-in multi-user sync (out of scope).

@@ -93,6 +93,18 @@
   spot. When a change lands in one, measure it directly against a copy of a
   real brain and report that, rather than quoting a benchmark that never
   exercised the code.
+- **The same blind spot covers types, not just behaviour - second confirmed
+  instance (2026-09-02).** Because `offline_embeddings` is autouse, no test had
+  ever called `embeddings.cosine` with real encoder output. fastembed returns a
+  Python list of `numpy.float32`, so `cosine` had been returning a `float32`
+  while declaring `-> float`, and `handlers/hints.py` had been emitting
+  `"similarity": "1.0"` as a **string** on every real-embeddings hint. It
+  surfaced only when a new caller wrote the value through `json.dumps`, which
+  refuses that type; the MCP serializer had been quietly stringifying it for
+  weeks. **A serializer that coerces instead of raising turns a type defect
+  into a data defect.** When a numeric field crosses a serializer, assert its
+  `type` somewhere and not only its value - and when a fixture disables a
+  dependency wholesale, the dependency's *return types* are unexercised too.
 - **Confirm the harness executes the changed function before quoting a
   delta.** A gate recorded by a past session is not self-validating. The
   type-weighted spreading activation item (2026-08-27) carried an explicit

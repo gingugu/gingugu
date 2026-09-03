@@ -73,6 +73,10 @@ Usage:
   gingugu promote [options]    Promote local gold memories up to a central brain.
   gingugu init [options]       Bootstrap a repo so an AI assistant uses Gingugu.
   gingugu ui [options]         Launch the Memory Explorer web UI in a browser.
+  gingugu dream [namespace]    Run the deterministic consolidation pass over the
+                               memory graph and stage what it finds for review.
+                               Writes only to the proposal queue, never to
+                               memories - safe to put on a cron.
   gingugu hook prompt          Involuntary recall: reads a UserPromptSubmit
                                event on stdin and surfaces memories the prompt
                                woke. Wired by `gingugu init`; not run by hand.
@@ -94,6 +98,7 @@ def main() -> None:
     ``gingugu promote`` → promote local gold memories up to a central brain.
     ``gingugu init``    → bootstrap a repo's Claude Code hooks / rules file.
     ``gingugu ui``      → launch the Memory Explorer web UI in a browser.
+    ``gingugu dream``   → run the consolidation pass; stages proposals only.
     """
     import sys
 
@@ -125,6 +130,10 @@ def main() -> None:
         from .webui import main as ui_main
 
         raise SystemExit(ui_main(sys.argv[2:]))
+    if cmd == ["dream"]:
+        from .dream_cli import main as dream_main
+
+        raise SystemExit(dream_main(sys.argv[2:]))
     if cmd == ["hook"]:
         # Runs on the user's keystroke via a Claude Code hook. Reads the event
         # payload on stdin; never raises, never blocks a prompt.

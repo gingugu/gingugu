@@ -453,6 +453,51 @@ being filtered out, so - unlike claims, which needed `open` and
 explaining. Reconnecting an orphan is still a judged act: an orphan is better
 left alone than wired up with an invented edge.
 
+## Dream (deterministic consolidation)
+
+Runs on command (`memory_dream(action="run")`) or unattended (`gingugu dream`,
+cron). Reads the graph; writes only to `proposals`.
+
+```
+gingugu dream [namespace]
+  -> dream.graph.load(conn, namespace_id)
+       memories in scope, sorted by id           <- stable order = reproducible
+       relations where BOTH endpoints in scope   <- no half-dangling inflation
+       adjacency treated as UNDIRECTED, matching spreading activation
+  -> one graph, shared by all three passes       <- so findings are comparable
+  -> centrality.find:  pagerank -> >= 3x the 1/N baseline -> drop pinned -> top 10
+  -> clusters.find:    propagate -> size 3..40 -> density >= 0.5 -> top 15
+  -> orphans.find:     for each of <=25 orphans:
+                         search (candidates) -> payload_similarity (absolute)
+                         -> RELATION_MIN_SIMILARITY[basis] floor -> best match
+  -> ProposalQueue.stage(kind, subject, object?, score, evidence)
+       new              -> INSERT
+       pending          -> UPDATE score/evidence   <- the graph moved
+       already decided  -> NO-OP                   <- never nag
+  -> report: graph shape, found vs staged per pass, queue depth
+```
+
+A pass that raises is logged and skipped; the run keeps the others. This is
+scheduled work with nobody watching, and losing two good passes to a third's
+edge case is the worst available trade.
+
+**Deciding, and where the judgment enters:**
+
+```
+memory_dream(action="accept", proposal_id, [relation_type | tag])
+  -> kind == "edge"    : relation_type REQUIRED -> RelationManager.relate
+  -> kind == "cluster" : tag REQUIRED           -> store.add_tags(each member)
+  -> kind == "core"    :                           store.update(pinned=True)
+  -> ProposalQueue.decide(id, accepted)
+memory_dream(action="reject", proposal_id)
+  -> decide(id, rejected). Row KEPT: it is what suppresses the next run's
+     identical finding, and the precedent governance bands will later count.
+```
+
+The write happens in the handler, through the ordinary managers - never from
+inside the queue. So there is no path by which a staged row reaches the brain
+without a person passing through the accept step first.
+
 ## Lifecycle
 
 - `memory_update` — mutate an existing memory (re-runs hint checks on title/content
