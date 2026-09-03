@@ -5,7 +5,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from gingugu.database import LATEST_SCHEMA_VERSION, Database
+from gingugu.database import Database
+from gingugu.migrations import LATEST_SCHEMA_VERSION
 
 
 def test_migration_sets_user_version(db: Database) -> None:
@@ -35,7 +36,7 @@ def test_fts_triggers_exist(db: Database) -> None:
 
 
 def test_migrate_is_idempotent(db: Database) -> None:
-    from gingugu.database import migrate
+    from gingugu.migrations import migrate
 
     assert migrate(db.conn) == LATEST_SCHEMA_VERSION
     assert migrate(db.conn) == LATEST_SCHEMA_VERSION
@@ -66,7 +67,7 @@ def test_backup_taken_when_migrations_pending(tmp_path: Path) -> None:
 
     # Create the DB at v3 by running only the first three migrations manually.
     conn = sqlite3.connect(str(db_path))
-    from gingugu.database import MIGRATIONS
+    from gingugu.migrations import MIGRATIONS
 
     for target, fn in MIGRATIONS[:3]:  # apply v1, v2, v3 only
         fn(conn)
@@ -102,7 +103,7 @@ def test_backup_captures_writes_still_sitting_in_the_wal(tmp_path: Path) -> None
     """
     db_path = tmp_path / "wal.db"
 
-    from gingugu.database import MIGRATIONS
+    from gingugu.migrations import MIGRATIONS
 
     holder = sqlite3.connect(str(db_path))
     holder.execute("PRAGMA journal_mode=WAL")
@@ -148,7 +149,7 @@ def test_backup_not_overwritten_on_retry(tmp_path: Path) -> None:
 
     # Set up a v3 DB.
     conn = sqlite3.connect(str(db_path))
-    from gingugu.database import MIGRATIONS
+    from gingugu.migrations import MIGRATIONS
 
     for target, fn in MIGRATIONS[:3]:
         fn(conn)

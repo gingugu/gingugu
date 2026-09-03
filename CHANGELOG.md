@@ -136,6 +136,39 @@ were never valid refs.
 
 ### Changed
 
+- **The two modules still over the 300-line limit were split, each along a seam
+  it already had.** Both were long because they were heavily documented, so
+  cutting on the line count would have separated every migration's reasoning
+  from the code it explains - the documentation was the thing worth keeping.
+
+  `database.py` (547 lines) split on *what a migration does*: `migrations/`
+  now holds the ordered registry, `LATEST_SCHEMA_VERSION`, the WAL-aware
+  pre-migration backup and `migrate()`, with `migrations/schema.py` for
+  structural work (tables, columns, FTS5 triggers) and
+  `migrations/claim_derivation.py` for the five migrations whose whole job is
+  re-reading prose that never changed. `database.py` keeps the SQLite
+  connection and its PRAGMAs, and nothing else.
+
+  `storage.py` (401 lines) split on *the memory row versus what hangs off it*.
+  `MemoryStore` keeps the `memories` row and its transaction boundary; the
+  satellite tables move to `tags.py` and `access.py`, reached with
+  `embedding_sync` and `claim_sync` through one `DerivedTables` delegation
+  surface. `normalize_metadata` joins `normalize_tag` in `models.py`.
+
+  These are modules over a connection rather than methods for a reason that
+  had already cost something: `MemoryStore` was not the only writer of memory
+  rows, and because its tag helper was unreachable from outside, the import
+  path had grown a byte-identical private copy of it. Both callers now share
+  one function. No behavior changed, and the migration registry is identical
+  in order and targets.
+
+- Three unreachable methods removed from `MemoryStore` rather than carried
+  into the split: `list_unembedded_ids`, `embed_memories` and
+  `_embedding_input` had no callers anywhere in the project. The docstring on
+  `backfill_embeddings` recommending `embed_memories` for bulk imports now
+  points at `embedding_sync.embed_ids`, which is what a bulk importer can
+  actually reach.
+
 - Repo qualification moved from `claims.py` into a new `claim_qualify.py`,
   keeping both modules inside the 300-line limit. No behavior depends on the
   split.

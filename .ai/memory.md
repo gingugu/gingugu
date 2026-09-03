@@ -51,9 +51,15 @@
 | `bootstrap/_files.py` | Shared `read_template` / `safe_read` helpers, split out so `global_rules` doesn't import the package `__init__` that imports it |
 | `bootstrap/settings.py` | Non-destructive `.claude/settings.json` merge. `declared_flags()` reads a hook's real `add_argument` flags off disk, so the "wired for a different script" warning reflects the installed script rather than our template's flag set |
 | `config.py` | Config + cross-platform DB path (platformdirs); transport + credentials-flag settings |
-| `database.py` | Connection, schema, WAL, migrations (`PRAGMA user_version`), FTS5 triggers |
-| `models.py` | Memory / namespace / relation data models. Also owns `MEMORY_COLUMNS` - the one declared `memories` column list - plus `memory_columns_sql()` / `memory_placeholders_sql()`. Every module that reads or inserts a memory row derives its SQL from these; private copies drifted and silently dropped `pinned` |
-| `storage.py` | Memory CRUD (store, update, forget) |
+| `database.py` | The SQLite connection alone: WAL, foreign keys, busy timeout. Opening one runs `migrate()`; it owns no schema |
+| `migrations/` | Schema migrations keyed off `PRAGMA user_version`. `__init__` holds the ordered `MIGRATIONS` registry, `LATEST_SCHEMA_VERSION`, the WAL-aware pre-migration backup, and `migrate()` |
+| `migrations/schema.py` | Structural migrations (001-004, 008): tables, columns, indexes, FTS5 triggers. Each keeps its DDL beside the function that applies it, so a table's rationale cannot drift from the table |
+| `migrations/claim_derivation.py` | Row migrations (005-007, 009, 010) + `_backfill_claims`. Claims are stored rows, so improving the extractor changes nothing already on disk - every fix needs a migration that re-reads prose which never changed. Five exist for that one reason |
+| `models.py` | Memory / namespace / relation data models. Also owns `MEMORY_COLUMNS` - the one declared `memories` column list - plus `memory_columns_sql()` / `memory_placeholders_sql()`. Every module that reads or inserts a memory row derives its SQL from these; private copies drifted and silently dropped `pinned`. Field normalizers live here too: `normalize_tag`, `normalize_metadata` |
+| `storage.py` | CRUD for the `memories` row itself, and the transaction boundary around it. Owns nothing else |
+| `storage_derived.py` | `DerivedTables`, the delegation surface for the four satellite tables a memory drags along (tags, access log, embeddings, claims). Mixed into `MemoryStore` ahead of `TransactionParticipant`, so it declares what it borrows under `TYPE_CHECKING` only - a real stub would sit earlier in the MRO and shadow the `_commit` it means to call |
+| `tags.py` | The `tags` / `memory_tags` tables. Split from `storage.py` because `memory_import` writes tag rows too and had grown a byte-identical private copy of `get_or_create` |
+| `access.py` | The `access_log` table and the two ways to touch a memory: `record` (a real access, bumps `access_count`) vs `touch` (reactivation only, refreshes the dormancy clock). Conflating them lets a well-connected memory inflate its own ranking |
 | `search.py` | True hybrid engine: BM25 pool, RRF fusion, composite re-rank. Ties break on id, never on iteration order |
 | `semantic_pool.py` | The cosine ranking cohort, split out when `search.py` crossed 300 lines. `SEMANTIC_COHORT` / `ENTRANT_CAP` are FIXED constants: sizing them by `limit` made a memory's relevance depend on how many rows the caller asked for |
 | `search_common.py` | Shared SQL columns + WHERE-fragment builders |
@@ -170,7 +176,7 @@ gap between the count and the rows.
   one-namespace-per-repo convention, load-bearing: 145 claims vs 26 without it);
   a slug overrides it; `""` declares the namespace is not a repo at all, so bare
   refs are dropped rather than mis-keyed. `crow` and `default` are seeded `""`.
-- Schema versioned via `PRAGMA user_version` (**currently 9**); migrations
+- Schema versioned via `PRAGMA user_version` (**currently 10**); migrations
   additive by default. Migration 006 adds no schema — it re-runs the claims
   backfill to repair DBs that reached v5 from pre-fix code and so can never
   run 005 again. Migration 007 adds `default_repo` and re-derives every claim

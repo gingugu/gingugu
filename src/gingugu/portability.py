@@ -15,7 +15,7 @@ import logging
 import sqlite3
 import uuid
 
-from . import embedding_sync
+from . import embedding_sync, tags
 from .embeddings import EmbeddingProvider
 from .models import (
     MEMORY_COLUMNS,
@@ -92,15 +92,6 @@ def export_data(
         "memories": memories,
         "relations": relations,
     }
-
-
-def _get_or_create_tag(conn: sqlite3.Connection, name: str) -> str:
-    row = conn.execute("SELECT id FROM tags WHERE name = ?", (name,)).fetchone()
-    if row is not None:
-        return row["id"]
-    tag_id = str(uuid.uuid4())
-    conn.execute("INSERT INTO tags(id, name) VALUES (?, ?)", (tag_id, name))
-    return tag_id
 
 
 def _resolve_namespaces(conn: sqlite3.Connection, namespaces: list[dict]) -> tuple[dict, int]:
@@ -222,7 +213,7 @@ def import_data(
         )
         written_ids.append(mem["id"])
         for tag_name in mem.get("tags", []):
-            tag_id = _get_or_create_tag(conn, tag_name)
+            tag_id = tags.get_or_create(conn, tag_name)
             conn.execute(
                 "INSERT OR IGNORE INTO memory_tags(memory_id, tag_id) VALUES (?, ?)",
                 (mem["id"], tag_id),

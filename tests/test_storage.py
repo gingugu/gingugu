@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from gingugu.models import Confidence, MemoryType
+from gingugu.models import Confidence, MemoryType, normalize_metadata
 from gingugu.namespaces import NamespaceManager
-from gingugu.storage import MemoryStore, _normalize_metadata
+from gingugu.storage import MemoryStore
 
 
 def _ns_id(namespaces: NamespaceManager) -> str:
@@ -146,30 +146,30 @@ def test_get_missing_returns_none(store: MemoryStore) -> None:
 
 
 def test_normalize_metadata_none_passthrough() -> None:
-    assert _normalize_metadata(None) is None
+    assert normalize_metadata(None) is None
 
 
 def test_normalize_metadata_empty_string_clears() -> None:
-    assert _normalize_metadata("") is None
+    assert normalize_metadata("") is None
 
 
 def test_normalize_metadata_canonicalizes_keys() -> None:
     """Equivalent JSON objects should produce identical stored strings."""
-    a = _normalize_metadata('{"b": 1, "a": 2}')
-    b = _normalize_metadata('{"a": 2, "b": 1}')
+    a = normalize_metadata('{"b": 1, "a": 2}')
+    b = normalize_metadata('{"a": 2, "b": 1}')
     assert a == b == '{"a": 2, "b": 1}'
 
 
 def test_normalize_metadata_rejects_non_json() -> None:
     with pytest.raises(ValueError, match="must be valid JSON"):
-        _normalize_metadata("not json at all")
+        normalize_metadata("not json at all")
 
 
 def test_normalize_metadata_rejects_non_object_shapes() -> None:
     """Lists, scalars, etc. are valid JSON but not what metadata should hold."""
     for payload in ("[1, 2, 3]", '"a string"', "42", "true", "null"):
         with pytest.raises(ValueError, match="JSON object"):
-            _normalize_metadata(payload)
+            normalize_metadata(payload)
 
 
 def test_create_rejects_bad_metadata(store: MemoryStore, namespaces: NamespaceManager) -> None:

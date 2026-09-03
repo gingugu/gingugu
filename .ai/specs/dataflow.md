@@ -478,11 +478,14 @@ left alone than wired up with an invented edge.
 
 ```
 database.py on startup:
-  → open SQLite (WAL mode)
-  → read PRAGMA user_version
-  → if migrations pending: snapshot to <db>.bak-before-vN via conn.backup()
-  → apply pending migrations in order (additive by default)
-  → ensure FTS5 virtual table + sync triggers exist and match `memories`
+  → open SQLite (WAL mode, foreign keys, busy timeout)
+  → hand off to migrations.migrate():
+      → read PRAGMA user_version
+      → if migrations pending: snapshot to <db>.bak-before-vN via conn.backup()
+      → apply pending migrations in order (additive by default), from
+        migrations/schema.py (structural) and migrations/claim_derivation.py
+        (re-derives rows from prose that never changed)
+      → ensure FTS5 virtual table + sync triggers exist and match `memories`
 ```
 
 The snapshot is taken with SQLite's backup API rather than a file copy, because

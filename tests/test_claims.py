@@ -14,7 +14,7 @@ import pytest
 
 from gingugu import claim_sync as cs
 from gingugu import claims as cm
-from gingugu.database import migrate
+from gingugu.migrations import migrate
 from gingugu.models import utcnow_iso
 
 # --- extraction: repo qualification -----------------------------------------
