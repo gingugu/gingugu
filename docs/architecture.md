@@ -25,10 +25,16 @@ graph LR
         K[Credential Vault]
     end
 
+    subgraph OS Scheduler
+        S[cron · launchd · Task Scheduler<br/>gingugu dream --if-idle]
+    end
+
     subgraph Storage
         H[(SQLite DB)]
         I[FTS5 Index]
         P[(proposals<br/>queue)]
+        Q[(activity<br/>heartbeat)]
+        R[(dream_lock)]
     end
 
     subgraph OS Secrets
@@ -52,7 +58,18 @@ graph LR
     L -->|writes only| P
     K --> H
     K --> J
+    C -->|stamps every tool call| Q
+    S -->|run only if idle| Q
+    S -->|one runner at a time| R
+    S --> L
 ```
+
+The scheduler edge is the whole of the "runs while nobody is there" design:
+there is no daemon in the server process. The OS timer supplies recurrence, the
+`activity` heartbeat supplies the judgment about whether now is the moment, and
+`dream_lock` keeps a scheduled run from colliding with a hand-run. Note the
+direction of the two dotted concerns - the handlers only ever *write* the
+heartbeat, and the scheduler only ever *reads* it.
 
 ---
 
@@ -203,6 +220,48 @@ on **both** `memory_stats` calls and write operations (`memory_store` /
 hour) so it can't grow unbounded when `memory_stats` is rarely called. Aggregate
 counts are denormalized onto `memories.access_count`, so trimming the log is
 non-destructive to ranking.
+
+#### `activity` and `dream_lock`
+```sql
+CREATE TABLE activity (
+    id             INTEGER PRIMARY KEY CHECK (id = 1),
+    last_active_at TEXT NOT NULL,
+    source         TEXT   -- the tool that stamped it; diagnostics only
+);
+
+CREATE TABLE dream_lock (
+    id          INTEGER PRIMARY KEY CHECK (id = 1),
+    holder      TEXT NOT NULL,   -- host:pid:uuid - identifies the LEASE
+    acquired_at TEXT NOT NULL,
+    expires_at  TEXT NOT NULL
+);
+```
+
+These describe the *processes touching the store*, not the memories in it. They
+carry no knowledge, are not exported, and a store that lost them would lose
+nothing a person put there - which is why their migration lives in
+`migrations/runtime.py` rather than beside the content schema.
+
+**`activity` is the heartbeat**, stamped on every MCP tool call, and it exists
+because a running server is not an active user: an editor holds the process
+open for hours whether or not anyone touches a memory. Deriving the same signal
+from existing tables does not work - reads land in `access_log`, writes in
+`memories`, edges in `relations`, and `idx_access_log_memory_time` leads with
+`memory_id`, so even a bare `MAX(accessed_at)` cannot use an index.
+
+It is **seeded** at migration time. An empty heartbeat table and a genuinely
+idle store look identical to a reader, and the safe reading of "I have never
+seen activity" is not "start unattended work now".
+
+**`dream_lock` serializes the pass.** A row rather than a lockfile: identical
+behaviour on macOS, Linux and Windows, and recoverable through an expiry
+instead of reasoning about orphaned file handles. Acquisition runs inside
+`BEGIN IMMEDIATE`, so two processes racing for it cannot both read "free".
+
+Both tables are pinned to a single row by `CHECK (id = 1)`. That makes the
+heartbeat an `UPDATE` on a known row - the cheapest write SQLite offers, paid
+on every tool call - and makes the lock impossible to hold twice however badly
+a caller misuses it.
 
 ---
 
@@ -890,10 +949,35 @@ computation run tomorrow on the same graph reaches the same conclusion, and
 the record is what stops it being raised again - a nightly job that re-proposed
 everything you declined would be a nagging machine.
 
-Run it unattended with `gingugu dream [namespace]`, which is the case the
-design was actually about. It is safe to schedule for a structural reason
-rather than a careful one: nothing in the pass has a write path to `memories`
-or `relations`, so the worst a bad run can do is waste a reader's time.
+Run it unattended with `gingugu dream --if-idle`, which is the case the design
+was actually about. It is safe to schedule for a structural reason rather than
+a careful one: nothing in the pass has a write path to `memories` or
+`relations`, so the worst a bad run can do is waste a reader's time.
+
+**There is no daemon.** Your OS already runs things on a timer, across every
+platform, with restart-on-boot. What it cannot do is tell whether you are
+mid-session, so that judgment lives in the command instead: each tick reads one
+row and exits in about 0.42s unless the brain has actually gone quiet.
+
+```bash
+*/15 * * * * gingugu dream --if-idle     # or a launchd / Task Scheduler trigger
+```
+
+"Quiet" means **nobody used the brain** - not "no process is running". Your
+editor keeps the MCP server alive all day whether or not you store anything,
+which is precisely when the pass should get its turn, so a one-row `activity`
+table is stamped by every tool call and the gate reads that. Two safeguards
+follow from the same table: an unknown or unreadable heartbeat never counts as
+idle, because no evidence that you left is not evidence that you left; and if
+you come back mid-run, the pass stops between passes and keeps whatever it
+finished, since every proposal is idempotent and the next run recomputes the
+rest.
+
+A `dream_lock` row keeps a scheduled run and a hand-run from computing the same
+PageRank at once. It carries an expiry, so a pass killed halfway blocks the next
+run for one window rather than forever. The threshold is
+`MEMORY_DREAM_IDLE_MINUTES` (default 20) or `--if-idle=MINUTES`; a skip exits 0,
+so a scheduler stays quiet instead of mailing you every quarter hour.
 
 ### `memory_consolidate`
 Merge or summarize related memories into a single consolidated memory - or,
@@ -1304,7 +1388,10 @@ src/gingugu/
 ├── duplicate_scan.py     # Read-only near-duplicate cluster detection
 ├── proposals.py          # The dream pass's queue; owns that table and nothing else
 ├── dream/                # Deterministic consolidation: graph, centrality, clusters, orphans
-├── dream_cli.py          # gingugu dream: the pass from a shell or a cron job
+├── dream_cli.py          # gingugu dream [--if-idle]: the pass from a shell or a scheduler
+├── dream_schedule.py     # guarded_run(): the idle gate + the lock, shared by CLI and tool
+├── activity.py           # One-row heartbeat: when the brain was last USED, not last alive
+├── dream_lock.py         # Single-instance lock for the pass; a row, not a lockfile
 ├── session.py            # Per-session id for access_log's co-access key
 ├── transactions.py       # atomic(): one transaction across store + relations
 ├── context.py            # Auto-context generation for session start
