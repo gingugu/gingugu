@@ -40,7 +40,42 @@ is real rather than decorative. Test imports were repointed to the new homes.
 786 tests pass, `ruff` + `black` clean, and a built wheel confirms the new
 subpackage ships (hatchling recurses `packages = ["src/gingugu"]`).
 
-`storage.py` (401) is the remaining half of board item 5.
+### `storage.py`: 401 -> 198
+
+Same principle, different seam. A memory is one row in `memories` plus four
+satellite tables that must stay in step with it, so the cut is **the row** vs
+**what hangs off the row**:
+
+- `tags.py` (75) - the `tags` / `memory_tags` tables. This one is a
+  de-duplication, not a move: `portability.py` carried a byte-identical private
+  copy of `_get_or_create_tag`, the same drift class that once let a private
+  column list silently drop `pinned`. Both now call one function.
+- `access.py` (75) - the `access_log` table and the distinction that matters
+  more than the table: `record` is a real access and bumps `access_count`,
+  `touch` is reactivation and only refreshes the dormancy clock. Conflating
+  them lets a well-connected memory inflate its own ranking by being adjacent
+  to popular ones.
+- `storage_derived.py` (153) - `DerivedTables`, the delegation surface for all
+  four satellites, mixed into `MemoryStore`.
+- `normalize_metadata` moved to `models.py`, beside its sibling
+  `normalize_tag`.
+
+**Three dead methods removed** rather than relocated: `list_unembedded_ids`,
+`embed_memories` and `_embedding_input` had zero references anywhere in the
+repo - src, tests, UI and docs all swept. `backfill_embeddings` had a docstring
+recommending `embed_memories` to bulk importers, and no bulk importer ever took
+the advice; it now points at `embedding_sync.embed_ids`.
+
+**One real bug, caught by the suite and not by review.** `DerivedTables` first
+declared `_commit`/`_after_commit` as `NotImplementedError` stubs to document
+what it borrows. As a mixin listed before `TransactionParticipant` those stubs
+won the MRO and shadowed the real implementations. They are now declared under
+`TYPE_CHECKING` only, so the contract is stated without existing at runtime.
+
+No file in `src/gingugu/` is now over 300 lines. Board item 5 is discharged.
+
+Also swept `.ai/specs/01-architecture.md` clean of em dashes (30 -> 0), a slice
+of board item 10 in a file this PR was already editing.
 
 ## Recently Completed
 

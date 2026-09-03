@@ -5,7 +5,7 @@
 Gingugu is a single-process **MCP server**. By default an AI client spawns it
 over **stdio**; it can also run over **streamable HTTP** (`gingugu serve`, gated
 by a Bearer token) so a hosted/central instance is reachable remotely. It owns
-one local SQLite database and exposes a set of memory tools — the entire system
+one local SQLite database and exposes a set of memory tools - the entire system
 is the server process plus the DB file plus an optional local web UI.
 
 ```
@@ -22,18 +22,24 @@ AI client (Claude Code / Cursor / Windsurf / …)
 
 ## Layers
 
-1. **Transport** — `server.py` registers MCP tools and routes calls to handlers.
+1. **Transport** - `server.py` registers MCP tools and routes calls to handlers.
    It is the crash boundary: no exception escapes to the client. Two transports
    share this path: **stdio** (default) and **streamable HTTP** via `serve.py`
    (`gingugu serve`), which wraps the same server in a Starlette app with
    Bearer-token auth middleware and a `/healthz` probe. The `credential_*` tools
    are gated by `MEMORY_CREDENTIALS_ENABLED` so a shared instance can omit the
    secret vault.
-2. **Handlers** (`handlers/`) — thin adapters that validate input, call the core
+2. **Handlers** (`handlers/`) - thin adapters that validate input, call the core
    modules, and return structured dicts. Split by domain: `memory`, `search`,
    `relations`, `admin`, `credentials`, plus `helpers`.
-3. **Core** — `storage`, `search`, `embeddings`, `context`, `relations`,
-   `consolidation`, `decay`, `stats`, `namespaces`, `portability`.
+3. **Core** - `storage`, `search`, `embeddings`, `context`, `relations`,
+   `consolidation`, `decay`, `stats`, `namespaces`, `portability`. `storage`
+   owns the `memories` row only; the satellite tables it drags along have their
+   own owners (`tags`, `access`, `embedding_sync`, `claim_sync`), reached
+   through the `storage_derived.DerivedTables` delegation surface. They are
+   modules over a bare connection rather than methods on `MemoryStore` because
+   `portability.import_data` writes memory rows too, and an invariant locked
+   inside that class is one the import path cannot honor.
 4. **Persistence** - `database.py` owns the SQLite connection and its PRAGMAs
    (WAL, foreign keys, busy timeout). The schema itself lives in the
    `migrations/` package: `schema.py` for structural work (tables, columns,
@@ -49,7 +55,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
   preference, workflow, context}; `confidence` ∈ {verified, inferred, stale,
   deprecated}.
 - **Graph:** directed typed relations (`supersedes`, `related_to`, `caused_by`,
-  `contradicts`, `parent_of`, `child_of`). Recall uses **spreading activation** —
+  `contradicts`, `parent_of`, `child_of`). Recall uses **spreading activation** -
   surfacing a memory wakes its linked cluster.
 - **Never-forget:** `decay.py` tracks dormancy (untouched ≥ 90 days) as a
   *resting signal* only. Nothing is auto-demoted or auto-deleted; only explicit
@@ -58,14 +64,14 @@ AI client (Claude Code / Cursor / Windsurf / …)
   `"2 days ago"` at serialization. Every read surface carries it; nothing
   persists it. Storing a relative timestamp would reintroduce the exact rot
   that `memory_claims` and `review_hints` exist to detect. Precedent:
-  `credentials.expiry_status()` and `staleness` classify at call time too — no
+  `credentials.expiry_status()` and `staleness` classify at call time too - no
   schema column anywhere holds a derived time value.
 - **One freshness anchor, and every consumer uses it.**
   `decay.reference_timestamp()` returns the **latest** of `last_confirmed`,
-  `updated_at`, `created_at` — a `MAX`, not a `COALESCE`, so an edit made after
+  `updated_at`, `created_at` - a `MAX`, not a `COALESCE`, so an edit made after
   the last confirmation is not discarded. The scorer, the spread-neighbour sort,
   staleness and the payload `age` (`decay.age_label()`) all read it; the two SQL
-  call sites mirror the same rule. Feeding it: **a rewrite is a confirmation** —
+  call sites mirror the same rule. Feeding it: **a rewrite is a confirmation** -
   `storage.update` advances `last_confirmed` when the title or content actually
   changed, reusing the "did the matching surface move?" test that already gates
   claim re-sync and embedding re-encode. Retypes, tag edits and metadata writes
@@ -84,13 +90,13 @@ AI client (Claude Code / Cursor / Windsurf / …)
   migration 006 re-runs the backfill for DBs stranded at v5; migration 007
   re-derives everything under the corrected extractor; migration 009 re-derives
   again for the `unverified` state below).
-  The prose is immutable history — a memory that said "PR #10 open" was correct
-  when written — so resolution is recorded in the claim row rather than by
+  The prose is immutable history - a memory that said "PR #10 open" was correct
+  when written - so resolution is recorded in the claim row rather than by
   editing the text. This is the primitive whose absence produced 160 distinct
   ad-hoc `=== STATUS ===` banner styles across the dogfooding corpus.
 
   Refs are qualified by URL, then a repo named beside them, then the
-  namespace's `default_repo` — unset means the namespace's own name (the
+  namespace's `default_repo` - unset means the namespace's own name (the
   one-namespace-per-repo convention), `""` means the namespace is not a repo
   at all. Unqualifiable refs are dropped rather than guessed, and contradiction
   detection is namespace-scoped so a bare-ref mis-key cannot reach across
@@ -98,14 +104,14 @@ AI client (Claude Code / Cursor / Windsurf / …)
 
   Refs inside `[[wiki-links]]` are ignored: a link to a memory *titled*
   "PR #10 open" is a citation, not this memory's assertion. Namespace scoping
-  does **not** contain this one — it produced wrong claims in namespaces whose
-  default repo was correct — which is why it is handled in the extractor.
+  does **not** contain this one - it produced wrong claims in namespaces whose
+  default repo was correct - which is why it is handled in the extractor.
 
   A ref whose prose asserts no state records as **`unverified`** rather than
   being dropped: dropping made it invisible, and a memory listing `PR #1: <url>`
   under "Deliverables" read as in-flight forever while `claims.open` said 0.
-  Calling it open instead was measured against the live corpus and rejected —
-  185 such claims against 223 real ones, nearly all narrating shipped work — so
+  Calling it open instead was measured against the live corpus and rejected -
+  185 such claims against 223 real ones, nearly all narrating shipped work - so
   it is excluded from `open`, `open_actionable`, `sample`, and contradiction
   detection, and surfaced only through its own filter. The governing rule is
   unchanged from the paragraphs above: a missed claim is silent, a wrong one
@@ -118,7 +124,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
 
   The read side lives in `claim_queries.py`: the `memory_stats.claims` backlog
   enumeration and the `claim_filter()` predicate behind
-  `memory_search(claims="open"|"contradicted"|"unverified")`. One definition, two consumers —
+  `memory_search(claims="open"|"contradicted"|"unverified")`. One definition, two consumers -
   a stats block and a search filter asking the same question with two
   hand-written correlated subqueries is how they drift apart. The split also
   put `claim_sync.py` back under the 300-line limit.
@@ -269,19 +275,19 @@ read-only suggest half against the write half - to keep both under the
   portable and inspectable. Trade-off: no built-in multi-user sync (out of scope).
 - **Optional network transport, still single-owner.** `gingugu serve` exposes
   the brain over HTTP behind one shared Bearer token for a hosted/central
-  instance, but it stays a single SQLite file with no per-user RBAC —
+  instance, but it stays a single SQLite file with no per-user RBAC -
   multi-tenant auth remains roadmap (see `docs/future-architecture.md`).
 - **Promotion is a client, not server logic.** `gingugu promote` (`promote.py`)
-  speaks the public MCP tool surface to two instances — read-only `memory_export`
+  speaks the public MCP tool surface to two instances - read-only `memory_export`
   from a local brain, filtered `memory_store` into a central brain with a
   provenance stamp. The server gains no promotion-specific code; the selective
   local→central absorption lives entirely in the client. Keeps the store pure.
 - **Onboarding is client-side too.** `gingugu init` (`bootstrap/`) writes no
-  server code — it copies packaged templates (`bootstrap/templates/*.tmpl`) into
+  server code - it copies packaged templates (`bootstrap/templates/*.tmpl`) into
   a target repo: for Claude Code, a `SessionStart` hook that auto-injects the
   memory startup contract every session (a rules file is not guaranteed to load
   into context; a hook is), a `Stop` save-discipline hook, and the
-  `/sink-the-ship` command — merging both hooks into `.claude/settings.json`
+  `/sink-the-ship` command - merging both hooks into `.claude/settings.json`
   non-destructively (`settings.py`) and appending the hooks' runtime artifacts
   (`logs/`, `.claude/data/`, `settings.local.json`) to the target's `.gitignore`
   so transcripts never get committed. Output is a themed 90s boot sequence
@@ -290,7 +296,7 @@ read-only suggest half against the write half - to keep both under the
   outperformed the copy-paste setup shipped to users.
 - **The user-level rules file is part of the bootstrap, and is merged, not
   written.** `bootstrap/global_rules.py` manages the protocol inside a marked
-  block in `~/.claude/CLAUDE.md` — the file loaded in *every* session, including
+  block in `~/.claude/CLAUDE.md` - the file loaded in *every* session, including
   directories with no project protocol installed. A repo rules file is written
   by `init`, so a `--force`-gated whole-file write is fine there **provided it
   backs the old bytes up first** - "init writes this file" was read for a while
@@ -301,7 +307,7 @@ read-only suggest half against the write half - to keep both under the
   sentinels. Everything else appends. An unmanaged protocol already in the file
   is a refusal plus instructions, never a silent second set of memory rules.
   There is deliberately **no `--global` flag**: making the step opt-in would
-  imply the protocol is optional. It exists because that file drifted — it still
+  imply the protocol is optional. It exists because that file drifted - it still
   said "build edges aggressively" long after the templates had moved on, with no
   tooling able to correct it. Nothing we ship may name that flag; a test asserts
   the managed note, the module docstring and the run output never do, because the
@@ -310,17 +316,17 @@ read-only suggest half against the write half - to keep both under the
 - **The same merge now also targets a repo's own `CLAUDE.md` / `AGENTS.md`,
   and `--adopt` is the escape hatch out of the permanent conflict-skip.**
   `merge_block` was already generic over any text, so `init_repo_rules` reuses
-  it unchanged — touching only files that already exist in the repo root
+  it unchanged - touching only files that already exist in the repo root
   (never creating an `AGENTS.md`), with the same no-`--force` rule as the
   user-level file. But a hand-written protocol hits `conflict` and stays that
-  way forever with no flag to opt in — the exact shape a prior finding named
+  way forever with no flag to opt in - the exact shape a prior finding named
   ("a correct guard can make a feature inert in the field"). `--adopt` breaks
   that: it locates the hand-written section by its own heading TITLE (never
-  its body — an early version matched on body text and a nested subsection
+  its body - an early version matched on body text and a nested subsection
   merely *naming* a tool in passing, e.g. "run `memory_recall` before
   asking", outranked the true enclosing heading by having a narrower span),
   wraps that span in the sentinel markers, and immediately re-runs
-  `merge_block` to refresh it to the template — one command, one backup of
+  `merge_block` to refresh it to the template - one command, one backup of
   the true original.
 - **A `--force` backup keys off content, never off ownership.** Whether a file
   carries `gingugu-init:managed-file` says whether *we* wrote it; it says nothing
@@ -445,8 +451,8 @@ read-only suggest half against the write half - to keep both under the
 - **Retrieval prefers directional edges, but confidence outranks type.**
   (2026-08-27.) `dampened_neighbour_ids` sorts neighbours by confidence rank,
   then `models.RELATION_WEIGHT`, then low degree, then recency, then id.
-  The weight table is deliberately **two tiers** — 1 for every directional
-  type, 0 for `related_to` — because nothing measured ranks `supersedes` above
+  The weight table is deliberately **two tiers** - 1 for every directional
+  type, 0 for `related_to` - because nothing measured ranks `supersedes` above
   `caused_by`, and a finer order would encode a guess as a ranking rule.
   Confidence stays *above* type for a concrete reason: `supersedes` habitually
   points at the deprecated memory it replaced, so ranking type first would make
@@ -456,7 +462,7 @@ read-only suggest half against the write half - to keep both under the
   Measured on the real brain (only the sort differing): the share of the spread
   budget reached by a directional edge went 67.7% → 73.0%, with the neighbour
   count flat at the `SPREAD_TOTAL` cap and every retrieval metric unchanged.
-  Context for the size of that move — the brain is 66.3% directional by edge
+  Context for the size of that move - the brain is 66.3% directional by edge
   count, so the old traversal was merely mirroring the edge mix and expressing
   no preference at all.
 - **A neighbour is a memory, not an edge.** Two memories may be joined by
@@ -469,6 +475,6 @@ read-only suggest half against the write half - to keep both under the
 
 ## Future Direction
 
-See `docs/future-architecture.md` — the long-term vision is epistemic governance
+See `docs/future-architecture.md` - the long-term vision is epistemic governance
 (versioned claims backed by evidence) and an embedded cognitive runtime that
 wraps model invocation with automatic recall + capture. Roadmap-only, not current work.
