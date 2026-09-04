@@ -34,6 +34,8 @@ class Graph:
     titles: dict[str, str] = field(default_factory=dict)
     namespace_of: dict[str, str] = field(default_factory=dict)
     namespace_id_of: dict[str, str] = field(default_factory=dict)
+    tags_of: dict[str, set[str]] = field(default_factory=dict)
+    tag_frequency: dict[str, int] = field(default_factory=dict)
 
     def degree(self, node: str) -> int:
         return len(self.adjacency.get(node, ()))
@@ -74,6 +76,25 @@ def load(conn: sqlite3.Connection, *, namespace_id: str | None = None) -> Graph:
     graph.namespace_of = {r["id"]: r["namespace"] for r in rows}
     graph.namespace_id_of = {r["id"]: r["namespace_id"] for r in rows}
     in_scope = set(graph.nodes)
+
+    # Tags come along because they are the one signal about a memory that is
+    # independent of WHEN it was written. Relation edges are laid down between
+    # memories saved in the same sitting, so anything computed purely from them
+    # rediscovers sessions; a tag survives that.
+    graph.tags_of = {node: set() for node in graph.nodes}
+    frequency: dict[str, int] = {}
+    for row in conn.execute(
+        "SELECT mt.memory_id, t.name FROM memory_tags mt JOIN tags t ON t.id = mt.tag_id"
+    ).fetchall():
+        bucket = graph.tags_of.get(row["memory_id"])
+        if bucket is not None:
+            bucket.add(row["name"])
+            # Counted over the same scope the graph was loaded with, so a
+            # namespace run measures rarity inside that namespace. A tag common
+            # here and rare store-wide is common for THIS question.
+            frequency[row["name"]] = frequency.get(row["name"], 0) + 1
+    graph.tag_frequency = frequency
+
     graph.adjacency = {node: set() for node in graph.nodes}
 
     for row in conn.execute("SELECT source_id, target_id FROM relations").fetchall():

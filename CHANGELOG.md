@@ -9,7 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Cluster proposals are ranked on tag evidence instead of an arbitrary
+  order.** Every community that clears the density floor scores exactly 1.0 on
+  a real graph, so the previous sort left findings tied and broke the tie by
+  id while the queue claimed "strongest finding first". Ranking now uses the
+  one signal about a group that does not encode *when* it was written: the
+  tags its members already carry, weighted by inverse document frequency.
+
+  Coverage alone is not enough, and that is measured rather than assumed. Every
+  store grows a handful of tags carried by a large share of it; those blanket
+  any group drawn from that region while saying nothing about it, exactly as a
+  date tag does. Scored against 15 hand-decided clusters (AUC, 0.500 = chance):
+  plain coverage 0.560, coverage x IDF 0.680, plus the skip below **0.750**.
+
+  Cluster proposals now carry `tag_score`, `tag_cohesion`, `tag_gap`,
+  `dominant_tag` and `shared_tags`, so the basis for an ordering can be checked
+  rather than trusted. Date-shaped and sail-ordinal tags are excluded from all
+  of it.
+
+- **A cluster whose strongest tag is already on every member is no longer
+  staged.** Accepting it could apply nothing, so it spends a reviewer's
+  attention to reach "no change". A logical rule rather than a tuned one, and
+  the single largest improvement to the ranking.
+
 ### Added
+
+- **`memory_dream(action="accept", ..., reverse=True)` writes an edge the other
+  way round.** The orphan pass always makes the orphan the proposal's subject,
+  which is an artifact of how candidates are found rather than a claim about
+  direction - cosine is symmetric, causation is not. A correct pair proposed
+  the wrong way round previously had to be rejected and the relation written by
+  hand, losing the link between the edge and the finding that produced it.
+  Passing `reverse` on a cluster or core proposal is an error, not a silently
+  ignored flag.
 
 - **The dream pass learns when to run: `gingugu dream --if-idle`.** The
   consolidation pass could already run unattended; nothing arranged for it to.
