@@ -239,3 +239,74 @@ def test_dream_cli_rejects_an_unknown_namespace(monkeypatch, tmp_path, capsys) -
         server_mod.main()
     assert exc.value.code == 1
     assert "not found" in capsys.readouterr().err
+
+
+async def test_reverse_writes_the_edge_the_other_way(server) -> None:
+    """Cosine is symmetric; causation is not.
+
+    The orphan pass always makes the orphan the subject, which is an artifact
+    of how candidates are found rather than a claim about direction. Without
+    reverse, a correct pair proposed the wrong way round had to be rejected and
+    hand-wired, which loses the tie between the edge and the finding.
+    """
+    a = await _store(server, "alpha", "research that established the legal position")
+    b = await _store(server, "beta", "the decision that research produced")
+
+    from gingugu.config import load_config
+    from gingugu.database import Database
+    from gingugu.proposals import ProposalQueue, ordered_pair
+
+    db_conn = Database(load_config().db_path).connect()
+    subject, obj = ordered_pair(a, b)
+    ProposalQueue(db_conn).stage(
+        pass_name="orphans",
+        kind="edge",
+        subject_id=subject,
+        object_id=obj,
+        score=0.9,
+        evidence={"relation_type": None},
+    )
+    proposal_id = _payload(
+        await server.call_tool("memory_dream", {"action": "list", "kind": "edge"})
+    )["proposals"][0]["id"]
+
+    accepted = _payload(
+        await server.call_tool(
+            "memory_dream",
+            {
+                "action": "accept",
+                "proposal_id": proposal_id,
+                "relation_type": "caused_by",
+                "reverse": True,
+            },
+        )
+    )
+
+    assert accepted["ok"]
+    assert accepted["applied"]["reversed"] is True
+    assert accepted["applied"]["edge"] == f"{obj} --caused_by--> {subject}"
+
+
+async def test_reverse_on_a_non_edge_is_refused_not_ignored(server) -> None:
+    """A flag that cannot apply is an error. Silently dropping one is how a
+    'sandboxed' run ends up writing to the real thing."""
+    hub, _ = await _hub(server)
+    await server.call_tool("memory_dream", {"action": "run"})
+    proposal = _payload(await server.call_tool("memory_dream", {"action": "list", "kind": "core"}))[
+        "proposals"
+    ][0]
+
+    refused = _payload(
+        await server.call_tool(
+            "memory_dream",
+            {"action": "accept", "proposal_id": proposal["id"], "reverse": True},
+        )
+    )
+
+    assert refused["ok"] is False
+    assert "reverse" in refused["error"]
+
+    still_pending = _payload(
+        await server.call_tool("memory_dream", {"action": "list", "kind": "core"})
+    )
+    assert still_pending["proposals"][0]["status"] == "pending"

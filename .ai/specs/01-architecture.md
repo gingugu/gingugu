@@ -288,6 +288,22 @@ read-only suggest half against the write half - to keep both under the
   declined to make - and an accept missing that judgment is refused rather than
   defaulted. A default would be the arithmetic choosing after all.
 
+  **A ranking signal has to be independent of when a memory was written.**
+  Working the first full queue by hand exposed that both large passes were
+  measuring the corpus's *authorship* rather than its meaning: cosine ranked
+  session journals above everything because they share a template, and label
+  propagation over relations reliably recovered single sessions, since relations
+  are laid down between memories saved in one sitting. Clusters therefore rank
+  on the members' tags, weighted by inverse document frequency and with
+  date-shaped tags dropped - the one property of a group that a burst of saving
+  does not manufacture. Coverage alone was measured at barely above chance;
+  rarity is what makes it work.
+
+  The corollary is that some findings are unreachable by arithmetic. A group can
+  be perfectly cohesive and still be wrong because the name would be false of
+  one member - a judgment about meaning, which is exactly the judgment the
+  accept step exists to collect.
+
   Determinism is a requirement, not a nicety. Published label propagation
   randomises node order to sample different local optima; ours fixes the sweep
   order and the tie-break instead, because a pass whose findings change between

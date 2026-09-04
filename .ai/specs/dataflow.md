@@ -492,9 +492,13 @@ gingugu dream [namespace]
        memories in scope, sorted by id           <- stable order = reproducible
        relations where BOTH endpoints in scope   <- no half-dangling inflation
        adjacency treated as UNDIRECTED, matching spreading activation
+       tags per node + corpus tag frequency      <- the one when-independent signal
   -> one graph, shared by all three passes       <- so findings are comparable
   -> centrality.find:  pagerank -> >= 3x the 1/N baseline -> drop pinned -> top 10
-  -> clusters.find:    propagate -> size 3..40 -> density >= 0.5 -> top 15
+  -> clusters.find:    propagate -> size 3..40 -> density >= 0.5
+                         -> tag_score = coverage x IDF, date-shaped tags dropped
+                         -> tag_gap == 0 ? SKIP (accepting could apply nothing)
+                         -> sort by tag_score, then density -> top 15
   -> orphans.find:     for each of <=25 orphans:
                          search (candidates) -> payload_similarity (absolute)
                          -> RELATION_MIN_SIMILARITY[basis] floor -> best match

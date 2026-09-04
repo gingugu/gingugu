@@ -4,83 +4,85 @@ _Last updated: 2026-09-03_
 
 ## In Flight
 
-**`feature/dream-scheduling`** - board item 3, phase 2. `main` is clean at
-`4fe3d6e` (PR #72 merged).
+**`feature/dream-ranking-signals`** - board item 2's findings, turned into code.
+`main` is clean at `a2f34e9` (PR #73 merged).
 
-Phase 1 built a pass that runs while nobody is present. It shipped with no way
-to actually run while nobody is present: `gingugu dream` is a command a person
-types, and the docstrings promising overnight runs described machinery that did
-not exist. This closes that.
+Working all 49 staged proposals by hand - the first time the dream pass has ever
+been reviewed end to end - produced calibration data the pass was built without,
+and two defects that only show up once a person actually decides things.
 
-**There is no daemon, and that is the design.** The OS scheduler already solves
-"every fifteen minutes" on every platform we ship to, with restart-on-boot and
-no supervision to write. What it cannot do is decide whether _now_ is a good
-time. So the timer stays outside and the judgment moves into the command:
-`gingugu dream --if-idle` opens the DB, reads one row, and is gone in 0.42s
-unless the brain is genuinely unused. A long-lived process would have bought
-identical behaviour in exchange for a PID file, a restart policy, three
-platform-specific service definitions, and a class of bug where the daemon is
-dead and nothing says so.
+**Both large passes were ranking on how the corpus was WRITTEN, not what it
+means.** The edge pass ranks by cosine, and its four highest-scoring findings
+were all session reflections matching each other on shared structure and voice
+rather than subject. The cluster pass runs label propagation over relations, and
+relations get laid down between memories saved in the same sitting - so a
+"community" was reliably one session's output. Same root cause, two mechanisms,
+and both get worse as the store grows.
 
-**Two guards, answering different questions.**
+**Clusters now rank on tag evidence, and the number is honest about itself.**
+A group's tags are the one signal about it that does not encode when it was
+written. Three things shipped, in ascending order of how much they were earned:
 
-- **The idle gate** - is a person using this brain right now? A new `activity`
-  table holds one row, stamped by the MCP server on every tool call. The
-  distinction it exists for: _a running server is not an active user._ An editor
-  holds the server open for eight hours whether or not anyone touches a memory,
-  so process liveness answers the wrong question. Deriving activity from
-  existing timestamps was rejected - reads live in `access_log`, writes in
-  `memories`, edges in `relations`, and `idx_access_log_memory_time` leads with
-  `memory_id`, so a bare `MAX(accessed_at)` cannot even use the index.
-- **The lock** - is another pass already running? A `dream_lock` row, taken
-  under `BEGIN IMMEDIATE`, carrying an expiry so a holder killed mid-pass costs
-  one window rather than every future run.
+- **The gap-0 skip.** A group whose strongest tag is already on every member has
+  no member left to tag, so accepting it can apply nothing. This is a logical
+  argument, not a tuned one - and it was the single biggest improvement.
+- **Inverse document frequency.** Filtering date-shaped tags was not enough:
+  every store grows a few tags carried by a large share of it, and those blanket
+  any group drawn from that region while saying nothing about it. Coverage alone
+  scored barely above chance. Weighting it by rarity is what makes it work.
+- **`tag_score` / `tag_cohesion` / `tag_gap` on every cluster proposal**, so a
+  reviewer sees the basis for the ordering instead of trusting it.
 
-**Preemption was scoped by measurement, not by instinct.** A full run on the
-live brain is 23.8s. Threading cancellation through three passes to reclaim at
-most 23 seconds of overlap is not worth its complexity, and the overlap is
-nearly harmless anyway: WAL readers never block and `busy_timeout` is 30s. What
-shipped instead is a check _between_ passes - three checkpoints, already a loop
-in `dream.run()` - which costs a few lines and still covers the case where the
-brain is ten times bigger and a run takes minutes. A cancelled run keeps what
-finished; staging is per-pass and every proposal is idempotent on re-run, so the
-next run recomputes exactly what was skipped.
+**Measured against 15 hand-decided clusters** (AUC, where 0.500 is chance):
+plain coverage 0.560, coverage x IDF 0.680, plus the gap-0 skip **0.750**. It
+replaces a sort that was effectively arbitrary - on a real graph every community
+clearing the density floor scores exactly 1.0, so fifteen findings tied and id
+order broke the tie while the queue claimed "strongest first".
 
-The idle threshold serves as both the gate and the cancellation check,
-deliberately: a run that would not have _started_ given current activity should
-not _continue_ either, and one number cannot drift into disagreeing with itself.
+**Three attempts to push past 0.750 all made it worse, and are recorded because
+the failures are the useful part.** An outlier-member penalty (0.537) was
+backwards: the members sharing no distinctive tag are concentrated in the
+ACCEPTS, because the member missing the tag is the whole reason to accept a
+tag-completion group. Semantic tightness (0.600 alone, 0.725 combined) has
+almost no dynamic range - mean pairwise cosine across the surviving clusters
+spans 0.712 to 0.840, because a store written by one person in one voice reads
+alike throughout. That is the same corpus property that wrecked the edge
+ranking, met from the other direction.
 
-**Two design errors caught by their own tests.**
+**The remaining error is not reachable by arithmetic, and that is the point.**
+At 40 accept/reject pairs, exactly two clusters cause every misordering: one
+rejected because the dominant tag would have been FALSE of a single member, one
+accepted because its members were never tagged for what they obviously share.
+Both are judgments about meaning. No count over tags, edges or embeddings saw
+either - which is the argument for the person on the accept step, restated as a
+measurement. One flipped pair moves AUC by 0.025, so tuning further on n=15 is
+fitting noise; re-measure past ~50 decided clusters.
 
-- The lock's holder token was `hostname:pid`, so two leases from the same
-  long-lived process shared a token and `release`'s `holder = ?` guard would
-  wave through exactly the theft it exists to prevent. A lease identifier has
-  to be per-lease; it now carries a uuid.
-- The embedder was built before the guards ran, so the overwhelmingly common
-  outcome on a fifteen-minute timer - a skip - was loading an embedding model
-  to throw it away. It now arrives as a factory called only after both guards
-  pass. Asserted in a test, because a needlessly-built embedder is slow rather
-  than wrong, and slow-not-wrong is what survives review unnoticed.
+**`accept` can now reverse an edge.** The orphan pass always makes the orphan
+the subject, which is an artifact of how candidates are found. Cosine is
+symmetric and causation is not, so a correct pair proposed the wrong way round
+previously had to be rejected and hand-wired, losing the tie between the edge
+and the finding that produced it. `reverse=True` writes it object-to-subject;
+passing it on a non-edge is an error rather than silently ignored.
 
-**The heartbeat is installed by wrapping the `tool` decorator once**, in
-`handlers/__init__.py`, rather than editing thirteen handler modules. A tool
-added next year is instrumented by the act of registering it. That the wrapper
-stays invisible to FastMCP's schema generation is asserted against the real
-server rather than reasoned about: `functools.wraps` is _why_ it works, but a
-wrapper that flattened every tool to `(*args, **kwargs)` would still register,
-still run, and hand every client an empty parameter list.
-
-Stamping happens in a `finally`, so a failing call still counts as activity. A
-session spent hitting an error is a session with a person in it.
-
-**Verified on a copy of the live 1,900-memory brain:** migration v11 -> v12 in
-0.05s with every count intact, a gated run correctly refused on a freshly
-seeded heartbeat, a full run at 23.8s once backdated, the lock released after,
-and 49 proposals refreshed rather than duplicated.
-
-852 tests pass (was 811), `ruff` + `black` clean.
+859 tests pass (was 852), `ruff` + `black` clean.
 
 ## Recently Completed
+
+**Dream-pass scheduling. MERGED as `a2f34e9` (#73).** Board item 3, phase 2.
+
+Phase 1 shipped a pass that runs while nobody is present, with no way to
+actually run while nobody is present. This closed that, without a daemon: the OS
+scheduler already solves recurrence on every platform, so the timer stays
+outside and the judgment moves into the command. `gingugu dream --if-idle` opens
+the DB, reads one row, and is gone in 0.42s unless the brain is genuinely
+unused. Two guards answering different questions - an `activity` heartbeat (a
+running server is not an active user) and a `dream_lock` row taken under
+`BEGIN IMMEDIATE`. Migration 012, in a new `migrations/runtime.py`. Verified on
+a copy of the live brain: v11 -> v12 in 0.05s, a full run at 23.8s, 49 proposals
+refreshed rather than duplicated.
+
+
 
 **The dream pass. MERGED as `4fe3d6e` (#72).** Board item 3, phase 1.
 

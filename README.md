@@ -382,6 +382,17 @@ next run picks up the rest.
 Review the queue with `memory_dream(action="list")`, and accept or reject each
 finding. A run takes roughly 24 seconds on a 1,900-memory brain.
 
+Cluster findings come ranked by the tags their members already carry, weighted
+so that a rare tag counts for more than one spread across the whole store, and
+a group whose strongest tag is already on every member is not staged at all -
+accepting it could apply nothing. Each proposal shows the `tag_score`,
+`tag_cohesion` and `tag_gap` behind its position, so the ordering can be
+checked rather than taken on faith.
+
+Edge findings pair an orphan with its closest neighbour, and the pass has no
+way to know which end an arrow starts at. When the pair is right but the
+direction is backwards, accept it with `reverse=True` rather than rejecting it.
+
 ### Configure Your MCP Client
 
 Gingugu speaks standard [MCP](https://modelcontextprotocol.io) over stdio —
