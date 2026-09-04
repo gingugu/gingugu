@@ -323,3 +323,115 @@ def test_accepting_a_proposal_is_what_writes_the_edge(
     assert decided["status"] == ACCEPTED
     assert decided["decided_at"] is not None
     assert db.conn.execute("SELECT COUNT(*) FROM relations").fetchone()[0] == 0
+
+
+# --- tag cohesion: what separates a concept from a sitting ----------------------
+
+
+def _tagged(store: MemoryStore, ns_id: str, title: str, tags: list[str]) -> str:
+    memory = store.create(
+        namespace_id=ns_id, type=MemoryType.FACT, title=title, content="c", tags=tags
+    )
+    return memory.id
+
+
+def test_time_shaped_tags_are_excluded_from_cohesion(
+    db: Database, store: MemoryStore, namespaces: NamespaceManager, relations: RelationManager
+) -> None:
+    """A date tag is on everything saved that day, so it names a sitting, not a subject.
+
+    Without this the four most cohesive groups on a real brain were single
+    sessions held together by their date alone - the exact structure the
+    ranking exists to see past.
+    """
+    ns_id = namespaces.get_or_create("test-ns").id
+    members = [
+        _tagged(store, ns_id, f"m{i}", ["2026-08-21", "24th-sail", "2026"]) for i in range(4)
+    ]
+    for a, b in zip(members, members[1:], strict=False):
+        relations.relate(source_id=a, target_id=b, relation_type=RelationType.CAUSED_BY)
+
+    graph = graph_mod.load(db.conn)
+    cohesion = clusters._tag_cohesion(graph, members)
+
+    assert cohesion["dominant_tag"] is None
+    assert cohesion["tag_score"] == 0.0
+    assert cohesion["tag_gap"] == len(members)
+
+
+def test_a_rare_tag_outranks_a_ubiquitous_one_at_equal_coverage(
+    db: Database, store: MemoryStore, namespaces: NamespaceManager
+) -> None:
+    """IDF is the whole reason coverage works at all.
+
+    Measured against fifteen hand-decided clusters, plain coverage scored AUC
+    0.56 against 0.50 for chance; weighting by inverse document frequency took
+    it to 0.68. A tag blanketing the corpus covers any group drawn from it
+    while saying nothing about that group.
+    """
+    ns_id = namespaces.get_or_create("test-ns").id
+    members = [_tagged(store, ns_id, f"member-{i}", ["everywhere", "specific"]) for i in range(3)]
+    # "everywhere" spreads across the corpus; "specific" does not.
+    for i in range(30):
+        _tagged(store, ns_id, f"noise-{i}", ["everywhere"])
+
+    graph = graph_mod.load(db.conn)
+    cohesion = clusters._tag_cohesion(graph, members)
+
+    assert cohesion["tag_cohesion"] == 1.0  # both tags cover every member
+    assert cohesion["dominant_tag"] == "specific"  # rarity is the tie-break that matters
+
+
+def test_a_fully_labelled_cluster_is_not_staged(
+    db: Database, store: MemoryStore, namespaces: NamespaceManager, relations: RelationManager
+) -> None:
+    """Accepting it could apply nothing, so it is not a finding.
+
+    This one is a logical argument rather than a statistical one: a group whose
+    dominant tag is already on every member has no member left to tag.
+    """
+    ns_id = namespaces.get_or_create("test-ns").id
+    members = [_tagged(store, ns_id, f"m{i}", ["already-complete"]) for i in range(4)]
+    for a, b in zip(members, members[1:], strict=False):
+        relations.relate(source_id=a, target_id=b, relation_type=RelationType.CAUSED_BY)
+
+    graph = graph_mod.load(db.conn)
+    assert clusters._tag_cohesion(graph, members)["tag_gap"] == 0
+    assert [f for f in clusters.find(graph) if set(f["evidence"]["members"]) == set(members)] == []
+
+
+def test_a_cluster_with_a_gap_is_staged_and_carries_its_evidence(
+    db: Database, store: MemoryStore, namespaces: NamespaceManager, relations: RelationManager
+) -> None:
+    """The tag-completion case: most members share a name, one is missing it."""
+    ns_id = namespaces.get_or_create("test-ns").id
+    members = [_tagged(store, ns_id, f"m{i}", ["release-discipline"]) for i in range(3)]
+    members.append(_tagged(store, ns_id, "untagged", []))
+    for a, b in zip(members, members[1:], strict=False):
+        relations.relate(source_id=a, target_id=b, relation_type=RelationType.CAUSED_BY)
+
+    graph = graph_mod.load(db.conn)
+    found = [f for f in clusters.find(graph) if set(f["evidence"]["members"]) == set(members)]
+
+    assert len(found) == 1
+    evidence = found[0]["evidence"]
+    assert evidence["dominant_tag"] == "release-discipline"
+    assert evidence["tag_gap"] == 1
+    assert evidence["tag_cohesion"] == 0.75
+    assert evidence["tag_score"] > 0
+
+
+def test_the_graph_carries_tags_and_their_frequency(
+    db: Database, store: MemoryStore, namespaces: NamespaceManager
+) -> None:
+    """Tags are loaded with the graph because they are the one signal that is
+    independent of when a memory was written."""
+    ns_id = namespaces.get_or_create("test-ns").id
+    a = _tagged(store, ns_id, "a", ["shared", "only-a"])
+    _tagged(store, ns_id, "b", ["shared"])
+
+    graph = graph_mod.load(db.conn)
+
+    assert graph.tags_of[a] == {"shared", "only-a"}
+    assert graph.tag_frequency["shared"] == 2
+    assert graph.tag_frequency["only-a"] == 1

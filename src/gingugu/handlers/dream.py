@@ -42,6 +42,7 @@ def register(mcp, ctx: ServerContext) -> None:
         status: str | None = PENDING,
         relation_type: str | None = None,
         tag: str | None = None,
+        reverse: bool = False,
         limit: int = 20,
     ) -> dict:
         """Deterministic background consolidation over the memory graph.
@@ -64,7 +65,10 @@ def register(mcp, ctx: ServerContext) -> None:
           that supplies what the math could not: an ``edge`` needs
           ``relation_type``, a ``cluster`` needs ``tag`` (applied to every member),
           a ``core`` proposal pins the memory. Missing arguments are an error, not
-          a default.
+          a default. Pass ``reverse=True`` on an ``edge`` to write it from object
+          to subject: the pass pairs an orphan with a neighbour and has no way to
+          know which end the arrow starts at, so a correct pair proposed the wrong
+          way round is a direction to supply, not a reason to reject.
         * ``reject`` - decline ``proposal_id`` permanently. The row is kept so the
           same computation cannot raise it again on the next run.
         * ``stats`` - queue depth by status and kind.
@@ -136,7 +140,14 @@ def register(mcp, ctx: ServerContext) -> None:
             if action == "reject":
                 return {"ok": True, "proposal": queue.decide(proposal_id, REJECTED)}
 
-            applied = _apply(ctx, relations, proposal, relation_type=relation_type, tag=tag)
+            applied = _apply(
+                ctx,
+                relations,
+                proposal,
+                relation_type=relation_type,
+                tag=tag,
+                reverse=reverse,
+            )
             if not applied.get("ok", True):
                 return applied
             return {
@@ -151,7 +162,9 @@ def register(mcp, ctx: ServerContext) -> None:
             return _err(f"{type(e).__name__}: {e}")
 
 
-def _apply(ctx: ServerContext, relations, proposal: dict, *, relation_type, tag) -> dict:
+def _apply(
+    ctx: ServerContext, relations, proposal: dict, *, relation_type, tag, reverse: bool = False
+) -> dict:
     """Carry out what accepting a proposal means, per kind.
 
     The write happens through the ordinary managers - ``RelationManager``,
@@ -160,6 +173,11 @@ def _apply(ctx: ServerContext, relations, proposal: dict, *, relation_type, tag)
     the brain without a person passing through here first.
     """
     kind = proposal["kind"]
+
+    # Silently ignoring a flag the caller meant is how a "sandboxed" run ends up
+    # writing to the real thing. If reverse cannot apply here, say so.
+    if reverse and kind != "edge":
+        return _err(f"reverse applies only to edge proposals; {proposal['id']!r} is a {kind}")
 
     if kind == "edge":
         if not relation_type:
@@ -170,16 +188,26 @@ def _apply(ctx: ServerContext, relations, proposal: dict, *, relation_type, tag)
                 "related_to is the fallback, not the default."
             )
         parsed = RelationType(relation_type)  # ValueError surfaces as a tool error
+        # The orphan pass always makes the orphan the subject, which is an
+        # artifact of how candidates are found, not a claim about direction.
+        # Cosine is symmetric; causation is not. Without this the only way to
+        # record a correct pair pointing the other way was to reject the
+        # proposal and hand-write the relation, which loses the audit trail
+        # tying the edge back to the finding that produced it.
+        source_id, target_id = proposal["subject_id"], proposal["object_id"]
+        if reverse:
+            source_id, target_id = target_id, source_id
         relations.relate(
-            source_id=proposal["subject_id"],
-            target_id=proposal["object_id"],
+            source_id=source_id,
+            target_id=target_id,
             relation_type=parsed,
             metadata=None,
         )
         return {
             "ok": True,
             "applied": {
-                "edge": f"{proposal['subject_id']} --{parsed.value}--> {proposal['object_id']}"
+                "edge": f"{source_id} --{parsed.value}--> {target_id}",
+                "reversed": reverse,
             },
         }
 
