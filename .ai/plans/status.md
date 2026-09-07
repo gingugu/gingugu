@@ -1,11 +1,20 @@
 # Project Status
 
-_Last updated: 2026-09-03_
+_Last updated: 2026-09-07_
 
 ## In Flight
 
-**`feature/dream-ranking-signals`** - board item 2's findings, turned into code.
-`main` is clean at `a2f34e9` (PR #73 merged).
+**Nothing.** `main` is clean at `2ef7f1d`, working tree clean, nothing unpushed.
+
+The 2026-09-07 sail wrote no product code. An outside review of the memory
+system - an agent asked to detach and assess honestly whether it was worth its
+cost - produced three new board items, each proven by command before boarding,
+plus one new standing rule on cost. See **The Board** below.
+
+## Recently Completed
+
+**Cluster ranking on tag evidence. MERGED as `2ef7f1d` (#75).** Board item 2's
+findings, turned into code.
 
 Working all 49 staged proposals by hand - the first time the dream pass has ever
 been reviewed end to end - produced calibration data the pass was built without,
@@ -66,8 +75,6 @@ and the finding that produced it. `reverse=True` writes it object-to-subject;
 passing it on a non-edge is an error rather than silently ignored.
 
 859 tests pass (was 852), `ruff` + `black` clean.
-
-## Recently Completed
 
 **Dream-pass scheduling. MERGED as `a2f34e9` (#73).** Board item 3, phase 2.
 
@@ -334,7 +341,116 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-## The Board (resequenced 2026-08-30)
+## The Board (current: 2026-09-07)
+
+**Seven items.** Went 5 to 7 on 2026-09-07: nothing discharged, three entered,
+and two existing items absorbed new findings. Every new item was proven by
+command before it was boarded - no item below rests on an unverified reading.
+
+| # | Item | Why here |
+|---|---|---|
+| 1 | **Reflection/template noise in retrieval** | Was "edge pass ranking". Now three witnesses, including a display-layer mechanism |
+| 2 | **Provenance vocabulary on `source`** | A stored conclusion is indistinguishable from a stored fact at recall time |
+| 3 | **Namespace auto-widen on empty** | Bit the user in real use; the behavioural rule covering it has failed three times |
+| 4 | Governance bands | Unblocked - 48 decided proposals to calibrate against |
+| 5 | `--adopt` + manage repo CLAUDE.md / AGENTS.md | Fixes a drift class |
+| 6 | Type-weighted spreading activation | Deferred seven times |
+| 7 | Hygiene - grew | `serve --help` + `MEMORY_*` naming + pin skew |
+
+**Recommended sequencing: 3, then 2, then 1.** Item 3 is the smallest and has
+one obvious right answer. Item 2 is mostly plumbing now its vocabulary is
+settled. Item 1 has a labelled test set but is uncertain ranking work and wants
+a session of its own.
+
+### 1. Reflection/template noise in retrieval - absorbed a third witness
+
+Cosine ranks session reflections above everything because they share a title
+format, section headers and voice: it is measuring a writing template, not
+meaning. This is one problem seen from three directions, not three problems.
+
+1. **The edge pass**, from the graph side - its four top-scoring findings were
+   all Reflection-to-Reflection. A 24-edge hand-decided test set already exists.
+2. **An outside review**, from the retrieval side - reflections are the bulk by
+   volume and the least operationally useful to the next session.
+3. **`_compact_summary`**, new 2026-09-07 - it is a blind 200-character head
+   truncation (`handlers/helpers.py`), and the memory protocol mandates compact
+   payloads at session start. So a reflection's session-start face is literally
+   its own scaffolding: `"START HERE. Written at /sink-the-ship. Supersedes…"`.
+   Zero signal at full token price.
+
+The fix direction gained a second half from witness 3: the dense short form
+should be **authored at write time, not chopped at read time**. Candidate for
+the ranking half, untested: normalise each pair's similarity against the
+baseline for its memory-type pair, so a 0.86 pattern-to-workflow pair reads as
+extraordinary while a 0.93 context-to-context pair reads as unremarkable. The
+cluster fix does not transfer directly - clusters had tags to fall back on and
+edges have no equivalent.
+
+### 2. Provenance vocabulary on `source` - vocabulary approved 2026-09-07
+
+`Confidence` is verified / inferred / stale / deprecated. All four are
+truth-flavoured and none is provenance, so `verified` in practice means "this
+was saved accurately", not "this claim is true". A stored inference and a
+stored fact therefore arrive stamped identically and both read as settled.
+Measured: 97.8% of one namespace is `verified`, so the field discriminates
+essentially nothing.
+
+`Memory.source: str | None` already exists and is populated on roughly half the
+store with uncontrolled free text - and that text is _already_ provenance-shaped
+by hand about half the time. So this is a controlled vocabulary on an existing
+column: no new column, likely no migration.
+
+**Approved vocabulary**, one axis - how did the writer come to believe this:
+`user-asserted` / `measured` / `file-derived` / `self-concluded`.
+`self-concluded` carries the point - it makes a stored opinion arrive visibly
+contestable. Declared at write time by whoever saves, never judged by a model,
+so it holds the design law that truth status is math and not model judgment.
+
+Open, and implementation rather than design: what happens to existing NULL and
+legacy free-text values; whether the value surfaces in compact payloads or full
+only; whether the vocabulary is enforced or advisory.
+
+### 3. Namespace auto-widen on an empty result
+
+`namespace=None` resolves to exactly one config-derived default. A
+comma-separated list works but requires the caller to already know where to
+look, which is the whole problem - if you knew, you would not be searching. An
+empty result returns `count: 0` and stops. There is no all-namespace mode
+anywhere in the codebase.
+
+The behavioural rule covering this was written three separate times and still
+failed in real use, because it is an ambient rule with no trigger moment: "the
+answer might be somewhere else" is not an event you can notice from inside.
+Build the mechanism instead of writing it a fourth time - widen on an empty (or
+below-floor) result and stamp each hit with its source namespace.
+
+Open: widen on empty only or on a relevance floor; second query or one UNION;
+whether it applies to search as well as recall.
+
+### 7. Hygiene - two entries collapsed into one fix
+
+`gingugu serve --help` **starts the server**. `serve()` is the only subcommand
+that takes no argv, so `--help` is matched and discarded (`server.py`). Its five
+knobs - host, port, token, log level, credentials-enabled - are environment-only
+and prefixed **`MEMORY_*`, not `GINGUGU_*`**. That is the same env-var trap
+already boarded, so one `serve --help` printing the real names discharges both.
+
+Also: the pinned tier is skewed again. One pin is 23% of it, nearly twice the
+next largest. The 2026-08-31 precedent applies - keep the rule pinned, move its
+instance log to an unpinned `child_of`.
+
+### Standing rules
+
+- **Never simply raise `w_freshness`.** Six investigations blamed it; all six
+  were wrong.
+- **Cost is a tiebreaker, never an objective** - see
+  `.ai/standards/01-code-and-testing.md`.
+- This repo is **public and personal**: no commit, PR body, CHANGELOG entry or
+  code comment may reference a work repo.
+
+---
+
+## Board history (resequenced 2026-08-30)
 
 **Two items discharged, four added, one unblocked.** Atomic consolidation
 merged as `ac2ee53` (#66) and the access-log session id as `b28c1dc` (#67) -
