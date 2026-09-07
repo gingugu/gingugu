@@ -160,8 +160,6 @@ behind them.
 811 tests pass (was 786), `ruff` + `black` clean, and a built wheel confirms the
 new `gingugu/dream/` subpackage ships.
 
-## Recently Completed
-
 **e2e CI coverage for involuntary recall. MERGED as `ea503c3` (#70).** Not a
 board item - a follow-up to #69.
 
@@ -928,7 +926,7 @@ fallback), which the intervention cannot touch.
 
 **Not done yet:** this PR.
 
-## Shipped in v0.18.0 (2026-08-28)
+### `gingugu init` manages a repo's own memory files
 
 **`gingugu init` manages a repo's own `CLAUDE.md` / `AGENTS.md`, and gained
 `--adopt` - PR #63, merged `52bc6cf` (2026-08-27).** 683 tests green
@@ -990,7 +988,7 @@ isolated scratch copies of the real files before touching them live again.
 
 **Not done yet:** this PR.
 
-## Shipped in v0.18.0 (2026-08-28)
+### `bench/` gains call-depth and hybrid coverage
 
 **`bench/` gains real call-depth coverage and a hybrid (embeddings) pass, and
 runs in CI - PR #62, merged `cfa89d0` (2026-08-27).** 666 tests green (was
@@ -1152,7 +1150,7 @@ under both the simulated coarse clock and the real one.
 `created_at` and `access_count` respectively and have the same unspecified-tie
 class. Deliberately out of scope here; worth a board item.
 
-## Shipped in v0.18.0 (2026-08-28)
+### Per-hit score breakdown + `memory_excerpt`
 
 **Per-hit score breakdown + `memory_excerpt` - PR #60, merged `b9fc4f1`
 (2026-08-26).** 658 tests green (was 634), `ruff` + `black` clean. Board items #2 and #3, shipped together: both are arithmetic and
@@ -1794,8 +1792,8 @@ v0.2.0).
   carry the hook; `ui-theme` and `ogre` are also still on a pre-v0.11.1
   `stop.py`.
 
-- ~~**Spreading activation is blind to `relation_type`.**~~ **BUILT, in
-  _In Flight_ above** (2026-08-27, 13th sail). `dampened_neighbour_ids` now
+- ~~**Spreading activation is blind to `relation_type`.**~~ **BUILT, shipped in
+  v0.18.0** (2026-08-27, 13th sail). `dampened_neighbour_ids` now
   weights by `models.RELATION_WEIGHT` within a confidence tier. The
   no-bulk-prune decision stands and was never revisited: the sort fix made the
   `related_to` edges stop winning slots, so nothing needed deleting.
@@ -2176,7 +2174,18 @@ section.
   `bspeagle` still carries 2 mis-keyed claims because migration 007 seeds only
   gingugu's own conventions (`crow`, `default`), not user namespaces.
 
-## Shipped / Working
+---
+
+## Archive: the pre-v0.13.0 status document
+
+Everything below this line is the earlier status document, kept for its record
+of releases up to v0.12.0 and the reasoning behind them. **It is history, not
+state.** Its "In Progress" and "Next Up" entries were current in July 2026 and
+have not been maintained since - read the live board above for what is actually
+open. Preserved verbatim rather than pruned, because several entries carry
+measurements and blast-radius notes that are not recorded anywhere else.
+
+### Shipped / Working
 
 - **Reconciliation backlog cleared (2026-07-30)** — the 10 claims that
   materialized when migration 006 ran against the live brain were resolved with
@@ -2279,7 +2288,7 @@ section.
   non-destructive `.claude/settings.json` merge; `--client` writes a rules file
   for Windsurf/Cursor/Cline. Closes the "our install beats the shipped install" gap.
 
-## In Progress
+### In Progress (as of July 2026 - superseded, see the live board above)
 
 - **Known retrieval gap (not yet addressed):** a memory at BM25 rank 1 AND
   semantic rank 1 can lose the composite top spots to high-`access_count`
@@ -2306,15 +2315,15 @@ section.
   brain. See `docs/roadmap.md` and the architecture memory in the `gingugu`
   namespace.
 
-## Blocked / Pending
+### Blocked / Pending (July 2026)
 
 - _None tracked._
 
-## Known Issues
+### Known Issues (July 2026)
 
 - _None tracked._
 
-## Recently Completed
+### Recently Completed (releases to v0.12.0)
 
 - **2026-07-20** - **v0.8.1: CLI front door.** `gingugu` now answers
   `-h`/`--help`/`help` (usage) and `-V`/`--version`/`version` (version), and an
@@ -2420,7 +2429,7 @@ section.
 - **2026-06-24** — v0.3.8: `suggested_relations` hint on `memory_store` /
   `memory_update`; 2 contract tests; released to PyPI.
 
-## Next Up
+### Next Up (as of July 2026 - superseded, see the live board above)
 
 - **Promotion bridge Stage 2-4** - consolidation with `contributors[]`,
   conflict detection, wiring to the real local brain (Stage 1 shipped, PR #11).
