@@ -23,6 +23,25 @@
   yes; "normally yes" is not a measurement.
 - **Pin dependencies** in `pyproject.toml`; verify against official docs (MCP
   spec, SQLite FTS5, `mcp` SDK) before adding or upgrading.
+- **Token and dollar cost is a TIEBREAKER, never an objective.** Among designs
+  equal on functionality and performance, take the cheaper one. A design that
+  is cheaper *and* better is free money - take it. A design that is cheaper but
+  worse on any axis (accuracy, retrieval quality, comprehension, portability,
+  correctness) is rejected, and is not presented as a trade-off worth weighing.
+  Cost gets no vote on what the thing does or how well it does it; it only
+  breaks ties.
+
+  The surfaces where this pays are the ones charged on *every* session
+  unconditionally: the pinned tier (loaded ahead of ranking), `compact`
+  payloads at session start (the protocol mandates them), and write-time hints
+  (unasked-for extras on every write - already compacted for this reason in
+  #35).
+
+  Worked example of taking it: authoring a memory's short summary rather than
+  head-truncating it is more signal *and* fewer tokens, sacrificing nothing.
+  Worked example of refusing it: storing memory content in a denser or bespoke
+  encoding would buy tokens by paying in comprehension accuracy and
+  cross-model portability, so it stays plain English.
 
 ## Error handling — the server must never crash
 
