@@ -36,6 +36,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The benchmark generates its own labelled probe sets
+  (`bench/probes.py`, `python -m bench --generate-probes`; dev-only, not
+  shipped in the package).** Hand-labelling caps a golden set at a few dozen
+  questions, and a few dozen binary questions cannot resolve a ranking change:
+  at 30 questions one question is worth 0.033, so any delta under a few points
+  is indistinguishable from noise.
+
+  The generator picks a property a `SELECT` can prove instead of one a human
+  judges: **a phrase occurring in exactly one memory of a namespace has exactly
+  one correct answer.** Nobody adjudicates, every candidate is re-verified
+  against the corpus before it is emitted, and the property is asserted for
+  every generated question in the test suite. Questions are drawn only from
+  template families (3+ memories in a namespace sharing a title shape), which
+  is the corpus structure that makes sibling memories hard to tell apart.
+
+  On a real 2,521-memory brain this yields 135 questions across 45 families -
+  roughly 4.5x the resolution of the hand-labelled set - and it immediately
+  separated a retrieval defect into a candidate-pool miss (22%, unreachable by
+  any re-ranking) and a ranking failure (78%). Two prospective ranking changes
+  were measured against it and rejected before reaching `src/`.
+
+  Generated sets contain real memory content and stay in the gitignored
+  `bench/local/`; only the generator is committed.
+
+- **`FixtureMemory.age_days` backdates a fixture row**, so the committed CI
+  corpus can express a graded-age cohort at all. Backdating lives in the bench
+  layer rather than as a parameter on `MemoryStore.create`: a production write
+  path that can stamp an arbitrary `created_at` is a way to corrupt a real
+  store. The fixture gains a five-member, length-balanced template family whose
+  two questions pull in opposite directions on purpose - one wants the newest
+  sibling, one wants the oldest - so a fix cannot satisfy the benchmark by
+  always preferring one end.
+
 - **`memory_dream(action="accept", ..., reverse=True)` writes an edge the other
   way round.** The orphan pass always makes the orphan the proposal's subject,
   which is an artifact of how candidates are found rather than a claim about

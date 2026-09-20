@@ -85,6 +85,12 @@ for this workload rather than a cross-product comparison. The runner is
 deterministic and committed, so you can point it at your own store and get
 your own numbers: `python -m bench --help`.
 
+The benchmark can also **build its own labeled question set** from your store
+(`python -m bench --db <store> --generate-probes <out>`), by picking questions
+whose answer is provable rather than hand-judged: a phrase that occurs in
+exactly one memory has exactly one correct answer. That gives you a golden set
+sized to your own brain without labeling anything by hand, and it stays local.
+
 Where this goes long-term — federated, org-wide agent memory — lives in
 [docs/enterprise-vision.md](https://github.com/gingugu/gingugu/blob/main/docs/enterprise-vision.md).
 
