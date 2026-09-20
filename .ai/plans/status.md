@@ -1,15 +1,33 @@
 # Project Status
 
-_Last updated: 2026-09-07_
+_Last updated: 2026-09-20_
 
 ## In Flight
 
-**Nothing.** `main` is clean at `2ef7f1d`, working tree clean, nothing unpushed.
+**Nothing.** `main` is clean at `0cef296`, working tree clean, nothing unpushed.
 
-The 2026-09-07 sail wrote no product code. An outside review of the memory
-system - an agent asked to detach and assess honestly whether it was worth its
-cost - produced three new board items, each proven by command before boarding,
-plus one new standing rule on cost. See **The Board** below.
+The 2026-09-20 sail wrote no product code either. Three real session transcripts
+were read end to end and measured, and they moved the board more than any sail
+since the program was set: the top item gained a fourth and worst witness, two
+new items entered, and one existing item gained its first live witness. Every
+number below is read off the actual payloads.
+
+The defect at the top of this board has a long paper trail, and it is worth
+stating because it drives the sequencing. It has been independently identified at
+least **seven times**, and the chain is documented in the memory store itself: a
+note from 2026-08-17 calls itself the fourth rediscovery, one from 2026-08-20
+calls itself the fifth, an `explain=True` diagnosis on a different memory family
+followed on 2026-08-28, and this sail is the next. Each time it has been mitigated
+by a naming convention rather than by code. One candidate fix was measured and
+falsified; a later one was approved and tabled as lower value than the items
+around it. Seven independent rediscoveries is the evidence that call was wrong,
+so item 1 now leads the sequencing rather than trailing it.
+
+The 2026-08-20 note also prescribes the right response to a defect found three or
+more times, and it is not "write a better memory" - it is to make the existing one
+reachable. That prescription names a specific pin candidate which is still not
+pinned a month later, so the pattern it describes has now consumed the fix for
+itself. Item 1 is where that stops.
 
 ## Recently Completed
 
@@ -339,52 +357,161 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-## The Board (current: 2026-09-07)
+## The Board (current: 2026-09-20)
 
-**Seven items.** Went 5 to 7 on 2026-09-07: nothing discharged, three entered,
-and two existing items absorbed new findings. Every new item was proven by
-command before it was boarded - no item below rests on an unverified reading.
+**Nine items.** Went 7 to 9 on 2026-09-20: nothing discharged, two entered, and
+two existing items absorbed new witnesses. Every new item was proven by reading
+the payload before it was boarded - no item below rests on an unverified reading.
 
 | # | Item | Why here |
 |---|---|---|
-| 1 | **Reflection/template noise in retrieval** | Was "edge pass ranking". Now three witnesses, including a display-layer mechanism |
-| 2 | **Provenance vocabulary on `source`** | A stored conclusion is indistinguishable from a stored fact at recall time |
-| 3 | **Namespace auto-widen on empty** | Bit the user in real use; the behavioural rule covering it has failed three times |
-| 4 | Governance bands | Unblocked - 48 decided proposals to calibrate against |
-| 5 | `--adopt` + manage repo CLAUDE.md / AGENTS.md | Fixes a drift class |
-| 6 | Type-weighted spreading activation | Deferred seven times |
-| 7 | Hygiene - grew | `serve --help` + `MEMORY_*` naming + pin skew |
+| 1 | **Template/sibling noise in retrieval** | Was three witnesses. Now **four**, and the new one is on the primary recall path |
+| 2 | **`credential_get` hands back plaintext** | The vault's own promise is broken by construction; three leaks trace to it |
+| 3 | **Namespace auto-widen on empty** | Now has a live witness: a recall resolved to `default` and returned `count: 0` |
+| 4 | **Provenance vocabulary on `source`** | A stored conclusion is indistinguishable from a stored fact at recall time |
+| 5 | **Aboutness: the store speaks the author's vocabulary** | The user's own word for a workstream found nothing; four queries to reach it |
+| 6 | Governance bands | Unblocked - 48 decided proposals to calibrate against |
+| 7 | `--adopt` + manage repo CLAUDE.md / AGENTS.md | Fixes a drift class |
+| 8 | Type-weighted spreading activation | Deferred seven times |
+| 9 | Hygiene - grew again | `serve --help` + `MEMORY_*` naming + pin skew + duplicated stats globals + bulk relate |
 
-**Recommended sequencing: 3, then 2, then 1.** Item 3 is the smallest and has
-one obvious right answer. Item 2 is mostly plumbing now its vocabulary is
-settled. Item 1 has a labelled test set but is uncertain ranking work and wants
-a session of its own.
+**Recommended sequencing: 1, then 2, then 3, then 4 and 5 together.**
 
-### 1. Reflection/template noise in retrieval - absorbed a third witness
+This reverses the 2026-09-07 order, which put item 1 last on the grounds that it
+was "uncertain ranking work". That reasoning is now spent: the measurement below
+is not uncertain, and five rediscoveries say deferring it costs more than doing
+it. Item 2 is next because it is small, self-contained and the only item on the
+board with a security consequence. Item 3 stays early - still the smallest, still
+one obvious right answer, and now with a witness instead of an argument. Items 4
+and 5 are both write-time declared fields on the existing record, so they want
+one migration and one pass, not two.
 
-Cosine ranks session reflections above everything because they share a title
-format, section headers and voice: it is measuring a writing template, not
-meaning. This is one problem seen from three directions, not three problems.
+### 1. Template/sibling noise in retrieval - a fourth witness, on the primary path
+
+Cosine ranks near-identical memories by how alike their _scaffolding_ is, not by
+what they say: shared title format, shared section headers, one voice. Four
+directions on one problem.
 
 1. **The edge pass**, from the graph side - its four top-scoring findings were
    all Reflection-to-Reflection. A 24-edge hand-decided test set already exists.
 2. **An outside review**, from the retrieval side - reflections are the bulk by
    volume and the least operationally useful to the next session.
-3. **`_compact_summary`**, new 2026-09-07 - it is a blind 200-character head
-   truncation (`handlers/helpers.py`), and the memory protocol mandates compact
-   payloads at session start. So a reflection's session-start face is literally
-   its own scaffolding: `"START HERE. Written at /sink-the-ship. Supersedes…"`.
+3. **`_compact_summary`**, 2026-09-07 - a blind 200-character head truncation
+   (`handlers/helpers.py`), and the memory protocol mandates compact payloads at
+   session start. So a reflection's session-start face is literally its own
+   scaffolding: `"START HERE. Written at /sink-the-ship. Supersedes…"`.
    Zero signal at full token price.
+4. **The handoff inversion, 2026-09-20 - the worst of the four**, because it is
+   on the primary recall path rather than a background pass or a display layer.
 
-The fix direction gained a second half from witness 3: the dense short form
-should be **authored at write time, not chopped at read time**. Candidate for
-the ranking half, untested: normalise each pair's similarity against the
-baseline for its memory-type pair, so a 0.86 pattern-to-workflow pair reads as
-extraordinary while a 0.93 context-to-context pair reads as unremarkable. The
-cluster fix does not transfer directly - clusters had tags to fall back on and
-edges have no equivalent.
+**Witness 4, measured across three transcripts.** Every session-start load has
+four bands: pinned (unscored), relevance-ranked (0.85-1.02), cross-namespace
+filler (~0.735), and a flat **synthetic 0.6750** recency band. The current
+handoff is always in the last band and never in the relevance band. It does not
+rank low - it never competes. A separate recency path forces it into the result
+set with a synthetic score, which places it at the bottom of a list the caller
+reads top-down.
 
-### 2. Provenance vocabulary on `source` - vocabulary approved 2026-09-07
+| session | top of the load | the handoff that mattered |
+|---|---|---|
+| A | a handoff 21 sails stale, 0.9106 | the current one **absent entirely** from the recall |
+| B | a handoff 24 sails stale, 0.9214 | current (6h old) at 0.6927, **14th of 19** |
+| C | a protocol memory 0.9560; a handoff **84 sails stale** 0.9217 | current (minutes old) at **0.6750, last** |
+
+In session C a handoff from 84 sails earlier beat the immediately preceding one
+by 0.247. Across handoffs 2 to 40 days apart the spread is 0.05 with no
+correlation to age, because the distinguishing token is one token against a
+paragraph of shared template.
+
+**A second, separable finding from the same measurement: the load is largely
+about itself.** ~9,000 tokens per session (8,952 / 9,112 / 8,391, all with
+`compact=true`), and the highest-ranked slots go to memories _about the session
+protocol_ because the task hint at session start is session-start-flavoured. In
+session A, seven of the top ten were protocol-meta, and the single top scorer at
+1.0194 was a memory about the SessionStart hook that injected the contract that
+made the call - a protocol the hook already delivers verbatim, for free, in the
+same turn. Three identical cross-namespace fillers appear in all three sessions
+at ~0.735, none relevant to any of them. This is not a cost argument; cost stays
+a tiebreaker. It is an argument that the best slots are going to the wrong rows.
+
+**Fix direction.** Not `w_freshness` - the standing rule holds and this data
+agrees, because the defect is not that recency is underweighted but that a
+template family is never collapsed. Candidate: detect a family (high mutual
+cosine plus shared title shape) and return only its newest member, in the shape
+of the cluster pass's gap-0 skip - a logical argument rather than a tuned weight.
+The three sessions above are a labelled set to measure against. Also from witness
+3: the dense short form should be authored at write time, not chopped at read
+time. The cluster fix does not transfer directly, because clusters had tags to
+fall back on and these do not.
+
+**Read the history before starting.** A candidate fix was measured and falsified
+once, and a later one was approved and tabled. Both are in the archive below.
+Do not re-propose either without reading why it failed. The falsified one is the
+important read: it establishes that two of the four retrieval bands carry a
+constant relevance of 0.5 whether or not a task hint is supplied, which is the
+mechanism behind the flat synthetic band measured above.
+
+### 2. `credential_get` hands the plaintext secret back into context
+
+`credential_get` returns a secret field's value in its response body. The vault's
+stated promise is that secrets never belong in files or chat, and this breaks it
+by construction: every use puts the plaintext into the transcript, and into
+whatever the caller's own tooling logs, before any discipline can apply.
+
+**Three leaks trace to it in nine days**, all the same mechanism. The second
+happened with the warning memory already loaded in context. The third happened
+one tool call after that warning was explicitly recalled - retrieval worked,
+ranked well, and changed nothing. The behavioural rule has been written three
+times and failed three times, which is board item 3's lesson pointed at our own
+tool surface: build the mechanism instead of writing the rule a fourth time.
+
+Fix directions, neither designed:
+
+- **A write-to-file mode.** `credential_get(into=<path>, mode=0600)` returns the
+  path plus a redacted confirmation and never the value. This is already what the
+  warning memory prescribes by hand; making it the tool's affordance is what
+  stops it being forgotten.
+- **Redact secret fields by default**, revealed only on an explicit flag, so the
+  default path cannot leak and the leaking path is a deliberate act that reads as
+  one in the transcript.
+
+Open: whether `credential_list` needs the same treatment for its non-secret
+fields, several of which are identifiers a public artifact should not carry.
+
+### 3. Namespace auto-widen on an empty result - now with a live witness
+
+`namespace=None` resolves to exactly one config-derived default. A
+comma-separated list works but requires the caller to already know where to
+look, which is the whole problem - if you knew, you would not be searching. An
+empty result returns `count: 0` and stops. There is no all-namespace mode
+anywhere in the codebase.
+
+The behavioural rule covering this was written three separate times and still
+failed in real use, because it is an ambient rule with no trigger moment: "the
+answer might be somewhere else" is not an event you can notice from inside.
+Build the mechanism instead of writing it a fourth time - widen on an empty (or
+below-floor) result and stamp each hit with its source namespace.
+
+**The witness, 2026-09-20.** A mid-session `memory_recall` in a session actively
+working one project returned `count: 0` with `"namespace": "default"` - it had
+resolved to a two-memory namespace nobody uses, returned nothing, and stopped.
+The thing being looked for existed, in a namespace holding hundreds of memories,
+and was reached four queries later. Two further details worth having before
+building:
+
+- The same session's next two recalls resolved to _different_ namespaces again
+  without the caller changing anything, so resolution is not stable across
+  consecutive calls in one session. Establish what actually drives it before
+  adding a widen on top.
+- The floor question is no longer hypothetical. That first call returned zero, so
+  widen-on-empty would have caught it. But query 2 in the same hunt returned
+  eight confident, entirely wrong hits, which widen-on-empty would not touch -
+  see item 5.
+
+Open: widen on empty only or on a relevance floor; second query or one UNION;
+whether it applies to search as well as recall.
+
+### 4. Provenance vocabulary on `source` - vocabulary approved 2026-09-07
 
 `Confidence` is verified / inferred / stale / deprecated. All four are
 truth-flavoured and none is provenance, so `verified` in practice means "this
@@ -408,24 +535,58 @@ Open, and implementation rather than design: what happens to existing NULL and
 legacy free-text values; whether the value surfaces in compact payloads or full
 only; whether the vocabulary is enforced or advisory.
 
-### 3. Namespace auto-widen on an empty result
+### 5. Aboutness: the store is indexed on the author's vocabulary
 
-`namespace=None` resolves to exactly one config-derived default. A
-comma-separated list works but requires the caller to already know where to
-look, which is the whole problem - if you knew, you would not be searching. An
-empty result returns `count: 0` and stops. There is no all-namespace mode
-anywhere in the codebase.
+A memory records what the writer did, in the writer's words. The user names the
+same thing by what it is _for_. Nothing bridges the two, so a workstream can be
+richly stored and still unreachable by the only name its owner uses for it.
 
-The behavioural rule covering this was written three separate times and still
-failed in real use, because it is an ambient rule with no trigger moment: "the
-answer might be somewhere else" is not an event you can notice from inside.
-Build the mechanism instead of writing it a fourth time - widen on an empty (or
-below-floor) result and stamp each hit with its source namespace.
+**The witness, 2026-09-20.** Asked to pick up "the claude code bootstrapping",
+four queries were needed:
 
-Open: widen on empty only or on a relevance floor; second query or one UNION;
-whether it applies to search as well as recall.
+1. `memory_recall` on the user's phrasing - `count: 0`, wrong namespace (item 3).
+2. `memory_search("bootstrap")` - eight hits, all the **wrong sense** of the
+   word: "PrivateLink bootstrap manifests", "Terraform S3 backend bootstrap".
+   Four of the eight were handoff memories (item 1).
+3. `memory_recall` rephrased - ten hits, all about a _different_ repo's
+   `init` command from two months earlier.
+4. `memory_recall` using the words the corpus was written in - eight hits, all
+   correct, top score 0.9279. Instant.
 
-### 7. Hygiene - two entries collapsed into one fix
+The workstream had four memories devoted to it, nine days old, one a milestone
+and one a design pattern. **Not one contains the word the user used.** They are
+titled and tagged for what was done; he names it for what it accomplishes. It was
+eventually found with `git log`, not with memory.
+
+Two things this is not: it is not item 1, because the problem is not that the
+right rows are too alike to separate but that the query and the right row share no
+surface at all. It is not item 3, because widening the namespace would not have
+helped queries 2 and 3, which returned plenty - just nothing useful.
+
+**A second, structural half.** The handoff chain silently dropped this workstream:
+each handoff supersedes the last and restates only what _that_ session touched, so
+anything left alone for one session falls out of the chain and cannot be recovered
+from it. That is a design consequence of the chain, not an authoring slip, and it
+is a second argument against the whole approach on top of item 1's measurement.
+
+Fix directions, neither designed:
+
+- **An aboutness field declared at write time** - what this is for, in the user's
+  terms, as distinct from what was done. Tags do not serve this today; in practice
+  they hold dates, session numbers and proper nouns. Pairs naturally with item 4,
+  since both are write-time declared fields on the existing record.
+- **A capability pointer.** The narrower, cheaper half, and the user's own
+  observation: memory can say _how to do a thing_ but has no way to say _the thing
+  that does it exists, here, run it like this_. One integration's REST mechanics
+  are recorded in full four separate times across four memories, and not one says
+  a script was ever built - so it was rebuilt from the notes. A procedure recorded
+  four times is four invitations to rebuild it.
+- **Lexical/semantic arbitration.** Query 2 is the case where lexical matching
+  actively hurt: it found the token in the wrong sense and outranked the
+  semantically right answer. Worth measuring whether hybrid weighting should back
+  off when lexical hit rate is high and semantic agreement is low.
+
+### 9. Hygiene - grew again
 
 `gingugu serve --help` **starts the server**. `serve()` is the only subcommand
 that takes no argv, so `--help` is matched and discarded (`server.py`). Its five
@@ -436,6 +597,21 @@ already boarded, so one `serve --help` printing the real names discharges both.
 Also: the pinned tier is skewed again. One pin is 23% of it, nearly twice the
 next largest. The 2026-08-31 precedent applies - keep the rule pinned, move its
 instance log to an unpinned `child_of`.
+
+**New 2026-09-20, both small:**
+
+- **`memory_stats` re-sends its global fields on every call.** The startup
+  contract mandates two calls, one per namespace, and each response repeats the
+  same namespace-independent payload: the full namespace inventory with counts,
+  `access_log_rows`, and the `credentials` block. Measured byte-identical across
+  the two calls in one transcript. Make the global block opt-in, or return it only
+  once per session. Cheapest fix on the whole board.
+- **Bulk `memory_relate`.** Requested by the user, and a normal session makes
+  several relate calls in a row, each its own round trip for a four-line ack.
+  Accept a list of triples, validated as a set and applied in one transaction.
+  One design call to settle first: **all-or-nothing, not best-effort** - a
+  half-applied relation set is the graph state hardest to notice and hardest to
+  repair, and a trustworthy graph is the point of relations.
 
 ### Standing rules
 
