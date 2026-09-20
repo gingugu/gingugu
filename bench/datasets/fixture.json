@@ -1,7 +1,7 @@
 {
   "version": 1,
   "name": "synthetic-devops-fixture",
-  "description": "Committed CI regression corpus. Entirely synthetic (checkout-api theme); includes near-miss distractors sharing vocabulary with the golden answers so questions are not gimmes. Labels are hand-written, deterministic ground truth.",
+  "description": "Committed CI regression corpus. Entirely synthetic (checkout-api theme); includes near-miss distractors sharing vocabulary with the golden answers so questions are not gimmes, and a graded-age template family in the release-handoffs namespace whose members share scaffolding rather than vocabulary. Labels are hand-written, deterministic ground truth.",
   "memories": [
     {
       "key": "redis-incident",
@@ -274,6 +274,51 @@
       "title": "Nightly job reconciles billing-service's ledger against processor settlement",
       "content": "A nightly job compares billing-service's internal ledger against the payment processor's settlement report, flagging any invoice whose recorded status doesn't match what actually settled. Discrepancies page a shared billing-ops channel, not on-call.",
       "tags": ["billing", "reconciliation", "ledger"]
+    },
+    {
+      "key": "handoff-v2-1",
+      "namespace": "release-handoffs",
+      "type": "workflow",
+      "title": "Release handoff: checkout-api v2.1 - state, open items, next steps",
+      "content": "Written at the end of the release. State, open items, and next steps for whoever picks this up next. Standing rules are unchanged: no deploy without a green pipeline, no schema change without a reversible migration, no feature flag left in the tree past its rollout window, and no manual edit to a manifest that is not committed the same day. Read the open items before starting anything new. Where we left off is recorded below. Carried forward from the previous handoff: the deploy pipeline runs on GitHub Actions, migrations run via Alembic, sessions live in Redis and application data in PostgreSQL, and on-call pages on checkout p99 latency. None of that changed this release and none of it needs action. Carried forward from the previous handoff: the deploy pipeline runs on GitHub Actions, migrations run via Alembic, sessions live in Redis and application data in PostgreSQL, and on-call pages on checkout p99 latency. None of that changed this release and none of it needs action. Open item: the nightly ledger reconciliation job was disabled for the duration of the data migration and has not been re-enabled since.",
+      "tags": ["handoff", "release", "checkout-api"],
+      "age_days": 120
+    },
+    {
+      "key": "handoff-v2-2",
+      "namespace": "release-handoffs",
+      "type": "workflow",
+      "title": "Release handoff: checkout-api v2.2 - state, open items, next steps",
+      "content": "Written at the end of the release. State, open items, and next steps for whoever picks this up next. Standing rules are unchanged: no deploy without a green pipeline, no schema change without a reversible migration, no feature flag left in the tree past its rollout window, and no manual edit to a manifest that is not committed the same day. Read the open items before starting anything new. Where we left off is recorded below. Carried forward from the previous handoff: the deploy pipeline runs on GitHub Actions, migrations run via Alembic, sessions live in Redis and application data in PostgreSQL, and on-call pages on checkout p99 latency. None of that changed this release and none of it needs action. Carried forward from the previous handoff: the deploy pipeline runs on GitHub Actions, migrations run via Alembic, sessions live in Redis and application data in PostgreSQL, and on-call pages on checkout p99 latency. None of that changed this release and none of it needs action. Open item: the staging ALB certificate expires next quarter and its renewal is still a manual step nobody owns.",
+      "tags": ["handoff", "release", "checkout-api"],
+      "age_days": 90
+    },
+    {
+      "key": "handoff-v2-3",
+      "namespace": "release-handoffs",
+      "type": "workflow",
+      "title": "Release handoff: checkout-api v2.3 - state, open items, next steps",
+      "content": "Written at the end of the release. State, open items, and next steps for whoever picks this up next. Standing rules are unchanged: no deploy without a green pipeline, no schema change without a reversible migration, no feature flag left in the tree past its rollout window, and no manual edit to a manifest that is not committed the same day. Read the open items before starting anything new. Where we left off is recorded below. Carried forward from the previous handoff: the deploy pipeline runs on GitHub Actions, migrations run via Alembic, sessions live in Redis and application data in PostgreSQL, and on-call pages on checkout p99 latency. None of that changed this release and none of it needs action. Carried forward from the previous handoff: the deploy pipeline runs on GitHub Actions, migrations run via Alembic, sessions live in Redis and application data in PostgreSQL, and on-call pages on checkout p99 latency. None of that changed this release and none of it needs action. Open item: two feature flags from the promo launch are past their archive window and were not cleaned up.",
+      "tags": ["handoff", "release", "checkout-api"],
+      "age_days": 60
+    },
+    {
+      "key": "handoff-v2-4",
+      "namespace": "release-handoffs",
+      "type": "workflow",
+      "title": "Release handoff: checkout-api v2.4 - state, open items, next steps",
+      "content": "Written at the end of the release. State, open items, and next steps for whoever picks this up next. Standing rules are unchanged: no deploy without a green pipeline, no schema change without a reversible migration, no feature flag left in the tree past its rollout window, and no manual edit to a manifest that is not committed the same day. Read the open items before starting anything new. Where we left off is recorded below. Carried forward from the previous handoff: the deploy pipeline runs on GitHub Actions, migrations run via Alembic, sessions live in Redis and application data in PostgreSQL, and on-call pages on checkout p99 latency. None of that changed this release and none of it needs action. Carried forward from the previous handoff: the deploy pipeline runs on GitHub Actions, migrations run via Alembic, sessions live in Redis and application data in PostgreSQL, and on-call pages on checkout p99 latency. None of that changed this release and none of it needs action. Open item: the pgbouncer pool sizing was raised by hand during the incident and was never committed back to the manifest.",
+      "tags": ["handoff", "release", "checkout-api"],
+      "age_days": 30
+    },
+    {
+      "key": "handoff-v2-5",
+      "namespace": "release-handoffs",
+      "type": "workflow",
+      "title": "Release handoff: checkout-api v2.5 - state, open items, next steps",
+      "content": "Written at the end of the release. State, open items, and next steps for whoever picks this up next. Standing rules are unchanged: no deploy without a green pipeline, no schema change without a reversible migration, no feature flag left in the tree past its rollout window, and no manual edit to a manifest that is not committed the same day. Read the open items before starting anything new. Where we left off is recorded below. Carried forward from the previous handoff: the deploy pipeline runs on GitHub Actions, migrations run via Alembic, sessions live in Redis and application data in PostgreSQL, and on-call pages on checkout p99 latency. None of that changed this release and none of it needs action. Carried forward from the previous handoff: the deploy pipeline runs on GitHub Actions, migrations run via Alembic, sessions live in Redis and application data in PostgreSQL, and on-call pages on checkout p99 latency. None of that changed this release and none of it needs action. Open item: the checkout idempotency key is derived from the cart id, which collides whenever a cart is deleted and re-created.",
+      "tags": ["handoff", "release", "checkout-api"],
+      "age_days": 0
     }
   ],
   "relations": [
@@ -289,7 +334,27 @@
     {"source": "wisdom-flag-cleanup-rule", "target": "flag-cleanup-checkout", "type": "parent_of"},
     {"source": "billing-dunning", "target": "billing-invoice-retry", "type": "caused_by"},
     {"source": "billing-reconciliation", "target": "billing-currency", "type": "related_to"},
-    {"source": "wisdom-incident-postmortem", "target": "redis-incident", "type": "related_to"}
+    {"source": "wisdom-incident-postmortem", "target": "redis-incident", "type": "related_to"},
+    {
+      "source": "handoff-v2-2",
+      "target": "handoff-v2-1",
+      "type": "supersedes"
+    },
+    {
+      "source": "handoff-v2-3",
+      "target": "handoff-v2-2",
+      "type": "supersedes"
+    },
+    {
+      "source": "handoff-v2-4",
+      "target": "handoff-v2-3",
+      "type": "supersedes"
+    },
+    {
+      "source": "handoff-v2-5",
+      "target": "handoff-v2-4",
+      "type": "supersedes"
+    }
   ],
   "questions": [
     {
@@ -448,6 +513,22 @@
       "relevant": ["billing-reconciliation"],
       "kind": "single",
       "notes": "distractor-billing-webhook and distractor-billing-tax share 'billing' vocabulary but answer unrelated questions."
+    },
+    {
+      "id": "q-handoff-current",
+      "query": "where did we leave off on checkout-api",
+      "namespaces": ["release-handoffs"],
+      "relevant": ["handoff-v2-5"],
+      "kind": "single",
+      "notes": "TEMPLATE-FAMILY PROBE, recency half. Five handoffs share a title shape and an identical opening paragraph, and are equal in length so document length cannot decide the order. Only the newest is a correct answer to 'where did we leave off'. The query deliberately matches the shared scaffolding and none of the distinguishing payloads, which is what a session-start task hint actually looks like. MEASURED 2026-09-20: PASSES today at rank 1 - with length equalized, freshness does break a tie that nothing else breaks. It is therefore a REGRESSION GUARD rather than a failing probe, and the value it protects is real: a family-collapse fix must not cost it. See .ai/plans/status.md board item 1."
+    },
+    {
+      "id": "q-handoff-specific-old",
+      "query": "what happened to the nightly ledger reconciliation job",
+      "namespaces": ["release-handoffs"],
+      "relevant": ["handoff-v2-1"],
+      "kind": "single",
+      "notes": "TEMPLATE-FAMILY PROBE, discrimination half - and the guard on any fix. 'nightly ledger reconciliation job' appears VERBATIM in handoff-v2-1 and in no other memory in the corpus, so a working retrieval returns it first. MEASURED 2026-09-20, equal-length cohort, hybrid: it comes back THIRD at 0.8546, behind handoff-v2-5 (0.8857) and handoff-v2-4 (0.8690) - neither of which contains a single one of the distinguishing query terms. Total spread across all five is 0.0427, so a unique verbatim match separates from a zero-term sibling by 0.031. The two that beat it are the two NEWEST, so what defeats the verbatim hit is freshness plus shared scaffolding, not a better match. Same shape as the real-brain 'tflint v0.64.0' case from 2026-08-17, now reproducible offline. It doubles as the guard on the fix: a family-collapse that always returns the newest member would answer handoff-v2-5 here, which is wrong, so this question must PASS after the fix rather than merely not regress."
     }
   ]
 }

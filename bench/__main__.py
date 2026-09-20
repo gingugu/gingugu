@@ -20,6 +20,7 @@ from pathlib import Path
 from gingugu.config import load_config
 from gingugu.embeddings import build_provider
 
+from . import probes
 from .dataset import load_dataset
 from .runner import (
     DEFAULT_KS,
@@ -54,6 +55,14 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         "(the relation-traversal path; plain runs never reach it)",
     )
     parser.add_argument("--json", type=Path, help="also write the full report as JSON")
+    parser.add_argument(
+        "--generate-probes",
+        type=Path,
+        metavar="OUT",
+        help="generate a template-family probe set from --db and write it to OUT, "
+        "instead of running a benchmark (see bench/probes.py). OUT must live under "
+        "bench/local/ - it contains real memory content",
+    )
     return parser.parse_args(argv)
 
 
@@ -89,8 +98,39 @@ def _print_report(report: BenchReport) -> None:
         print(f"spread: {share:.1%} of surfaced neighbours reached by a directional edge")
 
 
+def _generate_probes(db: Path, out: Path) -> int:
+    """Write a generated probe set and report what it covers."""
+    if not db.expanduser().exists():
+        print(f"error: no DB at {db}", file=sys.stderr)
+        return 2
+    conn = open_real_db(db.expanduser())
+    try:
+        dataset = probes.generate(conn)
+    finally:
+        conn.close()
+    if not dataset["questions"]:
+        print("error: no template families found; nothing to generate", file=sys.stderr)
+        return 2
+    probes.write(dataset, out)
+    namespaces = sorted({q["namespaces"][0] for q in dataset["questions"]})
+    print(f"questions: {len(dataset['questions'])}")
+    print(f"namespaces: {', '.join(namespaces)}")
+    print(f"written to {out}")
+    # Stated every time rather than left to the docstring: this file holds real
+    # memory content and this is a public repo.
+    print("this dataset contains real memory content - keep it out of git")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv if argv is not None else sys.argv[1:])
+
+    if args.generate_probes is not None:
+        if args.db is None:
+            print("error: --generate-probes requires --db", file=sys.stderr)
+            return 2
+        return _generate_probes(args.db, args.generate_probes)
+
     ks = tuple(sorted({int(k) for k in args.k.split(",") if k.strip()}))
     if not ks:
         print("error: --k produced no cutoffs", file=sys.stderr)
