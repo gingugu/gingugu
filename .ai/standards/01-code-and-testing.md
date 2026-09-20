@@ -112,6 +112,53 @@
   spot. When a change lands in one, measure it directly against a copy of a
   real brain and report that, rather than quoting a benchmark that never
   exercised the code.
+- **A corpus with no instance of the shape is blind to it, and growing the
+  corpus does not help (2026-09-20).** The fixture reached 34 memories and 20
+  questions, and was still structurally incapable of seeing the top board item:
+  every question was a single-answer topical lookup and the corpus held no
+  template family at all. It had near-miss distractors sharing *vocabulary*,
+  which is a different instrument from siblings sharing *scaffolding*. A fix
+  built against it would have gone green whether or not it worked. The earlier
+  diagnosis, "an 8-query fixture cannot see this", was right about the blindness
+  and wrong about the cause: it was never about question COUNT. **Before
+  trusting a benchmark to grade a defect, confirm the corpus contains an
+  instance of that defect - and if it does not, adding one is step one of the
+  work.** The corollary is that the new case must FAIL on the unfixed code, and
+  be pinned that way: `xfail(strict=True)` is the shape, because it fails the
+  suite the moment the fix lands and forces someone to come update it.
+- **Control the confounds in a labelled cohort, and pin the control.** The first
+  draft of that same template family made the older members longer, which is
+  what real ones do. BM25 length normalization then decided every query on its
+  own, and the probe "passed" while measuring nothing but document length.
+  Equalizing length turned it into a real instrument, and
+  `test_handoff_family_members_are_equal_length` exists so a later well-meaning
+  edit cannot quietly reintroduce the confound. A fixture is measuring
+  apparatus: the variable under test must be the only one that moves.
+- **A fixture clean enough to isolate a variable can be too clean to predict
+  anything (2026-09-20).** That same length-equalized cohort then rated a
+  retrieval change at mrr 1.0000, recall@1 0.9318 and zero regressions. On the
+  real brain the same change **halved recall@1**. Equalizing length removed the
+  confound *and* removed the condition that makes the real corpus hard. A
+  fixture can therefore prove a defect EXISTS while being worthless for sizing a
+  fix - keep the two jobs separate, and never let a green fixture stand in for a
+  real-brain measurement on a ranking change.
+- **Count what one question is worth before believing a delta (2026-09-20).**
+  `bench/local/brain-v1.json` has 30 binary questions, so one question is 0.033
+  and a "+0.050 recall@1" result is one and a half questions. Two separate
+  ranking changes looked like clear improvements on it and were killed by a
+  finer instrument; one of them was a *strict Pareto improvement* there and cut
+  recall@1 in half on 135 questions. Treat a delta smaller than a few questions
+  as noise, and read non-monotonic sweep rows as the harness reporting its own
+  error bar.
+- **Generate labels instead of judging them when the property is checkable
+  (2026-09-20).** Hand-labelling is what capped that set at 30. `bench/probes.py`
+  gets 135 questions at higher trust by choosing a property a `SELECT` can
+  prove: a phrase occurring in exactly one memory of a namespace has exactly one
+  correct answer. Nobody adjudicates, every candidate is re-verified against the
+  corpus before it is emitted, and `tests/test_probes.py` asserts that property
+  holds for every generated question - because a large set of confident guesses
+  is worse than a small set of honest ones. When a labelling task is blocking a
+  measurement, look first for a label that can be verified rather than decided.
 - **The same blind spot covers types, not just behaviour - second confirmed
   instance (2026-09-02).** Because `offline_embeddings` is autouse, no test had
   ever called `embeddings.cosine` with real encoder output. fastembed returns a

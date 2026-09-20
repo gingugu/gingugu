@@ -111,6 +111,17 @@ deterministic, no LLM-as-judge). Committed synthetic fixture for CI regression;
 real-brain golden sets + baseline reports live in gitignored `bench/local/`.
 Run: `uv run python -m bench [--db <real-brain.db>]`.
 
+`bench/probes.py` generates a labelled probe set from a real brain
+(`--generate-probes <out>`), for measuring retrieval against **template
+families** - groups of memories sharing a title shape, which a long-lived store
+accumulates naturally. Labels are verified rather than judged: each question
+asks for a phrase occurring in exactly one memory of its namespace, proven
+against the corpus at generation time, which is what lets the set be far larger
+than a hand-labelled one without losing trust. The fixture's `age_days` field
+backdates a row so a graded-age cohort can be expressed; backdating is
+deliberately a bench-layer concern and never a parameter on `MemoryStore.create`.
+Generated sets hold real memory content and stay in `bench/local/`.
+
 ---
 
 ## MCP Tool Surface
