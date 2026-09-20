@@ -42,7 +42,15 @@ _VALID_RELATIONS = (
 
 @dataclass(frozen=True)
 class FixtureMemory:
-    """A synthetic memory the runner will insert into an ephemeral DB."""
+    """A synthetic memory the runner will insert into an ephemeral DB.
+
+    ``age_days`` backdates the row's timestamps by that many days from the
+    run's start. It exists because a whole class of retrieval defect is only
+    visible across a *graded-age* cohort: when several near-identical memories
+    differ mainly in when they were written, "which one comes back" is the
+    question, and a fixture where every row is born in the same millisecond
+    cannot ask it. Default 0 keeps every existing row exactly as it was.
+    """
 
     key: str
     namespace: str
@@ -51,6 +59,7 @@ class FixtureMemory:
     content: str
     confidence: str = "verified"
     tags: list[str] = field(default_factory=list)
+    age_days: int = 0
 
 
 @dataclass(frozen=True)
@@ -107,6 +116,13 @@ def load_dataset(path: Path) -> GoldenDataset:
             f"memory {m.key!r}: bad confidence {m.confidence!r}",
         )
         _require(bool(m.title and m.content and m.namespace), f"memory {m.key!r}: empty field")
+        # Rejected rather than clamped: a negative age is a memory written in
+        # the future, and silently reading it as 0 would make a mislabeled
+        # cohort score as though it were correctly ordered.
+        _require(
+            isinstance(m.age_days, int) and not isinstance(m.age_days, bool) and m.age_days >= 0,
+            f"memory {m.key!r}: age_days must be a non-negative int, got {m.age_days!r}",
+        )
 
     key_set = set(keys)
     relations = [FixtureRelation(**r) for r in raw.get("relations", [])]

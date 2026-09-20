@@ -20,13 +20,14 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from gingugu import search as search_mod
 from gingugu.config import _DEFAULT_WEIGHTS
 from gingugu.database import migrate
 from gingugu.embeddings import EmbeddingProvider, NullEmbeddingProvider
-from gingugu.models import Confidence, MemoryType, RelationType
+from gingugu.models import Confidence, MemoryType, RelationType, utcnow_iso
 from gingugu.relations import RelationManager
 
 from .dataset import GoldenDataset
@@ -91,6 +92,11 @@ def build_fixture_db(
     namespaces = NamespaceManager(conn, cfg)
     store = MemoryStore(conn, embedder=embedder or NullEmbeddingProvider())
 
+    # One "now" for the whole build, so a cohort's relative ages are exact.
+    # Taken per-memory it would drift by however long embedding took, which is
+    # the one thing a graded-age fixture must not leave to chance.
+    now = datetime.fromisoformat(utcnow_iso())
+
     key_to_id: dict[str, str] = {}
     for fm in dataset.memories:
         ns = namespaces.get_or_create(fm.namespace)
@@ -102,6 +108,8 @@ def build_fixture_db(
             confidence=Confidence(fm.confidence),
             tags=fm.tags or None,
         )
+        if fm.age_days:
+            _backdate(conn, mem.id, now, fm.age_days)
         key_to_id[fm.key] = mem.id
 
     rel_mgr = RelationManager(conn)
@@ -112,6 +120,31 @@ def build_fixture_db(
             relation_type=RelationType(fr.type),
         )
     return conn, key_to_id
+
+
+def _backdate(conn: sqlite3.Connection, memory_id: str, now: datetime, age_days: int) -> None:
+    """Age one fixture row by rewriting its timestamps ``age_days`` into the past.
+
+    Done here, in the harness, rather than by giving ``MemoryStore.create`` an
+    age parameter. Backdating is a fixture concern with no legitimate caller in
+    a real brain, and a write path that can stamp an arbitrary ``created_at``
+    is a way to corrupt one. The bench already owns an ephemeral in-memory DB,
+    so it can do this with plain SQL and leave the production surface alone.
+
+    ``last_accessed`` is aged with the rest deliberately: leaving it at ``now``
+    would mark an old memory as just-read, which is a *different* ranking
+    signal and would quietly confound any cohort measured through it.
+    ``last_confirmed`` is only moved when it is set - an unverified memory has
+    none, and inventing one would promote it.
+    """
+    stamp = (now - timedelta(days=age_days)).isoformat()
+    conn.execute(
+        "UPDATE memories SET created_at = ?, updated_at = ?, last_accessed = ?, "
+        "last_confirmed = CASE WHEN last_confirmed IS NULL THEN NULL ELSE ? END "
+        "WHERE id = ?",
+        (stamp, stamp, stamp, stamp, memory_id),
+    )
+    conn.commit()
 
 
 def open_real_db(path: Path) -> sqlite3.Connection:
