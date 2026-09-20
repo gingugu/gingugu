@@ -4,7 +4,41 @@ _Last updated: 2026-09-20_
 
 ## In Flight
 
-**Nothing.** `main` is clean at `0cef296`, working tree clean, nothing unpushed.
+**Board item 1, step A: the instrument.** On `docs/board-transcript-findings`,
+unpushed. `main` is clean at `0cef296`.
+
+The bench fixture can now express a **graded-age template family**, and carries
+one: `FixtureMemory.age_days` (`bench/dataset.py`) plus `_backdate`
+(`bench/runner.py`), and five sibling memories in a `release-handoffs`
+namespace. Backdating lives in the bench layer on purpose - `MemoryStore.create`
+does not gain a knob that can stamp an arbitrary `created_at` into a real brain.
+The new namespace keeps the existing 20 questions' baseline untouched.
+
+This was the prerequisite the 2026-08-17 sequence named and that nobody had
+checked off: `bench/` reached CI, and the fixture grew 8 questions to 20, but
+every one of those 20 was a single-answer topical lookup. The corpus contained
+no template family at all, so item 1 was **unmeasurable** - a fix built against
+it would have gone green either way.
+
+It is measurable now, and measuring it immediately falsified the fix this board
+recommended. See item 1 below. `test_bench.py` goes 11 to 19 tests; the defect
+is pinned as an `xfail(strict=True)`.
+
+**`bench/probes.py` is the second instrument, and the one that matters.** It
+generates a labelled probe set from a real brain - 135 questions where the
+answer is a phrase occurring in exactly one memory of its namespace, verified
+against the corpus rather than judged by hand. That is what makes it 4.5x finer
+than `brain-v1.json`, and it is what caught a fix that the 30-question set had
+called a strict improvement. The generated dataset stays under `bench/local/`;
+only the generator is committed.
+
+It immediately produced the real size of item 1 (**recall@1 0.2074**) and split
+it into a recall half and a ranking half. See 1a.
+
+870 passed, 1 xfailed, ruff + black clean.
+
+**Step B, the fix itself, is not started.** Two directions were designed,
+measured and killed this sail. `src/` has not been touched.
 
 The 2026-09-20 sail wrote no product code either. Three real session transcripts
 were read end to end and measured, and they moved the board more than any sail
@@ -359,21 +393,32 @@ tranche soaked locally for a full week, the release was cut ahead of them.
 
 ## The Board (current: 2026-09-20)
 
-**Nine items.** Went 7 to 9 on 2026-09-20: nothing discharged, two entered, and
-two existing items absorbed new witnesses. Every new item was proven by reading
-the payload before it was boarded - no item below rests on an unverified reading.
+**Eight items.** Went 9 to 8: item 1 gained a reproducible offline case that
+also falsified its own prescribed fix, and the old item 8 was struck as a
+phantom (see below). Every item was proven by reading the payload before it was
+boarded - no item below rests on an unverified reading.
 
 | # | Item | Why here |
 |---|---|---|
-| 1 | **Template/sibling noise in retrieval** | Was three witnesses. Now **four**, and the new one is on the primary recall path |
+| 1 | **Template/sibling noise in retrieval** | Four witnesses, and now a **committed, deterministic, offline repro** in the bench fixture |
 | 2 | **`credential_get` hands back plaintext** | The vault's own promise is broken by construction; three leaks trace to it |
 | 3 | **Namespace auto-widen on empty** | Now has a live witness: a recall resolved to `default` and returned `count: 0` |
 | 4 | **Provenance vocabulary on `source`** | A stored conclusion is indistinguishable from a stored fact at recall time |
 | 5 | **Aboutness: the store speaks the author's vocabulary** | The user's own word for a workstream found nothing; four queries to reach it |
 | 6 | Governance bands | Unblocked - 48 decided proposals to calibrate against |
 | 7 | `--adopt` + manage repo CLAUDE.md / AGENTS.md | Fixes a drift class |
-| 8 | Type-weighted spreading activation | Deferred seven times |
-| 9 | Hygiene - grew again | `serve --help` + `MEMORY_*` naming + pin skew + duplicated stats globals + bulk relate |
+| 8 | Hygiene - grew again | `serve --help` + `MEMORY_*` naming + pin skew + duplicated stats globals + bulk relate |
+
+**Struck 2026-09-20: the old item 8, "Type-weighted spreading activation".** It
+never existed as a distinct item. That row entered in `0cef296` with no body and
+no citation behind its "deferred seven times", and it names - verbatim - the
+feature that **shipped in v0.18.0** as PR #64 (`4502ec2`). The same file records
+it as shipped a few hundred lines below, and `.ai/specs/product-spec.md` lists it
+under that exact title with a ✅. Confirmed in source: `models.RELATION_WEIGHT`
+is live and ranks the traversal at `relations.py:155`. Memory type (as opposed to
+relation type) genuinely does not influence spreading activation today, but the
+struck row did not ask for that; if it is ever wanted it enters as a new item
+with its own body.
 
 **Recommended sequencing: 1, then 2, then 3, then 4 and 5 together.**
 
@@ -386,7 +431,7 @@ one obvious right answer, and now with a witness instead of an argument. Items 4
 and 5 are both write-time declared fields on the existing record, so they want
 one migration and one pass, not two.
 
-### 1. Template/sibling noise in retrieval - a fourth witness, on the primary path
+### 1. Template/sibling noise in retrieval - now reproducible, and the fix reversed
 
 Cosine ranks near-identical memories by how alike their _scaffolding_ is, not by
 what they say: shared title format, shared section headers, one voice. Four
@@ -434,22 +479,136 @@ same turn. Three identical cross-namespace fillers appear in all three sessions
 at ~0.735, none relevant to any of them. This is not a cost argument; cost stays
 a tiebreaker. It is an argument that the best slots are going to the wrong rows.
 
-**Fix direction.** Not `w_freshness` - the standing rule holds and this data
-agrees, because the defect is not that recency is underweighted but that a
-template family is never collapsed. Candidate: detect a family (high mutual
-cosine plus shared title shape) and return only its newest member, in the shape
-of the cluster pass's gap-0 skip - a logical argument rather than a tuned weight.
-The three sessions above are a labelled set to measure against. Also from witness
-3: the dense short form should be authored at write time, not chopped at read
-time. The cluster fix does not transfer directly, because clusters had tags to
-fall back on and these do not.
+**Witness 5, 2026-09-20 - the first reproducible case, and it falsifies the fix
+this item used to prescribe.** `bench/datasets/fixture.json` now carries a
+five-member template family in a `release-handoffs` namespace: one title shape,
+one identical opening paragraph, one distinguishing sentence each, ages
+120/90/60/30/0 days, and **equal length** so document length cannot decide
+anything. Deterministic, offline, and it reproduces in bm25-only, so it does not
+need the embeddings job.
 
-**Read the history before starting.** A candidate fix was measured and falsified
-once, and a later one was approved and tabled. Both are in the archive below.
-Do not re-propose either without reading why it failed. The falsified one is the
-important read: it establishes that two of the four retrieval bands carry a
-constant relevance of 0.5 whether or not a task hint is supplied, which is the
-mechanism behind the flat synthetic band measured above.
+Query `"what happened to the nightly ledger reconciliation job"` - a phrase that
+appears verbatim in `handoff-v2-1` and nowhere else in the corpus:
+
+| rank | score | member | query terms present |
+|---|---|---|---|
+| 1 | 0.8857 | handoff-v2-5 | **none** |
+| 2 | 0.8759 | handoff-v2-4 | **none** |
+| 3 | 0.8546 | handoff-v2-1 | **the answer, verbatim** |
+
+Spread rank 1 to rank 5 is 0.0454, matching the real-brain `tflint v0.64.0` case
+(0.0578) that has been unreproducible since 2026-08-17.
+
+**The controlled experiment is the load-bearing part.** Disabling the fixture's
+backdating changes exactly one variable - every member becomes the same age -
+and the verbatim match returns at **rank 1**. So the mechanism is not that cosine
+matches the template. It is that **the shared scaffolding flattens every
+sibling's relevance into a near-tie, and the freshness term then lands as the
+deciding vote.** The distinguishing payload cannot outvote it.
+
+**Fix direction, corrected.** The previous entry here prescribed "detect a family
+and return only its newest member". **That is backwards and must not be built.**
+Applied to the case above it makes `handoff-v2-1` permanently unreachable: the
+correct answer to that query is the family's _oldest_ member. The two fixture
+questions pull in opposite directions deliberately - `q-handoff-current` wants
+the newest, `q-handoff-specific-old` wants the oldest - and keep-newest satisfies
+exactly one of them.
+
+Still not `w_freshness`, in either direction. The standing rule holds and this
+data sharpens why: freshness is not mis-weighted, it is simply the only live
+signal left once the scaffolding has flattened relevance. Also unchanged from
+witness 3: the dense short form should be authored at write time, not chopped at
+read time.
+
+### 1a. How big it actually is, on the real brain
+
+The fixture proves the defect exists. It says nothing about its size, and the
+size is the story. `bench/probes.py` generates a labelled probe set from a real
+brain - **135 questions, 45 template families, 6 namespaces** - where every
+question asks for a phrase occurring in exactly ONE memory of its namespace.
+The labels are **verified rather than judged**, which is what lets the set be
+4.5x finer than the 30 hand-labelled questions in `bench/local/brain-v1.json`.
+Regenerate with:
+
+```
+uv run python -m bench --db ~/.local/share/gingugu/memories.db \
+    --generate-probes bench/local/template-families-v1.json
+```
+
+Shipped engine, hybrid, 2521 memories: **mrr 0.2979, recall@1 0.2074,
+recall@5 0.4593.**
+
+Four times in five, asking for a phrase that exists in exactly one memory does
+not return that memory first. More than half the time it is not in the top five
+at all. Every previous estimate of this item understated it.
+
+**And it is two defects, which this board has been conflating:**
+
+| | share | nature |
+|---|---|---|
+| target never enters the BM25 candidate pool | **22%** (30/135) | a RECALL failure - no re-ranking can reach it |
+| target in the pool at mean BM25 rank 5.91 | 78% | the RANKING failure this item describes |
+
+The pool-miss half is new, is untouched by everything discussed above, and may
+be the larger problem. Do not start a fix without deciding which half it is for.
+
+### 1b. Magnitude fusion - measured and DEAD
+
+`_fuse_ranks` (`search.py:72-97`) fuses by RANK only, so BM25 magnitude is
+discarded. On the fixture that looks like the whole bug: one member scores
+-5.6698 and the rest -0.0000026, yet RRF hands the non-matching siblings 93.8%
+of a perfect match's relevance, and freshness then decides.
+
+Blending a ratio-normalized BM25 (`|bm25| / max|bm25|`) into the lexical side
+was measured at seven blend values. On `brain-v1.json` (30 questions) blend=0.20
+looked like a **strict Pareto improvement** - mrr +0.022, recall@1 +0.050,
+recall@5 unchanged - and satisfied both fixture questions, which no `_RRF_K`
+value could.
+
+**On the 135-question set every blend value is worse than shipped, and
+blend=0.20 halves recall@1 (0.2074 -> 0.1037).** It was nearly built.
+
+The reason is measurable: ratio normalization bets everything on the BM25
+magnitude leader, and **the leader is the right answer 28.1% of the time**
+(38/135). Amplifying a leader that is wrong 72% of the time makes retrieval
+worse. RRF's flatness is not a weakness to be fixed here - it is protection
+against a noisy leader. (Length is not the cause: when the target loses it
+averages 3550 chars against the leader's 3414.)
+
+**The defect is pinned in CI** as `test_unique_phrase_outranks_its_template_siblings`,
+an `xfail(strict=True)`. When the fix lands it XPASSes and fails the suite, which
+is the prompt to remove the marker.
+
+**Read the history before starting. Four candidate fixes are now dead, and two
+of them were prescribed by this very item.**
+
+1. **Keep-newest family collapse - falsified 2026-09-20**, by the controlled
+   experiment above. It makes the oldest member unreachable. This item
+   recommended it until that measurement; do not revive it.
+2. **Magnitude / ratio fusion - falsified 2026-09-20**, see 1b. It halves
+   recall@1 on the 135-question set while _looking_ like a strict improvement
+   on the 30-question one. This item recommended it for roughly an hour.
+3. **Raising `w_freshness` - rejected 2026-06-13 and six times since.** Standing
+   rule, and witness 5 sharpens the reason rather than weakening it.
+4. **A candidate measured and falsified earlier**, plus one approved and tabled,
+   both in the archive below. The falsified one is the important read: it
+   establishes that two of the four retrieval bands carry a constant relevance of
+   0.5 whether or not a task hint is supplied, which is the mechanism behind the
+   flat synthetic band measured above.
+
+Two patterns are worth naming, because a fifth candidate will look just as
+obvious as the four above did.
+
+**Every dead fix tried to change which memory WINS** a contest whose scores were
+already flattened. The 22% pool-miss finding in 1a says a large part of this
+item is not about who wins at all - it is about which memories are even
+competing. No re-ranking reaches that half.
+
+**Every dead fix was measured on an instrument too coarse to see it.** Two of
+the four looked actively good right before they were killed. Nothing here should
+be believed on fewer than the 135 probes, and a future fix direction that cannot
+be measured that way should be treated as not yet measurable rather than
+promising.
 
 ### 2. `credential_get` hands the plaintext secret back into context
 
@@ -586,7 +745,7 @@ Fix directions, neither designed:
   semantically right answer. Worth measuring whether hybrid weighting should back
   off when lexical hit rate is high and semantic agreement is low.
 
-### 9. Hygiene - grew again
+### 8. Hygiene - grew again
 
 `gingugu serve --help` **starts the server**. `serve()` is the only subcommand
 that takes no argv, so `--help` is matched and discarded (`server.py`). Its five
