@@ -27,10 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   An existing `.claude/commands/sink-the-ship.md` is therefore **retired** on
   the next run, with a `.bak` kept, and this needs no `--force` - the duplicate
-  is a correctness problem and nothing is lost by fixing it. A copy at that path
-  that does **not** carry our managed-file marker is yours: it is never deleted,
-  and the run says so. Ownership is never the test for whether bytes may be
-  destroyed, which is the lesson the `--force` backup bug already taught once.
+  is a correctness problem and nothing is lost by fixing it.
+
+  Retirement requires the file to be **byte-identical** to the template we would
+  have written. A copy that differs by so much as a line is yours: it is never
+  deleted, and the run says so. That covers both a file we never wrote and one we
+  wrote that you have since edited - the managed-file marker records only that it
+  left our hands, and it sits in a comment above the part you would actually
+  change. Ownership is never the test for whether bytes may be destroyed, which
+  is the lesson the `--force` backup bug already taught once.
 
 - **Cluster proposals are ranked on tag evidence instead of an arbitrary
   order.** Every community that clears the density floor scores exactly 1.0 on

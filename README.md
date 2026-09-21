@@ -521,7 +521,8 @@ It installs:
 - **`.claude/skills/sink-the-ship/SKILL.md`** — a `/sink-the-ship` skill to flush
   everything worth keeping before you close a session. If an older install left a
   `.claude/commands/sink-the-ship.md` behind, `gingugu init` retires it and keeps
-  a `.bak`; a copy you wrote yourself is left alone.
+  a `.bak` - but only if it is untouched. Edit that file and it is yours: it stays
+  put, and the output tells you it did.
 - All three hooks wired into `.claude/settings.json`, **merged non-destructively** —
   any existing config is backed up (`settings.json.bak`) and preserved.
 - The runtime artifacts the hooks generate (`logs/`, `.claude/data/`,

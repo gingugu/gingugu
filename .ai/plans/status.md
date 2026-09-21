@@ -1,11 +1,12 @@
 # Project Status
 
-_Last updated: 2026-09-20_
+_Last updated: 2026-09-21_
 
 ## In Flight
 
-**Harness upgrade, on `feature/claude-agents-minion-upgrade`.** Four changes,
-one PR. 884 passed, 1 xfailed, ruff + black clean.
+**Harness upgrade, on `feature/claude-agents-minion-upgrade`.** Six changes,
+one PR, three commits (`f057747`, `d1a9ffb`, `b7bebcd`). 888 passed, 1 xfailed,
+ruff + black clean.
 
 1. **`permissions.deny: ["Agent(model:opus)"]`** in `.claude/settings.json`.
    The Opus-is-never-a-minion tier rule was honor-system only; permission rules
@@ -28,13 +29,17 @@ one PR. 884 passed, 1 xfailed, ruff + black clean.
    and it is the one recurring check here that the global `repo-scout` cannot do
    because it does not know what a `user_version` is.
 
-   The agents could not be dogfooded this session. `.claude/agents/` did not
-   exist when it started, and the harness watcher covers only `agents`
-   directories present at startup, so the first file in a new one needs a
-   restart. Validated structurally instead - frontmatter parsed against the
-   documented field table, asserting `model` in {sonnet, haiku},
-   `disallowedTools: Agent`, and no `Bash`. **Proving them live is owed next
-   session.**
+   All three were dogfooded in the session that wrote them. The first spawns
+   failed - a brand-new `.claude/agents/` directory is rescanned on a delay of
+   minutes, where `.claude/skills/` surfaces in seconds - and the harness
+   announced them about ten minutes later, unprompted. The failure measured
+   latency, not impossibility. Frontmatter is also validated structurally
+   against the documented field table: `model` in {sonnet, haiku},
+   `disallowedTools: Agent`, no `Bash`.
+
+   `security-reviewer` earned its keep on its first real run, catching the
+   data-loss bug in item 5 below in code that had already been hand-tested,
+   covered by seven tests, self-reviewed and committed.
 
 3. **`gingugu init` ships a skill instead of a slash command.** See the
    CHANGELOG entry. The write primitives moved from `bootstrap/__init__.py` into
@@ -50,12 +55,34 @@ one PR. 884 passed, 1 xfailed, ruff + black clean.
    stop: a supporting file loads only if it is opened, so a stop condition
    living in one can silently fail to load and be sailed straight past.
 
+5. **Retirement is decided on content, not authorship** (`b7bebcd`).
+   `retire_file` deletes a legacy `.claude/commands/sink-the-ship.md` only when
+   it is byte-identical to the template that would be written. The first cut
+   deleted on `TEMPLATE_SIGNATURE` alone, which meant a user who ran an older
+   `gingugu init` and then customized their copy lost it to a plain re-run with
+   no `--force`. The marker records that a file left our hands, not that it came
+   back untouched, and it sits in a comment above the part anyone would edit.
+   A pristine copy of an _older_ template now reads as customized and is kept;
+   that is the error worth making, since a duplicate is a nuisance the output
+   explains and an unlinked file is not.
+
+6. **Permission allowlist broadened, deny list kept small** (`d1a9ffb`,
+   hardened in `b7bebcd`). `Write`/`Edit` had been scoped to `.claude/**`, so
+   every edit under `src/`, `tests/` and `.ai/` prompted. Two gaps closed in the
+   follow-up: `Bash(uv run:*)` wildcard-allowed meant `uv run twine upload`
+   matched the allow prefix and never reached the `twine upload` deny, and
+   `credential_get` auto-approved beside unscoped `Write` is an unbroken path
+   from reading a secret to writing it elsewhere with no human in it. Retrieving
+   a secret value now prompts; `credential_list` stays allowed, being metadata
+   only. `git push`, `gh pr create` and `gh pr merge` sit on **neither** list, so
+   they prompt rather than being refused outright.
+
 Still open: `gingugu init` has not been run live against a real repo to prove
 the retirement path end to end. It touches the user-level `~/.claude/CLAUDE.md`,
 so it needs an explicit go.
 
-**Board item 1, step A: the instrument.** On `docs/board-transcript-findings`,
-unpushed. `main` is clean at `0cef296`.
+**Board item 1, step A: the instrument.** Merged as #79. `main` is clean at
+`b412d32`.
 
 The bench fixture can now express a **graded-age template family**, and carries
 one: `FixtureMemory.age_days` (`bench/dataset.py`) plus `_backdate`

@@ -366,8 +366,9 @@ read-only suggest half against the write half - to keep both under the
   into context; a hook is), a `Stop` save-discipline hook, and the
   `/sink-the-ship` skill (`.claude/skills/sink-the-ship/SKILL.md`, the format
   Anthropic's docs steer new work to; the legacy `.claude/commands/` copy is
-  retired with a `.bak` when it carries our marker, and left alone when it does
-  not) - merging both hooks into `.claude/settings.json`
+  retired with a `.bak` only when it is byte-identical to the template we would
+  have written, and kept when it differs - the marker says we once wrote a file,
+  not that the user left it alone) - merging both hooks into `.claude/settings.json`
   non-destructively (`settings.py`) and appending the hooks' runtime artifacts
   (`logs/`, `.claude/data/`, `settings.local.json`) to the target's `.gitignore`
   so transcripts never get committed. Output is a themed 90s boot sequence

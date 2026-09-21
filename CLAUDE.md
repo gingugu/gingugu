@@ -204,9 +204,13 @@ Not defined on purpose: there is no `backend` or `planner` agent. Both describe
 Opus-tier work (schema, scoring, retrieval, sequencing), and that stays on the
 main thread.
 
-**`.claude/agents/` is watched, but only for directories that existed when the
-session started.** Adding the first agent file to a new `agents` directory needs
-a restart before it can be spawned.
+**A brand-new `.claude/agents/` directory is picked up mid-session, but on a
+delay of minutes** - unlike `.claude/skills/`, which surfaces in seconds. The
+first spawn after creating one will fail with "agent type not found"; that
+measures latency, not impossibility. Write the definition, validate its
+frontmatter structurally, get on with other work, and retry before the session
+ends. Do not promise a live demo in the same breath as writing the file, and do
+not declare it unusable until a restart either.
 
 ## Conventions
 

@@ -26,7 +26,7 @@ time so the main thread does not have to choose between rigor and momentum.
 | `.ai/specs/01-architecture.md` | New module or tool added, storage model changed, or a key decision was made |
 | `.ai/specs/dataflow.md` | The store -> embed -> recall -> context flow, or relations/spreading activation, changed |
 | `.ai/specs/product-spec.md` | A tool or feature shipped, got blocked, or was descoped |
-| `.ai/agents/` | Tech stack decision, directory structure, or agent rule changed |
+| `.claude/agents/` | A subagent's scope, tool allowlist, or model tier changed |
 | `.ai/standards/` | Testing, code, or database discipline changed |
 
 `docs/architecture.md` (its mermaid diagrams) and `CHANGELOG.md` must stay in
