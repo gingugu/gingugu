@@ -109,9 +109,10 @@ def init_claude_code(target: Path, *, force: bool, dry_run: bool, adopt: bool = 
     # that installs us to it. A repo that converted its own copy to a skill got
     # the command resurrected on the next `gingugu init`, leaving two
     # definitions answering to one name.
+    sink_the_ship = _read_template("sink-the-ship.md.tmpl")
     _write_file(
         skill_path,
-        _read_template("sink-the-ship.md.tmpl"),
+        sink_the_ship,
         force=force,
         dry_run=dry_run,
         results=results,
@@ -121,6 +122,7 @@ def init_claude_code(target: Path, *, force: bool, dry_run: bool, adopt: bool = 
     # .bak — see retire_file.
     _retire_file(
         legacy_command,
+        pristine=sink_the_ship,
         dry_run=dry_run,
         results=results,
         superseded_by=".claude/skills/sink-the-ship/SKILL.md",

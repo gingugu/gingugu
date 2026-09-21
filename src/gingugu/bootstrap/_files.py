@@ -90,23 +90,47 @@ def write_file(
         results.append(f"  {would} your version to {path.name}.bak")
 
 
-def retire_file(path: Path, *, dry_run: bool, results: list[str], superseded_by: str) -> None:
+def retire_file(
+    path: Path,
+    *,
+    pristine: str,
+    dry_run: bool,
+    results: list[str],
+    superseded_by: str,
+) -> None:
     """Remove a file this tool shipped that a newer location has replaced.
 
-    Retirement is not the same as overwriting, and it earns a stricter test:
-    **only a file carrying ``TEMPLATE_SIGNATURE`` is ever removed.** A file at
-    the old path without our marker is the user's own — leaving a duplicate
-    behind is a nuisance, deleting someone's work is not recoverable, and the
-    nuisance is the correct trade.
+    Retirement is a DELETE, so it earns a stricter test than overwriting does:
+    the file is removed only when it is **byte-identical to ``pristine``**, the
+    content we would have written there. Two other outcomes are both "keep it":
 
-    A ``.bak`` is written unconditionally before the removal, even though the
-    file is ours. The last time a decision here reasoned from authorship rather
-    than from content, `--force` destroyed customized hooks silently for three
-    releases. Ownership says nothing about whether the user edited it since.
+    - no ``TEMPLATE_SIGNATURE`` — never ours, never touched;
+    - marker present but content differs — ours originally, **edited since**.
 
-    This deliberately does not take ``force``. The duplicate it resolves is a
-    correctness problem — two definitions of the same command answering to one
-    name — and the ``.bak`` means nothing is lost by fixing it on a plain run.
+    That second case is the whole point, and the first version of this function
+    got it wrong. Carrying the marker says only that we once wrote the file; it
+    says nothing about whether the user has changed it, and the marker sits in a
+    comment near the top that nobody editing the body below would think to
+    remove. Deleting on the marker alone therefore destroys exactly the
+    customization it cannot see.
+
+    This is the same mistake, one function down, that ``write_file``'s comment
+    describes: conditioning on authorship rather than on content is what let
+    ``--force`` silently destroy customized hooks for three releases. It is
+    worse here, because an overwrite leaves the path in place and a retirement
+    does not.
+
+    Comparing against the CURRENT template also means a pristine copy of an
+    OLDER template reads as customized and is kept. That is the error worth
+    making: a lingering duplicate is a nuisance the message tells you how to
+    fix, and an unlinked file is not.
+
+    A ``.bak`` is still written before the removal, and before it rather than
+    after, so a failing backup aborts the delete instead of following it.
+
+    Deliberately takes no ``force``. The duplicate it resolves is a correctness
+    problem — two definitions answering to one name — and deleting a verified
+    byte-identical copy of something we wrote loses nothing.
     """
     if not path.exists():
         return
@@ -116,6 +140,15 @@ def retire_file(path: Path, *, dry_run: bool, results: list[str], superseded_by:
         results.append(
             f"  kept   {path}  (superseded by {superseded_by}, but this copy is "
             f"not ours — remove it yourself if you no longer want it)"
+        )
+        return
+
+    if existing != pristine:
+        results.append(
+            f"  kept   {path}  (superseded by {superseded_by}, but it differs "
+            f"from the version we shipped — treating it as your edits and "
+            f"leaving it. Delete it yourself once you have moved anything you "
+            f"want into {superseded_by}.)"
         )
         return
 
