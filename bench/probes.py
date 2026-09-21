@@ -37,6 +37,17 @@ but it is harder than "find the document with this rare token" and the absolute
 numbers should be read with that in mind. A before/after comparison is
 unaffected: both arms face the identical handicap.
 
+DEPRECATED MEMORIES ARE NOT VALID ANSWERS, and they play two different roles
+here. ``search()`` filters ``confidence != 'deprecated'`` unless the caller asks
+for them, so a deprecated target is a question the engine is CORRECT to fail -
+an unwinnable label that scores zero at every cutoff. Measured 2026-09-21: 11 of
+135 questions were labelled this way and all 11 scored zero at recall@10, holding
+the reported recall@1 down to 0.2074 where the corrected 126-question set
+measures 0.2143. They are therefore excluded from families and from targets. They
+remain in the SIBLING scan, where they are still evidence: a phrase shared with a
+deprecated memory is not unique, and dropping them from that scan would
+manufacture wrong labels - a far worse defect than the one this exclusion fixes.
+
 The generated dataset contains real memory content and belongs under
 ``bench/local/`` (gitignored), never in the repository.
 """
@@ -135,18 +146,24 @@ def unique_phrase(memory: sqlite3.Row, siblings: list[sqlite3.Row]) -> str | Non
 def generate(conn: sqlite3.Connection) -> dict:
     """Build the probe dataset. ``conn`` should be opened read-only."""
     rows = conn.execute(
-        "SELECT m.id, m.title, m.content, n.name AS ns "
+        "SELECT m.id, m.title, m.content, m.confidence, n.name AS ns "
         "FROM memories m JOIN namespaces n ON n.id = m.namespace_id"
     ).fetchall()
 
+    # EVERY row, deprecated included, is a sibling for the uniqueness proof.
     by_namespace: dict[str, list[sqlite3.Row]] = defaultdict(list)
     for row in rows:
         by_namespace[row["ns"]].append(row)
 
+    # Only retrievable rows can be answers - or can flatten a retrieval contest,
+    # which is what family size is a proxy for. A deprecated sibling never
+    # enters the candidate pool, so it competes with nothing.
+    answerable = [row for row in rows if row["confidence"] != "deprecated"]
+
     questions: list[dict] = []
     # Largest families first: they are the hardest cases and the ones the
     # defect is actually about, so they should never be the ones truncated.
-    families = sorted(find_families(rows).items(), key=lambda kv: (-len(kv[1]), kv[0]))
+    families = sorted(find_families(answerable).items(), key=lambda kv: (-len(kv[1]), kv[0]))
     for (namespace, sig), members in families:
         made = 0
         for memory in members:
@@ -174,8 +191,11 @@ def generate(conn: sqlite3.Connection) -> dict:
             "GENERATED, not hand-labelled. Every question asks for a phrase occurring "
             "in exactly one memory of its namespace, verified against the corpus at "
             "generation time, and every target sits inside a template family of "
-            f"{MIN_FAMILY}+ siblings sharing a title shape. Contains real memory "
-            "content: keep under bench/local/, never commit."
+            f"{MIN_FAMILY}+ siblings sharing a title shape. Targets are always "
+            "retrievable: deprecated memories are excluded as answers, since search "
+            "withholds them by default, but are still scanned when proving a phrase "
+            "unique. Contains real memory content: keep under bench/local/, never "
+            "commit."
         ),
         "questions": questions,
     }
