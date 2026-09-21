@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from gingugu.bootstrap import CLIENT_RULES_FILES, GITIGNORE_ENTRIES, main
+from gingugu.bootstrap._files import TEMPLATE_SIGNATURE, read_template, retire_file
 from gingugu.bootstrap.settings import declared_flags, foreign_flags, merge_settings
 
 STOP_CMD_WITH_EXTRA_FLAGS = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/stop.py --notify --chat"
@@ -30,23 +31,31 @@ def _read(path: Path) -> str:
 # --- Claude Code path ---------------------------------------------------------
 
 
-def test_claude_code_writes_hooks_command_and_settings(tmp_path):
+def test_claude_code_writes_hooks_skill_and_settings(tmp_path):
     assert main(["--path", str(tmp_path)]) == 0
 
     session_start = tmp_path / ".claude" / "hooks" / "session_start.py"
     stop = tmp_path / ".claude" / "hooks" / "stop.py"
-    command = tmp_path / ".claude" / "commands" / "sink-the-ship.md"
+    skill = tmp_path / ".claude" / "skills" / "sink-the-ship" / "SKILL.md"
     settings = tmp_path / ".claude" / "settings.json"
 
     assert session_start.exists()
     assert stop.exists()
-    assert command.exists()
+    assert skill.exists()
     assert settings.exists()
 
     # Hooks are the real product scripts, not empty stubs.
     assert "SESSION STARTUP CONTRACT" in _read(session_start)
     assert "save-discipline" in _read(stop)
-    assert "Sink the Ship" in _read(command)
+    assert "Sink the Ship" in _read(skill)
+
+
+def test_sink_the_ship_ships_as_a_skill_not_a_legacy_command(tmp_path):
+    """The directory name is what makes it `/sink-the-ship`, so it must be exact."""
+    assert main(["--path", str(tmp_path)]) == 0
+
+    assert not (tmp_path / ".claude" / "commands").exists()
+    assert (tmp_path / ".claude" / "skills" / "sink-the-ship" / "SKILL.md").exists()
 
 
 def test_settings_wire_both_events(tmp_path):
@@ -447,3 +456,130 @@ def test_startup_contract_does_not_invite_namespace_inference(tmp_path):
     # The floor is derived from cwd, and the allowlist is named as off-limits.
     assert "is the floor, always" in contract
     assert "permission allowlist, not the workspace" in contract
+
+
+# --- retiring the legacy slash command ---------------------------------------
+
+PRISTINE_LEGACY = read_template("sink-the-ship.md.tmpl")
+CUSTOMIZED_LEGACY = PRISTINE_LEGACY + "\n## My own extra step\n\nPing the crew.\n"
+HAND_WRITTEN_LEGACY = "---\ndescription: mine\n---\n\n## My own sink command\n"
+
+
+def _legacy_command(root: Path) -> Path:
+    path = root / ".claude" / "commands" / "sink-the-ship.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def test_retires_an_untouched_copy_of_what_we_shipped(tmp_path):
+    """The duplicate is the bug: two definitions answering to one name."""
+    legacy = _legacy_command(tmp_path)
+    legacy.write_text(PRISTINE_LEGACY)
+
+    assert main(["--path", str(tmp_path)]) == 0
+
+    assert not legacy.exists()
+    assert (tmp_path / ".claude" / "skills" / "sink-the-ship" / "SKILL.md").exists()
+    assert _read(legacy.parent / "sink-the-ship.md.bak") == PRISTINE_LEGACY
+
+
+def test_never_deletes_a_marked_file_the_user_edited(tmp_path):
+    """The marker says we WROTE it, never that the user left it alone.
+
+    The marker is a comment near the top. Anyone editing the body below it
+    keeps the marker without meaning to, so deleting on the marker alone
+    destroys exactly the customization it cannot see. This is the overwrite
+    bug that cost three releases, reintroduced for a delete.
+    """
+    legacy = _legacy_command(tmp_path)
+    legacy.write_text(CUSTOMIZED_LEGACY)
+
+    assert main(["--path", str(tmp_path)]) == 0
+
+    assert legacy.exists()
+    assert _read(legacy) == CUSTOMIZED_LEGACY
+
+
+def test_edited_marked_file_is_reported_as_the_users_edits(tmp_path, capsys):
+    legacy = _legacy_command(tmp_path)
+    legacy.write_text(CUSTOMIZED_LEGACY)
+
+    main(["--path", str(tmp_path)])
+
+    assert "differs" in capsys.readouterr().out
+
+
+def test_a_pristine_copy_of_an_OLDER_template_is_kept_not_deleted(tmp_path):
+    """Conservative on purpose: a lingering duplicate beats an unlinked file."""
+    legacy = _legacy_command(tmp_path)
+    older = PRISTINE_LEGACY.replace("Sink the Ship", "Sink The Ship")
+    assert older != PRISTINE_LEGACY and TEMPLATE_SIGNATURE in older
+    legacy.write_text(older)
+
+    main(["--path", str(tmp_path)])
+
+    assert legacy.exists()
+
+
+def test_never_deletes_a_command_we_did_not_write(tmp_path):
+    legacy = _legacy_command(tmp_path)
+    legacy.write_text(HAND_WRITTEN_LEGACY)
+
+    assert main(["--path", str(tmp_path)]) == 0
+
+    assert legacy.exists()
+    assert _read(legacy) == HAND_WRITTEN_LEGACY
+    assert not (legacy.parent / "sink-the-ship.md.bak").exists()
+
+
+def test_retirement_warns_rather_than_silently_leaving_a_foreign_command(tmp_path, capsys):
+    legacy = _legacy_command(tmp_path)
+    legacy.write_text(HAND_WRITTEN_LEGACY)
+
+    main(["--path", str(tmp_path)])
+
+    assert "not ours" in capsys.readouterr().out
+
+
+def test_retirement_needs_no_force(tmp_path):
+    legacy = _legacy_command(tmp_path)
+    legacy.write_text(PRISTINE_LEGACY)
+
+    main(["--path", str(tmp_path)])  # no --force
+
+    assert not legacy.exists()
+
+
+def test_dry_run_retires_nothing(tmp_path):
+    legacy = _legacy_command(tmp_path)
+    legacy.write_text(PRISTINE_LEGACY)
+
+    main(["--path", str(tmp_path), "--dry-run"])
+
+    assert legacy.exists()
+    assert _read(legacy) == PRISTINE_LEGACY
+    assert not (legacy.parent / "sink-the-ship.md.bak").exists()
+
+
+def test_a_failing_backup_aborts_the_delete(tmp_path):
+    """The .bak must be written BEFORE the unlink, not after."""
+    legacy = _legacy_command(tmp_path)
+    legacy.write_text(PRISTINE_LEGACY)
+    (legacy.parent / "sink-the-ship.md.bak").mkdir()  # make the .bak write fail
+
+    with pytest.raises(OSError):
+        retire_file(
+            legacy,
+            pristine=PRISTINE_LEGACY,
+            dry_run=False,
+            results=[],
+            superseded_by="x",
+        )
+
+    assert legacy.exists()
+
+
+def test_retirement_is_idempotent_when_there_is_nothing_to_retire(tmp_path):
+    assert main(["--path", str(tmp_path)]) == 0
+    assert main(["--path", str(tmp_path)]) == 0
+    assert not (tmp_path / ".claude" / "commands").exists()

@@ -129,12 +129,12 @@ This repo maintains a living knowledge base in `.ai/`. These rules apply to ever
 | `.ai/specs/01-architecture.md` | New module/tool added, storage model changed, or a key decision was made |
 | `.ai/specs/dataflow.md` | The store -> embed -> recall -> context retrieval flow or relations/spreading-activation changed |
 | `.ai/specs/product-spec.md` | A tool/feature shipped, got blocked, or was descoped |
-| `.ai/agents/` | Tech stack decision, directory structure, or agent rule changed |
+| `.claude/agents/` | A subagent's scope, tool allowlist, or model tier changed |
 | `.ai/standards/` | Testing, code, or database discipline changed |
 
 ### PR creation
 
-Always use the `/creating-pr` command (`.claude/commands/creating-pr.md`) when opening a PR.
+Always use the `/creating-pr` skill (`.claude/skills/creating-pr/SKILL.md`) when opening a PR.
 Never skip the `.ai/` assessment. Never open a PR without updating `status.md`.
 
 ## Key Specs
@@ -149,7 +149,7 @@ GitHub repo - use `gh`, not `glab`.
 
 - **Branches:** `feature/[name]`, `bugfix/[name]`, `fix/[name]`, `hotfix/[name]`, `docs/[name]`
 - **Commits:** `<type>: <what changed>` (feat, fix, docs, chore, refactor) - include what + why + impact
-- **PRs:** descriptive titles and bodies; use `/creating-pr` command
+- **PRs:** descriptive titles and bodies; use the `/creating-pr` skill
 - **Multiple PRs in one session: stack them.** Cut the second branch from the first and `gh pr create --base <first-branch>`. Every PR must add a `.ai/plans/status.md` entry at the same anchor, so two branches off `main` conflict on the second merge, every time. See step 0 of `/creating-pr`.
 - **Merging a stack:** never `--delete-branch` the parent - it closes child PRs and GitHub will not reopen them. Retarget children to `main` first.
 - Run `git status` before every commit
@@ -185,10 +185,32 @@ Before any write to external systems (GitHub API, PyPI, npm):
 - Explain what it changes and blast radius
 - Wait for explicit approval - zero exceptions
 
-## Available Commands
+## Available Skills
 
 - `/creating-pr` - Create a PR with mandatory `.ai/` knowledge base assessment
 - `/sink-the-ship` - Save everything to Gingugu and end session
+
+## Available Subagents (`.claude/agents/`)
+
+Tier rule: Opus is never a minion. All three are read-only - no `Bash`, and `disallowedTools: Agent`.
+
+| Agent | Tier | Use for |
+|---|---|---|
+| `ai-docs-auditor` | sonnet | Audits `.ai/` against the code, reports drift as `path:line`. Run before every PR. |
+| `security-reviewer` | sonnet | Secrets, PII, vault boundary, path safety, destructive writes without a backup. Run before every commit touching credentials, bootstrap, or path handling. |
+| `schema-ladder-scout` | haiku | Inventories the `user_version` migration ladder and the FTS5 trigger columns; reports gaps, duplicates, and column mismatches. Run on any change under `migrations/` or to `memories_fts`. |
+
+Not defined on purpose: there is no `backend` or `planner` agent. Both describe
+Opus-tier work (schema, scoring, retrieval, sequencing), and that stays on the
+main thread.
+
+**A brand-new `.claude/agents/` directory is picked up mid-session, but on a
+delay of minutes** - unlike `.claude/skills/`, which surfaces in seconds. The
+first spawn after creating one will fail with "agent type not found"; that
+measures latency, not impossibility. Write the definition, validate its
+frontmatter structurally, get on with other work, and retry before the session
+ends. Do not promise a live demo in the same breath as writing the file, and do
+not declare it unusable until a restart either.
 
 ## Conventions
 
