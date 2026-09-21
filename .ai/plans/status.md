@@ -77,9 +77,25 @@ ruff + black clean.
    only. `git push`, `gh pr create` and `gh pr merge` sit on **neither** list, so
    they prompt rather than being refused outright.
 
-Still open: `gingugu init` has not been run live against a real repo to prove
-the retirement path end to end. It touches the user-level `~/.claude/CLAUDE.md`,
-so it needs an explicit go.
+**Opened as [#80](https://github.com/gingugu/gingugu/pull/80).**
+
+The retirement path is now proven live, not only by tests. Two scratch repos,
+each with a planted `.claude/commands/sink-the-ship.md`, run against the
+branch's own code (`uv run gingugu init`, not the installed tool): a pristine
+copy was retired with a `.bak` carrying the original bytes, and a
+marked-but-edited copy was kept byte-for-byte with the output naming it as the
+user's edits. The `~/.claude/CLAUDE.md` concern that gated this for two sessions
+was unfounded - `--dry-run` reports `no change, managed block already current`,
+because the managed block only rewrites when the template moves.
+
+**Docs: transport and module structure, on `docs/architecture-transport-and-modules`.**
+Stacked on the branch above and targeting it, since both edit this file.
+`docs/architecture.md` described stdio as the only transport, omitting
+`gingugu serve`, and its module tree listed roughly 30 modules against a package
+of 78 - `handlers/` as 5 files where there are 14, and no `bootstrap/`,
+`serve.py`, `webui.py`, `config.py`, `migrations/`, claim modules or recall-hook
+modules at all. Both corrected; the tree is now checked against the package by
+script rather than by eye. Pre-existing drift, unrelated to the harness work.
 
 **Board item 1, step A: the instrument.** Merged as #79. `main` is clean at
 `b412d32`.
