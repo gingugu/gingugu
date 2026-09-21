@@ -364,7 +364,10 @@ read-only suggest half against the write half - to keep both under the
   a target repo: for Claude Code, a `SessionStart` hook that auto-injects the
   memory startup contract every session (a rules file is not guaranteed to load
   into context; a hook is), a `Stop` save-discipline hook, and the
-  `/sink-the-ship` command - merging both hooks into `.claude/settings.json`
+  `/sink-the-ship` skill (`.claude/skills/sink-the-ship/SKILL.md`, the format
+  Anthropic's docs steer new work to; the legacy `.claude/commands/` copy is
+  retired with a `.bak` when it carries our marker, and left alone when it does
+  not) - merging both hooks into `.claude/settings.json`
   non-destructively (`settings.py`) and appending the hooks' runtime artifacts
   (`logs/`, `.claude/data/`, `settings.local.json`) to the target's `.gitignore`
   so transcripts never get committed. Output is a themed 90s boot sequence

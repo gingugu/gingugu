@@ -27,7 +27,7 @@
       "Bash(node:*)",
       "Bash(npx:*)"
     ],
-    "deny": []
+    "deny": ["Agent(model:opus)"]
   },
   "hooks": {
     "PreToolUse": [

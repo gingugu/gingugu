@@ -3,7 +3,7 @@
 For **Claude Code** (the default) this installs the real advantage: a
 ``SessionStart`` hook that auto-injects the memory startup contract every
 session, a ``Stop`` hook that enforces save-discipline, and the
-``/sink-the-ship`` session-end command. A rules file (the manual approach) is
+``/sink-the-ship`` session-end skill. A rules file (the manual approach) is
 not guaranteed to be loaded into context; a hook is.
 
 For Windsurf / Cursor / Cline (``--client``) there is no hook system, so we
@@ -17,7 +17,8 @@ from pathlib import Path
 
 from . import theme
 from ._files import read_template as _read_template
-from ._files import safe_read as _safe_read
+from ._files import retire_file as _retire_file
+from ._files import write_file as _write_file
 from .global_rules import init_global_rules, init_repo_rules
 from .settings import load_settings, merge_settings, write_settings
 
@@ -66,67 +67,6 @@ def _ensure_gitignore(target: Path, *, dry_run: bool, results: list[str]) -> Non
     results.append(f"  {verb} {path}  (+{len(missing)} ignore rule(s))")
 
 
-# A distinctive marker every file we ship carries. Its absence in a file we are
-# about to overwrite means that file is NOT ours, so back it up first.
-#
-# This was the bare word "gingugu", which is useless as a signature: any hook
-# that merely mentions the tool matches, and every gingugu-aware hook does — the
-# MCP tool names are `mcp__gingugu__*`. A real, heavily-customized local hook was
-# therefore classified as ours and overwritten by `--force` with NO backup, and
-# only a clean git tree saved it. The marker has to be something only our
-# templates would ever contain.
-_TEMPLATE_SIGNATURE = "gingugu-init:managed-file"
-
-
-def _write_file(
-    path: Path,
-    content: str,
-    *,
-    force: bool,
-    dry_run: bool,
-    results: list[str],
-    skip_hint: str = "",
-) -> None:
-    if path.exists() and not force:
-        results.append(f"  skip   {path}  (exists; use --force to overwrite){skip_hint}")
-        return
-
-    existing = _safe_read(path) if path.exists() else None
-    # Back up whenever `--force` would change what is on disk - NOT only when the
-    # file looks foreign.
-    #
-    # The backup used to be conditioned on _TEMPLATE_SIGNATURE being ABSENT, which
-    # meant the net disappeared the moment it did its job: the first `--force`
-    # wrote a .bak and stamped the marker, and every `--force` after that saw its
-    # own marker and destroyed the user's edits silently. A file being ours says
-    # nothing about whether the user has since customized it.
-    changed = existing is not None and existing != content
-    foreign = (
-        existing is not None
-        and _TEMPLATE_SIGNATURE in content
-        and _TEMPLATE_SIGNATURE not in existing
-    )
-    if changed and not dry_run:
-        (path.parent / f"{path.name}.bak").write_text(existing or "")
-
-    verb = "would write" if dry_run else ("overwrite" if path.exists() else "write")
-    if not dry_run:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content)
-    results.append(f"  {verb:<9} {path}")
-
-    if foreign:
-        results.append(
-            f"  WARNING: {path.name} was not written by this version of `gingugu "
-            f"init` — it may be your own or another tool's. Backed up to "
-            f"{path.name}.bak. If your settings.json invokes it with flags the "
-            f"replacement does not declare, that command needs updating too."
-        )
-    elif changed:
-        would = "would back up" if dry_run else "backed up"
-        results.append(f"  {would} your version to {path.name}.bak")
-
-
 def init_claude_code(target: Path, *, force: bool, dry_run: bool, adopt: bool = False) -> list[str]:
     # State the resolved target first. `--path` defaults to the process's cwd,
     # and wrappers move that out from under you — `uv run --directory X` runs in
@@ -135,7 +75,8 @@ def init_claude_code(target: Path, *, force: bool, dry_run: bool, adopt: bool = 
     # into something you notice on line one.
     results: list[str] = ["Claude Code bootstrap:", f"  target {target}"]
     hooks_dir = target / ".claude" / "hooks"
-    commands_dir = target / ".claude" / "commands"
+    skill_path = target / ".claude" / "skills" / "sink-the-ship" / "SKILL.md"
+    legacy_command = target / ".claude" / "commands" / "sink-the-ship.md"
 
     _write_file(
         hooks_dir / "session_start.py",
@@ -158,12 +99,31 @@ def init_claude_code(target: Path, *, force: bool, dry_run: bool, adopt: bool = 
         dry_run=dry_run,
         results=results,
     )
+    # `sink-the-ship` ships as a SKILL, not a `.claude/commands/*.md` slash
+    # command. Anthropic documents the commands directory inside `skills.md` as
+    # the predecessor format and says to prefer skills for new work: a command
+    # is a flat single file, while a skill is a directory that can carry
+    # supporting files which load only when they are actually opened.
+    #
+    # Shipping the legacy format was not merely dated — it pinned every repo
+    # that installs us to it. A repo that converted its own copy to a skill got
+    # the command resurrected on the next `gingugu init`, leaving two
+    # definitions answering to one name.
     _write_file(
-        commands_dir / "sink-the-ship.md",
+        skill_path,
         _read_template("sink-the-ship.md.tmpl"),
         force=force,
         dry_run=dry_run,
         results=results,
+    )
+    # Clean up after ourselves rather than leaving the duplicate we used to
+    # create. Only ever removes a copy carrying our marker, and always leaves a
+    # .bak — see retire_file.
+    _retire_file(
+        legacy_command,
+        dry_run=dry_run,
+        results=results,
+        superseded_by=".claude/skills/sink-the-ship/SKILL.md",
     )
 
     settings_path = target / ".claude" / "settings.json"

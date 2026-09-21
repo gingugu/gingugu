@@ -215,11 +215,13 @@ The `.ai/` folder is a living knowledge base. **AI agents must assess and update
 | `.ai/specs/01-architecture.md` | New module/tool added, storage model changed, or a key decision was made |
 | `.ai/specs/dataflow.md` | The store/embed/recall/context flow, relations, or spreading activation changed |
 | `.ai/specs/product-spec.md` | A tool/feature shipped, got blocked, or was descoped |
-| `.ai/agents/` | Tech stack decision, directory structure, or agent rule changed |
+| `.claude/agents/` | A subagent's scope, tool allowlist, or model tier changed |
 | `.ai/standards/` | Testing, code, or database discipline changed |
 
-When creating a PR, always use the `/creating-pr` command
-(`.claude/commands/creating-pr.md`). It includes the mandatory `.ai/` assessment.
+When creating a PR, always use the `/creating-pr` skill
+(`.claude/skills/creating-pr/SKILL.md`). It includes the mandatory `.ai/`
+assessment, and its supporting files carry the stacking mechanics and the
+conditional half of the checklist.
 
 ---
 

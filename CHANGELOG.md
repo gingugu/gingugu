@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`gingugu init` now installs `sink-the-ship` as a skill, not a slash
+  command.** It writes `.claude/skills/sink-the-ship/SKILL.md` in place of
+  `.claude/commands/sink-the-ship.md`. Anthropic's docs describe the commands
+  directory as the predecessor format and steer new work to skills, which are
+  directories that can carry supporting files - and supporting files load only
+  when they are actually opened, so reference material stops costing context
+  until it is needed. The invocation is unchanged: it is still `/sink-the-ship`,
+  because a skill takes its command name from its directory.
+
+  Shipping the older format did not just date the install, it pinned every repo
+  that ran `gingugu init` to it. A repo that converted its own copy to a skill
+  got the command written back on the next run, leaving two definitions
+  answering to one name.
+
+  An existing `.claude/commands/sink-the-ship.md` is therefore **retired** on
+  the next run, with a `.bak` kept, and this needs no `--force` - the duplicate
+  is a correctness problem and nothing is lost by fixing it. A copy at that path
+  that does **not** carry our managed-file marker is yours: it is never deleted,
+  and the run says so. Ownership is never the test for whether bytes may be
+  destroyed, which is the lesson the `--force` backup bug already taught once.
+
 - **Cluster proposals are ranked on tag evidence instead of an arbitrary
   order.** Every community that clears the density floor scores exactly 1.0 on
   a real graph, so the previous sort left findings tied and broke the tie by
