@@ -58,7 +58,7 @@ Gingugu instance serves Windsurf and Claude Code against one DB.
 | `gingugu serve` (transport) | Run over streamable HTTP + Bearer auth (hosted/central) | ✅ Shipped |
 | `MEMORY_CREDENTIALS_ENABLED` flag | Run an instance without the credential vault | ✅ Shipped |
 | `gingugu promote` (client) | Promote local gold → central brain (filter + provenance, idempotent) | ✅ Shipped (Stage 1) |
-| `gingugu init` (bootstrap) | Install SessionStart+Stop hooks + `/sink-the-ship` (Claude Code) or a rules file (`--client`); non-destructive settings merge; `--force` copies anything it replaces to `<name>.bak` first, on every write path | ✅ Shipped (backup-on-force v0.18.0) |
+| `gingugu init` (bootstrap) | Install SessionStart+Stop hooks + the `/sink-the-ship` skill (Claude Code) or a rules file (`--client`); non-destructive settings merge; `--force` copies anything it replaces to `<name>.bak` first, on every write path. Ships `sink-the-ship` as `.claude/skills/sink-the-ship/SKILL.md` rather than the legacy `.claude/commands/*.md` format, and retires a legacy copy with a `.bak` so a repo is never left with two definitions answering to one name. Retirement requires a byte-identical match against the current template: no marker means it was never ours, and a marker with changed content means it was ours and the user edited it since. Both are kept and reported | ✅ Shipped (skill format unreleased; backup-on-force v0.18.0) |
 
 ## Principles
 

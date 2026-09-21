@@ -146,14 +146,14 @@ def test_generated_claude_code_guidance_is_selective(tmp_path):
     assert main(["--path", str(tmp_path)]) == 0
 
     stop = (tmp_path / ".claude" / "hooks" / "stop.py").read_text()
-    command = (tmp_path / ".claude" / "commands" / "sink-the-ship.md").read_text()
+    skill = (tmp_path / ".claude" / "skills" / "sink-the-ship" / "SKILL.md").read_text()
 
     # The save nag must not tell the agent to blanket-wire its new memories.
     assert "to their cluster" not in stop
     assert "supersedes" in stop and "skip related_to" in stop
 
-    assert "supersedes" in command
-    assert "skip `related_to`" in command
+    assert "supersedes" in skill
+    assert "skip `related_to`" in skill
 
 
 @pytest.mark.parametrize("client", sorted(CLIENT_RULES_FILES))

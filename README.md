@@ -518,8 +518,11 @@ It installs:
   skipped (they already load every session) and so are superseded ones. On a
   548-prompt sample it fires on about 5% of turns. Set `MEMORY_RECALL_HOOK=off`
   to disable it.
-- **`.claude/commands/sink-the-ship.md`** — a `/sink-the-ship` command to flush
-  everything worth keeping before you close a session.
+- **`.claude/skills/sink-the-ship/SKILL.md`** — a `/sink-the-ship` skill to flush
+  everything worth keeping before you close a session. If an older install left a
+  `.claude/commands/sink-the-ship.md` behind, `gingugu init` retires it and keeps
+  a `.bak` - but only if it is untouched. Edit that file and it is yours: it stays
+  put, and the output tells you it did.
 - All three hooks wired into `.claude/settings.json`, **merged non-destructively** —
   any existing config is backed up (`settings.json.bak`) and preserved.
 - The runtime artifacts the hooks generate (`logs/`, `.claude/data/`,
