@@ -77,11 +77,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   template families (3+ memories in a namespace sharing a title shape), which
   is the corpus structure that makes sibling memories hard to tell apart.
 
-  On a real 2,521-memory brain this yields 135 questions across 45 families -
-  roughly 4.5x the resolution of the hand-labelled set - and it immediately
-  separated a retrieval defect into a candidate-pool miss (22%, unreachable by
-  any re-ranking) and a ranking failure (78%). Two prospective ranking changes
-  were measured against it and rejected before reaching `src/`.
+  Deprecated memories are excluded as answers, because search withholds them by
+  default and a target it is designed never to return is an unwinnable question
+  rather than a hard one. They are still scanned when proving a phrase unique,
+  where they remain evidence: a phrase shared with a deprecated memory is not
+  unique, and a wrong label is a worse defect than a missing question.
+
+  On a real 2,542-memory brain this yields 126 questions - roughly 4x the
+  resolution of the hand-labelled set - and it immediately separated a retrieval
+  defect into a candidate-pool miss (unreachable by any re-ranking) and a
+  ranking failure. Four prospective ranking changes were measured against it and
+  rejected before reaching `src/`.
 
   Generated sets contain real memory content and stay in the gitignored
   `bench/local/`; only the generator is committed.

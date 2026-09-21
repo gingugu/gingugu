@@ -4,9 +4,25 @@ _Last updated: 2026-09-21_
 
 ## In Flight
 
-**Harness upgrade, on `feature/claude-agents-minion-upgrade`.** Six changes,
-one PR, three commits (`f057747`, `d1a9ffb`, `b7bebcd`). 888 passed, 1 xfailed,
-ruff + black clean.
+**Board item 1a: the instrument had an unwinnable 8.1%, on
+`fix/probe-set-excludes-deprecated-targets`.** `bench/probes.py` selected probe
+targets with no confidence filter, so 11 of 135 questions labelled a
+`deprecated` memory as the correct answer - rows `search()` withholds by
+default. Every one scored zero at recall@10. Deprecated rows are now excluded
+from families and targets and kept in the sibling scan, where they are still
+needed to prove a phrase unique. Three tests; two of them fail against the old
+generator and the third guards the sibling scan against the wrong fix.
+
+**Corrected baseline of record**, 126 answerable questions, real brain, hybrid:
+**mrr 0.3379, recall@1 0.2143, recall@5 0.5000, recall@10 0.6667.** Supersedes
+every absolute figure quoted from the 135-question set. See 1a.
+
+The same sail diagnosed the real pool-miss half and killed two more fix
+directions with measurements - `ENTRANT_CAP` (swept, monotonic degradation) and
+`pool_size` (ruled out on a read). See 1c. `src/` was not touched.
+
+**Harness upgrade. MERGED as `aa00677` (#80).** Six changes, three commits
+(`f057747`, `d1a9ffb`, `b7bebcd`). 888 passed, 1 xfailed, ruff + black clean.
 
 1. **`permissions.deny: ["Agent(model:opus)"]`** in `.claude/settings.json`.
    The Opus-is-never-a-minion tier rule was honor-system only; permission rules
@@ -77,7 +93,7 @@ ruff + black clean.
    only. `git push`, `gh pr create` and `gh pr merge` sit on **neither** list, so
    they prompt rather than being refused outright.
 
-**Opened as [#80](https://github.com/gingugu/gingugu/pull/80).**
+**Merged as [#80](https://github.com/gingugu/gingugu/pull/80).**
 
 The retirement path is now proven live, not only by tests. Two scratch repos,
 each with a planted `.claude/commands/sink-the-ship.md`, run against the
@@ -88,8 +104,8 @@ user's edits. The `~/.claude/CLAUDE.md` concern that gated this for two sessions
 was unfounded - `--dry-run` reports `no change, managed block already current`,
 because the managed block only rewrites when the template moves.
 
-**Docs: transport and module structure, on `docs/architecture-transport-and-modules`.**
-Stacked on the branch above and targeting it, since both edit this file.
+**Docs: transport and module structure. MERGED as `a553535` (#81).**
+Stacked on the branch above and targeted it, since both edit this file.
 `docs/architecture.md` described stdio as the only transport, omitting
 `gingugu serve`, and its module tree listed roughly 30 modules against a package
 of 78 - `handlers/` as 5 files where there are 14, and no `bootstrap/`,
@@ -118,20 +134,22 @@ recommended. See item 1 below. `test_bench.py` goes 11 to 19 tests; the defect
 is pinned as an `xfail(strict=True)`.
 
 **`bench/probes.py` is the second instrument, and the one that matters.** It
-generates a labelled probe set from a real brain - 135 questions where the
-answer is a phrase occurring in exactly one memory of its namespace, verified
-against the corpus rather than judged by hand. That is what makes it 4.5x finer
-than `brain-v1.json`, and it is what caught a fix that the 30-question set had
-called a strict improvement. The generated dataset stays under `bench/local/`;
-only the generator is committed.
+generates a labelled probe set from a real brain - questions where the answer is
+a phrase occurring in exactly one memory of its namespace, verified against the
+corpus rather than judged by hand. That is what makes it 4x finer than
+`brain-v1.json`, and it is what caught a fix that the 30-question set had called
+a strict improvement. The generated dataset stays under `bench/local/`; only the
+generator is committed.
 
-It immediately produced the real size of item 1 (**recall@1 0.2074**) and split
-it into a recall half and a ranking half. See 1a.
+It immediately produced the real size of item 1 and split it into a recall half
+and a ranking half. Its first cut emitted 135 questions including 11 unwinnable
+`deprecated` targets; corrected 2026-09-21 to 126, at **recall@1 0.2143**. See
+1a.
 
 870 passed, 1 xfailed, ruff + black clean.
 
-**Step B, the fix itself, is not started.** Two directions were designed,
-measured and killed this sail. `src/` has not been touched.
+**Step B, the fix itself, is not started.** Six directions have now been
+designed, measured or read, and killed. `src/` has not been touched.
 
 The 2026-09-20 sail wrote no product code either. Three real session transcripts
 were read end to end and measured, and they moved the board more than any sail
@@ -484,16 +502,17 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-## The Board (current: 2026-09-20)
+## The Board (current: 2026-09-21)
 
-**Eight items.** Went 9 to 8: item 1 gained a reproducible offline case that
-also falsified its own prescribed fix, and the old item 8 was struck as a
-phantom (see below). Every item was proven by reading the payload before it was
+**Still eight items.** Nothing entered and nothing left. Item 1 gained its
+measured diagnosis of the pool-miss half (1c) and two more dead fix directions,
+and its numbers were re-baselined after the instrument turned out to carry an
+unwinnable 8.1% (1a). Every item was proven by reading the payload before it was
 boarded - no item below rests on an unverified reading.
 
 | # | Item | Why here |
 |---|---|---|
-| 1 | **Template/sibling noise in retrieval** | Four witnesses, and now a **committed, deterministic, offline repro** in the bench fixture |
+| 1 | **Template/sibling noise in retrieval** | Five witnesses, a **committed, deterministic, offline repro**, and both halves now diagnosed with numbers |
 | 2 | **`credential_get` hands back plaintext** | The vault's own promise is broken by construction; three leaks trace to it |
 | 3 | **Namespace auto-widen on empty** | Now has a live witness: a recall resolved to `default` and returned `count: 0` |
 | 4 | **Provenance vocabulary on `source`** | A stored conclusion is indistinguishable from a stored fact at recall time |
@@ -617,33 +636,98 @@ read time.
 
 The fixture proves the defect exists. It says nothing about its size, and the
 size is the story. `bench/probes.py` generates a labelled probe set from a real
-brain - **135 questions, 45 template families, 6 namespaces** - where every
-question asks for a phrase occurring in exactly ONE memory of its namespace.
-The labels are **verified rather than judged**, which is what lets the set be
-4.5x finer than the 30 hand-labelled questions in `bench/local/brain-v1.json`.
-Regenerate with:
+brain - **126 questions, 6 namespaces** - where every question asks for a phrase
+occurring in exactly ONE memory of its namespace. The labels are **verified
+rather than judged**, which is what lets the set be 4x finer than the 30
+hand-labelled questions in `bench/local/brain-v1.json`. Regenerate with:
 
 ```
 uv run python -m bench --db ~/.local/share/gingugu/memories.db \
     --generate-probes bench/local/template-families-v1.json
 ```
 
-Shipped engine, hybrid, 2521 memories: **mrr 0.2979, recall@1 0.2074,
-recall@5 0.4593.**
+Shipped engine, hybrid, 2542 memories: **mrr 0.3379, recall@1 0.2143,
+recall@5 0.5000, recall@10 0.6667.**
 
 Four times in five, asking for a phrase that exists in exactly one memory does
-not return that memory first. More than half the time it is not in the top five
-at all. Every previous estimate of this item understated it.
+not return that memory first. Half the time it is not in the top five at all.
 
-**And it is two defects, which this board has been conflating:**
+**Read these numbers, not the previous ones.** Until 2026-09-21 this section
+quoted 135 questions at mrr 0.2979 / recall@1 0.2074 / recall@5 0.4593. **Eleven
+of those 135 questions labelled a `deprecated` memory as the correct answer** -
+`search()` filters `confidence != 'deprecated'` by default, so they were
+unwinnable by construction and every one scored zero at recall@10. The generator
+selected targets with no confidence filter. Fixed: deprecated rows are excluded
+from families and targets, and kept in the sibling scan, where they are still
+needed to prove a phrase unique. The old figures are understated by roughly a
+flat 8.1%, so a **before/after comparison made on the old set is still valid**
+(the penalty applies to both arms) but no absolute number from it is.
+
+**And it is three defects, which this board has been conflating into one:**
 
 | | share | nature |
 |---|---|---|
-| target never enters the BM25 candidate pool | **22%** (30/135) | a RECALL failure - no re-ranking can reach it |
-| target in the pool at mean BM25 rank 5.91 | 78% | the RANKING failure this item describes |
+| target in the pool at mean BM25 rank 5.91 | 77.0% (104/135) | the RANKING failure this item describes |
+| target never enters the BM25 candidate pool | **14.8%** (20/135) | a RECALL failure - no re-ranking can reach it |
+| ~~target is `deprecated`~~ | ~~8.1% (11/135)~~ | **not a defect. An instrument bug, now fixed.** |
 
-The pool-miss half is new, is untouched by everything discussed above, and may
-be the larger problem. Do not start a fix without deciding which half it is for.
+The shares are measured against the old 135-question set, because that is the
+set in which all three populations exist. The pool-miss half is untouched by
+everything discussed above. Do not start a fix without deciding which half it is
+for.
+
+### 1c. The pool-miss half, diagnosed - and the fifth dead fix
+
+Measured 2026-09-21 by running the FTS query `search()` builds with **no LIMIT**
+and locating each target in the full ordered match set. The 20 real pool misses
+sit at BM25 rank 43-309 of a ~900-row match set, excluded by
+`pool_size = max(SEMANTIC_COHORT, limit)` = 40.
+
+**They are not beyond semantic reach, and the semantic path still never fires.**
+A target past BM25 rank 40 is not in `bm25_ids`, so `semantic_pool` treats it as
+an eligible entrant - that path exists precisely for this case. It rescued
+**0 of 20** at recall@10.
+
+| of the 20 pool misses | n |
+|---|---|
+| clear the `_SEMANTIC_ENTRY_MIN` floor of 0.55 | 14 |
+| clear the floor and then lose to `ENTRANT_CAP = 5` | **14** |
+| fail the floor outright | 6 |
+
+**The floor gates nothing on a real brain.** Memories clearing 0.55 in the
+target's own namespace, per query: 2, 3, 33, 36, 89, 158, 176, 185, 193, 218,
+223, 228, 237, 303, 329, 359, 456, 491, 615, **767**. Median ~220. The docstring
+says it stops "weak lookalikes"; it admits up to four fifths of a namespace, and
+`ENTRANT_CAP = 5` then cuts five by raw cosine from a band hundreds wide.
+
+**So cosine is flattened by the shared scaffolding exactly as BM25 relevance
+is.** That is the piece this board's central pattern was missing.
+
+**Fifth dead fix: raising `ENTRANT_CAP`.** Swept on the corrected 126-question
+set. mrr degrades monotonically and there is no interior optimum:
+
+| cap | mrr | recall@1 | recall@5 | recall@10 |
+|---|---|---|---|---|
+| **5 (shipped)** | **0.3379** | **0.2143** | **0.5000** | 0.6667 |
+| 10 | 0.3269 | 0.1905 | 0.4841 | 0.6825 |
+| 20 | 0.3205 | 0.1825 | 0.4603 | **0.6905** |
+| 40 | 0.3162 | 0.1905 | 0.4286 | 0.6746 |
+| 80 | 0.3109 | 0.1905 | 0.4206 | 0.6429 |
+| 160 | 0.3079 | 0.1905 | 0.4286 | 0.6190 |
+
+The shape of the failure confirms the diagnosis while killing the remedy:
+recall@10 rises at cap 10 and 20 while recall@1 and recall@5 fall. The missing
+targets do arrive, low, alongside enough noise to push better answers out of the
+top five. Note the cap is not additive - a cohort member's semantic rank is
+computed over `candidates + entrants[:cap]`, so extra entrants move everyone.
+
+**Sixth candidate, also ruled out before building: raising `pool_size`.**
+`semantic_pool` skips pool members beyond the cohort outright
+(`elif r["id"] in bm25_ids: continue`). Widening the pool moves these 20 rows
+from "eligible semantic entrant" to "BM25-only at rank 200", RRF relevance
+~0.117 against ~0.5 for a rank-1 row. It buys pool membership by destroying the
+only path that could have ranked them, and rescuing all 20 needs `pool_size` 400
+of ~900.
 
 ### 1b. Magnitude fusion - measured and DEAD
 
@@ -672,7 +756,7 @@ averages 3550 chars against the leader's 3414.)
 an `xfail(strict=True)`. When the fix lands it XPASSes and fails the suite, which
 is the prompt to remove the marker.
 
-**Read the history before starting. Four candidate fixes are now dead, and two
+**Read the history before starting. Six candidate fixes are now dead, and two
 of them were prescribed by this very item.**
 
 1. **Keep-newest family collapse - falsified 2026-09-20**, by the controlled
@@ -688,20 +772,34 @@ of them were prescribed by this very item.**
    establishes that two of the four retrieval bands carry a constant relevance of
    0.5 whether or not a task hint is supplied, which is the mechanism behind the
    flat synthetic band measured above.
+5. **Raising `ENTRANT_CAP` - falsified 2026-09-21**, see 1c. Swept 5 to 160;
+   mrr degrades monotonically with no interior optimum.
+6. **Raising `pool_size` - ruled out 2026-09-21** on a read of
+   `semantic_pool`, see 1c. It buys pool membership at the cost of the entrant
+   path, which is the only thing that could have ranked these rows.
 
-Two patterns are worth naming, because a fifth candidate will look just as
-obvious as the four above did.
+Three patterns are worth naming, because a seventh candidate will look just as
+obvious as the six above did.
 
 **Every dead fix tried to change which memory WINS** a contest whose scores were
-already flattened. The 22% pool-miss finding in 1a says a large part of this
-item is not about who wins at all - it is about which memories are even
-competing. No re-ranking reaches that half.
+already flattened. The pool-miss finding in 1a says a large part of this item is
+not about who wins at all - it is about which memories are even competing. No
+re-ranking reaches that half.
 
-**Every dead fix was measured on an instrument too coarse to see it.** Two of
-the four looked actively good right before they were killed. Nothing here should
-be believed on fewer than the 135 probes, and a future fix direction that cannot
-be measured that way should be treated as not yet measurable rather than
-promising.
+**Both sides of the hybrid are flattened, not just BM25.** 1c measures the
+semantic half: the 0.55 cosine floor admits up to 767 rows of one namespace, so
+neither the floor nor the cap discriminates within the band. Candidates 5 and 6
+died because they re-cut a flat band. **The only direction left that changes the
+scores rather than re-cutting them is witness 3's** - author the dense short
+form at write time instead of chopping it at read time. That attacks the
+scaffolding itself, and it is the bigger piece of work.
+
+**Every dead fix was measured on an instrument too coarse to see it** - and on
+2026-09-21 the instrument itself turned out to carry an unwinnable 8.1%, see 1a.
+Two of the six looked actively good right before they were killed. Nothing here
+should be believed on fewer than the full probe set, and a future fix direction
+that cannot be measured that way should be treated as not yet measurable rather
+than promising.
 
 ### 2. `credential_get` hands the plaintext secret back into context
 

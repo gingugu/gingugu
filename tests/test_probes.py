@@ -38,7 +38,11 @@ _BOILER = (
 )
 
 
-def _brain(members: list[tuple[str, str]], namespace: str = "proj") -> sqlite3.Connection:
+def _brain(
+    members: list[tuple[str, str]],
+    namespace: str = "proj",
+    confidences: list[Confidence] | None = None,
+) -> sqlite3.Connection:
     from pathlib import Path
 
     from gingugu.config import Config
@@ -56,13 +60,13 @@ def _brain(members: list[tuple[str, str]], namespace: str = "proj") -> sqlite3.C
     )
     ns = NamespaceManager(conn, cfg).get_or_create(namespace)
     store = MemoryStore(conn, embedder=NullEmbeddingProvider())
-    for title, payload in members:
+    for i, (title, payload) in enumerate(members):
         store.create(
             namespace_id=ns.id,
             type=MemoryType.WORKFLOW,
             title=title,
             content=f"{_BOILER} {payload}",
-            confidence=Confidence.VERIFIED,
+            confidence=confidences[i] if confidences else Confidence.VERIFIED,
         )
     return conn
 
@@ -175,6 +179,72 @@ def test_generated_dataset_loads_through_the_bench_schema(tmp_path):
     assert not ds.is_fixture  # real-brain shape: UUIDs, no inline memories
     assert ds.questions
     assert all(q.kind == "single" and len(q.relevant) == 1 for q in ds.questions)
+
+
+def test_deprecated_memories_are_never_labelled_as_the_answer():
+    """An unwinnable label is worse than a missing question.
+
+    ``search()`` filters deprecated rows out unless the caller asks for them, so
+    a deprecated target scores zero at every cutoff no matter how good retrieval
+    gets. Measured on the real brain 2026-09-21: 11 of 135 questions were
+    labelled this way and every one of them scored zero at recall@10.
+    """
+    # Deprecated members come FIRST. `generate` walks a family in order and
+    # stops at QUESTIONS_PER_FAMILY, so putting them last lets a broken
+    # generator pass by never reaching them.
+    members = _family(5)
+    confidences = [Confidence.DEPRECATED] * 2 + [Confidence.VERIFIED] * 3
+    conn = _brain(members, confidences=confidences)
+
+    deprecated = {
+        row["id"] for row in conn.execute("SELECT id FROM memories WHERE confidence = 'deprecated'")
+    }
+    assert len(deprecated) == 2  # the fixture is what the test thinks it is
+
+    dataset = generate(conn)
+    assert dataset["questions"]
+    assert all(q["relevant"][0] not in deprecated for q in dataset["questions"])
+    conn.close()
+
+
+def test_deprecated_siblings_still_disprove_a_phrase_is_unique():
+    """They are excluded as ANSWERS, never as EVIDENCE.
+
+    A phrase shared with a deprecated memory is not unique, so dropping those
+    rows from the sibling scan would emit a label that is simply wrong - a worse
+    defect than the unwinnable-target one the exclusion fixes.
+    """
+    shared = "the telemetry exporter for shard alpha remains unconfigured after the cutover"
+    members = [
+        ("Release handoff: checkout-api v2.1 - state, open items", f"Open item: {shared}."),
+        ("Release handoff: checkout-api v2.2 - state, open items", "Open item: nothing at all."),
+        ("Release handoff: checkout-api v2.3 - state, open items", "Open item: nothing at all."),
+        # Deprecated, and it carries v2.1's sentence verbatim.
+        ("Release handoff: checkout-api v2.0 - state, open items", f"Open item: {shared}."),
+    ]
+    confidences = [Confidence.VERIFIED] * 3 + [Confidence.DEPRECATED]
+    conn = _brain(members, confidences=confidences)
+
+    dataset = generate(conn)
+    for q in dataset["questions"]:
+        phrase = q["query"].removeprefix("what did we say about ").lower()
+        holders = [
+            row["id"]
+            for row in conn.execute("SELECT id, content FROM memories")
+            if phrase in row["content"].lower()
+        ]
+        assert holders == q["relevant"], f"{q['id']}: phrase in {len(holders)} memories, not 1"
+    conn.close()
+
+
+def test_a_family_of_deprecated_siblings_does_not_count_as_a_family():
+    """Family size is a proxy for how many siblings COMPETE at retrieval time,
+    and a deprecated one never enters the candidate pool."""
+    members = _family(MIN_FAMILY)
+    confidences = [Confidence.VERIFIED] * (MIN_FAMILY - 1) + [Confidence.DEPRECATED]
+    conn = _brain(members, confidences=confidences)
+    assert generate(conn)["questions"] == []
+    conn.close()
 
 
 def test_generation_is_deterministic():
