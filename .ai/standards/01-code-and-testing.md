@@ -152,13 +152,29 @@
   error bar.
 - **Generate labels instead of judging them when the property is checkable
   (2026-09-20).** Hand-labelling is what capped that set at 30. `bench/probes.py`
-  gets 135 questions at higher trust by choosing a property a `SELECT` can
+  gets 126 questions at higher trust by choosing a property a `SELECT` can
   prove: a phrase occurring in exactly one memory of a namespace has exactly one
   correct answer. Nobody adjudicates, every candidate is re-verified against the
   corpus before it is emitted, and `tests/test_probes.py` asserts that property
   holds for every generated question - because a large set of confident guesses
   is worse than a small set of honest ones. When a labelling task is blocking a
   measurement, look first for a label that can be verified rather than decided.
+- **A verifiable label can still be an unanswerable one - check the label
+  against what the code under test is ALLOWED to return (2026-09-21).** That
+  same generator drew targets with no confidence filter, so 11 of its 135
+  questions named a `deprecated` memory as the correct answer. Every label was
+  provably correct and 11 of them were unwinnable: `search()` filters
+  `confidence != 'deprecated'` by default, so those questions scored zero at
+  every cutoff no matter how good retrieval got, and they understated the whole
+  set by a flat 8.1% (recall@1 0.2074 where the answerable figure is 0.2143).
+  Label correctness and label reachability are two different properties, and the
+  generated-label trick above only buys the first. **Ask what the engine is
+  designed to withhold, and do not make those rows the answer.** The fix has a
+  trap of its own worth copying: deprecated rows had to stay in the *sibling*
+  scan even while leaving the *target* pool, because a phrase shared with a
+  deprecated memory is still not unique - excluding them from the evidence would
+  have manufactured wrong labels, which is the worse defect. Exclude a row from
+  being the answer, never from being evidence.
 - **The same blind spot covers types, not just behaviour - second confirmed
   instance (2026-09-02).** Because `offline_embeddings` is autouse, no test had
   ever called `embeddings.cosine` with real encoder output. fastembed returns a
