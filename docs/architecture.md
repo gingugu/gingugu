@@ -2,7 +2,14 @@
 
 ## Overview
 
-Gingugu is a **Python MCP server** using **SQLite + FTS5** for persistent, structured, searchable long-term memory. It runs locally via stdio transport and works with any MCP client — Windsurf, Claude Code, Claude Desktop, Cursor, Cline, and friends.
+Gingugu is a **Python MCP server** using **SQLite + FTS5** for persistent, structured, searchable long-term memory. It works with any MCP client — Windsurf, Claude Code, Claude Desktop, Cursor, Cline, and friends.
+
+Two transports ship. **stdio** is the default (`gingugu`): the client spawns the
+server as a child process, and the brain stays entirely on one machine.
+**Streamable HTTP** (`gingugu serve`) puts the same tool surface behind a
+Bearer-token-authenticated endpoint with a `/healthz` probe, for a single brain
+shared across machines or clients. The transport is the only thing that differs;
+tools, storage and ranking are identical on both.
 
 ---
 
@@ -15,7 +22,7 @@ graph LR
     end
 
     subgraph MCP Server Process
-        B[Server Layer<br/>stdio transport]
+        B[Server Layer<br/>stdio · streamable HTTP]
         C[Tool Handlers]
         D[Search Engine]
         E[Decay Engine]
@@ -1363,42 +1370,119 @@ def migrate(conn):
 
 ## Module Structure
 
+Grouped by concern rather than alphabetically. Modules split where they crossed
+the 300-line limit keep their sibling beside them, since the split line is
+usually the interesting part.
+
 ```
 src/gingugu/
-├── __init__.py           # Package init + version
-├── server.py             # MCP server setup + tool registration
-├── handlers/             # Tool handler implementations (split to honor 300-line limit)
-│   ├── __init__.py       # Handler registry / dispatch table
-│   ├── memory.py         # store, recall, update, forget, context
-│   ├── search.py         # search, stats
-│   ├── relations.py      # relate, consolidate
-│   ├── namespaces.py     # namespaces
-│   └── credentials.py    # credential_store/get/list/delete
-├── models.py             # Pydantic models / data schemas
-├── database.py           # SQLite connection, migrations, FTS5 setup
-├── storage.py            # CRUD operations for memories
-├── search.py             # True hybrid engine: BM25 + semantic pools, RRF fusion
-├── search_common.py      # Shared SQL columns + WHERE-fragment builders
-├── search_filters.py     # advanced_search: picks the strategy sort_by asks for
-├── search_listing.py     # ordered retrieval: by column, by score, by match set, by id
-├── relations.py          # Relationship management
-├── decay.py              # Decay scoring (+ the parts behind it) + staleness detection
-├── excerpt.py            # Reading inside one memory: offsets + literal matches
-├── consolidation.py      # Merge/summarize/deduplicate logic
-├── duplicate_scan.py     # Read-only near-duplicate cluster detection
-├── proposals.py          # The dream pass's queue; owns that table and nothing else
-├── dream/                # Deterministic consolidation: graph, centrality, clusters, orphans
-├── dream_cli.py          # gingugu dream [--if-idle]: the pass from a shell or a scheduler
-├── dream_schedule.py     # guarded_run(): the idle gate + the lock, shared by CLI and tool
-├── activity.py           # One-row heartbeat: when the brain was last USED, not last alive
-├── dream_lock.py         # Single-instance lock for the pass; a row, not a lockfile
-├── session.py            # Per-session id for access_log's co-access key
-├── transactions.py       # atomic(): one transaction across store + relations
-├── context.py            # Auto-context generation for session start
-├── context_buckets.py    # Where memory_context's buckets get their rows
-├── namespaces.py         # Namespace CRUD + auto-detection
-└── credentials.py        # Credential vault: CRUD + keyring integration
+├── __init__.py             # Package init + version
+│
+│   # ── Entry points ──────────────────────────────────────────────
+├── server.py               # MCP server; stdio / serve / promote / init / ui dispatch
+├── serve.py                # gingugu serve: streamable HTTP + Bearer auth + /healthz
+├── webui.py                # gingugu ui: serves the built Memory Explorer bundle
+├── promote.py              # gingugu promote: local "gold" -> a central brain
+├── config.py               # Config + cross-platform DB path (platformdirs)
+│
+│   # ── Onboarding (client-side; not part of the server) ──────────
+├── bootstrap/
+│   ├── __init__.py         # gingugu init: hooks + the /sink-the-ship skill
+│   ├── _files.py           # Write primitives; never destroy user bytes without a copy
+│   ├── global_rules.py     # The managed protocol block in CLAUDE.md / AGENTS.md
+│   ├── settings.py         # Non-destructive .claude/settings.json merge
+│   └── theme.py            # The 90s boot sequence; degrades to monochrome off-TTY
+│
+│   # ── Storage ───────────────────────────────────────────────────
+├── database.py             # The connection alone: WAL, foreign keys, busy timeout
+├── migrations/
+│   ├── __init__.py         # Ordered registry, LATEST_SCHEMA_VERSION, migrate()
+│   ├── schema.py           # Structural migrations: tables, indexes, FTS5 triggers
+│   ├── claim_derivation.py # Row migrations + claim backfill
+│   └── runtime.py          # Coordination tables: activity, dream_lock
+├── models.py               # Data models + MEMORY_COLUMNS, the one column list
+├── storage.py              # CRUD for the memories row and its transaction boundary
+├── storage_derived.py      # The four satellite tables a memory drags along
+├── tags.py                 # tags / memory_tags
+├── access.py               # access_log; record (a real hit) vs touch (reactivation)
+├── transactions.py         # atomic(): one BEGIN IMMEDIATE across components
+├── portability.py          # Namespace export / import; vectors recomputed, never carried
+│
+│   # ── Retrieval ─────────────────────────────────────────────────
+├── search.py               # Hybrid engine: BM25 pool, RRF fusion, composite re-rank
+├── semantic_pool.py        # The cosine cohort; fixed constants, not sized by limit
+├── search_common.py        # Shared SQL columns + WHERE-fragment builders
+├── search_filters.py       # advanced_search: picks the strategy sort_by asks for
+├── search_listing.py       # Ordered retrieval: by column, score, match set, or id
+├── embeddings.py           # Vector generation; owns the one embedding_input() recipe
+├── embedding_sync.py       # Keeps memory_embeddings in step with memories
+├── similarity.py           # Absolute payload-vs-memory similarity for write-time hints
+├── decay.py                # Composite scoring, freshness anchor, dormancy, age labels
+├── excerpt.py              # Reading inside one memory: offsets + literal matches
+├── context.py              # memory_context: pinned tier + quota'd intent buckets
+├── context_buckets.py      # Where those buckets' rows come from, one fetcher per intent
+│
+│   # ── Graph ─────────────────────────────────────────────────────
+├── relations.py            # Typed edges + hub-dampened 1-hop traversal
+├── relation_repair.py      # Edge repair: retype, reverse, delete
+├── consolidation.py        # merge / summarize / deduplicate, inside one transaction
+├── duplicate_scan.py       # The read-only suggest half; nothing here writes
+│
+│   # ── Dream pass (deterministic, offline) ───────────────────────
+├── dream/
+│   ├── __init__.py         # The pass itself
+│   ├── graph.py            # Loads the undirected relation graph once per run
+│   ├── centrality.py       # PageRank: a computed answer to "what is core"
+│   ├── clusters.py         # Label propagation, deliberately not Louvain
+│   └── orphans.py          # Reconnection candidates for memories no edge touches
+├── proposals.py            # The pass's queue; owns that table and nothing else
+├── dream_cli.py            # gingugu dream [--if-idle]
+├── dream_schedule.py       # guarded_run(): the idle gate + the lock
+├── dream_lock.py           # Single-instance lock; a row, not a lockfile
+├── activity.py             # Heartbeat: when the brain was last USED, not last alive
+│
+│   # ── Involuntary recall (UserPromptSubmit hook) ────────────────
+├── recall_gate.py          # Decision half: pure arithmetic, built around refusing
+├── recall_sweep.py         # I/O half: read-only cosine sweep + BM25 lexical matches
+├── prompt_hook.py          # gingugu hook prompt: the entry point
+│
+│   # ── Claims (checkable state assertions) ───────────────────────
+├── claims.py               # Extracts repo-qualified PR/MR refs from prose
+├── claim_qualify.py        # Decides which repo a bare ref names
+├── claim_sync.py           # Write path: persistence, contradiction, resolution
+├── claim_queries.py        # Read path: backlog enumeration + the shared filter
+├── claim_rederive.py       # Re-derivation that preserves resolution state
+│
+│   # ── Stats + misc ──────────────────────────────────────────────
+├── stats.py                # Counts, confidence, dormancy, hygiene, review sweep
+├── graph_stats.py          # Relation-graph health: edges, degree, orphans, spread cap
+├── size_stats.py           # The character cost the counts do not show
+├── staleness.py            # Advisory review hints for point-in-time memories
+├── namespaces.py           # Namespace CRUD; a default_repo change re-derives claims
+├── credentials.py          # OS-keychain credential vault
+├── session.py              # Per-session id for access_log's co-access key
+│
+│   # ── MCP tool handlers (split to honor the 300-line limit) ─────
+└── handlers/
+    ├── __init__.py         # Handler registry / dispatch table
+    ├── memory.py           # store / update
+    ├── forget.py           # The one destructive tool
+    ├── hints.py            # Write-time similar + relation hints
+    ├── recall.py           # recall / context
+    ├── search.py           # search
+    ├── excerpt.py          # excerpt
+    ├── relations.py        # relate / unrelate / edges
+    ├── relation_ops.py     # Edge repair operations
+    ├── consolidate.py      # consolidate
+    ├── dream.py            # dream
+    ├── credentials.py      # credential_store / get / list / delete
+    ├── admin.py            # namespaces, stats, export, import
+    └── helpers.py          # Shared response shaping
 ```
+
+Dev-only tooling lives at the repo root and never ships in the wheel: `bench/`
+(the golden-set retrieval benchmark) and `ui/` (the Memory Explorer source,
+whose built bundle is what `webui.py` serves).
 
 ---
 
