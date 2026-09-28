@@ -27,6 +27,30 @@ hybrid:
 `src/` is not touched. The fix - chunked embeddings - is the next PR, stacked
 on this one, and it is a migration.
 
+**Board item 1d, the fix: long memories get a vector for their tail, on
+`feature/chunked-embeddings` (stacked on the branch above).** Migration 013 adds
+`memory_chunks`, additive: each memory is cut into window-sized pieces on the
+encoder's own tokens, the head vector in `memory_embeddings` is unchanged, and
+pieces 1..n get vectors. At query time a keyword-pool member is scored on ONE
+piece - the one holding the most distinct query words, ties to the head. Cosine
+never chooses. Memories outside the keyword pool keep their head vector. New
+module `chunking.py`; new command `gingugu embed` runs the backfill to
+completion (an existing brain needs it once, ~5 minutes). Backends without token
+offsets (Ollama) keep head-only search. 921 passed, 1 xfailed; both guards
+proven by mutation. See 1d for why lexical choice and not best match.
+
+Production code, migrated real-brain copy, 383 questions, hybrid:
+
+| position | mrr before | mrr after | recall@1 before | recall@1 after |
+|---|---|---|---|---|
+| head | 0.337 | 0.323 | 0.209 | 0.202 |
+| middle | 0.267 | 0.274 | 0.165 | 0.173 |
+| tail | 0.197 | **0.256** | 0.102 | **0.157** |
+| all | 0.2675 | **0.284** | 0.159 | **0.178** |
+
+`brain-v1.json` (30 hand-labelled) moves under one question: noise. +7 ms per
+search (88 -> 95). **After merging, run `gingugu embed` once on the live brain.**
+
 ## Recently Completed
 
 **Probe set excludes deprecated targets. MERGED as `ea5f749` (#82).** Board
@@ -517,10 +541,11 @@ tranche soaked locally for a full week, the release was cut ahead of them.
 
 ## The Board (current: 2026-09-27)
 
-**Still eight items.** Nothing entered and nothing left. Item 1 gained a new
+**Nine items.** One entered (9, a paraphrase question set). Item 1 gained a new
 mechanism (1d): the embedder never sees past a memory's first 512 tokens, and
 the probe set could not see that, because it only ever asked about openings.
-Its numbers are re-baselined per position. Before that, item 1 gained its
+Its numbers are re-baselined per position, and 1d's fix is built: tail mrr
+0.197 -> 0.256. Item 1 stays open - the sibling-noise half is untouched. Before that, item 1 gained its
 measured diagnosis of the pool-miss half (1c) and two more dead fix directions,
 and its numbers were re-baselined after the instrument turned out to carry an
 unwinnable 8.1% (1a). Every item was proven by reading the payload before it was
@@ -536,6 +561,7 @@ boarded - no item below rests on an unverified reading.
 | 6 | Governance bands | Unblocked - 48 decided proposals to calibrate against |
 | 7 | `--adopt` + manage repo CLAUDE.md / AGENTS.md | Fixes a drift class |
 | 8 | Hygiene - grew again | `serve --help` + `MEMORY_*` naming + pin skew + duplicated stats globals + bulk relate |
+| 9 | **A paraphrase question set, from the access log** | Every probe is a verbatim-phrase lookup, which favours BM25; the case semantic search exists for is unmeasured |
 
 **Struck 2026-09-20: the old item 8, "Type-weighted spreading activation".** It
 never existed as a distinct item. That row entered in `0cef296` with no body and
@@ -782,11 +808,30 @@ is in In Flight above.
 
 **This moves the fix direction.** Witness 3's write-time dense summary cannot
 reach a tail phrase - a summary drops exactly the detail a tail query asks for.
-**Next: chunked embeddings**, one vector per ~510-token window and a memory
-scored by its best chunk. Tail chunks carry no scaffolding, so it should also
-un-flatten cosine. It needs a chunk index on `memory_embeddings` (a migration)
-and a re-embed; the dedupe hint's 0.80 cosine cutoff was calibrated on truncated
-vectors and has to be re-checked.
+
+**The fix, built 2026-09-27 - and the obvious version of it is dead.** Pieces
+of ~510 tokens (overlap 1/8 of the window), each with a vector. Five ways of
+using them were measured on a `.backup` copy before any code reached `src/`
+(mrr head / tail / all, shipped 0.337 / 0.197 / 0.2675):
+
+| how a memory's pieces count | head | tail | all |
+|---|---|---|---|
+| best-matching piece, everywhere | 0.298 | 0.238 | 0.2675 |
+| best-matching piece, entrants only | 0.344 | 0.201 | 0.2710 |
+| best-matching piece, keyword pool only | 0.302 | 0.243 | 0.2669 |
+| best-piece ranking as a third RRF list | 0.212 | 0.217 | 0.2109 |
+| **piece holding the most query words, keyword pool only** | 0.320 | **0.255** | **0.2821** |
+
+Best-match loses because every long sibling gets several chances to match any
+query, and those lucky pieces bury the memories whose answer is in their head -
+the tail gain is paid back in full. The third-list variant is worse still: it
+compresses every relevance, and freshness decides even more. **Choosing the
+piece lexically gives each memory exactly one shot**, and it is the one that
+shipped. It is not free: head mrr gives up 0.014 (one question at recall@1) for
++0.058 on the tail.
+
+Not re-checked because not changed: the dedupe hint, involuntary recall and
+the dream pass still read head vectors only, so their calibrations stand.
 
 ### 1b. Magnitude fusion - measured and DEAD
 
@@ -815,8 +860,8 @@ averages 3550 chars against the leader's 3414.)
 an `xfail(strict=True)`. When the fix lands it XPASSes and fails the suite, which
 is the prompt to remove the marker.
 
-**Read the history before starting. Six candidate fixes are now dead, and two
-of them were prescribed by this very item.**
+**Read the history before starting. Eight candidate fixes are now dead, two of
+them prescribed by this very item - and one fix is live (1d, lexical pieces).**
 
 1. **Keep-newest family collapse - falsified 2026-09-20**, by the controlled
    experiment above. It makes the oldest member unreachable. This item
@@ -836,9 +881,13 @@ of them were prescribed by this very item.**
 6. **Raising `pool_size` - ruled out 2026-09-21** on a read of
    `semantic_pool`, see 1c. It buys pool membership at the cost of the entrant
    path, which is the only thing that could have ranked these rows.
+7. **Best-matching piece - falsified 2026-09-27**, see 1d. Net zero: the head
+   pays back the tail's gain.
+8. **Piece ranking as a third RRF list - falsified 2026-09-27**, see 1d. All
+   mrr 0.2109.
 
-Three patterns are worth naming, because a seventh candidate will look just as
-obvious as the six above did.
+Three patterns are worth naming, because the next candidate will look just as
+obvious as the eight above did.
 
 **Every dead fix tried to change which memory WINS** a contest whose scores were
 already flattened. The pool-miss finding in 1a says a large part of this item is
@@ -849,10 +898,12 @@ re-ranking reaches that half.
 semantic half: the 0.55 cosine floor admits up to 767 rows of one namespace, so
 neither the floor nor the cap discriminates within the band. Candidates 5 and 6
 died because they re-cut a flat band. Until 2026-09-27 this said the only direction left was
-witness 3's write-time summary. **1d supersedes that:** the vectors are built
-from each memory's first 510 tokens, so the semantic side cannot score what it
-was never shown. Chunked embeddings change what goes INTO the vector rather than
-re-cutting its output, and are the next build.
+witness 3's write-time summary. **1d supersedes that:** the vectors were built
+from each memory's first 510 tokens, so the semantic side could not score what it
+was never shown. Pieces change what goes INTO the vector rather than re-cutting
+its output, and they are the first fix on this item to measure net-positive.
+What remains is the sibling-noise half proper: the fixture's xfail still fails,
+because it is bm25-only and its memories are short.
 
 **Every dead fix was measured on an instrument too coarse to see it** - and on
 2026-09-21 the instrument itself turned out to carry an unwinnable 8.1%, see 1a.
@@ -1022,6 +1073,27 @@ instance log to an unpinned `child_of`.
   One design call to settle first: **all-or-nothing, not best-effort** - a
   half-applied relation set is the graph state hardest to notice and hardest to
   repair, and a trustworthy graph is the point of relations.
+
+### 9. A paraphrase question set, from the access log
+
+Entered 2026-09-27. Every generated probe is `what did we say about <verbatim
+phrase>` about one memory: a lexical lookup that BM25 is built for. The query
+semantic search exists for - the user's own words for a thing, which share no
+surface with how it was stored (item 5) - is not measured anywhere. 1d's pieces
+were validated on verbatim phrases and on the 30 hand-labelled questions, and
+that second set is the only non-verbatim evidence in the repo.
+
+The size of the set is not the problem; 383 questions resolve a change of about
+four per bucket. Its variety is. Direction, not designed: real queries, each
+labelled by the memory the same session then acted on (updated, related, or
+fetched by id). Deterministic, no model judging, so it keeps the design law.
+
+**The raw material does not exist yet.** `access_log.context` holds the MCP
+session id (`access.py`), not the query - so the log says which memories a
+session read and never what it asked. Step one is recording the query text of
+recall and search calls (local, in the same file as the memories themselves).
+Open: what counts as "acted on", and how to keep a session that simply re-read
+the top hit from labelling that hit correct by default.
 
 ### Standing rules
 

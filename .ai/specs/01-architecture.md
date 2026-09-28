@@ -32,7 +32,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
 2. **Handlers** (`handlers/`) - thin adapters that validate input, call the core
    modules, and return structured dicts. Split by domain: `memory`, `search`,
    `relations`, `admin`, `credentials`, plus `helpers`.
-3. **Core** - `storage`, `search`, `embeddings`, `context`, `relations`,
+3. **Core** - `storage`, `search`, `embeddings`, `chunking`, `context`, `relations`,
    `consolidation`, `decay`, `stats`, `namespaces`, `portability`. `storage`
    owns the `memories` row only; the satellite tables it drags along have their
    own owners (`tags`, `access`, `embedding_sync`, `claim_sync`), reached
@@ -431,6 +431,26 @@ read-only suggest half against the write half - to keep both under the
   and stay out of the semantic ranking, so a deep call cannot reshuffle a shallow
   one. Ties break on id for the same reason: RRF maps swapped rank pairs to
   identical floats, and the winner must not depend on set iteration order.
+- **A long memory gets vectors for what the encoder never read, and cosine never
+  picks among them.** The encoder truncates at a fixed token window - 512 for
+  bge-small, 510 of content - with no error and no log; measured on a real
+  brain, 79.1% of memories are longer than that, so before this the semantic
+  half of search had never seen a memory's tail at all. `chunking.py` splits a
+  memory into window-sized pieces cut on the encoder's own tokens (migration
+  013, `memory_chunks`, additive - the head vector in `memory_embeddings` is
+  untouched), and at query time a keyword-pool member is scored on exactly ONE
+  piece: the one holding the most distinct query words, ties to the head.
+  Scoring by the best-matching piece was measured first and rejected - it is a
+  wash, because every long sibling then gets several chances to match any
+  query, and the head's matches get buried by the tail's gain. Memories outside
+  the keyword pool keep their head vector; measured there, pieces add nothing.
+  Only a backend exposing `token_offsets` + `max_tokens` (`FastEmbedProvider`,
+  via a no-truncation copy of fastembed's own tokenizer) is pieced - Ollama and
+  disabled embeddings stay head-only. `gingugu embed` runs the backfill to
+  completion for an existing store instead of one small batch per server
+  start. Measured on a real brain copy, 383 position-stratified questions:
+  hybrid mrr 0.2675 → 0.284, tail mrr 0.197 → 0.256, head 0.337 → 0.323,
+  +7ms/search.
 - **`sort_by` chooses the retrieval strategy; it is never applied on top of
   one.** A sort layered over a pool that was truncated by a *different* ordering
   reorders a biased sample, not the corpus - so whatever lost the earlier cut

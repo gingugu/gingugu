@@ -77,6 +77,8 @@ Usage:
                                memory graph and stage what it finds for review.
                                Writes only to the proposal queue, never to
                                memories - safe to put on a cron.
+  gingugu embed                Finish embedding the whole store in one run (the
+                               server does one small batch per startup).
   gingugu hook prompt          Involuntary recall: reads a UserPromptSubmit
                                event on stdin and surfaces memories the prompt
                                woke. Wired by `gingugu init`; not run by hand.
@@ -99,6 +101,7 @@ def main() -> None:
     ``gingugu init``    → bootstrap a repo's Claude Code hooks / rules file.
     ``gingugu ui``      → launch the Memory Explorer web UI in a browser.
     ``gingugu dream``   → run the consolidation pass; stages proposals only.
+    ``gingugu embed``   → run the embedding backfill to completion.
     """
     import sys
 
@@ -134,6 +137,10 @@ def main() -> None:
         from .dream_cli import main as dream_main
 
         raise SystemExit(dream_main(sys.argv[2:]))
+    if cmd == ["embed"]:
+        from .embed_cli import main as embed_main
+
+        raise SystemExit(embed_main(sys.argv[2:]))
     if cmd == ["hook"]:
         # Runs on the user's keystroke via a Claude Code hook. Reads the event
         # payload on stdin; never raises, never blocks a prompt.
