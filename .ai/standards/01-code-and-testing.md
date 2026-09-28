@@ -186,6 +186,17 @@
   however many questions are generated. **Stratify generated questions by every
   axis the code under test treats unevenly - position, length, age - and report
   each stratum, not only the mean.**
+- **"Score it by its best part" is a multiple-comparisons trap (2026-09-27).**
+  Splitting long memories into pieces and scoring each memory by its
+  best-matching piece looked like the obvious fix for a truncated encoder, and it
+  measured net zero: every long memory got several chances to match any query,
+  so lucky pieces buried the short, correct matches and the head lost exactly
+  what the tail gained. Choosing the piece by a signal the score does not
+  measure (which piece holds the query's words), so every candidate gets ONE
+  shot, turned the same vectors into the first net gain on that item. **When a
+  candidate's score becomes a max over N samples, candidates with more samples
+  win for having more samples. Pick the sample by an independent signal, or
+  correct for N.**
 - **The same blind spot covers types, not just behaviour - second confirmed
   instance (2026-09-02).** Because `offline_embeddings` is autouse, no test had
   ever called `embeddings.cosine` with real encoder output. fastembed returns a

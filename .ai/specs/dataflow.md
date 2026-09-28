@@ -7,7 +7,8 @@ memory_store(content, title, type, namespace, tags, confidence)
   → handlers/memory.py validates + defaults (confidence="inferred" if unset)
   → storage.py inserts into `memories`
   → FTS5 trigger mirrors the row into the full-text index
-  → embeddings.py computes the semantic vector
+  → embeddings.py computes the semantic vector, and chunking.py pieces it into
+    `memory_chunks` when the backend exposes token offsets (head-only otherwise)
   → claim_sync.sync() derives state claims from title+content into `memory_claims`
      (claim_qualify resolves each ref's repo: URL > repo named beside the ref >
       a binding stated elsewhere in this same memory > the namespace default)
@@ -146,6 +147,12 @@ memory_recall(query, namespace | "ns1,ns2,…", filters)
     means something against a fixed cohort, so sizing it by the caller's row
     count made relevance move with `limit`. `search(q, k)` is now exactly the
     first k of `search(q, K)`. Ties break on id, not on set iteration order
+  → a cohort member past the encoder's window is scored on ONE piece from
+    `memory_chunks`, chosen lexically - the piece holding the most distinct
+    query words, ties to the head; cosine never chooses. Entrants (outside the
+    keyword pool) keep their head vector; only a backend exposing token offsets
+    pieces memories at all, so Ollama/disabled embeddings stay head-only
+    (see `chunking.py`)
   → multi-namespace: one ranked SQL pass over all listed namespaces
     (IN clause); limit caps the TOTAL list (unlike context's per-namespace limit)
   → blend with recency + confidence + access frequency
@@ -161,6 +168,19 @@ memory_recall(query, namespace | "ns1,ns2,…", filters)
     maintained since it was written reads "7 weeks ago (updated just now)"
     instead of looking 7 weeks stale
 ```
+
+A cohort member longer than the encoder's fixed token window carries pieces in
+`memory_chunks` (migration 013): window-sized slices cut on the encoder's own
+tokens, each with its own vector. At query time exactly one piece stands in for
+the memory - the one holding the most distinct query words, ties to the head -
+never the piece cosine ranks best. Scoring by best match was measured first and
+rejected: every long sibling then gets several chances to match, and the tail's
+gain comes straight out of the head's score. Memories outside the keyword pool
+are unaffected, since measured there pieces added nothing; only
+`FastEmbedProvider` exposes the token offsets pieces need, so Ollama and
+disabled embeddings stay head-only. Real brain copy, 383 position-stratified
+questions: hybrid mrr 0.2675 → 0.284, tail mrr 0.197 → 0.256, head 0.337 →
+0.323, +7ms/search.
 
 `memory_search`'s `sort_by` selects the retrieval path rather than reordering
 one:

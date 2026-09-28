@@ -62,6 +62,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Long memories get a vector for their tail, and a keyword match picks which
+  piece search compares.** The encoder reads a fixed token window - 512 for
+  the default bge-small - and truncates whatever does not fit, silently.
+  Measured on a real brain, 79.1% of memories are longer than that, so the
+  semantic half of hybrid search had never seen anything past a memory's
+  opening.
+
+  Every memory is now split into window-sized pieces cut on the encoder's own
+  tokens, with a small overlap so a phrase spanning a boundary still lands
+  whole in one piece. Piece 0 is the head, whose vector already lives in
+  `memory_embeddings`, unchanged; every piece past it gets its own vector in a
+  new `memory_chunks` table (schema migration 013, additive - `PRAGMA
+  user_version` moves to 13). At query time a memory in the keyword pool is
+  scored on exactly ONE piece - the one holding the most distinct query
+  words, ties to the head - never the piece cosine likes best. Scoring by
+  best match was measured first and rejected: every long sibling then gets
+  several chances to match a query, and the head's matches get buried by the
+  tail's gain. A memory outside the keyword pool keeps its head vector, since
+  measured there pieces add nothing.
+
+  Only a backend that exposes token offsets is pieced (`FastEmbedProvider`,
+  via a no-truncation copy of fastembed's own tokenizer); Ollama and disabled
+  embeddings are unaffected and keep searching on the head alone.
+
+  Measured on a real brain copy, 383 position-stratified questions: mrr
+  0.2675 -> 0.284, recall@1 0.159 -> 0.178, recall@5 0.397 -> 0.423; tail mrr
+  0.197 -> 0.256, head 0.337 -> 0.323. +7ms/search.
+
+- **`gingugu embed` finishes the backfill in one run.** The server embeds one
+  small batch per startup on purpose, so a cold model download never blocks
+  the process an editor is waiting on - the wrong default right after an
+  upgrade that changes what gets embedded, where an existing brain would
+  otherwise need one restart per batch. `gingugu embed [--batch-size N]` runs
+  the same backfill to completion instead, embedding both vectors and pieces;
+  about five minutes on an existing brain of a few thousand memories. Safe to
+  interrupt and re-run: every batch commits, and an already-current memory is
+  never re-selected.
+
 - **The benchmark generates its own labelled probe sets
   (`bench/probes.py`, `python -m bench --generate-probes`; dev-only, not
   shipped in the package).** Hand-labelling caps a golden set at a few dozen
