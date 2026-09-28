@@ -1,57 +1,31 @@
 # Project Status
 
-_Last updated: 2026-09-27_
+_Last updated: 2026-09-28_
 
 ## In Flight
 
-**Board item 1d: the probe set was blind to embedding truncation, on
-`feature/position-stratified-probes`.** The embedder (bge-small via fastembed)
-reads only the first 512 tokens of `embedding_input` and truncates the rest
-silently, and 79.1% of the real brain runs past that window (median 782
-tokens). `bench/probes.py` took the FIRST unique phrase in each target, so all
-126 probe phrases sat inside the window (median token 77) - the instrument
-could not see the defect. Every target is now probed at its head, middle and
-tail, labelled by `kind`. The head phrase is the old rule, so head figures stay
-comparable. Six tests in `tests/test_probes_position.py`. See 1d.
-
-**Baseline of record, stratified**, 383 questions over 129 targets, real brain,
-hybrid:
-
-| position | mrr | recall@1 | recall@5 | recall@10 |
-|---|---|---|---|---|
-| head | 0.337 | 0.209 | 0.519 | 0.667 |
-| middle | 0.267 | 0.165 | 0.362 | 0.543 |
-| tail | **0.197** | **0.102** | 0.307 | 0.496 |
-| all | 0.267 | 0.159 | 0.397 | 0.569 |
-
-`src/` is not touched. The fix - chunked embeddings - is the next PR, stacked
-on this one, and it is a migration.
-
-**Board item 1d, the fix: long memories get a vector for their tail, on
-`feature/chunked-embeddings` (stacked on the branch above).** Migration 013 adds
-`memory_chunks`, additive: each memory is cut into window-sized pieces on the
-encoder's own tokens, the head vector in `memory_embeddings` is unchanged, and
-pieces 1..n get vectors. At query time a keyword-pool member is scored on ONE
-piece - the one holding the most distinct query words, ties to the head. Cosine
-never chooses. Memories outside the keyword pool keep their head vector. New
-module `chunking.py`; new command `gingugu embed` runs the backfill to
-completion (an existing brain needs it once, ~5 minutes). Backends without token
-offsets (Ollama) keep head-only search. 921 passed, 1 xfailed; both guards
-proven by mutation. See 1d for why lexical choice and not best match.
-
-Production code, migrated real-brain copy, 383 questions, hybrid:
-
-| position | mrr before | mrr after | recall@1 before | recall@1 after |
-|---|---|---|---|---|
-| head | 0.337 | 0.323 | 0.209 | 0.202 |
-| middle | 0.267 | 0.274 | 0.165 | 0.173 |
-| tail | 0.197 | **0.256** | 0.102 | **0.157** |
-| all | 0.2675 | **0.284** | 0.159 | **0.178** |
-
-`brain-v1.json` (30 hand-labelled) moves under one question: noise. +7 ms per
-search (88 -> 95). **After merging, run `gingugu embed` once on the live brain.**
+**Board item 2: `credential_get` keeps secrets out of context, on
+`feature/credential-get-redact`.** Secret values are redacted by default - a
+secret field is `{"is_secret": true, "redacted": true}` and a redacted get
+never reads the keychain. `into=<absolute path>` writes exactly one secret to a
+0600 file (raw value, `O_NOFOLLOW`, an existing file tightened) and returns only
+path, bytes and mode; every refusal - relative path, missing parent, directory,
+symlink, non-secret field, locked keychain, empty entry - happens before a byte
+is written. `reveal=true` is the old behaviour as an explicit opt-in, exclusive
+with `into`. `into` is refused under `gingugu serve` via the new
+`ServerContext.transport`: over HTTP it would be an arbitrary file write on the
+server's disk. New module `secret_file.py`. Breaking, in `[Unreleased]`. The
+protocol installed by `gingugu init` (and this repo's CLAUDE.md / AGENTS.md)
+now teaches `into`. 947 passed, 1 xfailed; seven guards proven by mutation.
 
 ## Recently Completed
+
+**Board item 1d: tail-aware semantic search. MERGED as `26821bd` (#83, the
+position-stratified probe set) and `8e951e3` (#84, lexically-selected embedding
+pieces, migration 013).** Verified on the LIVE brain after `gingugu embed`
+(2026-09-28, 6137 pieces over 2692 memories), 383 stratified questions, hybrid
+mrr: all 0.285, head 0.324, middle 0.274, tail 0.256 - the migrated copy's
+figures to within 0.001. Pre-fix: all 0.2675, tail 0.197. See 1d.
 
 **Probe set excludes deprecated targets. MERGED as `ea5f749` (#82).** Board
 item 1a. 11 of 135 questions labelled a `deprecated` memory as the answer and
@@ -573,6 +547,12 @@ is live and ranks the traversal at `relations.py:155`. Memory type (as opposed t
 relation type) genuinely does not influence spreading activation today, but the
 struck row did not ask for that; if it is ever wanted it enters as a new item
 with its own body.
+
+**Item 1 is PARKED (2026-09-28).** Its measured-positive fix (1d) shipped; the
+remaining sibling-noise half has no live hypothesis after eight dead fixes, and
+without a target there is nothing to build. Re-open it only with a new
+hypothesis, measured on the full 383-question stratified set. **Item 2 is in
+flight** (see In Flight).
 
 **Recommended sequencing: 1, then 2, then 3, then 4 and 5 together.**
 

@@ -28,7 +28,9 @@ AI client (Claude Code / Cursor / Windsurf / …)
    (`gingugu serve`), which wraps the same server in a Starlette app with
    Bearer-token auth middleware and a `/healthz` probe. The `credential_*` tools
    are gated by `MEMORY_CREDENTIALS_ENABLED` so a shared instance can omit the
-   secret vault.
+   secret vault. `ServerContext.transport` records which transport built the
+   server (`"stdio"` / `"http"`); `credential_get(into=…)` refuses under HTTP,
+   where a caller-named path would be a file write on the server's disk.
 2. **Handlers** (`handlers/`) - thin adapters that validate input, call the core
    modules, and return structured dicts. Split by domain: `memory`, `search`,
    `relations`, `admin`, `credentials`, plus `helpers`.

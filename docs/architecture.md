@@ -1295,7 +1295,9 @@ hitting Keychain. With `is_secret`:
 
 - **`credential_list`** shows service names + non-secret fields (URLs,
   usernames) without touching Keychain.
-- **`credential_get`** pulls everything — secret values from Keychain on demand.
+- **`credential_get`** returns the bundle with secret values **redacted**. To use
+  a secret, `into` writes one field to a 0600 file; `reveal` returns values
+  inline as a deliberate, visible act.
 - **Default: `is_secret=true`** for safety. Fields are assumed secret unless
   explicitly marked otherwise.
 
@@ -1323,13 +1325,29 @@ Existing fields not in the new payload are untouched. To remove a field, use
 `credential_delete` with `field_name`.
 
 #### `credential_get`
-Retrieve a full service bundle, including secret values from Keychain.
+Retrieve a service bundle. Secret values never enter the response unless asked
+for by name: a tool response lands in the transcript and in any client-side tool
+log, where no later discipline can take it back.
 
 **Parameters:**
 - `service_name` (required) — which service to retrieve
 - `fields` (optional) — comma-separated field names to return (default: all)
+- `into` (optional) - absolute path (`~` expanded). Writes exactly one secret
+  field, named in `fields`, to that file with mode `0600`: raw value, no
+  trailing newline, so `$(cat path)` works. Refused for a relative path, a
+  missing parent directory, a directory, a symlink, a non-secret field, a locked
+  keychain or an empty keychain entry - every refusal before a byte is written.
+  The open uses `O_NOFOLLOW`, and an existing file is truncated and tightened to
+  `0600`. **Refused under `gingugu serve`**, where the path would name the
+  server's disk: useless to a remote caller, and an arbitrary file write for
+  anyone holding the token.
+- `reveal` (optional, default `false`) - return secret values inline. Cannot be
+  combined with `into`.
 
-**Returns:** JSON with service metadata + all requested fields and their values.
+**Returns:** service metadata + the requested fields. A secret field is
+`{"is_secret": true, "redacted": true}` by default, which does not read the
+keychain at all. With `into`: `service_name`, `field`, `written` (the path),
+`bytes` and `mode` - never the value.
 
 #### `credential_list`
 List all services with metadata and non-secret field values. **Does not hit
@@ -1500,6 +1518,7 @@ src/gingugu/
 ├── staleness.py            # Advisory review hints for point-in-time memories
 ├── namespaces.py           # Namespace CRUD; a default_repo change re-derives claims
 ├── credentials.py          # OS-keychain credential vault
+├── secret_file.py          # 0600 file write for credential_get(into=…)
 ├── session.py              # Per-session id for access_log's co-access key
 │
 │   # ── MCP tool handlers (split to honor the 300-line limit) ─────
