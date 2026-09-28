@@ -780,7 +780,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_search` | Advanced filtered search (type, tags, confidence, dates; one or many namespaces; optional compact mode; fetch by exact `ids`; `claims` to work the reconciliation backlog or read refs the prose never resolved, `orphans` to work the graph backlog, `pinned` to enumerate the always-present tier; `explain` for a per-hit score breakdown) |
 | `memory_excerpt` | Read inside ONE memory: find literal matches with their character offsets, line numbers and surrounding context, and/or slice an exact character range |
 | `credential_store` | Store/update a service credential bundle |
-| `credential_get` | Retrieve credentials (secrets from OS Keychain) |
+| `credential_get` | Retrieve a credential bundle - secrets redacted; `into` writes one to a 0600 file, `reveal` shows it inline |
 | `credential_list` | List services + expiry status (no secrets shown) |
 | `credential_delete` | Remove a service or specific credential field |
 

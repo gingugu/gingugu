@@ -68,7 +68,7 @@ Add search ranking, decay scoring, and auto-context.
 | `credential_services` + `credential_fields` tables | ✅ | Migration v2, isolated from memory tables |
 | `keyring` integration for OS-native secret storage | ✅ | macOS Keychain via `keyring` (spike-verified) |
 | `credential_store` tool | ✅ | Bundle upsert, secret fields → keychain |
-| `credential_get` tool | ✅ | Retrieve bundle with keychain secret values |
+| `credential_get` tool | ✅ | Retrieve bundle; secrets redacted by default, `into` writes one to a 0600 file, `reveal` opt-in |
 | `credential_list` tool | ✅ | Non-secret fields + expiry status, no keychain hit |
 | `credential_delete` tool | ✅ | Service/field removal + keychain cleanup, `confirm` gate |
 | Expiry tracking in `credential_list` + `memory_stats` | ✅ | active / expiring_soon / expired |

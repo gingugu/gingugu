@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING: `credential_get` redacts secret values by default.** A secret
+  field now comes back as `{"is_secret": true, "redacted": true}` instead of its
+  value, and a redacted get does not read the keychain at all. A tool response
+  lands in the transcript and in any client-side tool log, so returning the
+  value by default put every secret there on every use. Two new parameters:
+  - `into` - an absolute path. Writes exactly one secret field to that file with
+    mode `0600` (raw value, no trailing newline) and returns only the path, byte
+    count and mode. Symlinks, directories, missing parents, relative paths,
+    non-secret fields and a locked keychain are all refused before a byte is
+    written. Refused under `gingugu serve`, where it would write to the
+    server's disk.
+  - `reveal=true` - the previous behaviour, as an explicit opt-in. Cannot be
+    combined with `into`.
+
+  Callers that read `value` from a secret field must pass `reveal=true` or move
+  to `into`. The memory protocol installed by `gingugu init` now teaches `into`.
+  Non-secret fields and `credential_list` are unchanged.
 - **`gingugu init` now installs `sink-the-ship` as a skill, not a slash
   command.** It writes `.claude/skills/sink-the-ship/SKILL.md` in place of
   `.claude/commands/sink-the-ship.md`. Anthropic's docs describe the commands

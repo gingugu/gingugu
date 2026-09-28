@@ -23,7 +23,7 @@ def test_store_and_get_roundtrip(vault: CredentialVault) -> None:
         },
         description="Jira cloud",
     )
-    bundle = vault.get("jira")
+    bundle = vault.get("jira", reveal=True)
     assert bundle is not None
     assert bundle["fields"]["base_url"]["value"] == "https://x.atlassian.net"
     assert bundle["fields"]["base_url"]["is_secret"] is False
@@ -104,7 +104,7 @@ def test_get_degrades_gracefully_when_keychain_unavailable(
 
     monkeypatch.setattr(credentials_mod.keyring, "get_password", _boom)
 
-    bundle = vault.get("svc")
+    bundle = vault.get("svc", reveal=True)
     assert bundle is not None
     # Non-secret field still resolves from SQLite.
     assert bundle["fields"]["url"]["value"] == "https://x"
