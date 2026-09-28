@@ -77,7 +77,10 @@ Gingugu carries an OS-keychain vault, so secrets never belong in files or chat.
 
 - **`credential_list` FIRST**, before asking the user for any secret, token, or
   API key — it may already be vaulted.
-- `credential_get` to retrieve one for use.
+- `credential_get` with `into=<absolute path>` and one field in `fields` to use
+  a secret: it lands in a 0600 file and the value never enters the transcript.
+  Secret values come back redacted otherwise; `reveal=true` only when a value
+  must actually be read.
 - `credential_store` to vault a new one the moment you receive it.
 - `credential_delete` when one is revoked, then store the replacement.
 

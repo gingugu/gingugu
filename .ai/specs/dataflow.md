@@ -620,10 +620,25 @@ backfill for DBs stamped v5 by a build whose 005 did not have one.
 ## Credentials
 
 ```
-credential_store / credential_get / credential_list / credential_delete
+credential_store / credential_list / credential_delete
   → credentials.py reads/writes secret values in the OS keychain
-  → only non-secret metadata is listed; secret values never touch the DB, files, or logs
+  → only non-secret metadata is listed; secret values never touch the DB or logs
+
+credential_get(service, fields)                 (default)
+  → secret fields returned as {is_secret, redacted}; the keychain is NOT read
+credential_get(service, fields=<one>, into=<abs path>)
+  → handler: refused unless ctx.transport == "stdio", exclusive with reveal
+  → vault.write_secret: service/field exist, field is secret
+  → secret_file.check_target: absolute, not symlink/dir, parent exists
+  → keychain read (locked or empty → refused, nothing written)
+  → secret_file.write_private: O_NOFOLLOW, fchmod 0600, then write
+  → response: path, bytes, mode - never the value
+credential_get(service, reveal=true)
+  → the value inline, as a deliberate act
 ```
+
+The one place a secret touches a file is `into`, on purpose: a file the caller
+named is how the value reaches a command without passing through the transcript.
 
 ## Promotion (local → central)
 
