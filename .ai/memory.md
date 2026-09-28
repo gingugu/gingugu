@@ -117,7 +117,10 @@ families** - groups of memories sharing a title shape, which a long-lived store
 accumulates naturally. Labels are verified rather than judged: each question
 asks for a phrase occurring in exactly one memory of its namespace, proven
 against the corpus at generation time, which is what lets the set be far larger
-than a hand-labelled one without losing trust. The fixture's `age_days` field
+than a hand-labelled one without losing trust. Each target is probed at up to
+three positions - head, middle, tail - and `kind` names which, because the
+embedder truncates at 512 tokens and a set asking only about openings cannot see
+that. The fixture's `age_days` field
 backdates a row so a graded-age cohort can be expressed; backdating is
 deliberately a bench-layer concern and never a parameter on `MemoryStore.create`.
 Generated sets hold real memory content and stay in `bench/local/`.
