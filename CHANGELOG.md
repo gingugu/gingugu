@@ -9,7 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Recall and search widen to every namespace when the scoped lookup finds
+  nothing.** A `memory_recall`, or a `memory_search` with a `query`, that comes
+  back empty in the namespaces it was scoped to reruns once across every
+  namespace with the same filters. The response says so with `widened_from`
+  (the namespaces it missed in) and `scope: "all"`, and every hit still carries
+  its own `namespace`. A filter-only `memory_search` sweep never widens: "none
+  here" is its answer. `memory_context` is unchanged.
+
 ### Changed
+
+- **`memory_recall` with no `namespace` on an unconfigured server searches
+  every namespace** instead of the `default` fallback, and reports
+  `scope: "all"`. With neither `MEMORY_NAMESPACE` nor `MEMORY_NAMESPACE_PATH`
+  set there is no current project to scope a read to. Writes still fall back
+  to `default`.
 
 - **BREAKING: `credential_get` redacts secret values by default.** A secret
   field now comes back as `{"is_secret": true, "redacted": true}` instead of its

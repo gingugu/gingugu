@@ -155,6 +155,11 @@ memory_recall(query, namespace | "ns1,ns2,…", filters)
     (see `chunking.py`)
   → multi-namespace: one ranked SQL pass over all listed namespaces
     (IN clause); limit caps the TOTAL list (unlike context's per-namespace limit)
+  → namespace omitted: the configured namespace, or EVERY namespace when the
+    server has none configured (scope: "all") - never the `default` fallback,
+    which is for writes (handlers/scope.py)
+  → scoped and empty: rerun once with no namespace filter, every other filter
+    kept; response carries widened_from + scope: "all", even if still empty
   → blend with recency + confidence + access frequency
   → if include_related: hub-dampened neighbourhood appended (via_relation=true) —
     ≤3 neighbours per seed (confidence, then low degree, then recency), ≤10 total
@@ -207,7 +212,9 @@ newest rows nor a stable answer as `limit` changed. Ties break on `id`.
 
 `memory_search` takes the same namespace forms (single, CSV, or omitted =
 all namespaces). Unknown namespaces error and name the missing one(s) — reads
-never mint namespaces. Single-namespace-only tools return a comma-hint when
+never mint namespaces. It widens on empty like recall, but only with a `query`:
+an empty filter-only sweep (`claims`, `orphans`, `pinned`) is a real answer, and
+padding it with other namespaces' rows would misdirect a reconciliation sweep. Single-namespace-only tools return a comma-hint when
 handed a CSV value, and `memory_store` rejects CSV outright rather than
 minting a junk namespace named `"a,b"`.
 
