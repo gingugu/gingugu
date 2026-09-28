@@ -82,7 +82,7 @@ def serve() -> None:
     import uvicorn
 
     config = load_config()
-    mcp = build_server()
+    mcp = build_server(transport="http")
     token_path = config.db_path.parent / "serve_token"
     token = _resolve_token(config.serve_token, token_path)
 

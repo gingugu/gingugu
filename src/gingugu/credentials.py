@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta
 import keyring
 
 from .models import utcnow_iso
+from .secret_file import check_target, write_private
 
 logger = logging.getLogger(__name__)
 
@@ -122,8 +123,14 @@ class CredentialVault:
         if is_secret and value is not None:
             keyring.set_password(KEYRING_SERVICE, _keyring_account(service_name, field_name), value)
 
-    def get(self, service_name: str, fields: list[str] | None = None) -> dict | None:
-        """Return a full bundle including secret values pulled from the keychain."""
+    def get(
+        self, service_name: str, fields: list[str] | None = None, reveal: bool = False
+    ) -> dict | None:
+        """Return a bundle. Secret values are redacted unless ``reveal`` is set.
+
+        A redacted get never reads the keychain, so it cannot trigger an unlock
+        prompt and cannot put a secret into the caller's context.
+        """
         row = self._get_service_row(service_name)
         if row is None:
             return None
@@ -136,7 +143,9 @@ class CredentialVault:
             name = fr["field_name"]
             if fields is not None and name not in fields:
                 continue
-            if fr["is_secret"]:
+            if fr["is_secret"] and not reveal:
+                out_fields[name] = {"is_secret": True, "redacted": True}
+            elif fr["is_secret"]:
                 value, available = self._safe_keyring_get(service_name, name)
                 field = {"value": value, "is_secret": True}
                 if not available:
@@ -152,6 +161,39 @@ class CredentialVault:
             "expires_at": row["expires_at"],
             "status": expiry_status(row["expires_at"]),
             "fields": out_fields,
+        }
+
+    def write_secret(self, service_name: str, field_name: str, path: str) -> dict:
+        """Write one secret field to a 0600 file and describe it, never the value.
+
+        Raises LookupError (unknown service/field), ValueError (not a secret, or
+        an unsafe path) or RuntimeError (keychain unavailable, no value stored).
+        Every refusal happens before a byte is written.
+        """
+        row = self._get_service_row(service_name)
+        if row is None:
+            raise LookupError(f"service {service_name!r} not found")
+        field = self._conn.execute(
+            "SELECT is_secret FROM credential_fields WHERE service_id = ? AND field_name = ?",
+            (row["id"], field_name),
+        ).fetchone()
+        if field is None:
+            raise LookupError(f"field {field_name!r} not found in {service_name!r}")
+        if not field["is_secret"]:
+            raise ValueError(f"field {field_name!r} is not a secret; credential_get returns it")
+        target = check_target(path)
+        value, available = self._safe_keyring_get(service_name, field_name)
+        if not available:
+            raise RuntimeError("keychain unavailable; nothing written")
+        if value is None:
+            raise RuntimeError(f"keychain holds no value for {field_name!r}; nothing written")
+        size = write_private(target, value)
+        return {
+            "service_name": service_name,
+            "field": field_name,
+            "written": str(target),
+            "bytes": size,
+            "mode": "0600",
         }
 
     def list(self, check_expiry: bool = True) -> list[dict]:

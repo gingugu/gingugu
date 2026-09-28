@@ -15,6 +15,21 @@ logger = logging.getLogger(__name__)
 def register(mcp, ctx: ServerContext) -> None:
     vault = CredentialVault(ctx.conn)
 
+    def _write_into(service_name: str, field_list, into: str, reveal: bool) -> dict:
+        if reveal:
+            return _err("into and reveal cannot be combined")
+        if ctx.transport != "stdio":
+            # Over HTTP the path would be on the SERVER's disk: useless to a
+            # remote caller, and an arbitrary-file-write for any token holder.
+            return _err("into is not available under `gingugu serve`")
+        if not field_list or len(field_list) != 1:
+            return _err("into needs exactly one secret field in `fields`")
+        try:
+            result = vault.write_secret(service_name, field_list[0], into)
+        except (LookupError, ValueError, RuntimeError) as exc:
+            return _err(str(exc))
+        return {"ok": True, **result}
+
     @mcp.tool()
     def credential_store(
         service_name: str,
@@ -50,17 +65,33 @@ def register(mcp, ctx: ServerContext) -> None:
             return _err(f"credential_store failed: {exc}")
 
     @mcp.tool()
-    def credential_get(service_name: str, fields: str | None = None) -> dict:
-        """Retrieve all fields of a stored credential bundle, including secrets from the
-        OS keychain. Use before making API calls that need stored credentials. Returns
-        both secret and non-secret fields in one response. Returns an error if the
-        service is not found — use credential_list first to discover available services.
+    def credential_get(
+        service_name: str,
+        fields: str | None = None,
+        reveal: bool = False,
+        into: str | None = None,
+    ) -> dict:
+        """Retrieve a stored credential bundle. Secret values are REDACTED by default
+        (``{"is_secret": true, "redacted": true}``) so they never enter the transcript;
+        non-secret fields are returned as-is. Returns an error if the service is not
+        found — use credential_list first to discover available services.
+
+        To USE a secret, pass ``into`` - an absolute path - with exactly one secret
+        field in ``fields``. The raw value (no trailing newline) is written to that
+        file with mode 0600 and the response carries only the path, never the value;
+        read it with e.g. ``$(cat /path)``. Not available under ``gingugu serve``.
+
+        ``reveal=True`` returns secret values inline. Every use puts the secret in
+        the transcript and any tool logs, so prefer ``into``. Cannot be combined
+        with ``into``.
 
         ``fields`` is an optional comma-separated list of field names to retrieve —
         omit to return all fields."""
         try:
             field_list = [f.strip() for f in fields.split(",") if f.strip()] if fields else None
-            bundle = vault.get(service_name, field_list)
+            if into is not None:
+                return _write_into(service_name, field_list, into, reveal)
+            bundle = vault.get(service_name, field_list, reveal=reveal)
             if bundle is None:
                 return _err(f"service {service_name!r} not found")
             return {"ok": True, "service": bundle}
