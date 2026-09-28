@@ -99,8 +99,22 @@ def persist_pieces(
 
     Any failure leaves the memory with NO piece rows, which search reads as
     head-only - the behaviour before pieces existed - rather than with spans
-    that no longer match its text. The caller commits.
+    that no longer match its text. Never raises. The caller commits.
     """
+    try:
+        return _replace_pieces(conn, embedder, memory_id, text)
+    except Exception:
+        logger.exception("storing pieces failed for memory %s; it stays head-only", memory_id)
+        try:
+            conn.execute("DELETE FROM memory_chunks WHERE memory_id = ?", (memory_id,))
+        except Exception:  # pragma: no cover - the table itself is unusable
+            pass
+        return False
+
+
+def _replace_pieces(
+    conn: sqlite3.Connection, embedder: EmbeddingProvider | None, memory_id: str, text: str
+) -> bool:
     conn.execute("DELETE FROM memory_chunks WHERE memory_id = ?", (memory_id,))
     offsets = _offsets(embedder, text)
     if offsets is None:
@@ -155,7 +169,21 @@ def cohort_vectors(
     """For each memory whose lexically chosen piece is NOT its head, that piece's vector.
 
     A memory absent from the result is scored on its head vector, as before.
+    Never raises: any failure returns {} and search degrades to head vectors.
     """
+    try:
+        return _cohort_vectors(conn, embedder, query, memory_ids)
+    except Exception:
+        logger.exception("piece selection failed; scoring on head vectors")
+        return {}
+
+
+def _cohort_vectors(
+    conn: sqlite3.Connection,
+    embedder: EmbeddingProvider,
+    query: str,
+    memory_ids: list[str],
+) -> dict[str, list[float]]:
     if not memory_ids:
         return {}
     terms = query_terms(query)
@@ -180,6 +208,8 @@ def cohort_vectors(
     }
     out: dict[str, list[float]] = {}
     for mid in pieced:
+        if mid not in texts:  # deleted between the two reads: head-only, like any other
+            continue
         rows = spans[mid]
         chosen = choose_piece(terms, [texts[mid][s:e] for s, e, _ in rows])
         if chosen and rows[chosen][2] is not None:
