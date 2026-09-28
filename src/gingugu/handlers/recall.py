@@ -22,12 +22,12 @@ from .helpers import (
     _attach_review_hints,
     _collect_related,
     _err,
-    _resolve_namespaces,
     _split_csv,
     _spread_activation,
     _stamp_namespace_names,
     _summarizer,
 )
+from .scope import read_scope, run_widening
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +108,13 @@ def register(mcp, ctx: ServerContext) -> None:
         multi-namespace response carries ``namespaces`` and stamps each memory
         with its source ``namespace``.
 
+        Omitting ``namespace`` scopes to the server's configured namespace, or
+        to every namespace when none is configured (``scope: "all"``). A scoped
+        recall that finds nothing reruns once across every namespace with the
+        same filters, and says so with ``widened_from`` (the names it missed
+        in) and ``scope: "all"`` - check each memory's ``namespace`` before
+        treating a widened hit as belonging to the current project.
+
         ``tags`` is comma-separated; ALL provided tags must match. ``confidence`` sets
         a minimum confidence threshold (verified > inferred > stale > deprecated).
         ``include_deprecated`` also returns deprecated memories (stale ones are always
@@ -133,33 +140,24 @@ def register(mcp, ctx: ServerContext) -> None:
                 except ValueError:
                     return _err(f"invalid confidence {confidence!r}")
 
-            requested = list(dict.fromkeys(_split_csv(namespace)))
-            if requested:
-                # Explicit unknown namespaces are a caller mistake — don't
-                # silently create junk rows on a read (matches memory_search).
-                resolved, error = _resolve_namespaces(ctx, requested)
-                if error is not None:
-                    return error
-            else:
-                ns_name = ctx.namespaces.resolve_name(None)
-                ns = ctx.namespaces.get(ns_name)
-                if ns is None:
-                    # Config-resolved namespace with nothing stored yet: empty result.
-                    return {"ok": True, "namespace": ns_name, "count": 0, "memories": []}
-                resolved = {ns_name: ns}
-            ns_ids = [ns.id for ns in resolved.values()]
-            results = search_mod.search(
-                ctx.conn,
-                query=query,
-                namespace_id=ns_ids[0] if len(ns_ids) == 1 else ns_ids,
-                type=type,
-                min_confidence=min_conf,
-                include_deprecated=include_deprecated,
-                limit=limit,
-                weights=ctx.config.weights,
-                decay_lambda=ctx.config.decay_lambda,
-                tags=_split_csv(tags) or None,
-                embedder=ctx.store.embedder,
+            scope, error = read_scope(ctx, namespace, use_config=True)
+            if error is not None:
+                return error
+            results, widened_from = run_widening(
+                scope,
+                lambda ns_arg: search_mod.search(
+                    ctx.conn,
+                    query=query,
+                    namespace_id=ns_arg,
+                    type=type,
+                    min_confidence=min_conf,
+                    include_deprecated=include_deprecated,
+                    limit=limit,
+                    weights=ctx.config.weights,
+                    decay_lambda=ctx.config.decay_lambda,
+                    tags=_split_csv(tags) or None,
+                    embedder=ctx.store.embedder,
+                ),
             )
             ctx.store.load_tags(results)
             seed_ids = [m.id for m in results]
@@ -176,10 +174,14 @@ def register(mcp, ctx: ServerContext) -> None:
             # (matches memory_context).
             _stamp_namespace_names(ctx, summaries)
             payload: dict = {"ok": True, "count": len(summaries), "memories": summaries}
-            if len(resolved) == 1:
-                payload["namespace"] = next(iter(resolved))
+            if scope.is_all or widened_from is not None:
+                payload["scope"] = "all"
+                if widened_from is not None:
+                    payload["widened_from"] = widened_from
+            elif len(scope.names) == 1:
+                payload["namespace"] = scope.names[0]
             else:
-                payload["namespaces"] = list(resolved)
+                payload["namespaces"] = scope.names
             return payload
         except Exception as exc:
             logger.exception("memory_recall failed")

@@ -12,12 +12,12 @@ from . import ServerContext
 from .helpers import (
     _attach_review_hints,
     _err,
-    _resolve_namespaces,
     _single_namespace_not_found,
     _split_csv,
     _stamp_namespace_names,
     _summarizer,
 )
+from .scope import read_scope, run_widening
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,10 @@ def register(mcp, ctx: ServerContext) -> None:
         ``namespace`` accepts a single name, a comma-separated list (e.g.
         "crow,my-project"), or None to search every namespace; ``limit`` is always the
         total result cap. A multi-namespace response carries ``namespaces`` and stamps
-        each memory with its source ``namespace``.
+        each memory with its source ``namespace``. A scoped search WITH a ``query``
+        that finds nothing reruns once across every namespace, same filters, and
+        reports ``widened_from`` plus ``scope: "all"``; a filter-only sweep never
+        widens, since "none here" is its answer.
         ``tags`` is comma-separated; all provided tags must match. ``sort_by`` is one of:
         relevance, created, accessed, decay_score. A ``created``/``accessed`` sort
         orders the whole matching corpus before the limit, so it returns the true
@@ -144,35 +147,36 @@ def register(mcp, ctx: ServerContext) -> None:
             if claims is not None and claims not in CLAIM_FILTERS:
                 return _err(f"invalid claims {claims!r}; expected one of {list(CLAIM_FILTERS)}")
 
-            requested = list(dict.fromkeys(_split_csv(namespace)))
-            ns_scope: str | list[str] | None = None
-            resolved: dict = {}
-            if requested:
-                resolved, error = _resolve_namespaces(ctx, requested)
-                if error is not None:
-                    return error
-                ns_ids = [ns.id for ns in resolved.values()]
-                ns_scope = ns_ids[0] if len(ns_ids) == 1 else ns_ids
+            scope, error = read_scope(ctx, namespace, use_config=False)
+            if error is not None:
+                return error
 
             tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
-            results = search_mod.advanced_search(
-                ctx.conn,
-                query=query,
-                namespace_id=ns_scope,
-                type=type,
-                min_confidence=min_conf,
-                created_after=created_after,
-                created_before=created_before,
-                sort_by=sort_by,
-                include_deprecated=include_deprecated,
-                limit=limit,
-                weights=ctx.config.weights,
-                decay_lambda=ctx.config.decay_lambda,
-                tags=tag_list,
-                claims=claims,
-                orphans=orphans,
-                pinned=pinned,
-                embedder=ctx.store.embedder,
+            # Only a lookup widens. An empty filter-only sweep ("open claims in
+            # gingugu") is a real answer, and padding it with other namespaces'
+            # rows would send a reconciliation sweep after the wrong memories.
+            results, widened_from = run_widening(
+                scope,
+                lambda ns_arg: search_mod.advanced_search(
+                    ctx.conn,
+                    query=query,
+                    namespace_id=ns_arg,
+                    type=type,
+                    min_confidence=min_conf,
+                    created_after=created_after,
+                    created_before=created_before,
+                    sort_by=sort_by,
+                    include_deprecated=include_deprecated,
+                    limit=limit,
+                    weights=ctx.config.weights,
+                    decay_lambda=ctx.config.decay_lambda,
+                    tags=tag_list,
+                    claims=claims,
+                    orphans=orphans,
+                    pinned=pinned,
+                    embedder=ctx.store.embedder,
+                ),
+                widen=bool(query and query.strip()),
             )
             ctx.store.load_tags(results)
             summarize = _summarizer(compact=compact, explain=explain)
@@ -190,8 +194,11 @@ def register(mcp, ctx: ServerContext) -> None:
                 "count": len(results),
                 "memories": summaries,
             }
-            if len(resolved) > 1:
-                payload["namespaces"] = list(resolved)
+            if widened_from is not None:
+                payload["scope"] = "all"
+                payload["widened_from"] = widened_from
+            elif len(scope.names) > 1:
+                payload["namespaces"] = scope.names
             return payload
         except Exception as exc:
             logger.exception("memory_search failed")
