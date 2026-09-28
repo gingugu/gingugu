@@ -15,6 +15,7 @@ its first ``max_tokens`` words only, exactly as the real encoder drops its tail.
 from __future__ import annotations
 
 import re
+import sqlite3
 
 import pytest
 
@@ -258,3 +259,33 @@ def test_real_encoder_pieces_fit_its_window():
     for start, end in spans:
         assert sum(1 for a, b in offsets if a >= start and b <= end) <= provider.max_tokens
     assert provider._model.model.tokenizer.truncation is not None
+
+
+# --- never raises ----------------------------------------------------------------
+
+
+class ExplodingEmbedder(TruncatingEmbedder):
+    def encode_many(self, texts):
+        raise RuntimeError("boom")
+
+
+def test_a_failed_piece_write_leaves_the_memory_head_only(estore, namespaces):
+    ns = namespaces.get_or_create("test-ns").id
+    mem = estore.create(namespace_id=ns, type=MemoryType.FACT, title="t", content=_long("delta"))
+    assert chunking.persist_pieces(estore.conn, ExplodingEmbedder(), mem.id, _long("x")) is False
+    assert _pieces(estore.conn, mem.id) == []
+
+
+def test_piece_selection_failure_degrades_to_head_vectors(estore, namespaces, monkeypatch):
+    """Search must fall back, never fail: a broken piece read returns no overrides."""
+    ns = namespaces.get_or_create("test-ns").id
+    target, _ = _two_siblings(estore, ns)
+
+    def broken(*_a, **_k):
+        raise sqlite3.OperationalError("no such table: memory_chunks")
+
+    monkeypatch.setattr(chunking, "_cohort_vectors", broken)
+    assert (
+        chunking.cohort_vectors(estore.conn, TruncatingEmbedder(), "ledger delta", [target.id])
+        == {}
+    )
