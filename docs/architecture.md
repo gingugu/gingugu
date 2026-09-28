@@ -700,8 +700,10 @@ Search and retrieve memories ranked by relevance × freshness.
   list) instead of the historical `namespace` key; every returned memory is
   stamped with its home `namespace` name either way. Any explicit unknown
   namespace is an error naming the missing one(s) (reads never create
-  namespaces); when omitted and the config-resolved namespace doesn't exist
-  yet, returns an empty result.
+  namespaces). When omitted, the configured namespace is used, or every
+  namespace when none is configured. A scoped recall that finds nothing
+  reruns once across every namespace and reports `widened_from` plus
+  `scope: "all"` - see [Namespace Auto-Detection](#namespace-auto-detection).
 - `type` (optional) — filter by memory type
 - `confidence` (optional) — minimum confidence level (rank order: `verified > inferred > stale > deprecated`; see *Confidence ordering* above)
 - `limit` (optional) — max results (default 10)
@@ -1141,6 +1143,9 @@ Advanced search with full filter support, plus a precise fetch-by-ID path.
   semantics as `memory_recall`: `limit` is the total cap, unknown names are
   an error, multi responses carry `namespaces`), or omitted to search every
   namespace. Every returned memory is stamped with its home `namespace` name.
+  A scoped search **with a `query`** that finds nothing reruns once across
+  every namespace (`widened_from`, `scope: "all"`); a filter-only sweep never
+  widens.
 - `type` (optional) — memory type filter
 - `tags` (optional) — required tags (comma-separated)
 - `confidence` (optional) — confidence filter
@@ -1388,6 +1393,18 @@ Resolution order (first hit wins):
 3. **`MEMORY_NAMESPACE_PATH` env var** — filesystem path; namespace name derived from `basename`
 4. **Fallback to `default`** namespace, with a warning logged
 
+Step 4 applies to **writes** only. The lookup reads resolve differently, since
+an unconfigured server has no current project to scope a read to:
+
+- `memory_recall` with no `namespace` on an unconfigured server searches
+  **every** namespace (`scope: "all"`), never `default`.
+- A scoped lookup - explicit names, or the configured namespace - that finds
+  nothing reruns once across every namespace with the same filters, and
+  reports `widened_from` (the names it missed in) plus `scope: "all"`. This
+  covers `memory_recall` always and `memory_search` only when it has a
+  `query`: an empty filter-only sweep is a real "none here" and never widens.
+- `memory_context` loads exactly what it is told and never widens.
+
 **Recommended setup:** your MCP client's server entry sets
 `MEMORY_NAMESPACE` to the repo name (per-workspace where the client supports
 it). See README for an example.
@@ -1529,6 +1546,7 @@ src/gingugu/
     ├── hints.py            # Write-time similar + relation hints
     ├── recall.py           # recall / context
     ├── search.py           # search
+    ├── scope.py            # Read scope + widen-on-empty for recall / search
     ├── excerpt.py          # excerpt
     ├── relations.py        # relate / unrelate / edges
     ├── relation_ops.py     # Edge repair operations

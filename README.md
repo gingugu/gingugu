@@ -501,7 +501,9 @@ see the active workspace), the assistant passes a `namespace` argument on each
 memory tool call (every tool accepts one). To instead pin a server instance to
 a single project, set a static `MEMORY_NAMESPACE` in the `env` block. See
 `docs/architecture.md` → *Namespace Auto-Detection* for the full resolution
-order.
+order. Reads never dead-end on the wrong namespace: a recall with no namespace
+on an unconfigured server searches all of them, and a scoped lookup that finds
+nothing widens to every namespace and says so with `widened_from`.
 
 ### Configure Your AI Agent
 
