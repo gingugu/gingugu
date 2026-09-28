@@ -147,7 +147,32 @@ class FastEmbedProvider:
         self._model = TextEmbedding(model_name=self.model_name)
         sample = next(iter(self._model.embed(["probe"])))
         self.dim = len(sample)
+        self._load_tokenizer()
         logger.info("Embedding model ready: dim=%d", self.dim)
+
+    def _load_tokenizer(self) -> None:
+        """A no-truncation COPY of the model's tokenizer, for cutting pieces (see
+        ``chunking``). ``model.tokenizer`` is not documented fastembed API; if it
+        is absent, ``token_offsets`` returns None and search stays head-only."""
+        self._tokenizer, self.max_tokens = None, 0
+        try:
+            from tokenizers import Tokenizer
+
+            base = self._model.model.tokenizer
+            tok = Tokenizer.from_str(base.to_str())
+            tok.no_truncation()
+            tok.no_padding()
+            specials = len(tok.encode("", add_special_tokens=True).ids)
+            self._tokenizer, self.max_tokens = tok, base.truncation["max_length"] - specials
+        except Exception:
+            logger.warning("fastembed tokenizer unavailable; long memories stay head-only")
+
+    def token_offsets(self, text: str) -> list[tuple[int, int]] | None:
+        """Character offsets of each token, untruncated. None if unavailable."""
+        self._ensure_model()
+        if self._tokenizer is None:
+            return None
+        return self._tokenizer.encode(text, add_special_tokens=False).offsets
 
     def encode(self, text: str) -> list[float] | None:
         try:
