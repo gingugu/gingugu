@@ -4,8 +4,25 @@ _Last updated: 2026-09-28_
 
 ## In Flight
 
-**Board item 2: `credential_get` keeps secrets out of context, on
-`feature/credential-get-redact`.** Secret values are redacted by default - a
+**Board item 3: namespace auto-widen, on `feature/namespace-auto-widen`.**
+Server-side resolution turned out to be static per process (explicit arg, then
+`MEMORY_NAMESPACE`, then the `MEMORY_NAMESPACE_PATH` basename, then `default`),
+so on a global server with neither variable set every read that omitted
+`namespace` searched `default` alone. The namespace drift the witness saw came
+from the caller, not the server. New `handlers/scope.py`: `memory_recall` with
+no namespace on an unconfigured server searches every namespace
+(`scope: "all"`); a scoped lookup that finds nothing reruns once across every
+namespace with the same filters and reports `widened_from`. `memory_search`
+widens only when it has a `query` - an empty filter-only sweep is a real
+answer. Empty-only trigger, no relevance floor: scores are not calibrated for
+one, and confident-but-wrong hits are item 5's problem. Writes and
+`memory_context` unchanged. 13 new tests; 960 passed, 1 xfailed; three
+mutations each caught.
+
+## Recently Completed
+
+**Board item 2: `credential_get` keeps secrets out of context. MERGED as
+`044e3e2` (#85).** Secret values are redacted by default - a
 secret field is `{"is_secret": true, "redacted": true}` and a redacted get
 never reads the keychain. `into=<absolute path>` writes exactly one secret to a
 0600 file (raw value, `O_NOFOLLOW`, an existing file tightened) and returns only
@@ -17,8 +34,6 @@ with `into`. `into` is refused under `gingugu serve` via the new
 server's disk. New module `secret_file.py`. Breaking, in `[Unreleased]`. The
 protocol installed by `gingugu init` (and this repo's CLAUDE.md / AGENTS.md)
 now teaches `into`. 947 passed, 1 xfailed; seven guards proven by mutation.
-
-## Recently Completed
 
 **Board item 1d: tail-aware semantic search. MERGED as `26821bd` (#83, the
 position-stratified probe set) and `8e951e3` (#84, lexically-selected embedding
@@ -515,8 +530,10 @@ tranche soaked locally for a full week, the release was cut ahead of them.
 
 ## The Board (current: 2026-09-28)
 
-**Nineteen items.** Ten entered 2026-09-28 (10-19), approved as directions and
-not yet designed; see their sections below. The rest of this paragraph
+**Seventeen items.** Items 2 (`credential_get` redaction, #85) and 3 (namespace
+auto-widen) shipped 2026-09-28 and are off the board; the remaining items keep
+their numbers so existing references stay valid. Ten entered 2026-09-28 (10-19),
+approved as directions and not yet designed; see their sections below. The rest of this paragraph
 describes the 2026-09-27 board of nine. One entered (9, a paraphrase question set). Item 1 gained a new
 mechanism (1d): the embedder never sees past a memory's first 512 tokens, and
 the probe set could not see that, because it only ever asked about openings.
@@ -530,8 +547,6 @@ boarded - no item below rests on an unverified reading.
 | # | Item | Why here |
 |---|---|---|
 | 1 | **Template/sibling noise in retrieval** | Five witnesses, a **committed, deterministic, offline repro**, and a concrete mechanism on the semantic side: 512-token truncation (1d) |
-| 2 | **`credential_get` hands back plaintext** | The vault's own promise is broken by construction; three leaks trace to it |
-| 3 | **Namespace auto-widen on empty** | Now has a live witness: a recall resolved to `default` and returned `count: 0` |
 | 4 | **Provenance vocabulary on `source`** | A stored conclusion is indistinguishable from a stored fact at recall time |
 | 5 | **Aboutness: the store speaks the author's vocabulary** | The user's own word for a workstream found nothing; four queries to reach it |
 | 6 | Governance bands | Unblocked - 48 decided proposals to calibrate against |
@@ -563,18 +578,12 @@ with its own body.
 **Item 1 is PARKED (2026-09-28).** Its measured-positive fix (1d) shipped; the
 remaining sibling-noise half has no live hypothesis after eight dead fixes, and
 without a target there is nothing to build. Re-open it only with a new
-hypothesis, measured on the full 383-question stratified set. **Item 2 is in
-flight** (see In Flight).
+hypothesis, measured on the full 383-question stratified set. Items 2 and 3
+shipped 2026-09-28.
 
-**Recommended sequencing: 1, then 2, then 3, then 4 and 5 together.**
+**Recommended sequencing: 4 and 5 together.**
 
-This reverses the 2026-09-07 order, which put item 1 last on the grounds that it
-was "uncertain ranking work". That reasoning is now spent: the measurement below
-is not uncertain, and five rediscoveries say deferring it costs more than doing
-it. Item 2 is next because it is small, self-contained and the only item on the
-board with a security consequence. Item 3 stays early - still the smallest, still
-one obvious right answer, and now with a witness instead of an argument. Items 4
-and 5 are both write-time declared fields on the existing record, so they want
+Items 4 and 5 are both write-time declared fields on the existing record, so they want
 one migration and one pass, not two.
 
 ### 1. Template/sibling noise in retrieval - now reproducible, and the fix reversed
@@ -903,66 +912,6 @@ Two of the six looked actively good right before they were killed. Nothing here
 should be believed on fewer than the full probe set, and a future fix direction
 that cannot be measured that way should be treated as not yet measurable rather
 than promising.
-
-### 2. `credential_get` hands the plaintext secret back into context
-
-`credential_get` returns a secret field's value in its response body. The vault's
-stated promise is that secrets never belong in files or chat, and this breaks it
-by construction: every use puts the plaintext into the transcript, and into
-whatever the caller's own tooling logs, before any discipline can apply.
-
-**Three leaks trace to it in nine days**, all the same mechanism. The second
-happened with the warning memory already loaded in context. The third happened
-one tool call after that warning was explicitly recalled - retrieval worked,
-ranked well, and changed nothing. The behavioural rule has been written three
-times and failed three times, which is board item 3's lesson pointed at our own
-tool surface: build the mechanism instead of writing the rule a fourth time.
-
-Fix directions, neither designed:
-
-- **A write-to-file mode.** `credential_get(into=<path>, mode=0600)` returns the
-  path plus a redacted confirmation and never the value. This is already what the
-  warning memory prescribes by hand; making it the tool's affordance is what
-  stops it being forgotten.
-- **Redact secret fields by default**, revealed only on an explicit flag, so the
-  default path cannot leak and the leaking path is a deliberate act that reads as
-  one in the transcript.
-
-Open: whether `credential_list` needs the same treatment for its non-secret
-fields, several of which are identifiers a public artifact should not carry.
-
-### 3. Namespace auto-widen on an empty result - now with a live witness
-
-`namespace=None` resolves to exactly one config-derived default. A
-comma-separated list works but requires the caller to already know where to
-look, which is the whole problem - if you knew, you would not be searching. An
-empty result returns `count: 0` and stops. There is no all-namespace mode
-anywhere in the codebase.
-
-The behavioural rule covering this was written three separate times and still
-failed in real use, because it is an ambient rule with no trigger moment: "the
-answer might be somewhere else" is not an event you can notice from inside.
-Build the mechanism instead of writing it a fourth time - widen on an empty (or
-below-floor) result and stamp each hit with its source namespace.
-
-**The witness, 2026-09-20.** A mid-session `memory_recall` in a session actively
-working one project returned `count: 0` with `"namespace": "default"` - it had
-resolved to a two-memory namespace nobody uses, returned nothing, and stopped.
-The thing being looked for existed, in a namespace holding hundreds of memories,
-and was reached four queries later. Two further details worth having before
-building:
-
-- The same session's next two recalls resolved to _different_ namespaces again
-  without the caller changing anything, so resolution is not stable across
-  consecutive calls in one session. Establish what actually drives it before
-  adding a widen on top.
-- The floor question is no longer hypothetical. That first call returned zero, so
-  widen-on-empty would have caught it. But query 2 in the same hunt returned
-  eight confident, entirely wrong hits, which widen-on-empty would not touch -
-  see item 5.
-
-Open: widen on empty only or on a relevance floor; second query or one UNION;
-whether it applies to search as well as recall.
 
 ### 4. Provenance vocabulary on `source` - vocabulary approved 2026-09-07
 
