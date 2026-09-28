@@ -311,6 +311,25 @@ changed in the new version.
 
 </details>
 
+### Finish embedding after an upgrade (optional)
+
+The server backfills embeddings in small batches at startup, on purpose - a
+cold model download must never block the process an editor is waiting on.
+That is the right default and the wrong tool right after an upgrade that
+changes what gets embedded: at one batch per startup, catching up a large
+existing brain could take dozens of restarts. `gingugu embed` runs the same
+backfill to completion in a single run instead:
+
+```bash
+gingugu embed [--batch-size N]
+```
+
+It's safe to interrupt and re-run - every batch commits, and a memory that
+already has a current vector is never re-selected. Takes about five minutes on
+an existing brain of a few thousand memories. **Run it once after upgrading**
+so every memory already in your brain is caught up immediately, rather than
+trickling in one batch per server restart.
+
 ### Run as a remote server (optional)
 
 By default `gingugu` runs over **stdio** (the client spawns it). To reach one

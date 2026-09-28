@@ -260,3 +260,33 @@ def _migration_011_proposals(conn: sqlite3.Connection) -> None:
     forgotten memory removes anything here.
     """
     conn.executescript(_SCHEMA_V11)
+
+
+# --- Migration 013: embedding pieces -----------------------------------------
+
+_SCHEMA_V13 = """
+CREATE TABLE memory_chunks (
+    memory_id  TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    chunk      INTEGER NOT NULL,
+    start_char INTEGER NOT NULL,
+    end_char   INTEGER NOT NULL,
+    model      TEXT NOT NULL,
+    dim        INTEGER NOT NULL,
+    embedding  BLOB,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (memory_id, chunk)
+);
+"""
+
+
+def _migration_013_chunks(conn: sqlite3.Connection) -> None:
+    """Add the pieces that give a long memory's tail a vector (see ``chunking``).
+
+    Purely additive: ``memory_embeddings`` is untouched, and a store with no rows
+    here searches exactly as it did before. Spans are character offsets into
+    ``embedding_input(title, content)``, so a piece's text is re-derived from the
+    memory rather than stored twice. Chunk 0 is the head; its ``embedding`` is
+    NULL because that vector already lives in ``memory_embeddings``, and its row
+    is the marker the backfill looks for.
+    """
+    conn.executescript(_SCHEMA_V13)

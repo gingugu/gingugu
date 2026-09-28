@@ -27,6 +27,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 
+from . import chunking
 from . import embeddings as emb
 from .embeddings import EmbeddingProvider, embedding_input
 from .models import utcnow_iso
@@ -53,11 +54,12 @@ def persist_one(
     title: str,
     content: str,
 ) -> None:
-    """Encode one memory and upsert its vector. Best-effort."""
+    """Encode one memory and upsert its vector and pieces. Best-effort."""
     if not _enabled(embedder):
         return
+    text = embedding_input(title, content)
     try:
-        vec = embedder.encode(embedding_input(title, content))
+        vec = embedder.encode(text)
     except Exception:
         logger.exception("encode failed for memory %s; skipping embedding", memory_id)
         return
@@ -66,6 +68,7 @@ def persist_one(
     now = utcnow_iso()
     try:
         conn.execute(_UPSERT, (memory_id, embedder.model_name, len(vec), emb.pack(vec), now, now))
+        chunking.persist_pieces(conn, embedder, memory_id, text)
         conn.commit()
     except Exception:
         logger.exception("persist_embedding failed for memory %s", memory_id)
@@ -173,7 +176,7 @@ def embed_ids(
         except Exception:
             logger.exception("batch encode failed for %d memories; skipping batch", len(rows))
             continue
-        for r, vec in zip(rows, vectors, strict=False):
+        for r, text, vec in zip(rows, texts, vectors, strict=False):
             if vec is None:
                 continue
             try:
@@ -181,6 +184,7 @@ def embed_ids(
                     _UPSERT,
                     (r["id"], embedder.model_name, len(vec), emb.pack(vec), now, now),
                 )
+                chunking.persist_pieces(conn, embedder, r["id"], text)
                 written += 1
             except Exception:
                 logger.exception("embedding write failed for memory %s", r["id"])
@@ -198,11 +202,16 @@ def backfill(
     cold model download must not block the process. It is a safety net for
     rows that predate an embedding upgrade, NOT the repair path for a bulk
     import - that caller knows its own ids and should use `embed_ids`.
+
+    Also pieces one batch of memories written before pieces existed (see
+    `chunking`). The return value counts both: memories given a head vector,
+    plus memories given their pieces. Zero means there is nothing left to do.
     """
     ids = unembedded_ids(conn, embedder, limit=batch_size)
-    if not ids:
-        return 0
-    written = embed_ids(conn, embedder, ids, batch_size=batch_size)
+    written = embed_ids(conn, embedder, ids, batch_size=batch_size) if ids else 0
     if written:
         logger.info("Backfilled %d embeddings", written)
-    return written
+    pieced = chunking.backfill(conn, embedder, batch_size=batch_size) if _enabled(embedder) else 0
+    if pieced:
+        logger.info("Backfilled pieces for %d memories", pieced)
+    return written + pieced
