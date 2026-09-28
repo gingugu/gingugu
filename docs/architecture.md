@@ -228,6 +228,34 @@ hour) so it can't grow unbounded when `memory_stats` is rarely called. Aggregate
 counts are denormalized onto `memories.access_count`, so trimming the log is
 non-destructive to ranking.
 
+#### `memory_chunks`
+```sql
+CREATE TABLE memory_chunks (
+    memory_id  TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    chunk      INTEGER NOT NULL,
+    start_char INTEGER NOT NULL,
+    end_char   INTEGER NOT NULL,
+    model      TEXT NOT NULL,
+    dim        INTEGER NOT NULL,
+    embedding  BLOB,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (memory_id, chunk)
+);
+```
+
+Additive (migration 013): a store with no rows here searches exactly as it did
+before pieces existed. An encoder reads a fixed token window - 512 for the
+default bge-small - and silently truncates the rest; measured on a real brain,
+79.1% of memories are longer than that. Chunk 0 is the head: its vector is the
+one `memory_embeddings` already holds, so its row here carries only the span
+and a NULL `embedding`, doubling as the marker that a memory has been pieced at
+all. Every chunk past it gets its own vector, cut on the encoder's own tokens
+via a no-truncation copy of its tokenizer (`FastEmbedProvider.token_offsets`)
+so a piece's span never overflows the window it exists to fit. `start_char`/
+`end_char` are offsets into `embedding_input(title, content)`, so a piece's
+text is re-derived rather than stored twice. Only a backend exposing token
+offsets is pieced; Ollama and disabled embeddings stay head-only.
+
 #### `activity` and `dream_lock`
 ```sql
 CREATE TABLE activity (
@@ -301,6 +329,16 @@ Two candidate pools are pulled **independently** for a query:
   memory matching the query's *meaning* surfaces even when it shares no
   keywords with it, while weak lookalikes can't crowd out keyword matches.
   Both knobs are tuned against the retrieval benchmark (`bench/`).
+
+A BM25-pool member longer than the encoder's fixed token window is scored on
+one piece from `memory_chunks` (see *`memory_chunks`* above) rather than its
+head vector alone: the piece holding the most distinct query words, ties to
+the head. Cosine never picks the piece - scoring by the best-matching one was
+measured and rejected, since every long sibling then gets several chances to
+match and the head's score pays for the tail's gain. A memory outside the
+BM25 pool keeps its head vector regardless. Real brain copy, 383
+position-stratified questions: hybrid mrr 0.2675 → 0.284, tail mrr 0.197 →
+0.256, +7ms/search.
 
 The two rankings are fused with **Reciprocal Rank Fusion** (`k = 60`) over
 their union and normalized to `[0, 1]` — rank 1 in both pools maps to `1.0`.
@@ -1416,6 +1454,8 @@ src/gingugu/
 ├── search_listing.py       # Ordered retrieval: by column, score, match set, or id
 ├── embeddings.py           # Vector generation; owns the one embedding_input() recipe
 ├── embedding_sync.py       # Keeps memory_embeddings in step with memories
+├── chunking.py             # Pieces: vectors for a memory's tail, past the encoder's window
+├── embed_cli.py            # gingugu embed: runs the embedding backfill to completion
 ├── similarity.py           # Absolute payload-vs-memory similarity for write-time hints
 ├── decay.py                # Composite scoring, freshness anchor, dormancy, age labels
 ├── excerpt.py              # Reading inside one memory: offsets + literal matches

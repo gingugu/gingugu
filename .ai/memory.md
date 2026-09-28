@@ -67,7 +67,9 @@
 | `search_filters.py` | `advanced_search`: picks the retrieval strategy `sort_by` asks for - the hybrid engine, or one of the ordered listings |
 | `search_listing.py` | The ordered-retrieval strategies: by column, by composite score, by FTS match set, by exact id. Each selects rows in the order it returns them; none re-sorts a pool truncated on another axis |
 | `embeddings.py` | Semantic vector generation; owns `embedding_input()`, the one text recipe the write path and any compare path must share |
-| `embedding_sync.py` | Keeps `memory_embeddings` in step with `memories`. Extracted from `storage.py` because the invariant belongs to whoever writes a memory row, and `MemoryStore` is not the only one - `memory_import` writes them too. There are NO triggers for embeddings; a vector exists only where code deliberately wrote one |
+| `embedding_sync.py` | Keeps `memory_embeddings` in step with `memories`. Extracted from `storage.py` because the invariant belongs to whoever writes a memory row, and `MemoryStore` is not the only one - `memory_import` writes them too. There are NO triggers for embeddings; a vector exists only where code deliberately wrote one. Also calls `chunking.persist_pieces` on every write, so pieces stay in step with the head vector |
+| `chunking.py` | Pieces: vectors for a memory's tail, past the encoder's fixed token window (measured: 79.1% of a real brain is longer than bge-small's 512-token window). Splits on the encoder's own tokens into overlapping windows; piece 0 is the head, whose vector already lives in `memory_embeddings`, so its row here carries only the span and marks the memory as pieced. `cohort_vectors()` scores a keyword-pool member on exactly ONE piece - the one holding the most distinct query words, ties to the head - never the best-matching one; cosine never chooses. Entrants outside the pool keep their head vector. Only a backend exposing `token_offsets` + `max_tokens` gets pieced; Ollama and disabled embeddings stay head-only |
+| `embed_cli.py` | `gingugu embed`: runs the embedding backfill (vectors and pieces) to completion in one run, instead of one small batch per server start - the tool for giving an existing brain its pieces after upgrading. Safe to interrupt and re-run; every batch commits |
 | `similarity.py` | ABSOLUTE payload-vs-memory similarity for the write-time hints: cosine, or token Jaccard without embeddings. Cutoffs are calibrated against a real corpus, never inherited from a ranking score |
 | `context.py` | Session priming (`memory_context`): the pinned tier + three quota'd intent buckets, plus spreading activation. Decides how buckets are scored, quota'd and presented |
 | `context_buckets.py` | Where those buckets' rows come from: one SQL fetcher per intent (recency, pins, cross-namespace), each ordered by its own native signal. Split from `context.py` when it crossed 300 lines; the seam is "where rows come from" vs "how they are combined" |
@@ -208,7 +210,14 @@ gap between the count and the rows.
   one-namespace-per-repo convention, load-bearing: 145 claims vs 26 without it);
   a slug overrides it; `""` declares the namespace is not a repo at all, so bare
   refs are dropped rather than mis-keyed. `crow` and `default` are seeded `""`.
-- Schema versioned via `PRAGMA user_version` (**currently 12**); migrations
+- `memory_chunks` table (migration 013): pieces of a memory past the encoder's
+  fixed token window - vectors for the tail an encoder silently truncates away.
+  Purely additive; `memory_embeddings` (the head vector) is untouched. Chunk 0
+  carries the span but no vector (NULL), doubling as the marker that a memory
+  has been pieced. PK `(memory_id, chunk)`, `ON DELETE CASCADE`; spans are char
+  offsets into `embedding_input(title, content)`, so a piece's text is
+  re-derived rather than stored twice. See `chunking.py`.
+- Schema versioned via `PRAGMA user_version` (**currently 13**); migrations
   additive by default. Migration 006 adds no schema — it re-runs the claims
   backfill to repair DBs that reached v5 from pre-fix code and so can never
   run 005 again. Migration 007 adds `default_repo` and re-derives every claim
@@ -229,7 +238,9 @@ gap between the count and the rows.
   the lock unable to be held twice however badly a caller misuses it.
   `activity` is **seeded** at migration time, because an empty heartbeat table
   and a genuinely idle store are indistinguishable to a reader, and the safe
-  reading of "I have never seen activity" is not "start work now".
+  reading of "I have never seen activity" is not "start work now". Migration 013
+  adds `memory_chunks`: a store with no rows there searches exactly as it did
+  before pieces existed.
 
 ---
 
