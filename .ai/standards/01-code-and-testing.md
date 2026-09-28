@@ -175,6 +175,17 @@
   deprecated memory is still not unique - excluding them from the evidence would
   have manufactured wrong labels, which is the worse defect. Exclude a row from
   being the answer, never from being evidence.
+- **A generated question also chooses WHERE it looks - check that against what
+  the engine can see (2026-09-27).** The same generator took the first unique
+  phrase in each memory, so every question asked about an opening. The embedder
+  truncates at 512 tokens and 79.1% of the real brain is longer, so the whole
+  set lived inside the one region the semantic side can read: 0 of 126 phrases
+  sat past the window. Probed from the tail, the same 126 targets lost 38% of
+  their mrr (0.3353 -> 0.2078). A selection rule that is deterministic and "neutral" still samples one
+  part of the input, and a defect that lives in the unsampled part is invisible
+  however many questions are generated. **Stratify generated questions by every
+  axis the code under test treats unevenly - position, length, age - and report
+  each stratum, not only the mean.**
 - **The same blind spot covers types, not just behaviour - second confirmed
   instance (2026-09-02).** Because `offline_embeddings` is autouse, no test had
   ever called `embeddings.cosine` with real encoder output. fastembed returns a

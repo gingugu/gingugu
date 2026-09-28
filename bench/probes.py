@@ -29,6 +29,16 @@ precondition for the defect - a bare phrase would not reproduce it. Using one
 wrapper everywhere keeps it a controlled variable rather than a source of
 variance between questions.
 
+POSITION. Each target is probed up to three times, with a phrase from its head,
+middle and tail, and the question's ``kind`` names which. The embedder reads only
+the first 512 tokens and truncates the rest silently, so a set that asks only
+about openings cannot see that defect: measured 2026-09-27 on the real brain,
+79.1% of memories ran past the window, yet every first-unique-phrase probe sat
+inside it (median token 77), and probing the same targets from their tail cut
+mrr from 0.3353 to 0.2078. Read the per-kind rows, not only the overall mean.
+The ``head`` phrase is the original first-unique-phrase rule, so ``head``
+figures stay comparable with numbers recorded before stratification.
+
 READ THE OUTPUT'S LIMITS. The phrase is unique as a contiguous STRING, but FTS5
 indexes WORDS, and the individual words of a phrase are usually common. So
 these questions test phrase-level recall against a word-level index. That is a
@@ -70,6 +80,13 @@ NGRAM_LENS = (5, 6, 4)
 SIG_TOKENS = 3
 WRAPPER = "what did we say about {}"
 
+# Where in a memory each probe's phrase is taken from, and the question `kind`
+# that labels it. The embedder silently truncates at 512 tokens and most of a
+# real brain is longer, so a set probing only the opening cannot see that defect
+# at all: measured 2026-09-27, every first-unique-phrase probe sat inside the
+# window. Each value is an anchor as a fraction of the memory's length in words.
+POSITIONS: dict[str, float] = {"head": 0.0, "middle": 0.5, "tail": 1.0}
+
 # Stripped before computing a title signature. These are exactly the parts that
 # DISTINGUISH members of a family (the date, the sail number, the item count),
 # so removing them is what makes siblings collapse onto one signature.
@@ -99,8 +116,12 @@ def content_ngrams(content: str, n: int) -> list[str]:
     carry fewer than two content words, are skipped because they cannot
     identify anything.
     """
-    words = content.split()
-    out: list[str] = []
+    return [gram for _, gram in _indexed_ngrams(content.split(), n)]
+
+
+def _indexed_ngrams(words: list[str], n: int) -> list[tuple[int, str]]:
+    """``content_ngrams`` with each gram's starting word index."""
+    out: list[tuple[int, str]] = []
     for i in range(len(words) - n + 1):
         gram = words[i : i + n]
         if any(not w.replace("-", "").isalnum() for w in gram):
@@ -108,7 +129,7 @@ def content_ngrams(content: str, n: int) -> list[str]:
         lowered = [w.lower() for w in gram]
         if sum(1 for w in lowered if w not in _STOP) < 2:
             continue
-        out.append(" ".join(gram))
+        out.append((i, " ".join(gram)))
     return out
 
 
@@ -126,16 +147,25 @@ def find_families(rows: list[sqlite3.Row]) -> dict[tuple[str, str], list[sqlite3
     return {key: members for key, members in families.items() if len(members) >= MIN_FAMILY}
 
 
-def unique_phrase(memory: sqlite3.Row, siblings: list[sqlite3.Row]) -> str | None:
+def unique_phrase(
+    memory: sqlite3.Row, siblings: list[sqlite3.Row], anchor: float = 0.0
+) -> str | None:
     """A phrase from ``memory`` that appears in no other row of its namespace.
 
     THE LABEL PROOF. Every row of the namespace is checked, never a sample:
     a phrase that is unique among a family's siblings but shared with some
     unrelated memory would make the labelled answer simply wrong, and a wrong
     label is worse than a missing question.
+
+    ``anchor`` is where in the memory to look, as a fraction of its length in
+    words: the unique gram starting nearest it wins, earlier on a tie. The
+    default of 0.0 is the original first-unique-phrase rule, unchanged.
     """
+    words = memory["content"].split()
+    target = anchor * max(len(words) - 1, 0)
     for n in NGRAM_LENS:
-        for gram in content_ngrams(memory["content"], n):
+        grams = sorted(_indexed_ngrams(words, n), key=lambda ig: (abs(ig[0] - target), ig[0]))
+        for _, gram in grams:
             needle = gram.lower()
             holders = [other["id"] for other in siblings if needle in other["content"].lower()]
             if holders == [memory["id"]]:
@@ -169,20 +199,26 @@ def generate(conn: sqlite3.Connection) -> dict:
         for memory in members:
             if made >= QUESTIONS_PER_FAMILY:
                 break
-            phrase = unique_phrase(memory, by_namespace[namespace])
-            if phrase is None:
-                continue
-            questions.append(
-                {
-                    "id": f"tf-{len(questions):04d}",
-                    "query": WRAPPER.format(phrase),
-                    "namespaces": [namespace],
-                    "relevant": [memory["id"]],
-                    "kind": "single",
-                    "notes": f"family={sig!r} size={len(members)} ns={namespace}",
-                }
-            )
-            made += 1
+            # A phrase already asked for this target is dropped, not repeated:
+            # a short memory may have one distinguishing sentence, and asking it
+            # three times would triple-weight that target in the aggregate.
+            asked: set[str] = set()
+            for position, anchor in POSITIONS.items():
+                phrase = unique_phrase(memory, by_namespace[namespace], anchor)
+                if phrase is None or phrase in asked:
+                    continue
+                asked.add(phrase)
+                questions.append(
+                    {
+                        "id": f"tf-{len(questions):04d}",
+                        "query": WRAPPER.format(phrase),
+                        "namespaces": [namespace],
+                        "relevant": [memory["id"]],
+                        "kind": position,
+                        "notes": f"family={sig!r} size={len(members)} ns={namespace}",
+                    }
+                )
+            made += bool(asked)
 
     return {
         "version": 1,
@@ -191,7 +227,9 @@ def generate(conn: sqlite3.Connection) -> dict:
             "GENERATED, not hand-labelled. Every question asks for a phrase occurring "
             "in exactly one memory of its namespace, verified against the corpus at "
             "generation time, and every target sits inside a template family of "
-            f"{MIN_FAMILY}+ siblings sharing a title shape. Targets are always "
+            f"{MIN_FAMILY}+ siblings sharing a title shape. Each target is probed "
+            "at its head, middle and tail, and `kind` names the position; a "
+            "position with no phrase of its own is dropped. Targets are always "
             "retrievable: deprecated memories are excluded as answers, since search "
             "withholds them by default, but are still scanned when proving a phrase "
             "unique. Contains real memory content: keep under bench/local/, never "

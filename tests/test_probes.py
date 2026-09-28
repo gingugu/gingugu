@@ -16,6 +16,7 @@ import pytest
 from bench.dataset import load_dataset
 from bench.probes import (
     MIN_FAMILY,
+    POSITIONS,
     QUESTIONS_PER_FAMILY,
     content_ngrams,
     find_families,
@@ -161,10 +162,13 @@ def test_every_generated_label_is_provably_correct():
 
 
 def test_generation_caps_questions_per_family():
-    """One 55-member family must not be allowed to dominate the metric."""
+    """One 55-member family must not be allowed to dominate the metric.
+
+    The cap counts TARGETS: each target is then probed at up to three positions.
+    """
     conn = _brain(_family(5))
     dataset = generate(conn)
-    assert len(dataset["questions"]) == QUESTIONS_PER_FAMILY
+    assert len({q["relevant"][0] for q in dataset["questions"]}) == QUESTIONS_PER_FAMILY
     conn.close()
 
 
@@ -178,7 +182,7 @@ def test_generated_dataset_loads_through_the_bench_schema(tmp_path):
     ds = load_dataset(out)
     assert not ds.is_fixture  # real-brain shape: UUIDs, no inline memories
     assert ds.questions
-    assert all(q.kind == "single" and len(q.relevant) == 1 for q in ds.questions)
+    assert all(q.kind in POSITIONS and len(q.relevant) == 1 for q in ds.questions)
 
 
 def test_deprecated_memories_are_never_labelled_as_the_answer():

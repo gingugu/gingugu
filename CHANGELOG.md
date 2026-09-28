@@ -89,6 +89,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ranking failure. Four prospective ranking changes were measured against it and
   rejected before reaching `src/`.
 
+  Every target is probed up to three times, with a phrase from its head, middle
+  and tail, and results are reported per position. The embedder reads only a
+  memory's first 512 tokens, and most memories in a working brain are longer,
+  so a question drawn from a memory's opening measures only the part the
+  semantic side can see. The stratified set reports the tail separately, where
+  it runs well below the head (mrr 0.197 against 0.337 on a real brain).
+
   Generated sets contain real memory content and stay in the gitignored
   `bench/local/`; only the generator is committed.
 

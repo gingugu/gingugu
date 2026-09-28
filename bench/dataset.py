@@ -18,7 +18,10 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-_VALID_KINDS = ("single", "multi")
+# `kind` is the label results are aggregated by. single/multi describe how many
+# answers a hand-labelled question has; head/middle/tail are generated probes,
+# named for where in the target memory the queried phrase sits (bench/probes.py).
+_VALID_KINDS = ("single", "multi", "head", "middle", "tail")
 _VALID_TYPES = (
     "fact",
     "decision",
