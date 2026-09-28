@@ -21,8 +21,11 @@ from .storage import MemoryStore
 logger = logging.getLogger(__name__)
 
 
-def build_server() -> FastMCP:
-    """Construct and fully wire the FastMCP server."""
+def build_server(transport: str = "stdio") -> FastMCP:
+    """Construct and fully wire the FastMCP server.
+
+    ``transport`` is "stdio" or "http"; `gingugu serve` passes "http".
+    """
     config = load_config()
     from .config import setup_logging
 
@@ -56,6 +59,7 @@ def build_server() -> FastMCP:
         store=store,
         namespaces=NamespaceManager(conn, config),
         conn=conn,
+        transport=transport,
     )
 
     mcp = FastMCP("gingugu")

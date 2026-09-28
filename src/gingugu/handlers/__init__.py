@@ -21,6 +21,11 @@ class ServerContext:
     store: MemoryStore
     namespaces: NamespaceManager
     conn: object  # sqlite3.Connection — kept loose to avoid import churn
+    # "stdio" for a local client, "http" under `gingugu serve`. Tools that touch
+    # the local filesystem on the caller's behalf allow it only on an exact
+    # "stdio", so the default fails closed: a context that never said what it
+    # is gets no file writes.
+    transport: str = "unknown"
 
 
 class _HeartbeatMCP:
