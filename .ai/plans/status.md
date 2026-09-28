@@ -4,7 +4,41 @@ _Last updated: 2026-09-28_
 
 ## In Flight
 
-**Board item 3: namespace auto-widen, on `feature/namespace-auto-widen`.**
+**Board items 4 + 5: provenance and aboutness, on `feature/provenance-aboutness`.**
+Two write-time declared fields on the memory record, one migration (014,
+new `migrations/fields.py`). **`provenance`** is a new column, not a
+vocabulary over `source`: measured on the live brain, `source` holds 1061
+distinct values across 1233 rows and mostly records the occasion a memory was
+written ("session ...", "/sink-the-ship"), so the board's "no new column"
+premise did not survive a read of the data. Vocabulary `user-asserted /
+measured / file-derived / self-concluded`, enforced in the application layer
+(store, update and import reject anything else; no SQL `CHECK`, since SQLite
+cannot alter one in place). Surfaced in compact payloads too. **`about`** is
+indexed on both sides: a third `memories_fts` column (index and triggers
+rebuilt in one transaction) and part of the embedding text, between title and
+content, via the new `embedding_text.py`. Rows without it embed byte-identically,
+so nothing stored goes stale. Neither field advances `last_confirmed`; changing
+`about` re-embeds. Hints still compare title + content only. Splits to hold 300
+lines: `handlers/summaries.py`, `handlers/choices.py`. 36 new tests, 996
+passed + 1 xfailed; five mutations each caught. Migration on a copy of the live
+brain: 0.30s, all 2716 rows, FTS hits and `source` values intact.
+
+**Operational note:** `bench --db` opens a brain read-only and never migrates,
+so against a v13 brain the new code fails with `no such column: m.provenance`.
+Start the server once after upgrading (it migrates, with a `.bak-before-v14`)
+before benching the live DB.
+
+**The fresh-memory penalty, measured and NOT changed.** On the brain copy an
+`about`-matched memory had the highest relevance of any hit (0.45, the cap) for
+the user's own phrasing and still ranked 19th of 40: access 0 and the default
+`inferred` confidence cost it 0.17 against worn, verified neighbours. Every
+available knob was swept on the 383-question set (see board item 1, dead fixes
+9 and 10). None ships; `about` works as retrieval signal, and the composite that
+buries new memories stays as it was.
+
+## Recently Completed
+
+**Board item 3: namespace auto-widen. MERGED as `8259d1d` (#86).**
 Server-side resolution turned out to be static per process (explicit arg, then
 `MEMORY_NAMESPACE`, then the `MEMORY_NAMESPACE_PATH` basename, then `default`),
 so on a global server with neither variable set every read that omitted
@@ -18,8 +52,6 @@ answer. Empty-only trigger, no relevance floor: scores are not calibrated for
 one, and confident-but-wrong hits are item 5's problem. Writes and
 `memory_context` unchanged. 13 new tests; 960 passed, 1 xfailed; three
 mutations each caught.
-
-## Recently Completed
 
 **Board item 2: `credential_get` keeps secrets out of context. MERGED as
 `044e3e2` (#85).** Secret values are redacted by default - a
@@ -530,8 +562,11 @@ tranche soaked locally for a full week, the release was cut ahead of them.
 
 ## The Board (current: 2026-09-28)
 
-**Seventeen items.** Items 2 (`credential_get` redaction, #85) and 3 (namespace
-auto-widen) shipped 2026-09-28 and are off the board; the remaining items keep
+**Sixteen items.** Item 4 (provenance) shipped 2026-09-28 with the declared-field
+half of item 5 (`about`), on `feature/provenance-aboutness`; item 4 is off the
+board and item 5 keeps its two undesigned directions. Items 2 (`credential_get`
+redaction, #85) and 3 (namespace auto-widen, #86) shipped 2026-09-28 and are off
+the board; the remaining items keep
 their numbers so existing references stay valid. Ten entered 2026-09-28 (10-19),
 approved as directions and not yet designed; see their sections below. The rest of this paragraph
 describes the 2026-09-27 board of nine. One entered (9, a paraphrase question set). Item 1 gained a new
@@ -547,8 +582,7 @@ boarded - no item below rests on an unverified reading.
 | # | Item | Why here |
 |---|---|---|
 | 1 | **Template/sibling noise in retrieval** | Five witnesses, a **committed, deterministic, offline repro**, and a concrete mechanism on the semantic side: 512-token truncation (1d) |
-| 4 | **Provenance vocabulary on `source`** | A stored conclusion is indistinguishable from a stored fact at recall time |
-| 5 | **Aboutness: the store speaks the author's vocabulary** | The user's own word for a workstream found nothing; four queries to reach it |
+| 5 | **Aboutness: the store speaks the author's vocabulary** | The `about` field shipped; the capability pointer and lexical/semantic arbitration remain |
 | 6 | Governance bands | Unblocked - 48 decided proposals to calibrate against |
 | 7 | `--adopt` + manage repo CLAUDE.md / AGENTS.md | Fixes a drift class |
 | 8 | Hygiene - grew again | `serve --help` + `MEMORY_*` naming + pin skew + duplicated stats globals + bulk relate |
@@ -576,15 +610,13 @@ struck row did not ask for that; if it is ever wanted it enters as a new item
 with its own body.
 
 **Item 1 is PARKED (2026-09-28).** Its measured-positive fix (1d) shipped; the
-remaining sibling-noise half has no live hypothesis after eight dead fixes, and
+remaining sibling-noise half has no live hypothesis after ten dead fixes, and
 without a target there is nothing to build. Re-open it only with a new
 hypothesis, measured on the full 383-question stratified set. Items 2 and 3
 shipped 2026-09-28.
 
-**Recommended sequencing: 4 and 5 together.**
-
-Items 4 and 5 are both write-time declared fields on the existing record, so they want
-one migration and one pass, not two.
+**Recommended sequencing: 10 (tripwires)**, the user's top pick of the ten
+entered 2026-09-28, now that the write-time fields it can key off exist.
 
 ### 1. Template/sibling noise in retrieval - now reproducible, and the fix reversed
 
@@ -861,7 +893,7 @@ averages 3550 chars against the leader's 3414.)
 an `xfail(strict=True)`. When the fix lands it XPASSes and fails the suite, which
 is the prompt to remove the marker.
 
-**Read the history before starting. Eight candidate fixes are now dead, two of
+**Read the history before starting. Ten candidate fixes are now dead, two of
 them prescribed by this very item - and one fix is live (1d, lexical pieces).**
 
 1. **Keep-newest family collapse - falsified 2026-09-20**, by the controlled
@@ -886,9 +918,21 @@ them prescribed by this very item - and one fix is live (1d, lexical pieces).**
    pays back the tail's gain.
 8. **Piece ranking as a third RRF list - falsified 2026-09-27**, see 1d. All
    mrr 0.2109.
+9. **A new-memory access grace - falsified 2026-09-28.** Access floored at a
+   prior fading over G days, swept G 3/7/14 x prior 0.3/0.5/0.7 on the 383-question
+   set (v14 brain copy, baseline mrr 0.2865). Young targets rise with the prior
+   (0.19 -> 0.31) and old targets fall by more, because a template family's
+   distractors are themselves young. Best overall +0.0023 with 16 questions worse
+   and 7 better; larger priors strictly worse (14/0.7: 51 worse, 11 better).
+10. **Lowering `w_access` or `w_confidence` - measured 2026-09-28**, step 3 of the
+   2026-08-17 sequence. `w_access` 0.05 -> mrr 0.2828, 0 -> 0.2638: access is
+   what keeps old answers findable. `w_confidence` 0.20/0.10/0 -> +0.001 to
+   +0.004 with 2-6 questions moving: noise, young targets exactly unchanged (for a
+   new verified memory the confidence term equals everyone's), and dropping it
+   would erase stale-vs-verified, which this probe set cannot see.
 
 Three patterns are worth naming, because the next candidate will look just as
-obvious as the eight above did.
+obvious as the ten above did.
 
 **Every dead fix tried to change which memory WINS** a contest whose scores were
 already flattened. The pool-miss finding in 1a says a large part of this item is
@@ -913,29 +957,13 @@ should be believed on fewer than the full probe set, and a future fix direction
 that cannot be measured that way should be treated as not yet measurable rather
 than promising.
 
-### 4. Provenance vocabulary on `source` - vocabulary approved 2026-09-07
+### 4. Provenance - SHIPPED 2026-09-28, off the board
 
-`Confidence` is verified / inferred / stale / deprecated. All four are
-truth-flavoured and none is provenance, so `verified` in practice means "this
-was saved accurately", not "this claim is true". A stored inference and a
-stored fact therefore arrive stamped identically and both read as settled.
-Measured: 97.8% of one namespace is `verified`, so the field discriminates
-essentially nothing.
-
-`Memory.source: str | None` already exists and is populated on roughly half the
-store with uncontrolled free text - and that text is _already_ provenance-shaped
-by hand about half the time. So this is a controlled vocabulary on an existing
-column: no new column, likely no migration.
-
-**Approved vocabulary**, one axis - how did the writer come to believe this:
-`user-asserted` / `measured` / `file-derived` / `self-concluded`.
-`self-concluded` carries the point - it makes a stored opinion arrive visibly
-contestable. Declared at write time by whoever saves, never judged by a model,
-so it holds the design law that truth status is math and not model judgment.
-
-Open, and implementation rather than design: what happens to existing NULL and
-legacy free-text values; whether the value surfaces in compact payloads or full
-only; whether the vocabulary is enforced or advisory.
+Built as a new `provenance` column (migration 014), not a vocabulary over
+`source`: measured on the live brain, `source` holds 1061 distinct values across
+1233 rows and mostly records the occasion a memory was written, a different axis.
+The approved vocabulary is enforced; legacy rows stay NULL ("undeclared"), with
+no guessed backfill. See In Flight.
 
 ### 5. Aboutness: the store is indexed on the author's vocabulary
 
@@ -971,12 +999,13 @@ anything left alone for one session falls out of the chain and cannot be recover
 from it. That is a design consequence of the chain, not an authoring slip, and it
 is a second argument against the whole approach on top of item 1's measurement.
 
-Fix directions, neither designed:
+**Shipped 2026-09-28: the `about` field**, declared at write time and indexed
+on both sides of the hybrid (FTS5 column + embedding text). Measured on a brain
+copy, a memory matched only by `about` reaches the maximum relevance for the
+user's phrasing - and still ranked 19th of 40, buried by the composite's access
+term. That is board item 1's territory (dead fixes 9 and 10), not a defect in the
+field. Remaining directions, neither designed:
 
-- **An aboutness field declared at write time** - what this is for, in the user's
-  terms, as distinct from what was done. Tags do not serve this today; in practice
-  they hold dates, session numbers and proper nouns. Pairs naturally with item 4,
-  since both are write-time declared fields on the existing record.
 - **A capability pointer.** The narrower, cheaper half, and the user's own
   observation: memory can say _how to do a thing_ but has no way to say _the thing
   that does it exists, here, run it like this_. One integration's REST mechanics

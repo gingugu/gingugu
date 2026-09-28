@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`memory_store` and `memory_update` take `provenance` and `about`.**
+  `provenance` declares how the writer came to believe the memory -
+  `user-asserted`, `measured`, `file-derived`, or `self-concluded` - enforced
+  at the application layer, not a SQL constraint; any other value is
+  rejected. It is orthogonal to `confidence`: a `verified` memory can still
+  be `self-concluded`, and surfacing that in every payload, including
+  compact ones, is the point - a stored opinion arrives visibly contestable
+  instead of reading as settled fact. `about` declares what the memory is
+  for, in the user's own words for the thing rather than the words of what
+  was done, and is indexed on both sides of hybrid search - a new
+  `memories_fts` column, and part of the embedding text, placed between
+  title and content so it always sits inside the encoder's window. A memory
+  with no `about` embeds byte-identically to before, so no stored vector or
+  piece span goes stale. Neither field advances `last_confirmed`. On
+  `memory_update`, `""` clears either field. `source` is untouched and
+  stays what it always was: the occasion a memory was written.
+
 - **Recall and search widen to every namespace when the scoped lookup finds
   nothing.** A `memory_recall`, or a `memory_search` with a `query`, that comes
   back empty in the namespaces it was scoped to reruns once across every
@@ -20,6 +37,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   here" is its answer. `memory_context` is unchanged.
 
 ### Changed
+
+- **Schema version 14.** `memories_fts` gains a third indexed column,
+  `about` (`title`, `content`, `about`), with all three sync triggers rebuilt
+  to match and a full FTS `rebuild` after. The migration is re-runnable and,
+  measured on a copy of a 2716-memory real brain, ran in 0.30s with every
+  row, every FTS hit, and every `source` value preserved.
 
 - **`memory_recall` with no `namespace` on an unconfigured server searches
   every namespace** instead of the `default` fallback, and reports

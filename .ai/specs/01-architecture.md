@@ -34,25 +34,33 @@ AI client (Claude Code / Cursor / Windsurf / …)
 2. **Handlers** (`handlers/`) - thin adapters that validate input, call the core
    modules, and return structured dicts. Split by domain: `memory`, `forget`,
    `hints`, `recall`, `search`, `excerpt`, `relations` (+ `relation_ops`),
-   `consolidate`, `dream`, `admin`, `credentials`, plus `helpers` and `scope`
-   (the read scope recall and search share: all namespaces when unconfigured,
-   widen an empty scoped lookup to every namespace).
-3. **Core** - `storage`, `search`, `embeddings`, `chunking`, `context`, `relations`,
-   `consolidation`, `decay`, `stats`, `namespaces`, `portability`. `storage`
-   owns the `memories` row only; the satellite tables it drags along have their
-   own owners (`tags`, `access`, `embedding_sync`, `claim_sync`), reached
-   through the `storage_derived.DerivedTables` delegation surface. They are
-   modules over a bare connection rather than methods on `MemoryStore` because
-   `portability.import_data` writes memory rows too, and an invariant locked
-   inside that class is one the import path cannot honor.
+   `consolidate`, `dream`, `admin`, `credentials`, plus `summaries` (payload
+   shapes: full summary, compact summary, the picker between them), `choices`
+   (enum argument parsing shared by every write-surface field with a controlled
+   vocabulary), `helpers` and `scope` (the read scope recall and search share:
+   all namespaces when unconfigured, widen an empty scoped lookup to every
+   namespace).
+3. **Core** - `storage`, `search`, `embeddings`, `embedding_text`, `chunking`,
+   `context`, `relations`, `consolidation`, `decay`, `stats`, `namespaces`,
+   `portability`. `storage` owns the `memories` row only; the satellite tables
+   it drags along have their own owners (`tags`, `access`, `embedding_sync`,
+   `claim_sync`), reached through the `storage_derived.DerivedTables`
+   delegation surface. They are modules over a bare connection rather than
+   methods on `MemoryStore` because `portability.import_data` writes memory
+   rows too, and an invariant locked inside that class is one the import path
+   cannot honor. `embedding_text.embedding_input()` is the one text recipe
+   every write path and every compare path shares - split out of `embeddings`
+   because it is a contract between callers, not provider code.
 4. **Persistence** - `database.py` owns the SQLite connection and its PRAGMAs
    (WAL, foreign keys, busy timeout). The schema itself lives in the
    `migrations/` package: `schema.py` for structural work (tables, columns,
    FTS5 triggers), `claim_derivation.py` for migrations that only re-read
    existing prose, `runtime.py` for coordination tables that describe the
    processes touching the store rather than the memories in it (`activity`,
-   `dream_lock`), and `__init__.py` for the ordered registry and the runner.
-   `config.py` resolves the DB path.
+   `dream_lock`), `fields.py` for write-time declared fields on the memory
+   record (`provenance`, `about`) and the FTS5 rebuild that indexes them, and
+   `__init__.py` for the ordered registry and the runner. `config.py` resolves
+   the DB path.
 
 ## Memory Model
 
@@ -61,6 +69,15 @@ AI client (Claude Code / Cursor / Windsurf / …)
 - **Typed memories:** `type` ∈ {fact, decision, pattern, bug, architecture,
   preference, workflow, context}; `confidence` ∈ {verified, inferred, stale,
   deprecated}.
+- **Write-time declared fields (migration 014):** `provenance` ∈
+  {user-asserted, measured, file-derived, self-concluded} - how the writer
+  came to believe the memory, enforced at the application layer rather than a
+  SQL `CHECK` (SQLite cannot alter a constraint in place). Orthogonal to
+  `confidence`: a `verified` memory can still be `self-concluded`. `about` -
+  what the memory is for, in the user's own words - is indexed on both sides
+  of hybrid search: a `memories_fts` column, and part of the embedding text
+  via `embedding_text.embedding_input()`. Both are `None` until declared, and
+  neither advances `last_confirmed`.
 - **Graph:** directed typed relations (`supersedes`, `related_to`, `caused_by`,
   `contradicts`, `parent_of`, `child_of`). Recall uses **spreading activation** -
   surfacing a memory wakes its linked cluster.
