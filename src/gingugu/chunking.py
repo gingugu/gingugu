@@ -34,7 +34,8 @@ import re
 import sqlite3
 
 from . import embeddings as emb
-from .embeddings import EmbeddingProvider, embedding_input
+from .embedding_text import embedding_input
+from .embeddings import EmbeddingProvider
 from .models import utcnow_iso
 
 logger = logging.getLogger(__name__)
@@ -145,7 +146,7 @@ def backfill(
     if _offsets(embedder, "probe") is None:
         return 0
     rows = conn.execute(
-        "SELECT m.id, m.title, m.content FROM memories m "
+        "SELECT m.id, m.title, m.content, m.about FROM memories m "
         "JOIN memory_embeddings e ON e.memory_id = m.id AND e.dim = ? "
         "WHERE NOT EXISTS (SELECT 1 FROM memory_chunks c "
         "                  WHERE c.memory_id = m.id AND c.chunk = 0 AND c.dim = e.dim) "
@@ -153,7 +154,9 @@ def backfill(
         (embedder.dim, batch_size),
     ).fetchall()
     done = sum(
-        persist_pieces(conn, embedder, r["id"], embedding_input(r["title"], r["content"]))
+        persist_pieces(
+            conn, embedder, r["id"], embedding_input(r["title"], r["content"], r["about"])
+        )
         for r in rows
     )
     conn.commit()
@@ -201,9 +204,9 @@ def _cohort_vectors(
         return {}
     marks = ", ".join("?" for _ in pieced)
     texts = {
-        r["id"]: embedding_input(r["title"], r["content"])
+        r["id"]: embedding_input(r["title"], r["content"], r["about"])
         for r in conn.execute(
-            f"SELECT id, title, content FROM memories WHERE id IN ({marks})", pieced
+            f"SELECT id, title, content, about FROM memories WHERE id IN ({marks})", pieced
         )
     }
     out: dict[str, list[float]] = {}

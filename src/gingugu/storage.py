@@ -18,6 +18,7 @@ from .models import (
     Confidence,
     Memory,
     MemoryType,
+    Provenance,
     memory_columns_sql,
     memory_placeholders_sql,
     normalize_metadata,
@@ -60,6 +61,8 @@ class MemoryStore(DerivedTables, TransactionParticipant):
         source: str | None = None,
         metadata: str | None = None,
         tags: list[str] | None = None,
+        provenance: Provenance | None = None,
+        about: str | None = None,
     ) -> Memory:
         metadata = normalize_metadata(metadata)
         now = utcnow_iso()
@@ -77,6 +80,8 @@ class MemoryStore(DerivedTables, TransactionParticipant):
             last_confirmed=now if confidence == Confidence.VERIFIED else None,
             access_count=0,
             metadata=metadata,
+            provenance=provenance,
+            about=about or None,
         )
         self._conn.execute(
             f"INSERT INTO memories({_COLUMNS}) VALUES ({memory_placeholders_sql()})",
@@ -84,6 +89,7 @@ class MemoryStore(DerivedTables, TransactionParticipant):
                 **mem.model_dump(exclude={"score", "tags"}),
                 "type": mem.type.value,
                 "confidence": mem.confidence.value,
+                "provenance": mem.provenance.value if mem.provenance else None,
                 # New memories are never born pinned: pinning is a deliberate,
                 # budgeted decision made after the fact, never a store-time default.
                 "pinned": 0,
@@ -94,7 +100,7 @@ class MemoryStore(DerivedTables, TransactionParticipant):
         claim_sync.sync(self._conn, mem, now)
         self._commit()
         mem.tags = self.get_tags(mem.id)
-        self._persist_embedding(mem.id, mem.title, mem.content)
+        self._persist_embedding(mem.id, mem.title, mem.content, mem.about)
         logger.info("Stored memory %s (%s)", mem.id, mem.title)
         return mem
 
@@ -120,6 +126,8 @@ class MemoryStore(DerivedTables, TransactionParticipant):
         confidence: Confidence | None = None,
         metadata: str | None = None,
         pinned: bool | None = None,
+        provenance: Provenance | str | None = None,
+        about: str | None = None,
     ) -> Memory | None:
         existing = self.get(memory_id, record_access=False)
         if existing is None:
@@ -153,9 +161,15 @@ class MemoryStore(DerivedTables, TransactionParticipant):
         # it deliberately does not advance last_confirmed (same reasoning as a
         # metadata-only edit above).
         new_pinned = existing.pinned if pinned is None else pinned
+        # Both declarations follow the metadata convention: None leaves the
+        # field alone, "" clears it. Neither advances last_confirmed - saying how
+        # a claim was reached, or what it is for, is not re-checking it.
+        new_provenance = existing.provenance if provenance is None else provenance or None
+        new_about = existing.about if about is None else about or None
+        about_changed = new_about != existing.about
         self._conn.execute(
             "UPDATE memories SET title=?, content=?, type=?, confidence=?, metadata=?, "
-            "pinned=?, updated_at=?, last_confirmed=? WHERE id=?",
+            "pinned=?, provenance=?, about=?, updated_at=?, last_confirmed=? WHERE id=?",
             (
                 new_title,
                 new_content,
@@ -163,6 +177,8 @@ class MemoryStore(DerivedTables, TransactionParticipant):
                 new_confidence.value,
                 new_metadata,
                 int(new_pinned),
+                Provenance(new_provenance).value if new_provenance else None,
+                new_about,
                 now,
                 last_confirmed,
                 memory_id,
@@ -176,8 +192,8 @@ class MemoryStore(DerivedTables, TransactionParticipant):
         self._commit()
         # Re-encode only when the text the embedding was derived from actually
         # changed — confidence/metadata updates don't invalidate the vector.
-        if text_changed:
-            self._persist_embedding(memory_id, new_title, new_content)
+        if text_changed or about_changed:
+            self._persist_embedding(memory_id, new_title, new_content, new_about)
         return self.get(memory_id, record_access=False)
 
     def delete(self, memory_id: str) -> bool:
