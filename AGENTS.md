@@ -133,8 +133,10 @@ src/gingugu/
   namespaces.py      → namespace CRUD
   credentials.py     → OS-keychain credential vault
   portability.py     → export / import a namespace
-  handlers/          → MCP tool handlers: memory.py, search.py, relations.py,
-                       admin.py, credentials.py, helpers.py
+  handlers/          → MCP tool handlers: memory.py, forget.py, hints.py,
+                       recall.py, search.py, scope.py, excerpt.py, relations.py,
+                       relation_ops.py, consolidate.py, dream.py, admin.py,
+                       credentials.py, helpers.py
 ui/                  → Memory Explorer (api.py backend + React/Vite frontend)
 docs/                → architecture.md (mermaids = source of truth), roadmap.md, future-architecture.md
 tests/               → pytest suites (unit + integration MCP flows)

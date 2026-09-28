@@ -4,8 +4,25 @@ _Last updated: 2026-09-28_
 
 ## In Flight
 
-**Board item 2: `credential_get` keeps secrets out of context, on
-`feature/credential-get-redact`.** Secret values are redacted by default - a
+**Board item 3: namespace auto-widen, on `feature/namespace-auto-widen`.**
+Server-side resolution turned out to be static per process (explicit arg, then
+`MEMORY_NAMESPACE`, then the `MEMORY_NAMESPACE_PATH` basename, then `default`),
+so on a global server with neither variable set every read that omitted
+`namespace` searched `default` alone. The namespace drift the witness saw came
+from the caller, not the server. New `handlers/scope.py`: `memory_recall` with
+no namespace on an unconfigured server searches every namespace
+(`scope: "all"`); a scoped lookup that finds nothing reruns once across every
+namespace with the same filters and reports `widened_from`. `memory_search`
+widens only when it has a `query` - an empty filter-only sweep is a real
+answer. Empty-only trigger, no relevance floor: scores are not calibrated for
+one, and confident-but-wrong hits are item 5's problem. Writes and
+`memory_context` unchanged. 13 new tests; 960 passed, 1 xfailed; three
+mutations each caught.
+
+## Recently Completed
+
+**Board item 2: `credential_get` keeps secrets out of context. MERGED as
+`044e3e2` (#85).** Secret values are redacted by default - a
 secret field is `{"is_secret": true, "redacted": true}` and a redacted get
 never reads the keychain. `into=<absolute path>` writes exactly one secret to a
 0600 file (raw value, `O_NOFOLLOW`, an existing file tightened) and returns only
@@ -17,8 +34,6 @@ with `into`. `into` is refused under `gingugu serve` via the new
 server's disk. New module `secret_file.py`. Breaking, in `[Unreleased]`. The
 protocol installed by `gingugu init` (and this repo's CLAUDE.md / AGENTS.md)
 now teaches `into`. 947 passed, 1 xfailed; seven guards proven by mutation.
-
-## Recently Completed
 
 **Board item 1d: tail-aware semantic search. MERGED as `26821bd` (#83, the
 position-stratified probe set) and `8e951e3` (#84, lexically-selected embedding
@@ -513,9 +528,13 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-## The Board (current: 2026-09-27)
+## The Board (current: 2026-09-28)
 
-**Nine items.** One entered (9, a paraphrase question set). Item 1 gained a new
+**Seventeen items.** Items 2 (`credential_get` redaction, #85) and 3 (namespace
+auto-widen) shipped 2026-09-28 and are off the board; the remaining items keep
+their numbers so existing references stay valid. Ten entered 2026-09-28 (10-19),
+approved as directions and not yet designed; see their sections below. The rest of this paragraph
+describes the 2026-09-27 board of nine. One entered (9, a paraphrase question set). Item 1 gained a new
 mechanism (1d): the embedder never sees past a memory's first 512 tokens, and
 the probe set could not see that, because it only ever asked about openings.
 Its numbers are re-baselined per position, and 1d's fix is built: tail mrr
@@ -528,14 +547,22 @@ boarded - no item below rests on an unverified reading.
 | # | Item | Why here |
 |---|---|---|
 | 1 | **Template/sibling noise in retrieval** | Five witnesses, a **committed, deterministic, offline repro**, and a concrete mechanism on the semantic side: 512-token truncation (1d) |
-| 2 | **`credential_get` hands back plaintext** | The vault's own promise is broken by construction; three leaks trace to it |
-| 3 | **Namespace auto-widen on empty** | Now has a live witness: a recall resolved to `default` and returned `count: 0` |
 | 4 | **Provenance vocabulary on `source`** | A stored conclusion is indistinguishable from a stored fact at recall time |
 | 5 | **Aboutness: the store speaks the author's vocabulary** | The user's own word for a workstream found nothing; four queries to reach it |
 | 6 | Governance bands | Unblocked - 48 decided proposals to calibrate against |
 | 7 | `--adopt` + manage repo CLAUDE.md / AGENTS.md | Fixes a drift class |
 | 8 | Hygiene - grew again | `serve --help` + `MEMORY_*` naming + pin skew + duplicated stats globals + bulk relate |
 | 9 | **A paraphrase question set, from the access log** | Every probe is a verbatim-phrase lookup, which favours BM25; the case semantic search exists for is unmeasured |
+| 10 | **Tripwires: involuntary recall at the action** | The user's top pick of the five entered 2026-09-28; involuntary recall exists for prompts, not for the command about to run |
+| 11 | **One central brain, several clients** | `gingugu serve` already exists; today each client runs its own diverging copy |
+| 12 | **Scoped serve tokens** | One shared token grants every client read and write on every namespace; 11 and 13 both need less |
+| 13 | **Warm minions** | Subagents start cold; a read-only, namespace-scoped brain fixes that. Needs 12 |
+| 14 | **A calibration ledger** | Stated confidence is never checked against outcomes, so nothing says when to trust a claim |
+| 15 | **A shared board between agents** | Several agents on one central brain (11) can hand work to each other, not just read the same memories |
+| 16 | **Secrets broker** | The vault is served already; scripts on the network could pull credentials instead of reading `.env` files |
+| 17 | **A referee for rival memory tools** | The probe set can measure any retrieval engine, not only this one |
+| 18 | Session flight recorder (low priority) | Every tool call of every session, replayable; check prior art before building |
+| 19 | **Codebase X-ray, as an MCP tool** | The dream pass's graph math runs on any graph; fed a repo's imports, it ranks the files a change is riskiest in |
 
 **Struck 2026-09-20: the old item 8, "Type-weighted spreading activation".** It
 never existed as a distinct item. That row entered in `0cef296` with no body and
@@ -551,18 +578,12 @@ with its own body.
 **Item 1 is PARKED (2026-09-28).** Its measured-positive fix (1d) shipped; the
 remaining sibling-noise half has no live hypothesis after eight dead fixes, and
 without a target there is nothing to build. Re-open it only with a new
-hypothesis, measured on the full 383-question stratified set. **Item 2 is in
-flight** (see In Flight).
+hypothesis, measured on the full 383-question stratified set. Items 2 and 3
+shipped 2026-09-28.
 
-**Recommended sequencing: 1, then 2, then 3, then 4 and 5 together.**
+**Recommended sequencing: 4 and 5 together.**
 
-This reverses the 2026-09-07 order, which put item 1 last on the grounds that it
-was "uncertain ranking work". That reasoning is now spent: the measurement below
-is not uncertain, and five rediscoveries say deferring it costs more than doing
-it. Item 2 is next because it is small, self-contained and the only item on the
-board with a security consequence. Item 3 stays early - still the smallest, still
-one obvious right answer, and now with a witness instead of an argument. Items 4
-and 5 are both write-time declared fields on the existing record, so they want
+Items 4 and 5 are both write-time declared fields on the existing record, so they want
 one migration and one pass, not two.
 
 ### 1. Template/sibling noise in retrieval - now reproducible, and the fix reversed
@@ -892,66 +913,6 @@ should be believed on fewer than the full probe set, and a future fix direction
 that cannot be measured that way should be treated as not yet measurable rather
 than promising.
 
-### 2. `credential_get` hands the plaintext secret back into context
-
-`credential_get` returns a secret field's value in its response body. The vault's
-stated promise is that secrets never belong in files or chat, and this breaks it
-by construction: every use puts the plaintext into the transcript, and into
-whatever the caller's own tooling logs, before any discipline can apply.
-
-**Three leaks trace to it in nine days**, all the same mechanism. The second
-happened with the warning memory already loaded in context. The third happened
-one tool call after that warning was explicitly recalled - retrieval worked,
-ranked well, and changed nothing. The behavioural rule has been written three
-times and failed three times, which is board item 3's lesson pointed at our own
-tool surface: build the mechanism instead of writing the rule a fourth time.
-
-Fix directions, neither designed:
-
-- **A write-to-file mode.** `credential_get(into=<path>, mode=0600)` returns the
-  path plus a redacted confirmation and never the value. This is already what the
-  warning memory prescribes by hand; making it the tool's affordance is what
-  stops it being forgotten.
-- **Redact secret fields by default**, revealed only on an explicit flag, so the
-  default path cannot leak and the leaking path is a deliberate act that reads as
-  one in the transcript.
-
-Open: whether `credential_list` needs the same treatment for its non-secret
-fields, several of which are identifiers a public artifact should not carry.
-
-### 3. Namespace auto-widen on an empty result - now with a live witness
-
-`namespace=None` resolves to exactly one config-derived default. A
-comma-separated list works but requires the caller to already know where to
-look, which is the whole problem - if you knew, you would not be searching. An
-empty result returns `count: 0` and stops. There is no all-namespace mode
-anywhere in the codebase.
-
-The behavioural rule covering this was written three separate times and still
-failed in real use, because it is an ambient rule with no trigger moment: "the
-answer might be somewhere else" is not an event you can notice from inside.
-Build the mechanism instead of writing it a fourth time - widen on an empty (or
-below-floor) result and stamp each hit with its source namespace.
-
-**The witness, 2026-09-20.** A mid-session `memory_recall` in a session actively
-working one project returned `count: 0` with `"namespace": "default"` - it had
-resolved to a two-memory namespace nobody uses, returned nothing, and stopped.
-The thing being looked for existed, in a namespace holding hundreds of memories,
-and was reached four queries later. Two further details worth having before
-building:
-
-- The same session's next two recalls resolved to _different_ namespaces again
-  without the caller changing anything, so resolution is not stable across
-  consecutive calls in one session. Establish what actually drives it before
-  adding a widen on top.
-- The floor question is no longer hypothetical. That first call returned zero, so
-  widen-on-empty would have caught it. But query 2 in the same hunt returned
-  eight confident, entirely wrong hits, which widen-on-empty would not touch -
-  see item 5.
-
-Open: widen on empty only or on a relevance floor; second query or one UNION;
-whether it applies to search as well as recall.
-
 ### 4. Provenance vocabulary on `source` - vocabulary approved 2026-09-07
 
 `Confidence` is verified / inferred / stale / deprecated. All four are
@@ -1074,6 +1035,121 @@ session read and never what it asked. Step one is recording the query text of
 recall and search calls (local, in the same file as the memories themselves).
 Open: what counts as "acted on", and how to keep a session that simply re-read
 the top hit from labelling that hit correct by default.
+
+### 10-14. Entered 2026-09-28: approved directions, not designed
+
+Five items the user approved in one sitting. Each is recorded as a direction
+with what already exists under it; **none is designed**, and design waits for an
+explicit go. The user's order of priority puts 10 first.
+
+### 10. Tripwires: involuntary recall at the action
+
+Involuntary recall (`prompt_hook.py`, `recall_gate.py`) fires on
+`UserPromptSubmit`, so it can only react to what the user typed. The costliest
+repeat mistakes happen at a specific action instead - a tag written into a
+commit, a merge of a stacked PR - and the prompt that led there rarely names it.
+A `PreToolUse` hook matches the pending tool call against memories and injects
+the matches before the call runs. Pure arithmetic, no model judging relevance.
+
+- Leaning, not decided: explicit triggers stored per memory (tool name plus a
+  pattern over its input) rather than embedding similarity, since a risky
+  command and a harmless one can look alike to an encoder.
+- Latency is acceptable to the user; a network round trip per tool call to a
+  remote brain (item 11) is fine. Do not build a cache for speed alone.
+- Constraint: `prompt_hook` reads the SQLite file directly
+  (`connect_readonly(app.db_path)`). Against a remote brain the hooks need a
+  path through `gingugu serve`.
+
+### 11. One central brain, several clients
+
+`gingugu serve` (streamable HTTP, bearer auth) already turns the stdio server
+into a network endpoint. The goal is one brain shared by the user's two
+laptops and a non-Claude desktop client (ChatGPT desktop), which today runs
+against its own local copy. Separate copies diverge, which defeats the point of
+long-term memory. Open: which transport each existing client uses today.
+
+### 12. Scoped serve tokens
+
+`BearerAuthMiddleware` (`serve.py`) checks one shared token, and holding it
+means read and write on every namespace. Per-client tokens, each carrying a
+namespace allowlist and a read-only or read-write grant. Foundation for 11 (a
+second model family should not need write access everywhere) and 13.
+
+### 13. Warm minions
+
+A subagent starts with none of the store's context. Give it read-only access
+scoped to the project namespace, and a scratch namespace to write findings into
+that the main thread reviews before anything reaches a real namespace. The
+fence has to be the server's (item 12), not an instruction. Depends on 12.
+
+### 14. A calibration ledger
+
+Log a claim with its stated confidence at the time it is made, resolve it later
+as confirmed or refuted, and compute accuracy per domain (a Brier score or
+similar). Arithmetic only, in keeping with the design law that truth status is
+calculated rather than judged. New tables mean a migration, so this stays on the
+main thread.
+
+### 15-18. Entered 2026-09-28: the same primitives, repurposed
+
+A second set from the same sitting: what the existing parts can do outside
+memory. Approved as directions, not designed.
+
+### 15. A shared board between agents
+
+Once several agents share one brain (11), a namespace can carry work rather
+than knowledge: tasks posted, claimed, and answered, with "working on X"
+markers so two agents do not take the same job. Asynchronous handoff between
+agents from different model families, with the store as the record. Open:
+whether a claim on a task needs a real lock (`BEGIN IMMEDIATE`, as
+`dream_lock` does) or a convention is enough. Builds on 11 and 12.
+
+### 16. Secrets broker
+
+`gingugu serve` plus the credential vault could hand credentials to scripts and
+services on the user's network. **Gated on a security review before any
+build:** an unattended server cannot unlock an encrypted keyring, so a headless
+host stores secrets in plaintext at rest, and `credential_get(into=...)` is
+already refused over HTTP because it is an arbitrary file write on the server.
+Needs 12, so each consumer gets only the entries it names.
+
+### 17. A referee for rival memory tools
+
+`bench/probes.py` generates labelled questions from a real corpus, verified
+rather than judged. Nothing in that ties it to gingugu's own engine. Load the
+same corpus into other memory tools and score them all on the same questions:
+a measured head-to-head in place of a feature matrix. Open: an adapter per
+tool, and whether each can ingest the corpus faithfully enough for the
+comparison to be fair.
+
+### 18. Session flight recorder - low priority
+
+Record every tool call of every session through hooks, keyed by the session
+id `access_log` already carries, so a session can be replayed and audited
+after the fact. Low priority: look for existing prior art to reuse before
+designing anything.
+
+### 19. Codebase X-ray, as an MCP tool
+
+`dream/centrality.pagerank(graph)` and `dream/clusters.propagate(graph)` are
+plain functions over an in-memory `dream.graph.Graph`; nothing in them needs
+the nodes to be memories. Feed them a repository's import graph (file = node,
+import = edge) and they report the files the rest of the code leans on, the
+module boundaries as the code actually draws them rather than as the folders
+do, and files nothing imports. No file is added to the target repository.
+
+**An MCP tool, not a CLI command** - the user's call, and the right one: the
+agent is the one that needs the answer before a change, and it should be able
+to run or refresh the X-ray itself rather than ask for it. Open:
+
+- **Transport.** A tool that reads a path reads the server's disk. Over stdio
+  that is the caller's machine; under `gingugu serve` it is the host's, the
+  same reason `credential_get(into=...)` is refused over HTTP. Refuse it
+  there, or accept the edge list from the client instead of a path.
+- **Persistence.** Whether a result is kept (keyed by repo and commit) so a
+  later session can query it without re-parsing, and where - not as memories,
+  which would flood the store's own graph.
+- **Languages.** Python imports via `ast` first; others later.
 
 ### Standing rules
 

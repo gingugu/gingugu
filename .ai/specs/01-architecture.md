@@ -32,8 +32,11 @@ AI client (Claude Code / Cursor / Windsurf / …)
    server (`"stdio"` / `"http"`); `credential_get(into=…)` refuses under HTTP,
    where a caller-named path would be a file write on the server's disk.
 2. **Handlers** (`handlers/`) - thin adapters that validate input, call the core
-   modules, and return structured dicts. Split by domain: `memory`, `search`,
-   `relations`, `admin`, `credentials`, plus `helpers`.
+   modules, and return structured dicts. Split by domain: `memory`, `forget`,
+   `hints`, `recall`, `search`, `excerpt`, `relations` (+ `relation_ops`),
+   `consolidate`, `dream`, `admin`, `credentials`, plus `helpers` and `scope`
+   (the read scope recall and search share: all namespaces when unconfigured,
+   widen an empty scoped lookup to every namespace).
 3. **Core** - `storage`, `search`, `embeddings`, `chunking`, `context`, `relations`,
    `consolidation`, `decay`, `stats`, `namespaces`, `portability`. `storage`
    owns the `memories` row only; the satellite tables it drags along have their
