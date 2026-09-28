@@ -56,7 +56,8 @@
 | `migrations/schema.py` | Structural migrations (001-004, 008): tables, columns, indexes, FTS5 triggers. Each keeps its DDL beside the function that applies it, so a table's rationale cannot drift from the table |
 | `migrations/claim_derivation.py` | Row migrations (005-007, 009, 010) + `_backfill_claims`. Claims are stored rows, so improving the extractor changes nothing already on disk - every fix needs a migration that re-reads prose which never changed. Five exist for that one reason |
 | `migrations/runtime.py` | Coordination migrations (012): `activity`, `dream_lock`. Split from `schema.py` on the line between *state about memories* and *state about the processes touching them* - these carry no knowledge, survive no export, and a store that lost them would lose nothing a person put there |
-| `models.py` | Memory / namespace / relation data models. Also owns `MEMORY_COLUMNS` - the one declared `memories` column list - plus `memory_columns_sql()` / `memory_placeholders_sql()`. Every module that reads or inserts a memory row derives its SQL from these; private copies drifted and silently dropped `pinned`. Field normalizers live here too: `normalize_tag`, `normalize_metadata` |
+| `migrations/fields.py` | Migration 014: `provenance` and `about`, two write-time declared columns on `memories`. Both start NULL, no backfill - a guessed provenance would be the model-free-but-invented judgment the field exists to rule out. Rebuilds `memories_fts` (and its three sync triggers) in one transaction to index `about` alongside `title`/`content`, then runs FTS5's `rebuild` command. Re-runnable: checks `pragma_table_info` before each `ADD COLUMN` |
+| `models.py` | Memory / namespace / relation data models. Also owns `Provenance` (the `provenance` vocabulary: user-asserted/measured/file-derived/self-concluded, enforced at the application layer, never a SQL `CHECK`) and `MEMORY_COLUMNS` - the one declared `memories` column list - plus `memory_columns_sql()` / `memory_placeholders_sql()`. Every module that reads or inserts a memory row derives its SQL from these; private copies drifted and silently dropped `pinned`. Field normalizers live here too: `normalize_tag`, `normalize_metadata` |
 | `storage.py` | CRUD for the `memories` row itself, and the transaction boundary around it. Owns nothing else |
 | `storage_derived.py` | `DerivedTables`, the delegation surface for the four satellite tables a memory drags along (tags, access log, embeddings, claims). Mixed into `MemoryStore` ahead of `TransactionParticipant`, so it declares what it borrows under `TYPE_CHECKING` only - a real stub would sit earlier in the MRO and shadow the `_commit` it means to call |
 | `tags.py` | The `tags` / `memory_tags` tables. Split from `storage.py` because `memory_import` writes tag rows too and had grown a byte-identical private copy of `get_or_create` |
@@ -66,7 +67,8 @@
 | `search_common.py` | Shared SQL columns + WHERE-fragment builders |
 | `search_filters.py` | `advanced_search`: picks the retrieval strategy `sort_by` asks for - the hybrid engine, or one of the ordered listings |
 | `search_listing.py` | The ordered-retrieval strategies: by column, by composite score, by FTS match set, by exact id. Each selects rows in the order it returns them; none re-sorts a pool truncated on another axis |
-| `embeddings.py` | Semantic vector generation; owns `embedding_input()`, the one text recipe the write path and any compare path must share |
+| `embeddings.py` | Semantic vector generation: providers and the encoders themselves. No longer owns the text recipe - see `embedding_text.py` |
+| `embedding_text.py` | `embedding_input(title, content, about=None)` - the one text recipe the write path and any compare path must share. `about` sits between title and content, inside the encoder's window; without it the text is byte-identical to before the field existed, so no stored vector or piece span went stale |
 | `embedding_sync.py` | Keeps `memory_embeddings` in step with `memories`. Extracted from `storage.py` because the invariant belongs to whoever writes a memory row, and `MemoryStore` is not the only one - `memory_import` writes them too. There are NO triggers for embeddings; a vector exists only where code deliberately wrote one. Also calls `chunking.persist_pieces` on every write, so pieces stay in step with the head vector |
 | `chunking.py` | Pieces: vectors for a memory's tail, past the encoder's fixed token window (measured: 79.1% of a real brain is longer than bge-small's 512-token window). Splits on the encoder's own tokens into overlapping windows; piece 0 is the head, whose vector already lives in `memory_embeddings`, so its row here carries only the span and marks the memory as pieced. `cohort_vectors()` scores a keyword-pool member on exactly ONE piece - the one holding the most distinct query words, ties to the head - never the best-matching one; cosine never chooses. Entrants outside the pool keep their head vector. Only a backend exposing `token_offsets` + `max_tokens` gets pieced; Ollama and disabled embeddings stay head-only |
 | `embed_cli.py` | `gingugu embed`: runs the embedding backfill (vectors and pieces) to completion in one run, instead of one small batch per server start - the tool for giving an existing brain its pieces after upgrading. Safe to interrupt and re-run; every batch commits |
@@ -106,7 +108,7 @@
 | `credentials.py` | OS-keychain credential vault. `get` redacts secret values unless `reveal`; `write_secret` hands one secret to a file |
 | `secret_file.py` | Safe owner-only file write for `credential_get(into=…)`: absolute path, no symlink/dir, parent must exist; `O_NOFOLLOW`, mode 0600 |
 | `portability.py` | Export / import a namespace. `import_data` takes an `embedder` and embeds what it writes; vectors are recomputed, never carried in the payload (they are model-specific and derived) |
-| `handlers/` | MCP tool handlers: `memory.py` (store/update), `forget.py` (the one destructive tool), `hints.py` (write-time similar/relation hints), `recall.py` (recall/context), `search.py`, `scope.py` (read scope for recall/search: all namespaces when unconfigured, widen an empty scoped lookup to every namespace), `excerpt.py` (`memory_excerpt`: one memory, never ranked), `relations.py` (relate/edges/unrelate) with `relation_ops.py` (batch parsing + per-edge dispatch), `consolidate.py`, `dream.py` (run/read/decide the proposal queue; an accept that would need a judgment the pass declined to make is REFUSED, not defaulted, and `reverse=True` writes an edge object-to-subject since the orphan pass's subject order is an artifact of retrieval rather than a claim about direction), `admin.py`, `credentials.py`, `helpers.py` |
+| `handlers/` | MCP tool handlers: `memory.py` (store/update), `forget.py` (the one destructive tool), `hints.py` (write-time similar/relation hints), `recall.py` (recall/context), `search.py`, `scope.py` (read scope for recall/search: all namespaces when unconfigured, widen an empty scoped lookup to every namespace), `excerpt.py` (`memory_excerpt`: one memory, never ranked), `relations.py` (relate/edges/unrelate) with `relation_ops.py` (batch parsing + per-edge dispatch), `consolidate.py`, `dream.py` (run/read/decide the proposal queue; an accept that would need a judgment the pass declined to make is REFUSED, not defaulted, and `reverse=True` writes an edge object-to-subject since the orphan pass's subject order is an artifact of retrieval rather than a claim about direction), `admin.py`, `credentials.py`, `summaries.py` (payload shapes: full summary, compact summary, the picker between them), `choices.py` (enum argument parsing shared across store/update: one error format naming the field, the bad value, and the vocabulary), `helpers.py` |
 
 Dev-only tooling at the repo root (never shipped in the wheel): **`bench/`** —
 golden-set retrieval benchmark (Recall@K, MRR, precision, token cost;
@@ -169,7 +171,19 @@ stay cheap; `memory_recall` fetches the body when a candidate matters.
 `memory_update` accepts `type`, so a misfiled memory can be retyped instead of
 reworded — retyping to `pattern`/`preference` is the sanctioned way to clear a
 gated review-hint false positive, and it does not re-embed (the vector derives
-from title + content only).
+from title + about + content).
+
+**Write-time declared fields.** `memory_store` / `memory_update` also take
+`provenance` (how the writer came to believe the memory - `user-asserted`,
+`measured`, `file-derived`, `self-concluded`; enforced at the application
+layer, rejecting anything else) and `about` (what the memory is for, in the
+user's own words for the thing rather than the words of what was done).
+Neither advances `last_confirmed`. `about` is indexed on both sides of hybrid
+search - an FTS5 column and part of the embedding text - so a query using the
+user's word for a workstream reaches memories whose title/content never use
+it; changing it re-embeds the memory. Both are omitted from a payload when
+unset; `provenance` is surfaced even in compact payloads, so a self-concluded
+claim arrives visibly contestable.
 
 **State claims and the reconciliation loop.** `memory_store` / `memory_update`
 also return `contradicted_memories` when the write resolves a ref another
@@ -218,9 +232,21 @@ gap between the count and the rows.
   Purely additive; `memory_embeddings` (the head vector) is untouched. Chunk 0
   carries the span but no vector (NULL), doubling as the marker that a memory
   has been pieced. PK `(memory_id, chunk)`, `ON DELETE CASCADE`; spans are char
-  offsets into `embedding_input(title, content)`, so a piece's text is
-  re-derived rather than stored twice. See `chunking.py`.
-- Schema versioned via `PRAGMA user_version` (**currently 13**); migrations
+  offsets into `embedding_input(title, content, about)`, so a piece's text is
+  re-derived rather than stored twice - every reader passes the same `about`
+  the memory was stored with. See `chunking.py`.
+- `memories.provenance` / `memories.about` (migration 014): two write-time
+  declared TEXT columns, NULL on every row that predates them, no backfill.
+  `provenance` is a controlled vocabulary (`models.Provenance`) enforced by
+  the application layer rather than a `CHECK` constraint - SQLite cannot alter
+  a constraint in place, so a vocabulary change would otherwise mean rebuilding
+  `memories` and every trigger on it. `source` is untouched and stays a
+  different axis: measured on a real brain it holds 1061 distinct values
+  across 1233 rows and mostly records the occasion a memory was written.
+  `about` joins the FTS5 index (`memories_fts` gains a third column, all three
+  sync triggers rebuilt, then an FTS `rebuild`) and the embedding text. See
+  `migrations/fields.py`.
+- Schema versioned via `PRAGMA user_version` (**currently 14**); migrations
   additive by default. Migration 006 adds no schema — it re-runs the claims
   backfill to repair DBs that reached v5 from pre-fix code and so can never
   run 005 again. Migration 007 adds `default_repo` and re-derives every claim
@@ -243,7 +269,11 @@ gap between the count and the rows.
   and a genuinely idle store are indistinguishable to a reader, and the safe
   reading of "I have never seen activity" is not "start work now". Migration 013
   adds `memory_chunks`: a store with no rows there searches exactly as it did
-  before pieces existed.
+  before pieces existed. Migration 014 adds `provenance` and `about`, plus the
+  FTS5 rebuild that indexes `about`. Re-runnable (checks `pragma_table_info`
+  before each `ADD COLUMN`); measured on a copy of a 2716-memory real brain,
+  ran in 0.30s with every row, every FTS hit, and every `source` value
+  preserved.
 
 ---
 
