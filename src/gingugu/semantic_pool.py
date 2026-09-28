@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 
+from . import chunking
 from . import embeddings as emb
 from .embeddings import EmbeddingProvider, cosine
 
@@ -91,11 +92,17 @@ def semantic_pool(
     if not rows:
         return None
 
+    # A cohort member past the encoder's window is scored on the ONE piece that
+    # holds the most query words, never on its best-matching one - see `chunking`
+    # for why the difference decides whether pieces help at all. Entrants keep
+    # their head vector: measured, pieces add nothing outside the keyword pool.
+    pieces = chunking.cohort_vectors(conn, embedder, query, sorted(cohort_ids))
+
     candidates: list[tuple[str, float]] = []
     entrants: list[tuple[str, float]] = []
     for r in rows:
         try:
-            vec = emb.unpack(r["embedding"])
+            vec = pieces.get(r["id"]) or emb.unpack(r["embedding"])
         except Exception:  # pragma: no cover - defensive
             continue
         sim = cosine(query_vec, vec)
