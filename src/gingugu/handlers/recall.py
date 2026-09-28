@@ -25,9 +25,9 @@ from .helpers import (
     _split_csv,
     _spread_activation,
     _stamp_namespace_names,
-    _summarizer,
 )
 from .scope import read_scope, run_widening
+from .summaries import _summarizer
 
 logger = logging.getLogger(__name__)
 

@@ -21,6 +21,7 @@ from .models import (
     MEMORY_COLUMNS,
     Confidence,
     MemoryType,
+    Provenance,
     RelationType,
     memory_columns_sql,
     memory_placeholders_sql,
@@ -134,12 +135,18 @@ def _validate_payload(data: dict) -> None:
     valid_types = {t.value for t in MemoryType}
     valid_confidences = {c.value for c in Confidence}
     valid_relations = {r.value for r in RelationType}
+    # Absent or null is legitimate: an export written before provenance existed.
+    valid_provenances = {p.value for p in Provenance} | {None}
     for mem in data["memories"]:
         if mem.get("type") not in valid_types:
             raise ValueError(f"memory {mem.get('id')!r} has invalid type {mem.get('type')!r}")
         if mem.get("confidence") not in valid_confidences:
             raise ValueError(
                 f"memory {mem.get('id')!r} has invalid confidence {mem.get('confidence')!r}"
+            )
+        if mem.get("provenance") not in valid_provenances:
+            raise ValueError(
+                f"memory {mem.get('id')!r} has invalid provenance {mem.get('provenance')!r}"
             )
     for rel in data.get("relations", []):
         if rel.get("relation_type") not in valid_relations:

@@ -3,18 +3,30 @@
 ## Store
 
 ```
-memory_store(content, title, type, namespace, tags, confidence)
-  → handlers/memory.py validates + defaults (confidence="inferred" if unset)
-  → storage.py inserts into `memories`
-  → FTS5 trigger mirrors the row into the full-text index
-  → embeddings.py computes the semantic vector, and chunking.py pieces it into
-    `memory_chunks` when the backend exposes token offsets (head-only otherwise)
+memory_store(content, title, type, namespace, tags, confidence, provenance, about)
+  → handlers/memory.py validates + defaults (confidence="inferred" if unset;
+     provenance parsed against its controlled vocabulary if given)
+  → storage.py inserts into `memories`, including `provenance` and `about`
+  → FTS5 trigger mirrors the row (title, content, about) into the full-text index
+  → embedding_text.embedding_input(title, content, about) builds the text;
+    embeddings.py computes the semantic vector from it, and chunking.py pieces
+    it into `memory_chunks` when the backend exposes token offsets (head-only
+    otherwise). `about` sits between title and content, inside the encoder's
+    window; a memory with no `about` embeds the same text it always did
   → claim_sync.sync() derives state claims from title+content into `memory_claims`
      (claim_qualify resolves each ref's repo: URL > repo named beside the ref >
       a binding stated elsewhere in this same memory > the namespace default)
   → dedupe/relation check → returns { ok, memory, similar_memories[],
                                       suggested_relations[], contradicted_memories[]? }
 ```
+
+`provenance` declares how the writer came to believe the memory
+(`user-asserted`/`measured`/`file-derived`/`self-concluded`); `about` declares
+what it is for, in the user's own words. Both are optional, both default to
+unset, and neither advances `last_confirmed` - declaring them is not
+confirming the claim. `memory_update` accepts both too, with the `metadata`
+convention (`None` leaves the field alone, `""` clears it); changing `about`
+re-runs the embed step above and re-syncs `memories_fts`.
 
 `similar_memories` = merge candidates. `suggested_relations` (excludes self +
 already-linked + items already in `similar_memories`) = memories to **examine
@@ -166,7 +178,10 @@ memory_recall(query, namespace | "ns1,ns2,…", filters)
   → ranked list; every memory stamped with its home namespace
     (compact=true: title + ~200-char summary instead of full content,
     related extras compacted too - keeps broad recalls under MCP clients'
-    tool-result token caps; access is still credited)
+    tool-result token caps; access is still credited). `provenance` rides
+    along in both shapes when set, so a self-concluded claim stays visibly
+    contestable; `about` is in the full shape only. Both are omitted when
+    unset
   → every memory carries a derived `age` ("2 days ago"), computed at
     serialization and never stored - kept in compact mode even though raw
     timestamps are dropped. Anchored on the freshness anchor, so a memory
@@ -562,6 +577,9 @@ without a person passing through the accept step first.
 - `memory_update` — mutate an existing memory (re-runs hint checks on title/content
   change). Also retypes: `type` is the fix for a misfiled memory, since `pattern`
   and `preference` are exempt from gated review hints. Retyping does not re-embed.
+  Also declares `provenance` and `about` (`""` clears either); changing `about`
+  does re-embed, since it is part of the text the vector is built from.
+  Neither advances `last_confirmed`.
 - `memory_forget` — the ONLY removal path (deprecate or hard-delete). Nothing is
   auto-forgotten.
 - `memory_consolidate` - merge / summarize / deduplicate a cluster; without

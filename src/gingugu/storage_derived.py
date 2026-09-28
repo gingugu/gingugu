@@ -124,13 +124,15 @@ class DerivedTables:
 
     # --- Embeddings ----------------------------------------------------------
 
-    def _persist_embedding(self, memory_id: str, title: str, content: str) -> None:
+    def _persist_embedding(
+        self, memory_id: str, title: str, content: str, about: str | None = None
+    ) -> None:
         # Deferred inside an `atomic()` block: the vector write commits on its
         # own, and a row whose memory the block later rolls back is an orphan.
         # See transactions.py → deferred side effects.
         self._after_commit(
             lambda: embedding_sync.persist_one(
-                self._conn, self._embedder, memory_id, title, content
+                self._conn, self._embedder, memory_id, title, content, about
             )
         )
 

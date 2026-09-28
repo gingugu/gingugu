@@ -11,16 +11,17 @@ from __future__ import annotations
 
 import logging
 
-from ..models import Confidence, MemoryType
+from ..models import Confidence, MemoryType, Provenance
 from . import ServerContext
+from .choices import parse_choice, parse_clearable
 from .helpers import (
     _check_pin_budget,
     _coerce_metadata,
     _err,
-    _memory_summary,
     _split_csv,
 )
 from .hints import find_similar, suggest_relations
+from .summaries import _memory_summary
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,8 @@ def register(mcp, ctx: ServerContext) -> None:
         confidence: str = "inferred",
         source: str | None = None,
         metadata: str | dict | None = None,
+        provenance: str | None = None,
+        about: str | None = None,
         dedupe_check: bool = True,
         relation_check: bool = True,
     ) -> dict:
@@ -51,6 +54,15 @@ def register(mcp, ctx: ServerContext) -> None:
         memory to a project or domain; omit to use the configured default namespace.
         ``source`` records what generated this memory (e.g. a file path or tool name).
         ``metadata`` is an optional free-form JSON string for extra structured data.
+
+        ``provenance`` declares how you came to believe this: user-asserted (the
+        user said so), measured (a command or test showed it), file-derived (read
+        from code or docs), or self-concluded (your own inference or opinion).
+        Declare it honestly - self-concluded is how a stored opinion arrives
+        visibly contestable instead of reading as settled fact. Any other value
+        is rejected. ``about`` says what this memory is FOR, in the user's words
+        for the thing rather than the words of what was done ("claude code
+        bootstrapping", not "init writes hook blocks"). It is searchable.
 
         When ``dedupe_check`` is True (default), the response includes a
         ``similar_memories`` list of up to 3 existing memories in the same
@@ -94,18 +106,11 @@ def register(mcp, ctx: ServerContext) -> None:
         nothing was mutated."""
         try:
             try:
-                mem_type = MemoryType(type)
-            except ValueError:
-                return _err(
-                    f"invalid type {type!r}; expected one of " f"{[t.value for t in MemoryType]}"
-                )
-            try:
-                conf = Confidence(confidence)
-            except ValueError:
-                return _err(
-                    f"invalid confidence {confidence!r}; expected one of "
-                    f"{[c.value for c in Confidence]}"
-                )
+                mem_type = parse_choice(MemoryType, type, "type")
+                conf = parse_choice(Confidence, confidence, "confidence")
+                prov = parse_choice(Provenance, provenance, "provenance")
+            except ValueError as e:
+                return _err(str(e))
 
             if namespace is not None and "," in namespace:
                 # get_or_create would mint a junk namespace literally named
@@ -131,6 +136,8 @@ def register(mcp, ctx: ServerContext) -> None:
                 source=source,
                 metadata=_coerce_metadata(metadata),
                 tags=_split_csv(tags),
+                provenance=prov,
+                about=about,
             )
             relations = (
                 suggest_relations(
@@ -171,6 +178,8 @@ def register(mcp, ctx: ServerContext) -> None:
         resolve_claims: str | None = None,
         relation_check: bool = True,
         pinned: bool | None = None,
+        provenance: str | None = None,
+        about: str | None = None,
     ) -> dict:
         """Update one or more fields of an existing memory. Use to correct outdated
         information, promote confidence after confirming an inference, retype a
@@ -186,7 +195,11 @@ def register(mcp, ctx: ServerContext) -> None:
         right fix when a memory was filed under the wrong kind — e.g. durable
         reference material saved as ``workflow`` picks up point-in-time review
         hints, because ``pattern``/``preference`` are the types exempt from them.
-        Retyping does not re-embed: the vector derives from title + content only.
+        Retyping does not re-embed: the vector derives from title + about + content.
+
+        ``provenance`` and ``about`` declare how the claim was reached and what it
+        is for (see memory_store); pass ``""`` to clear either. Neither touches
+        ``last_confirmed``: declaring them is not re-checking the claim.
 
         ``resolve_claims`` reconciles a stale state claim WITHOUT EDITING THE
         PROSE — comma-separated refs (e.g. "gingugu#10"), or "all" for every
@@ -225,21 +238,12 @@ def register(mcp, ctx: ServerContext) -> None:
         unpin. Pinning does not touch ``last_confirmed`` — it is a retrieval
         decision, not a claim that the content is still true."""
         try:
-            conf = None
-            if confidence is not None:
-                try:
-                    conf = Confidence(confidence)
-                except ValueError:
-                    return _err(f"invalid confidence {confidence!r}")
-            mem_type = None
-            if type is not None:
-                try:
-                    mem_type = MemoryType(type)
-                except ValueError:
-                    return _err(
-                        f"invalid type {type!r}; expected one of "
-                        f"{[t.value for t in MemoryType]}"
-                    )
+            try:
+                conf = parse_choice(Confidence, confidence, "confidence")
+                mem_type = parse_choice(MemoryType, type, "type")
+                prov = parse_clearable(Provenance, provenance, "provenance")
+            except ValueError as e:
+                return _err(str(e))
             if pinned:
                 refused = _check_pin_budget(ctx, memory_id)
                 if refused is not None:
@@ -252,6 +256,8 @@ def register(mcp, ctx: ServerContext) -> None:
                 confidence=conf,
                 metadata=_coerce_metadata(metadata),
                 pinned=pinned,
+                provenance=prov,
+                about=about,
             )
             if mem is None:
                 return _err(f"memory {memory_id!r} not found")

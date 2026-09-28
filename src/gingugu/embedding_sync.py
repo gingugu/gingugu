@@ -29,7 +29,8 @@ import sqlite3
 
 from . import chunking
 from . import embeddings as emb
-from .embeddings import EmbeddingProvider, embedding_input
+from .embedding_text import embedding_input
+from .embeddings import EmbeddingProvider
 from .models import utcnow_iso
 
 logger = logging.getLogger(__name__)
@@ -53,11 +54,12 @@ def persist_one(
     memory_id: str,
     title: str,
     content: str,
+    about: str | None = None,
 ) -> None:
     """Encode one memory and upsert its vector and pieces. Best-effort."""
     if not _enabled(embedder):
         return
-    text = embedding_input(title, content)
+    text = embedding_input(title, content, about)
     try:
         vec = embedder.encode(text)
     except Exception:
@@ -165,12 +167,12 @@ def embed_ids(
         chunk = memory_ids[start : start + batch_size]
         placeholders = ", ".join("?" for _ in chunk)
         rows = conn.execute(
-            f"SELECT id, title, content FROM memories WHERE id IN ({placeholders})",
+            f"SELECT id, title, content, about FROM memories WHERE id IN ({placeholders})",
             chunk,
         ).fetchall()
         if not rows:
             continue
-        texts = [embedding_input(r["title"], r["content"]) for r in rows]
+        texts = [embedding_input(r["title"], r["content"], r["about"]) for r in rows]
         try:
             vectors = embedder.encode_many(texts)
         except Exception:
