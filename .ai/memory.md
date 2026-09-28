@@ -103,7 +103,8 @@
 | `claim_queries.py` | Claim **read** path: the `claims.sample` backlog enumeration and the shared `claim_filter()` predicate behind `memory_search(claims=…)` |
 | `claim_rederive.py` | Claim re-derivation that **preserves** resolution state, whole-corpus or scoped to one `namespace_id` (`claim_sync.sync_claims` drops resolution by design) |
 | `namespaces.py` | Namespace CRUD; a `default_repo` change re-derives that namespace's claims (best-effort) so the declaration is not inert |
-| `credentials.py` | OS-keychain credential vault |
+| `credentials.py` | OS-keychain credential vault. `get` redacts secret values unless `reveal`; `write_secret` hands one secret to a file |
+| `secret_file.py` | Safe owner-only file write for `credential_get(into=…)`: absolute path, no symlink/dir, parent must exist; `O_NOFOLLOW`, mode 0600 |
 | `portability.py` | Export / import a namespace. `import_data` takes an `embedder` and embeds what it writes; vectors are recomputed, never carried in the payload (they are model-specific and derived) |
 | `handlers/` | MCP tool handlers: `memory.py` (store/update), `forget.py` (the one destructive tool), `hints.py` (write-time similar/relation hints), `recall.py` (recall/context), `search.py`, `excerpt.py` (`memory_excerpt`: one memory, never ranked), `relations.py` (relate/edges/unrelate) with `relation_ops.py` (batch parsing + per-edge dispatch), `consolidate.py`, `dream.py` (run/read/decide the proposal queue; an accept that would need a judgment the pass declined to make is REFUSED, not defaulted, and `reverse=True` writes an edge object-to-subject since the orphan pass's subject order is an artifact of retrieval rather than a claim about direction), `admin.py`, `credentials.py`, `helpers.py` |
 
@@ -148,7 +149,9 @@ Generated sets hold real memory content and stay in `bench/local/`.
   accepting is where a person supplies the judgment the arithmetic stopped
   short of
 - **Credentials:** `credential_list`, `credential_get`, `credential_store`, `credential_delete`
-  — gated by `MEMORY_CREDENTIALS_ENABLED` (default true); a shared/central
+  - `credential_get` redacts secrets by default; `into=<abs path>` writes one to
+  a 0600 file (stdio only, refused under `serve`), `reveal=true` returns it
+  inline. Gated by `MEMORY_CREDENTIALS_ENABLED` (default true); a shared/central
   instance runs with it `false` to omit the vault.
 
 `memory_store` / `memory_update` return non-blocking `similar_memories` (merge
