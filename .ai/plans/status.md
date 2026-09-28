@@ -1,25 +1,40 @@
 # Project Status
 
-_Last updated: 2026-09-21_
+_Last updated: 2026-09-27_
 
 ## In Flight
 
-**Board item 1a: the instrument had an unwinnable 8.1%, on
-`fix/probe-set-excludes-deprecated-targets`.** `bench/probes.py` selected probe
-targets with no confidence filter, so 11 of 135 questions labelled a
-`deprecated` memory as the correct answer - rows `search()` withholds by
-default. Every one scored zero at recall@10. Deprecated rows are now excluded
-from families and targets and kept in the sibling scan, where they are still
-needed to prove a phrase unique. Three tests; two of them fail against the old
-generator and the third guards the sibling scan against the wrong fix.
+**Board item 1d: the probe set was blind to embedding truncation, on
+`feature/position-stratified-probes`.** The embedder (bge-small via fastembed)
+reads only the first 512 tokens of `embedding_input` and truncates the rest
+silently, and 79.1% of the real brain runs past that window (median 782
+tokens). `bench/probes.py` took the FIRST unique phrase in each target, so all
+126 probe phrases sat inside the window (median token 77) - the instrument
+could not see the defect. Every target is now probed at its head, middle and
+tail, labelled by `kind`. The head phrase is the old rule, so head figures stay
+comparable. Six tests in `tests/test_probes_position.py`. See 1d.
 
-**Corrected baseline of record**, 126 answerable questions, real brain, hybrid:
-**mrr 0.3379, recall@1 0.2143, recall@5 0.5000, recall@10 0.6667.** Supersedes
-every absolute figure quoted from the 135-question set. See 1a.
+**Baseline of record, stratified**, 383 questions over 129 targets, real brain,
+hybrid:
 
-The same sail diagnosed the real pool-miss half and killed two more fix
-directions with measurements - `ENTRANT_CAP` (swept, monotonic degradation) and
-`pool_size` (ruled out on a read). See 1c. `src/` was not touched.
+| position | mrr | recall@1 | recall@5 | recall@10 |
+|---|---|---|---|---|
+| head | 0.337 | 0.209 | 0.519 | 0.667 |
+| middle | 0.267 | 0.165 | 0.362 | 0.543 |
+| tail | **0.197** | **0.102** | 0.307 | 0.496 |
+| all | 0.267 | 0.159 | 0.397 | 0.569 |
+
+`src/` is not touched. The fix - chunked embeddings - is the next PR, stacked
+on this one, and it is a migration.
+
+## Recently Completed
+
+**Probe set excludes deprecated targets. MERGED as `ea5f749` (#82).** Board
+item 1a. 11 of 135 questions labelled a `deprecated` memory as the answer and
+were unwinnable by construction; they are excluded as answers and kept in the
+sibling scan. Corrected baseline then: 126 questions, mrr 0.3379, recall@1
+0.2143. The same sail diagnosed the pool-miss half and killed `ENTRANT_CAP`
+and `pool_size` as fix directions. See 1a and 1c.
 
 **Harness upgrade. MERGED as `aa00677` (#80).** Six changes, three commits
 (`f057747`, `d1a9ffb`, `b7bebcd`). 888 passed, 1 xfailed, ruff + black clean.
@@ -173,8 +188,6 @@ more times, and it is not "write a better memory" - it is to make the existing o
 reachable. That prescription names a specific pin candidate which is still not
 pinned a month later, so the pattern it describes has now consumed the fix for
 itself. Item 1 is where that stops.
-
-## Recently Completed
 
 **Cluster ranking on tag evidence. MERGED as `2ef7f1d` (#75).** Board item 2's
 findings, turned into code.
@@ -502,9 +515,12 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-## The Board (current: 2026-09-21)
+## The Board (current: 2026-09-27)
 
-**Still eight items.** Nothing entered and nothing left. Item 1 gained its
+**Still eight items.** Nothing entered and nothing left. Item 1 gained a new
+mechanism (1d): the embedder never sees past a memory's first 512 tokens, and
+the probe set could not see that, because it only ever asked about openings.
+Its numbers are re-baselined per position. Before that, item 1 gained its
 measured diagnosis of the pool-miss half (1c) and two more dead fix directions,
 and its numbers were re-baselined after the instrument turned out to carry an
 unwinnable 8.1% (1a). Every item was proven by reading the payload before it was
@@ -512,7 +528,7 @@ boarded - no item below rests on an unverified reading.
 
 | # | Item | Why here |
 |---|---|---|
-| 1 | **Template/sibling noise in retrieval** | Five witnesses, a **committed, deterministic, offline repro**, and both halves now diagnosed with numbers |
+| 1 | **Template/sibling noise in retrieval** | Five witnesses, a **committed, deterministic, offline repro**, and a concrete mechanism on the semantic side: 512-token truncation (1d) |
 | 2 | **`credential_get` hands back plaintext** | The vault's own promise is broken by construction; three leaks trace to it |
 | 3 | **Namespace auto-widen on empty** | Now has a live witness: a recall resolved to `default` and returned `count: 0` |
 | 4 | **Provenance vocabulary on `source`** | A stored conclusion is indistinguishable from a stored fact at recall time |
@@ -647,7 +663,9 @@ uv run python -m bench --db ~/.local/share/gingugu/memories.db \
 ```
 
 Shipped engine, hybrid, 2542 memories: **mrr 0.3379, recall@1 0.2143,
-recall@5 0.5000, recall@10 0.6667.**
+recall@5 0.5000, recall@10 0.6667.** Those figures are HEAD-ONLY - see 1d for
+why, and for the stratified baseline that supersedes them (head 0.337, tail
+0.197 mrr on 383 questions).
 
 Four times in five, asking for a phrase that exists in exactly one memory does
 not return that memory first. Half the time it is not in the top five at all.
@@ -729,6 +747,47 @@ from "eligible semantic entrant" to "BM25-only at rank 200", RRF relevance
 only path that could have ranked them, and rescuing all 20 needs `pool_size` 400
 of ~900.
 
+### 1d. The embedder cannot see past token 512 - and the probe set could not see that
+
+Measured 2026-09-27. `embedding_input(title, content)` feeds the whole body to
+the encoder (`embeddings.py`), and fastembed truncates to the model's
+`model_max_length` - 512 for bge-small, 510 content tokens - with no error and
+no log (`fastembed/common/preprocessor_utils.py`, `enable_truncation`).
+
+| store (2618 non-deprecated memories) | tokens |
+|---|---|
+| p25 / median / p75 / p90 | 551 / 782 / 1094 / 1430 |
+| **longer than the window** | **2072 (79.1%)** |
+
+For four memories in five, cosine is computed over the title and opening only -
+exactly where template scaffolding lives. That is a concrete mechanism for 1c's
+finding that cosine is flattened as badly as BM25.
+
+**The instrument was blind to it by construction.** `unique_phrase` returned the
+FIRST unique n-gram, so all 126 probe phrases sat inside the window (median
+token 77, max 486) though 115 of the 126 targets were longer than it. Probing
+the same 126 targets from their tail instead cut mrr from 0.3353 to 0.2078
+overall; the table isolates the 110 whose tail phrase lies past the window,
+paired against their own head phrase:
+
+| same 110 memories, phrase past token 510 | head phrase | tail phrase |
+|---|---|---|
+| cosine median rank in namespace | 48.5 | **183** |
+| cosine top-10 | 26 | **5** |
+| hybrid mrr | 0.3102 | **0.1710** |
+
+The tail ranked worse in 87 of 110. Fixed in the instrument: the generator now
+probes head, middle and tail and labels each by `kind`; the stratified baseline
+is in In Flight above.
+
+**This moves the fix direction.** Witness 3's write-time dense summary cannot
+reach a tail phrase - a summary drops exactly the detail a tail query asks for.
+**Next: chunked embeddings**, one vector per ~510-token window and a memory
+scored by its best chunk. Tail chunks carry no scaffolding, so it should also
+un-flatten cosine. It needs a chunk index on `memory_embeddings` (a migration)
+and a re-embed; the dedupe hint's 0.80 cosine cutoff was calibrated on truncated
+vectors and has to be re-checked.
+
 ### 1b. Magnitude fusion - measured and DEAD
 
 `_fuse_ranks` (`search.py:72-97`) fuses by RANK only, so BM25 magnitude is
@@ -789,10 +848,11 @@ re-ranking reaches that half.
 **Both sides of the hybrid are flattened, not just BM25.** 1c measures the
 semantic half: the 0.55 cosine floor admits up to 767 rows of one namespace, so
 neither the floor nor the cap discriminates within the band. Candidates 5 and 6
-died because they re-cut a flat band. **The only direction left that changes the
-scores rather than re-cutting them is witness 3's** - author the dense short
-form at write time instead of chopping it at read time. That attacks the
-scaffolding itself, and it is the bigger piece of work.
+died because they re-cut a flat band. Until 2026-09-27 this said the only direction left was
+witness 3's write-time summary. **1d supersedes that:** the vectors are built
+from each memory's first 510 tokens, so the semantic side cannot score what it
+was never shown. Chunked embeddings change what goes INTO the vector rather than
+re-cutting its output, and are the next build.
 
 **Every dead fix was measured on an instrument too coarse to see it** - and on
 2026-09-21 the instrument itself turned out to carry an unwinnable 8.1%, see 1a.
