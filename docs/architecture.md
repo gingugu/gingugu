@@ -112,7 +112,9 @@ CREATE TABLE memories (
     last_confirmed  TEXT,
     access_count    INTEGER DEFAULT 0,
     metadata        TEXT,             -- JSON blob for flexible extra data
-    pinned          INTEGER NOT NULL DEFAULT 0  -- always load in memory_context, exempt from ranking
+    pinned          INTEGER NOT NULL DEFAULT 0,  -- always load in memory_context, exempt from ranking
+    provenance      TEXT,             -- user-asserted|measured|file-derived|self-concluded; NULL if never declared
+    about           TEXT              -- what the memory is for, in the user's words; NULL if never declared
 );
 
 -- Partial index: only ever indexes the handful of pinned rows, so the
@@ -125,6 +127,7 @@ CREATE INDEX idx_memories_pinned ON memories(namespace_id, pinned) WHERE pinned 
 CREATE VIRTUAL TABLE memories_fts USING fts5(
     title,
     content,
+    about,
     content=memories,
     content_rowid=rowid,
     tokenize='porter unicode61'
@@ -132,20 +135,20 @@ CREATE VIRTUAL TABLE memories_fts USING fts5(
 
 -- Required sync triggers (FTS5 contentless-delete pattern)
 CREATE TRIGGER memories_ai AFTER INSERT ON memories BEGIN
-    INSERT INTO memories_fts(rowid, title, content)
-    VALUES (new.rowid, new.title, new.content);
+    INSERT INTO memories_fts(rowid, title, content, about)
+    VALUES (new.rowid, new.title, new.content, new.about);
 END;
 
 CREATE TRIGGER memories_ad AFTER DELETE ON memories BEGIN
-    INSERT INTO memories_fts(memories_fts, rowid, title, content)
-    VALUES ('delete', old.rowid, old.title, old.content);
+    INSERT INTO memories_fts(memories_fts, rowid, title, content, about)
+    VALUES ('delete', old.rowid, old.title, old.content, old.about);
 END;
 
 CREATE TRIGGER memories_au AFTER UPDATE ON memories BEGIN
-    INSERT INTO memories_fts(memories_fts, rowid, title, content)
-    VALUES ('delete', old.rowid, old.title, old.content);
-    INSERT INTO memories_fts(rowid, title, content)
-    VALUES (new.rowid, new.title, new.content);
+    INSERT INTO memories_fts(memories_fts, rowid, title, content, about)
+    VALUES ('delete', old.rowid, old.title, old.content, old.about);
+    INSERT INTO memories_fts(rowid, title, content, about)
+    VALUES (new.rowid, new.title, new.content, new.about);
 END;
 ```
 
@@ -252,9 +255,11 @@ and a NULL `embedding`, doubling as the marker that a memory has been pieced at
 all. Every chunk past it gets its own vector, cut on the encoder's own tokens
 via a no-truncation copy of its tokenizer (`FastEmbedProvider.token_offsets`)
 so a piece's span never overflows the window it exists to fit. `start_char`/
-`end_char` are offsets into `embedding_input(title, content)`, so a piece's
-text is re-derived rather than stored twice. Only a backend exposing token
-offsets is pieced; Ollama and disabled embeddings stay head-only.
+`end_char` are offsets into `embedding_input(title, content, about)`, so a
+piece's text is re-derived rather than stored twice. Every reader passes the
+same `about` the memory was stored with, or a piece slices the wrong words.
+Only a backend exposing token offsets is pieced; Ollama and disabled
+embeddings stay head-only.
 
 #### `activity` and `dream_lock`
 ```sql
@@ -659,6 +664,18 @@ Store a new memory with full metadata.
 - `confidence` (optional) — defaults to `inferred`
 - `source` (optional) — where this knowledge came from
 - `metadata` (optional) — JSON string of additional data
+- `provenance` (optional) - how the writer came to believe this:
+  `user-asserted`, `measured`, `file-derived`, or `self-concluded`. Enforced at
+  the application layer, not a SQL constraint - any other value is rejected.
+  Orthogonal to `confidence`: a `verified` memory can still be
+  `self-concluded`, and surfacing that in every payload (including compact
+  ones) is the point - a stored opinion arrives visibly contestable instead of
+  reading as settled fact. Omitted from the payload when unset
+- `about` (optional) - what the memory is for, in the user's own words for the
+  thing rather than the words of what was done. Indexed on both sides of
+  hybrid search: a `memories_fts` column, and part of the text the embedder
+  reads, so a query using the user's word for a workstream reaches memories
+  whose title and content never use it
 - `dedupe_check` (optional, default `true`) — also return `similar_memories`,
   a non-blocking hint of up to 3 near-duplicates (score ≥ 0.5) in the same
   namespace; disable for bulk imports
@@ -824,7 +841,7 @@ Update an existing memory's content, type, confidence, or metadata.
   right fix for a misfiled memory: durable reference material saved as
   `workflow` picks up point-in-time review hints, because `pattern` and
   `preference` are the types exempt from them. Retyping does not re-embed —
-  the vector derives from title + content only
+  the vector derives from title + about + content
 - `resolve_claims` (optional) — comma-separated refs (e.g. `gingugu#10`), or
   `all`, to mark this memory's open state claims resolved **without editing its
   prose**. A dated record that said "PR #10 open" was accurate when written, so
@@ -833,6 +850,13 @@ Update an existing memory's content, type, confidence, or metadata.
   instead only when a memory asserts something that was never true
 - `confidence` (optional) — new confidence level
 - `metadata` (optional) — updated metadata JSON
+- `provenance` (optional) - declare how the claim was reached (same values as
+  `memory_store`); `""` clears it. Does not advance `last_confirmed` -
+  declaring provenance is not re-checking the claim
+- `about` (optional) - declare or change what the memory is for (same
+  semantics as `memory_store`); `""` clears it. Changing it re-embeds the
+  memory and re-indexes it in `memories_fts`, and does not advance
+  `last_confirmed`
 - `tags` (optional) — comma-separated; replaces the full tag set when provided
 - `relation_check` (optional, default `true`) — when `title` or `content` was
   provided, also return `suggested_relations` (same semantics as
@@ -1472,7 +1496,8 @@ src/gingugu/
 │   ├── __init__.py         # Ordered registry, LATEST_SCHEMA_VERSION, migrate()
 │   ├── schema.py           # Structural migrations: tables, indexes, FTS5 triggers
 │   ├── claim_derivation.py # Row migrations + claim backfill
-│   └── runtime.py          # Coordination tables: activity, dream_lock
+│   ├── runtime.py          # Coordination tables: activity, dream_lock
+│   └── fields.py           # Write-time declared fields: provenance, about; FTS5 rebuild
 ├── models.py               # Data models + MEMORY_COLUMNS, the one column list
 ├── storage.py              # CRUD for the memories row and its transaction boundary
 ├── storage_derived.py      # The four satellite tables a memory drags along
@@ -1487,7 +1512,8 @@ src/gingugu/
 ├── search_common.py        # Shared SQL columns + WHERE-fragment builders
 ├── search_filters.py       # advanced_search: picks the strategy sort_by asks for
 ├── search_listing.py       # Ordered retrieval: by column, score, match set, or id
-├── embeddings.py           # Vector generation; owns the one embedding_input() recipe
+├── embeddings.py           # Vector generation; providers and the encoders themselves
+├── embedding_text.py       # The one embedding_input() recipe every caller shares
 ├── embedding_sync.py       # Keeps memory_embeddings in step with memories
 ├── chunking.py             # Pieces: vectors for a memory's tail, past the encoder's window
 ├── embed_cli.py            # gingugu embed: runs the embedding backfill to completion
@@ -1554,6 +1580,8 @@ src/gingugu/
     ├── dream.py            # dream
     ├── credentials.py      # credential_store / get / list / delete
     ├── admin.py            # namespaces, stats, export, import
+    ├── summaries.py        # Payload shapes: full summary, compact summary, the picker
+    ├── choices.py          # Enum argument parsing, shared error wording
     └── helpers.py          # Shared response shaping
 ```
 

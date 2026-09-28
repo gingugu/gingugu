@@ -34,7 +34,7 @@ from ..similarity import (
     payload_similarity,
 )
 from . import ServerContext
-from .helpers import _compact_summary
+from .summaries import _compact_summary
 
 logger = logging.getLogger(__name__)
 

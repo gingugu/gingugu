@@ -47,7 +47,8 @@ import re
 import sqlite3
 
 from . import embedding_sync
-from .embeddings import EmbeddingProvider, cosine, embedding_input
+from .embedding_text import embedding_input
+from .embeddings import EmbeddingProvider, cosine
 
 logger = logging.getLogger(__name__)
 

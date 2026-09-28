@@ -72,6 +72,19 @@ class Confidence(StrEnum):
     DEPRECATED = "deprecated"
 
 
+class Provenance(StrEnum):
+    """How the writer came to believe a memory. Declared, never inferred.
+
+    One axis, orthogonal to ``Confidence``: a ``verified`` memory can still be
+    ``self-concluded``, and that is exactly the case this field exists to show.
+    """
+
+    USER_ASSERTED = "user-asserted"
+    MEASURED = "measured"
+    FILE_DERIVED = "file-derived"
+    SELF_CONCLUDED = "self-concluded"
+
+
 class RelationType(StrEnum):
     SUPERSEDES = "supersedes"
     RELATED_TO = "related_to"
@@ -136,6 +149,11 @@ class Memory(BaseModel):
     # Pinned memories always load in memory_context, ahead of and exempt from
     # ranking. Reserved for the handful of rules that must never be missing.
     pinned: bool = False
+    # Write-time declarations (migration 014). None means never declared.
+    provenance: Provenance | None = None
+    # What this memory is for, in the user's words. Indexed by FTS5 and part of
+    # the embedding text, so it reaches retrieval on both sides of the hybrid.
+    about: str | None = None
     # Populated from memory_tags on read; not a column on `memories`.
     tags: list[str] = Field(default_factory=list)
     # Populated only on search/recall results; not stored.
@@ -175,6 +193,8 @@ MEMORY_COLUMNS: tuple[str, ...] = (
     "access_count",
     "metadata",
     "pinned",
+    "provenance",
+    "about",
 )
 
 
