@@ -136,3 +136,15 @@ def test_startup_protocol_asks_for_one_stats_call() -> None:
         text = path.read_text(encoding="utf-8")
         assert 'memory_stats(namespace="crow")' not in text, path
         assert 'memory_stats(namespace="crow,' in text, path
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("raw", ["crow,crow", " crow ", "crow,"])
+async def test_a_list_that_normalises_to_one_name_is_a_single_namespace_call(server, raw) -> None:
+    """Normalisation happens before the shape is chosen: a list that collapses
+    to one real name is that name's single-namespace call, not a lookup of the
+    raw string."""
+    await _seed(server)
+    out = await _stats(server, namespace=raw)
+    assert out["ok"] is True
+    assert out["stats"]["total_memories"] == 2

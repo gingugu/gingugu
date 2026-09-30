@@ -108,9 +108,11 @@ def register(mcp, ctx: ServerContext) -> None:
 
             ns_id = None
             if namespace is not None:
-                ns = ctx.namespaces.get(namespace)
+                # A list that normalises to one name is that name's call.
+                name = names[0] if names else namespace
+                ns = ctx.namespaces.get(name)
                 if ns is None:
-                    return _single_namespace_not_found(namespace)
+                    return _single_namespace_not_found(name)
                 ns_id = ns.id
             data = stats_mod.compute_stats(ctx.conn, namespace_id=ns_id, review_limit=review_limit)
             return {"ok": True, "flagged_stale": 0, "stats": data}
