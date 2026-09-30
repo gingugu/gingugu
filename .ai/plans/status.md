@@ -25,7 +25,7 @@ resequenced board. Three code changes and one store curation:
   typed `list`, not `list[dict]`: FastMCP's argument validation rejects a
   non-object element before the handler runs, which would escape as a raw
   `ToolError` instead of a structured `ok: false`. `memory_unrelate`'s
-  `edges: list[dict]` has the same gap and is left for a follow-up.
+  `edges` had the same gap and is typed the same way now, with a test.
 - Splits to hold 300 lines: `memory_stats` moved to `handlers/stats.py`,
   `compute_hygiene` to `hygiene_stats.py`.
 - **Pin skew**, fixed in the store rather than the code: the largest pin's

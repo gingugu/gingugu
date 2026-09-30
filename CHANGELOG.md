@@ -355,6 +355,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A malformed element in `memory_unrelate`'s `edges` batch now returns a
+  structured error.** A non-object element was rejected by argument validation
+  before the handler ran, so the caller got a raw tool error instead of
+  `ok: false` naming the bad index. `edges` is now typed as a plain list and
+  each element is checked by the batch parser, the same as `memory_relate`'s
+  new batch.
 - **`cosine` returned a `numpy.float32` from every real-embedding call**, in
   spite of declaring `-> float`. `fastembed` hands back a Python list whose
   elements are `float32`, so the arithmetic silently changed type. `json.dumps`

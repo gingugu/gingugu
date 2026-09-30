@@ -156,7 +156,9 @@ def register(mcp, ctx: ServerContext) -> None:
         relation_type: str | None = None,
         new_relation_type: str | None = None,
         reverse: bool = False,
-        edges: list[dict] | None = None,
+        # ``list``, not ``list[dict]``: element validation belongs to
+        # ``_parse_edges``, which names the bad index and returns ``ok: false``.
+        edges: list | None = None,
         dry_run: bool = False,
     ) -> dict:
         """Repair the graph: retype a mislabelled edge, turn a backwards one around, or
