@@ -57,9 +57,11 @@
 | `migrations/claim_derivation.py` | Row migrations (005-007, 009, 010) + `_backfill_claims`. Claims are stored rows, so improving the extractor changes nothing already on disk - every fix needs a migration that re-reads prose which never changed. Five exist for that one reason |
 | `migrations/runtime.py` | Coordination migrations (012): `activity`, `dream_lock`. Split from `schema.py` on the line between *state about memories* and *state about the processes touching them* - these carry no knowledge, survive no export, and a store that lost them would lose nothing a person put there |
 | `migrations/fields.py` | Migration 014: `provenance` and `about`, two write-time declared columns on `memories`. Both start NULL, no backfill - a guessed provenance would be the model-free-but-invented judgment the field exists to rule out. Rebuilds `memories_fts` (and its three sync triggers) in one transaction to index `about` alongside `title`/`content`, then runs FTS5's `rebuild` command. Re-runnable: checks `pragma_table_info` before each `ADD COLUMN` |
+| `migrations/queries.py` | Migration 015: `query_log`, the questions asked of the store. Its own module because it is neither structure, re-derivation, coordination state, nor a declared field - and because `access_log` cannot hold it: that table has one row per *returned memory*, so it never sees the question or a miss |
+| `query_log.py` | `record(conn, *, tool, query, result_ids, namespaces, session_id=None)`: one row per query. Never commits, swallows `sqlite3.Error` (logs a warning) so retrieval never fails over bookkeeping. Blank queries are skipped; text is stripped and capped at `MAX_QUERY_CHARS` (2000). Never pruned |
 | `models.py` | Memory / namespace / relation data models. Also owns `Provenance` (the `provenance` vocabulary: user-asserted/measured/file-derived/self-concluded, enforced at the application layer, never a SQL `CHECK`) and `MEMORY_COLUMNS` - the one declared `memories` column list - plus `memory_columns_sql()` / `memory_placeholders_sql()`. Every module that reads or inserts a memory row derives its SQL from these; private copies drifted and silently dropped `pinned`. Field normalizers live here too: `normalize_tag`, `normalize_metadata` |
 | `storage.py` | CRUD for the `memories` row itself, and the transaction boundary around it. Owns nothing else |
-| `storage_derived.py` | `DerivedTables`, the delegation surface for the four satellite tables a memory drags along (tags, access log, embeddings, claims). Mixed into `MemoryStore` ahead of `TransactionParticipant`, so it declares what it borrows under `TYPE_CHECKING` only - a real stub would sit earlier in the MRO and shadow the `_commit` it means to call |
+| `storage_derived.py` | `DerivedTables`, the delegation surface for the four satellite tables a memory drags along (tags, access log, embeddings, claims), plus `log_query` for the query log (which hangs off a question, not a memory row; it stamps the MCP session id and commits). Mixed into `MemoryStore` ahead of `TransactionParticipant`, so it declares what it borrows under `TYPE_CHECKING` only - a real stub would sit earlier in the MRO and shadow the `_commit` it means to call |
 | `tags.py` | The `tags` / `memory_tags` tables. Split from `storage.py` because `memory_import` writes tag rows too and had grown a byte-identical private copy of `get_or_create` |
 | `access.py` | The `access_log` table and the two ways to touch a memory: `record` (a real access, bumps `access_count`) vs `touch` (reactivation only, refreshes the dormancy clock). Conflating them lets a well-connected memory inflate its own ranking |
 | `search.py` | True hybrid engine: BM25 pool, RRF fusion, composite re-rank. Ties break on id, never on iteration order |
@@ -95,10 +97,10 @@
 | `stats.py` | Health stats (counts, confidence, dormancy, hygiene, review sweep) |
 | `graph_stats.py` | Relation-graph health: edges, degree, type mix, orphans, and edges stranded past `SPREAD_PER_SEED`. Also `orphan_sample` (the orphans behind the count, costliest first) and the shared `orphan_filter()` predicate behind `memory_search(orphans=True)` |
 | `size_stats.py` | Character cost the counts do not show: `total_chars`, `mean_chars`, `pinned_chars`, `largest_pinned_chars`. `pinned_chars` is the only recurring context cost in the store, since pins load at every session start exempt from ranking; `largest_pinned_chars` is the skew check, because a tier dominated by one entry is not fixed by adding better ones |
-| `hygiene_stats.py` | Store hygiene for `memory_stats`: ghost namespaces (global calls only) and duplicate-title clusters. Split out of `stats.py`, whose `compute_global_stats` (inventory, `access_log_rows`, `credentials`) is computed once per call so a multi-namespace `memory_stats` does not repeat it |
+| `hygiene_stats.py` | Store hygiene for `memory_stats`: ghost namespaces (global calls only) and duplicate-title clusters. Split out of `stats.py`, whose `compute_global_stats` (inventory, `access_log_rows`, `query_log_rows`, `credentials`) is computed once per call so a multi-namespace `memory_stats` does not repeat it |
 | `recall_gate.py` | Involuntary recall, decision half: pure arithmetic over scored candidates. Length floor, affect stripping, absolute bar, **margin vs the sweep median** (the gate that stops the cap from doing the threshold's job), lexical requirement, cap, per-session suppression. No I/O, so it is unit-testable without a brain |
-| `recall_sweep.py` | Involuntary recall, I/O half: read-only (`mode=ro`) cosine sweep + BM25 `lexical_matches`. Excludes deprecated, **pinned** (already loaded unconditionally at session start) and **superseded** (replaced knowledge arriving as current) in SQL |
-| `prompt_hook.py` | `gingugu hook prompt`: the `UserPromptSubmit` entry point. Orchestrates gate + sweep, writes `hookSpecificOutput.additionalContext`, keeps suppression state beside the DB. Exits 0 on every path |
+| `recall_sweep.py` | Involuntary recall, I/O half: read-only (`mode=ro`) cosine sweep + BM25 `lexical_matches`. Also `sqlite_uri(db_path, mode)`, the one place a `file:` URI is built (resolved path, percent-encoded, so a `#` or `?` in a path cannot end the filename early and drop `mode=`). Excludes deprecated, **pinned** (already loaded unconditionally at session start) and **superseded** (replaced knowledge arriving as current) in SQL |
+| `prompt_hook.py` | `gingugu hook prompt`: the `UserPromptSubmit` entry point. Orchestrates gate + sweep, writes `hookSpecificOutput.additionalContext`, keeps suppression state beside the DB. The sweep stays read-only; its one write is `log_prompt`, which records the prompt and the ids injected to `query_log` (`tool='hook'`) over its own short best-effort connection, even when nothing surfaced. Exits 0 on every path |
 | `staleness.py` | Advisory review hints for point-in-time memories |
 | `claims.py` | Extracts checkable state claims (repo-qualified PR/MR refs) from prose; ignores refs inside `[[wiki-links]]` |
 | `claim_qualify.py` | Decides **which repo** a ref names: URL, then a repo the prose names next to it, then a binding stated elsewhere in the same memory, then the namespace default. Requires the `#`/`!` sigil so plan ordinals ("PR 1") are not refs |
@@ -109,7 +111,7 @@
 | `credentials.py` | OS-keychain credential vault. `get` redacts secret values unless `reveal`; `write_secret` hands one secret to a file |
 | `secret_file.py` | Safe owner-only file write for `credential_get(into=…)`: absolute path, no symlink/dir, parent must exist; `O_NOFOLLOW`, mode 0600 |
 | `portability.py` | Export / import a namespace. `import_data` takes an `embedder` and embeds what it writes; vectors are recomputed, never carried in the payload (they are model-specific and derived) |
-| `handlers/` | MCP tool handlers: `memory.py` (store/update), `forget.py` (the one destructive tool), `hints.py` (write-time similar/relation hints), `recall.py` (recall/context), `search.py`, `stats.py` (`memory_stats`: single, unscoped, or a comma list returning `global` once plus `by_namespace`), `scope.py` (read scope for recall/search: all namespaces when unconfigured, widen an empty scoped lookup to every namespace), `excerpt.py` (`memory_excerpt`: one memory, never ranked), `relations.py` (relate/edges/unrelate) with `relation_ops.py` (batch parsing + per-edge dispatch for both; the relate batch is all-or-nothing inside one `atomic()`), `consolidate.py`, `dream.py` (run/read/decide the proposal queue; an accept that would need a judgment the pass declined to make is REFUSED, not defaulted, and `reverse=True` writes an edge object-to-subject since the orphan pass's subject order is an artifact of retrieval rather than a claim about direction), `admin.py`, `credentials.py`, `summaries.py` (payload shapes: full summary, compact summary, the picker between them), `choices.py` (enum argument parsing shared across store/update: one error format naming the field, the bad value, and the vocabulary), `helpers.py` |
+| `handlers/` | MCP tool handlers: `memory.py` (store/update), `forget.py` (the one destructive tool), `hints.py` (write-time similar/relation hints), `recall.py` (recall/context), `search.py`, `stats.py` (`memory_stats`: single, unscoped, or a comma list returning `global` once plus `by_namespace`), `scope.py` (read scope for recall/search: all namespaces when unconfigured, widen an empty scoped lookup to every namespace), `excerpt.py` (`memory_excerpt`: one memory, never ranked), `relations.py` (relate/edges/unrelate) with `relation_ops.py` (batch parsing + per-edge dispatch for both; the relate batch is all-or-nothing inside one `atomic()`), `consolidate.py`, `dream.py` (run/read/decide the proposal queue; an accept that would need a judgment the pass declined to make is REFUSED, not defaulted, and `reverse=True` writes an edge object-to-subject since the orphan pass's subject order is an artifact of retrieval rather than a claim about direction), `admin.py`, `credentials.py`, `summaries.py` (payload shapes: full summary, compact summary, the picker between them), `choices.py` (enum argument parsing shared across store/update: one error format naming the field, the bad value, and the vocabulary), `helpers.py`, `context_merge.py` (`merge_namespace_context`: pure merge of per-namespace context loads - pins first, then ranked tails interleaved by rank) |
 
 Dev-only tooling at the repo root (never shipped in the wheel): **`bench/`** —
 golden-set retrieval benchmark (Recall@K, MRR, precision, token cost;
@@ -156,6 +158,12 @@ Generated sets hold real memory content and stay in `bench/local/`.
   a 0600 file (stdio only, refused under `serve`), `reveal=true` returns it
   inline. Gated by `MEMORY_CREDENTIALS_ENABLED` (default true); a shared/central
   instance runs with it `false` to omit the vault.
+
+Query text is recorded in `query_log`: every `memory_recall`, a `memory_search`
+that carries a `query` (an `ids` fetch or a filter/sort listing is not logged),
+and a `memory_context` given a `task_hint` (`tool='context'`; context still
+does not bump `access_count` or write `access_log`). The involuntary-recall hook
+logs its prompts too (`tool='hook'`). `memory_stats` reports `query_log_rows`.
 
 `memory_store` / `memory_update` return non-blocking `similar_memories` (merge
 candidates) and `suggested_relations` hints. The latter are candidates to
@@ -247,7 +255,19 @@ gap between the count and the rows.
   `about` joins the FTS5 index (`memories_fts` gains a third column, all three
   sync triggers rebuilt, then an FTS `rebuild`) and the embedding text. See
   `migrations/fields.py`.
-- Schema versioned via `PRAGMA user_version` (**currently 14**); migrations
+- `query_log` table (migration 015): one row per query - `id`, `session_id`,
+  `tool` (`recall` / `search` / `context` / `hook`), `query`, `namespaces`
+  (comma-separated scope actually searched, or `*` for every namespace,
+  including a scoped read that widened), `result_ids` (JSON array in rank
+  order, de-duplicated), `created_at`; indexed on `created_at`. A zero-hit
+  query is still a row - those misses are the point. Own table rather than an
+  `access_log` column because `access_log` has one row per returned memory.
+  `result_ids` is JSON, not a join table: written once, read whole, and its
+  order is the point. **Never pruned**: `access_log` keeps a 90-day window
+  because its aggregate lives on `access_count`, but nothing summarises
+  `query_log`, so the rows are the only copy. See `migrations/queries.py`,
+  `query_log.py`.
+- Schema versioned via `PRAGMA user_version` (**currently 15**); migrations
   additive by default. Migration 006 adds no schema — it re-runs the claims
   backfill to repair DBs that reached v5 from pre-fix code and so can never
   run 005 again. Migration 007 adds `default_repo` and re-derives every claim
@@ -274,7 +294,8 @@ gap between the count and the rows.
   FTS5 rebuild that indexes `about`. Re-runnable (checks `pragma_table_info`
   before each `ADD COLUMN`); measured on a copy of a 2716-memory real brain,
   ran in 0.30s with every row, every FTS hit, and every `source` value
-  preserved.
+  preserved. Migration 015 adds `query_log` (`migrations/queries.py`), purely
+  additive: a store with no rows there behaves exactly as before.
 
 ---
 

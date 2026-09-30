@@ -137,6 +137,16 @@
             "timeout": 30
           }
         ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/user_prompt_recall.py",
+            "timeout": 20
+          }
+        ]
       }
     ],
     "Notification": [

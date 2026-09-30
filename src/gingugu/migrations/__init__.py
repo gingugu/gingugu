@@ -4,7 +4,7 @@ Migrations are hand-rolled and keyed off ``PRAGMA user_version`` (Alembic is
 overkill for a single-file DB). Each one is a ``(target_version, callable)``
 pair in ``MIGRATIONS``, applied in order whenever the stored version is lower.
 
-The migrations themselves live in four modules, split by what they actually do:
+The migrations themselves live in five modules, split by what they actually do:
 
 * ``schema`` - structural work. New tables, new columns, new indexes.
 * ``claim_derivation`` - row work. Re-reading prose that never changed,
@@ -14,6 +14,8 @@ The migrations themselves live in four modules, split by what they actually do:
   the store rather than the memories in it.
 * ``fields`` - write-time declared fields on the memory record, and the FTS5
   rebuild that indexes them.
+* ``queries`` - the questions asked of the store, as opposed to the memories
+  in it.
 
 A migration is append-only once released. ``migrate()`` selects pending work
 with ``current < target``, so a DB already stamped at version N can never run
@@ -37,6 +39,7 @@ from .claim_derivation import (
     _migration_010_claim_qualification,
 )
 from .fields import _migration_014_provenance_about
+from .queries import _migration_015_query_log
 from .runtime import _migration_012_activity_and_lock
 from .schema import (
     _migration_001_initial_schema,
@@ -66,6 +69,7 @@ MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
     (12, _migration_012_activity_and_lock),
     (13, _migration_013_chunks),
     (14, _migration_014_provenance_about),
+    (15, _migration_015_query_log),
 ]
 
 # The version a fully-migrated DB lands on. Derived rather than written down so

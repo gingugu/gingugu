@@ -7,6 +7,10 @@ connection - ``tags``, ``access``, ``embedding_sync``, ``claim_sync`` - because
 ``MemoryStore`` is not the only writer of memory rows and an invariant locked
 inside that class is one ``memory_import`` has no way to honor.
 
+The query log is not a fifth satellite - it hangs off a question, not a memory
+row - but its ``log_query`` pass-through lives here too, so this one file also
+answers "what else does a retrieval touch?".
+
 What is left over is the pass-through surface callers actually hold, and this
 is it. Keeping it here means ``storage`` reads as the row's own CRUD, and the
 question "what else does writing a memory touch?" has one answer in one file.
@@ -24,7 +28,7 @@ import sqlite3
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from . import access, claim_sync, embedding_sync
+from . import access, claim_sync, embedding_sync, query_log
 from . import tags as tags_mod
 from .embeddings import EmbeddingProvider
 from .models import Memory
@@ -80,6 +84,24 @@ class DerivedTables:
         updated = access.record(self._conn, ids, session_id=current_session_id())
         self._commit()
         return updated
+
+    def log_query(
+        self, tool: str, query: str | None, result_ids: list[str], namespaces: list[str] | None
+    ) -> None:
+        """Record what a retrieval was asked and what it returned, rank order kept.
+
+        ``namespaces=None`` means the query ran across every namespace. Never
+        raises; see ``query_log.record``.
+        """
+        if query_log.record(
+            self._conn,
+            tool=tool,
+            query=query,
+            result_ids=result_ids,
+            namespaces=namespaces,
+            session_id=current_session_id(),
+        ):
+            self._commit()
 
     def touch_many(self, memory_ids: list[str]) -> int:
         """Reactivate memories without counting an access. Returns rows updated.

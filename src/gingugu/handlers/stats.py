@@ -32,9 +32,9 @@ def register(mcp, ctx: ServerContext) -> None:
         "crow,my-project"), or omitted for global. A single name and the unscoped
         call keep the shape they always had: ``{"ok": true, "flagged_stale": 0,
         "stats": {...}}``. A comma list instead returns the namespace-independent
-        block (``namespaces``, ``access_log_rows``, ``credentials``) exactly once
-        under ``global``, plus each namespace's own scoped stats under
-        ``by_namespace`` - the session-start protocol's two-call pattern
+        block (``namespaces``, ``access_log_rows``, ``query_log_rows``,
+        ``credentials``) exactly once under ``global``, plus each namespace's own
+        scoped stats under ``by_namespace`` - the session-start protocol's two-call pattern
         (``memory_stats(namespace="crow")`` then one per project) collapsed into
         one call that computes the shared block once instead of once per
         namespace: ``{"ok": true, "flagged_stale": 0, "namespaces": [...],

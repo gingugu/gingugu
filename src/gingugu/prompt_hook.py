@@ -22,6 +22,10 @@ from .recall_gate import GateConfig, is_worth_embedding, render, select, strip_a
 
 GLOBAL_NAMESPACE = "crow"
 
+# How long logging the prompt may wait on a busy database. The hook holds the
+# user's turn, so losing one row beats a visible stall.
+LOG_BUSY_TIMEOUT_S = 0.5
+
 # Suppression state older than this is a session that ended. Pruned on write so
 # the directory cannot grow without bound.
 _STATE_TTL_SECONDS = 7 * 24 * 3600
@@ -130,6 +134,46 @@ def _emit(context: str, count: int) -> None:
     )
 
 
+def log_prompt(
+    db_path: Path, session_id: str, query: str, result_ids: list[str], namespaces: list[str]
+) -> None:
+    """Record the prompt this turn searched on, and what it injected.
+
+    The sweep's connection is read-only by design, so this opens its own write
+    connection, briefly, after the sweep is done. It is the one write the hook
+    makes to the brain, and it is best-effort twice over: a busy database waits
+    at most ``LOG_BUSY_TIMEOUT_S`` rather than holding the turn, and a missing
+    file or a store not yet migrated to ``query_log`` is skipped, never created.
+    Every failure is swallowed, not just database ones: this runs before the
+    injection, and a logging bug must not cost the turn its recall.
+    ``session_id`` is Claude Code's, not an MCP session id, so these rows do not
+    join to ``access_log`` - ``tool='hook'`` keeps them apart.
+    """
+    import sqlite3
+
+    from .query_log import record
+    from .recall_sweep import sqlite_uri
+
+    try:
+        conn = sqlite3.connect(sqlite_uri(db_path, "rw"), uri=True, timeout=LOG_BUSY_TIMEOUT_S)
+    except Exception:  # noqa: BLE001 - logging must never cost the turn its recall
+        return
+    try:
+        if record(
+            conn,
+            tool="hook",
+            query=query,
+            result_ids=result_ids,
+            namespaces=namespaces,
+            session_id=session_id,
+        ):
+            conn.commit()
+    except Exception:  # noqa: BLE001
+        pass
+    finally:
+        conn.close()
+
+
 def run(payload: dict) -> int:
     """Decide and print. Returns the process exit code (always 0)."""
     if not enabled():
@@ -174,6 +218,7 @@ def run(payload: dict) -> int:
 
     suppressed = load_suppressed(app.db_path, session_id)
     picked = select(candidates, lexical_ids=lexical, config=cfg, suppressed=suppressed)
+    log_prompt(app.db_path, session_id, cleaned, [c.id for c in picked], namespaces)
     if not picked:
         return 0
 
