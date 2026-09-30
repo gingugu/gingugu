@@ -50,6 +50,10 @@ and a harmless one can read alike to an encoder.
   Windows, where `?` is not a legal filename character. Skipped on Windows
   only; the `#` and `%` cases passed there, which confirms the
   `Path.as_uri()` fix on Windows too.
+- **Verified live:** after a server restart the brain migrated to schema 16.
+  Two tripwires were seeded (`gh pr merge ... --delete-branch`, and a
+  `Co-Authored-By: Claude` trailer). A matching Bash call was denied in a real
+  Claude Code session, and the unchanged re-issue went through.
 - Suite: 1118 passed, 1 xfailed. Unreleased; 0.18.0 is the latest release.
 
 ## Recently Completed
