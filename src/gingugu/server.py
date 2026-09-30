@@ -120,8 +120,16 @@ def main() -> None:
         print(f"gingugu {__version__}")
         return
     if cmd == ["serve"]:
-        from .serve import serve
+        from .serve import SERVE_USAGE, serve
 
+        rest = sys.argv[2:]
+        if rest and rest[0] in ("-h", "--help"):
+            print(SERVE_USAGE)
+            return
+        if rest:
+            print(f"gingugu serve: unexpected argument {rest[0]!r}\n", file=sys.stderr)
+            print(SERVE_USAGE, file=sys.stderr)
+            raise SystemExit(2)
         serve()
         return
     if cmd == ["promote"]:
