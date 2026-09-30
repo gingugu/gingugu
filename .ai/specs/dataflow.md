@@ -416,6 +416,7 @@ governs truth status governs this.
 
 ```
 memory_relate(source_id, target_id, relation_type)
+  | edges[]                                         (all-or-nothing, one transaction)
   → relations.py writes a directed typed edge
   → later recall/context traverse edges so one hit surfaces its cluster
 

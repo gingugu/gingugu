@@ -75,7 +75,8 @@ def _single_namespace_not_found(namespace: str) -> dict:
     if "," in namespace:
         msg += (
             " (this tool takes a single namespace; comma-separated lists are "
-            "supported by memory_context, memory_recall, and memory_search)"
+            "supported by memory_context, memory_recall, memory_search, and "
+            "memory_stats)"
         )
     return _err(msg)
 

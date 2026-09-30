@@ -339,28 +339,6 @@
         ]
       }
     ],
-    "WorktreeCreate": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/worktree_create.py",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "WorktreeRemove": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/worktree_remove.py",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
     "Elicitation": [
       {
         "matcher": "",

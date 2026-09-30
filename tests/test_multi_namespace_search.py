@@ -167,11 +167,12 @@ async def test_store_rejects_comma_namespace(server) -> None:
 
 
 @pytest.mark.asyncio
-async def test_stats_comma_namespace_gets_hint(server) -> None:
+async def test_stats_comma_namespace_names_the_missing_one(server) -> None:
+    """memory_stats accepts a comma list now; an unknown name still fails."""
     out = _payload(await server.call_tool("memory_stats", {"namespace": "crow,gingugu"}))
     assert not out["ok"]
     assert "not found" in out["error"]
-    assert "comma-separated lists are supported by" in out["error"]
+    assert "'crow'" in out["error"] and "'gingugu'" in out["error"]
 
 
 @pytest.mark.asyncio
