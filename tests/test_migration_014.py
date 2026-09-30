@@ -50,13 +50,13 @@ def _match(conn: sqlite3.Connection, query: str) -> list[str]:
     ]
 
 
-def test_014_is_the_latest():
-    assert LATEST_SCHEMA_VERSION == 14
+def test_014_is_registered():
+    assert (14, _migration_014_provenance_about) in MIGRATIONS
 
 
 def test_upgrade_adds_both_columns_null_and_keeps_source():
     conn = _v13_with_rows()
-    assert migrate(conn) == 14
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
     rows = conn.execute("SELECT source, provenance, about FROM memories ORDER BY id").fetchall()
     assert [tuple(r) for r in rows] == [("session 2026-07-24", None, None)] * 2
 
