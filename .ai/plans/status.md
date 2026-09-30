@@ -1,11 +1,50 @@
 # Project Status
 
-_Last updated: 2026-09-29_
+_Last updated: 2026-09-30_
 
 ## In Flight
 
-**Board #1 (hygiene), on `feature/hygiene`.** The first item of the
-resequenced board. Three code changes and one store curation:
+**Board #1 (query-text logging), on `feature/query-log`.** Step one of the
+paraphrase question set (old #9): it starts the clock on collecting real
+queries, which that set needs weeks of.
+
+- **Migration 015, a `query_log` table** (new `migrations/queries.py`): one row
+  per query, carrying `tool`, the query text, the namespace scope it actually
+  ran in (`*` when unscoped or widened), the results as a JSON array **in rank
+  order**, the session id, and a timestamp. Its own table rather than a column
+  on `access_log`, because `access_log` has one row per *returned* memory: a
+  zero-hit query left no trace there, and those misses are what the set
+  measures. **Never pruned** - `access_log` keeps its 90-day window because
+  `access_count` carries its aggregate; nothing summarises this table.
+- **Logged:** `memory_recall`; `memory_search` with a query (an `ids` fetch or
+  a listing is not a question); `memory_context`'s `task_hint` as
+  `tool='context'`; and the involuntary-recall hook's prompt as `tool='hook'`
+  (past the length floor, affect stripped, capped at 2000 chars). Hook rows
+  carry Claude Code's session id, not an MCP one, so they do not join to
+  `access_log`.
+- New `query_log.py` (`record`, never commits, swallows database errors) and
+  `store.log_query`. `memory_stats` gains `query_log_rows` in its global block.
+- The hook's sweep stays read-only; logging opens its own write connection
+  afterwards, waits at most 0.5s on a busy database, never creates a file, and
+  swallows every failure so it cannot cost the turn its injection.
+- **URI fix, found by the security review:** both hook connections now build
+  their `file:` URI with `Path.as_uri()` (`recall_sweep.sqlite_uri`). A raw
+  path containing `#` or `?` ended the filename early and dropped `mode=`, so
+  the "read-only" sweep opened - and created - a stray empty database.
+- `_merge_namespace_context` moved to `handlers/context_merge.py` to keep
+  `handlers/recall.py` under 300 lines.
+- **Also on this branch:** `gingugu init` run on this repo (the
+  `UserPromptSubmit` hook entry and `.claude/hooks/user_prompt_recall.py`), and
+  init's gitignore block now covers `.claude/**/*.bak`, the copies it saves
+  before replacing a user's settings or hook.
+
+Out of scope, and board #10's job: labelling which memory a session then
+acted on. 1064 tests pass (+38).
+
+## Recently Completed
+
+**Board #1 (hygiene): MERGED as `344215e` (#88).** Three code changes and
+one store curation:
 
 - **`gingugu serve --help` no longer starts the server.** It lists the
   environment-only knobs by their real `MEMORY_*` names; a stray argument
@@ -35,12 +74,9 @@ resequenced board. Three code changes and one store curation:
   (19%) to 3,593 (9.5%), with the next at 3,356 - no single pin dominates it
   any more.
 
-**Also on this branch:** the repo's log-only `WorktreeCreate` and
-`WorktreeRemove` hooks are removed.
-That hook replaces git's worktree creation and must print the new path, so it
-had broken every `isolation: worktree` subagent here.
-
-## Recently Completed
+**Also in #88:** the repo's log-only `WorktreeCreate` and `WorktreeRemove`
+hooks are removed. That hook replaces git's worktree creation and must print
+the new path, so it had broken every `isolation: worktree` subagent here.
 
 **Board items 4 + 5: provenance and aboutness. MERGED as `e00f380` (#87).**
 Two write-time declared fields on the memory record, one migration (014,
@@ -596,7 +632,7 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-## The Board (current: 2026-09-29)
+## The Board (current: 2026-09-30)
 
 **Resequenced 2026-09-29 into build order.** The table below is the order the
 work gets done in, top first; `#` is that position. Item numbers used to be
@@ -606,23 +642,25 @@ older notes and memories that cite "item 10" still resolve. The old row 7
 (`--adopt` + manage repo CLAUDE.md / AGENTS.md) is **removed: it shipped as
 `52bc6cf` (#63) on 2026-08-27** and was left on the board by mistake.
 
+**2026-09-30:** hygiene (old #8) shipped as #88 and came off; every row moved up
+one. A shipped item leaves the table and the rest keep their order.
+
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **Hygiene** | 8 | Cheap, and it clears debris before anything is built on top: `serve --help`, multi-namespace `memory_stats`, bulk `memory_relate`, pin skew |
-| 2 | **Query-text logging** (step one of the paraphrase set) | 9 | Tiny, and it starts a clock: the paraphrase set needs weeks of real queries that are not being recorded today |
-| 3 | **Tripwires: involuntary recall at the action** | 10 | The user's top pick. Built local-first, with a seam for a remote brain |
-| 4 | **Capability pointer** | 5 | The cheaper half of aboutness; builds straight on the shipped `about` field |
-| 5 | **Scoped serve tokens** | 12 | The foundation for everything that runs over the network |
-| 6 | **One central brain, several clients** | 11 | Mostly built; the rest is physical setup, so it can run in parallel whenever that happens |
-| 7 | **Warm minions** | 13 | Needs 5 |
-| 8 | **A shared board between agents** | 15 | Needs 5 and 6 |
-| 9 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
-| 10 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
-| 11 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries 2 has been logging; arbitration needs this set to be measured on |
-| 12 | **A referee for rival memory tools** | 17 | Only a fair comparison once 11 exists |
-| 13 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
-| 14 | **Secrets broker** | 16 | Needs 5, and a security review before any build |
-| 15 | Session flight recorder (low priority) | 18 | Check prior art first |
+| 1 | **Query-text logging** (step one of the paraphrase set) - IN FLIGHT on `feature/query-log` | 9 | Tiny, and it starts a clock: the paraphrase set needs weeks of real queries that are not being recorded today |
+| 2 | **Tripwires: involuntary recall at the action** | 10 | The user's top pick. Built local-first, with a seam for a remote brain |
+| 3 | **Capability pointer** | 5 | The cheaper half of aboutness; builds straight on the shipped `about` field |
+| 4 | **Scoped serve tokens** | 12 | The foundation for everything that runs over the network |
+| 5 | **One central brain, several clients** | 11 | Mostly built; the rest is physical setup, so it can run in parallel whenever that happens |
+| 6 | **Warm minions** | 13 | Needs 4 |
+| 7 | **A shared board between agents** | 15 | Needs 4 and 5 |
+| 8 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
+| 9 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
+| 10 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries 1 has been logging; arbitration needs this set to be measured on |
+| 11 | **A referee for rival memory tools** | 17 | Only a fair comparison once 10 exists |
+| 12 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
+| 13 | **Secrets broker** | 16 | Needs 4, and a security review before any build |
+| 14 | Session flight recorder (low priority) | 18 | Check prior art first |
 | - | **Template/sibling noise in retrieval - PARKED** | 1 | Ten dead fixes and no live hypothesis; see below |
 
 ### Previous board (2026-09-28), kept for its numbering
@@ -1131,7 +1169,8 @@ fetched by id). Deterministic, no model judging, so it keeps the design law.
 session id (`access.py`), not the query - so the log says which memories a
 session read and never what it asked. Step one is recording the query text of
 recall and search calls (local, in the same file as the memories themselves).
-Open: what counts as "acted on", and how to keep a session that simply re-read
+**Step one is in flight (2026-09-30):** `query_log`, migration 015 - see In
+Flight at the top. Open: what counts as "acted on", and how to keep a session that simply re-read
 the top hit from labelling that hit correct by default.
 
 ### 10-14. Entered 2026-09-28: approved directions, not designed

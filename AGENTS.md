@@ -122,7 +122,10 @@ src/gingugu/
   server.py          → MCP server entrypoint; registers tools, never crashes
   config.py          → config + cross-platform DB path (platformdirs)
   database.py        → SQLite connection, schema, WAL, migrations (PRAGMA user_version), FTS5 triggers
+  migrations/queries.py → migration 015: the query_log table
   models.py          → memory/namespace/relation data models
+  query_log.py       → record(): one query_log row per recall/search/context/hook query;
+                       best-effort, never prunes
   storage.py         → memory CRUD (store/update/forget)
   search.py          → hybrid BM25 (FTS5) + semantic ranking
   embeddings.py      → semantic vector generation
@@ -139,8 +142,9 @@ src/gingugu/
   portability.py     → export / import a namespace
   handlers/          → MCP tool handlers: memory.py, forget.py, hints.py,
                        recall.py, search.py, stats.py, scope.py, excerpt.py,
-                       relations.py, relation_ops.py, consolidate.py, dream.py,
-                       admin.py, credentials.py, helpers.py
+                       context_merge.py, relations.py, relation_ops.py,
+                       consolidate.py, dream.py, admin.py, credentials.py,
+                       helpers.py
 ui/                  → Memory Explorer (api.py backend + React/Vite frontend)
 docs/                → architecture.md (mermaids = source of truth), roadmap.md, future-architecture.md
 tests/               → pytest suites (unit + integration MCP flows)
