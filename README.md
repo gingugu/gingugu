@@ -629,8 +629,9 @@ Gingugu is your long-term brain. Memory is split into **two layers**:
    de-duplicated across namespaces; load all of them speculatively rather than asking the user
    which one to focus on. Add `compact=true` for a lighter payload and pull full bodies with
    `memory_recall` as needed.
-2. `memory_stats(namespace="crow")` — global health (dormancy is a resting signal, never auto-forgotten)
-3. `memory_stats(namespace="<project>")` for each project namespace, in parallel with step 2
+2. `memory_stats(namespace="crow,<project>[,<project2>…]")` - the same namespace list as
+   step 1, in one call: global health once (dormancy is a resting signal, never
+   auto-forgotten) plus each namespace's own breakdown
 
 ### During the session
 **Default: save. Immediately.** Gingugu has trust-led scoring,
@@ -769,7 +770,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_recall` | Search + retrieve (ranked by relevance × freshness; one or many namespaces; optional compact mode; `explain` for a per-hit score breakdown) |
 | `memory_context` | Auto-surface relevant memories (one or many namespaces, deduped; optional compact mode; `explain` for a per-hit score breakdown) |
 | `memory_update` | Update content, type, confidence, metadata, `provenance` or `about`; `resolve_claims` reconciles a stale PR/MR claim without editing the prose |
-| `memory_relate` | Create relationships between memories |
+| `memory_relate` | Create relationships between memories; one at a time or a batch (`edges`), all-or-nothing, idempotent |
 | `memory_edges` | List edges with both endpoints' titles, namespaces, and degree; filter by namespace, type, or memory |
 | `memory_unrelate` | Retype an edge in place, reverse a backwards one, or remove it; one at a time or a batch, with `dry_run` |
 | `memory_consolidate` | Merge/summarize/deduplicate; call without ids for a read-only near-dupe scan |
@@ -778,7 +779,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo) |
 | `memory_export` | Export memories + tags + relations to portable JSON |
 | `memory_import` | Restore a JSON export (skip or replace on conflict) |
-| `memory_stats` | Health overview (dormancy, counts, coverage, review sweep, the `claims` backlog, a relation-graph block whose `orphan_sample` names the memories no edge reaches - `review_limit` raises every sample's cap, and a `size` block reporting the character cost of the store and of the always-loaded pinned tier) |
+| `memory_stats` | Health overview (dormancy, counts, coverage, review sweep, the `claims` backlog, a relation-graph block whose `orphan_sample` names the memories no edge reaches - `review_limit` raises every sample's cap, and a `size` block reporting the character cost of the store and of the always-loaded pinned tier); a comma-separated `namespace` list returns the global block once plus each namespace's own stats |
 | `memory_search` | Advanced filtered search (type, tags, confidence, dates; one or many namespaces; optional compact mode; fetch by exact `ids`; `claims` to work the reconciliation backlog or read refs the prose never resolved, `orphans` to work the graph backlog, `pinned` to enumerate the always-present tier; `explain` for a per-hit score breakdown) |
 | `memory_excerpt` | Read inside ONE memory: find literal matches with their character offsets, line numbers and surrounding context, and/or slice an exact character range |
 | `credential_store` | Store/update a service credential bundle |

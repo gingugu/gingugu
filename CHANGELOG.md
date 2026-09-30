@@ -36,6 +36,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its own `namespace`. A filter-only `memory_search` sweep never widens: "none
   here" is its answer. `memory_context` is unchanged.
 
+- **`memory_stats` accepts a comma-separated `namespace` list**, same CSV
+  semantics as `memory_recall`/`memory_search`: names are de-duplicated
+  order-preserving and an unknown name fails the whole call and names it. The
+  response returns the three namespace-independent fields (`namespaces`,
+  `access_log_rows`, `credentials`) once under `global`, plus each namespace's
+  own scoped stats under `by_namespace` - collapsing the session-start
+  protocol's old two-call pattern (`memory_stats(namespace="crow")` then one
+  per project) into a single call that computes the shared block once instead
+  of once per namespace. `review_limit` applies to every namespace's block. A
+  single name and the unscoped call keep their exact current shape.
+
+- **`memory_relate` accepts a batch.** `edges` takes an array of up to
+  `MAX_BATCH_EDGES` (100) objects, each with `source_id`, `target_id`, and a
+  required `relation_type` (no default per op), mutually exclusive with the
+  single-edge fields. The whole batch is validated before anything is written
+  and applied inside one transaction, so a failure partway through rolls back
+  everything already written in that call - the same all-or-nothing principle
+  as `memory_unrelate`'s existing batch. Relate is idempotent on
+  `(source_id, target_id, relation_type)`, so each result reports `created` or
+  `exists` rather than pretending a no-op was a write. The single-edge
+  response is unchanged.
+
+- **`gingugu serve -h`/`--help` prints its usage instead of starting the
+  server.** `serve()` takes no arguments, so the flag used to be silently
+  matched and discarded while the HTTP server started anyway. The new usage
+  text lists the real names and defaults of every environment-only knob
+  (`MEMORY_SERVE_HOST`, `MEMORY_SERVE_PORT`, `MEMORY_SERVE_TOKEN`,
+  `MEMORY_LOG_LEVEL`, `MEMORY_CREDENTIALS_ENABLED`), and any other argument
+  after `serve` is now a hard error (exit 2) instead of being ignored.
+
 ### Changed
 
 - **Schema version 14.** `memories_fts` gains a third indexed column,
