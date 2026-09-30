@@ -68,3 +68,44 @@ def test_init_dispatch_propagates_exit_code(monkeypatch):
     with pytest.raises(SystemExit) as exc:
         _run(monkeypatch, ["init"])
     assert exc.value.code == 7
+
+
+# --- `gingugu serve` takes no arguments, so it must not swallow them ---------
+
+SERVE_ENV_VARS = (
+    "MEMORY_SERVE_HOST",
+    "MEMORY_SERVE_PORT",
+    "MEMORY_SERVE_TOKEN",
+    "MEMORY_LOG_LEVEL",
+    "MEMORY_CREDENTIALS_ENABLED",
+)
+
+
+@pytest.mark.parametrize("flag", ["-h", "--help"])
+def test_serve_help_prints_its_env_knobs_and_does_not_start(monkeypatch, capsys, flag):
+    """`serve --help` used to start the server: serve() takes no argv, so the
+    flag was matched and discarded. Its knobs are environment-only, and the
+    help is the one place a user learns their real names."""
+    started = {"serve": False}
+    monkeypatch.setattr("gingugu.serve.serve", lambda: started.__setitem__("serve", True))
+    try:
+        _run(monkeypatch, ["serve", flag])
+    except SystemExit as exc:
+        assert exc.code in (0, None)
+    assert started["serve"] is False
+    out = capsys.readouterr().out
+    assert "gingugu serve" in out
+    for name in SERVE_ENV_VARS:
+        assert name in out
+
+
+def test_serve_rejects_unknown_arguments(monkeypatch, capsys):
+    """A stray argument is a typo, not something to ignore on the way to
+    binding a port."""
+    started = {"serve": False}
+    monkeypatch.setattr("gingugu.serve.serve", lambda: started.__setitem__("serve", True))
+    with pytest.raises(SystemExit) as exc:
+        _run(monkeypatch, ["serve", "--port", "9000"])
+    assert exc.value.code == 2
+    assert started["serve"] is False
+    assert "MEMORY_SERVE_PORT" in capsys.readouterr().err
