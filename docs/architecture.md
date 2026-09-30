@@ -1584,7 +1584,8 @@ src/gingugu/
 ├── claim_rederive.py       # Re-derivation that preserves resolution state
 │
 │   # ── Stats + misc ──────────────────────────────────────────────
-├── stats.py                # Counts, confidence, dormancy, hygiene, review sweep
+├── stats.py                # Counts, confidence, dormancy, review sweep; global block
+├── hygiene_stats.py        # Ghost namespaces, duplicate titles
 ├── graph_stats.py          # Relation-graph health: edges, degree, orphans, spread cap
 ├── size_stats.py           # The character cost the counts do not show
 ├── staleness.py            # Advisory review hints for point-in-time memories
@@ -1601,14 +1602,15 @@ src/gingugu/
     ├── hints.py            # Write-time similar + relation hints
     ├── recall.py           # recall / context
     ├── search.py           # search
+    ├── stats.py            # memory_stats (single or multi-namespace)
     ├── scope.py            # Read scope + widen-on-empty for recall / search
     ├── excerpt.py          # excerpt
     ├── relations.py        # relate / unrelate / edges
-    ├── relation_ops.py     # Edge repair operations
+    ├── relation_ops.py     # Batch parsing for relate and unrelate
     ├── consolidate.py      # consolidate
     ├── dream.py            # dream
     ├── credentials.py      # credential_store / get / list / delete
-    ├── admin.py            # namespaces, stats, export, import
+    ├── admin.py            # namespaces, export, import
     ├── summaries.py        # Payload shapes: full summary, compact summary, the picker
     ├── choices.py          # Enum argument parsing, shared error wording
     └── helpers.py          # Shared response shaping
@@ -1634,7 +1636,6 @@ whose built bundle is what `webui.py` serves).
 
 ## Future Enhancements (v2+)
 
-- **SSE transport** (`gingugu serve`) — HTTP/SSE mode for multi-machine personal access with bearer token auth
 - **LLM-powered consolidation** — use the AI itself to summarize memory clusters
 - **Rules integration** — auto-generate rules files (`.windsurfrules`, `.cursorrules`, `AGENTS.md`) from learned patterns
 - **Multi-agent support** — shared memory across different AI tools
