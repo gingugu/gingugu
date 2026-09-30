@@ -33,7 +33,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    where a caller-named path would be a file write on the server's disk.
 2. **Handlers** (`handlers/`) - thin adapters that validate input, call the core
    modules, and return structured dicts. Split by domain: `memory`, `forget`,
-   `hints`, `recall`, `search`, `excerpt`, `relations` (+ `relation_ops`),
+   `hints`, `recall`, `search`, `stats`, `excerpt`, `relations` (+ `relation_ops`),
    `consolidate`, `dream`, `admin`, `credentials`, plus `summaries` (payload
    shapes: full summary, compact summary, the picker between them), `choices`
    (enum argument parsing shared by every write-surface field with a controlled
