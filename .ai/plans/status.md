@@ -28,8 +28,12 @@ resequenced board. Three code changes and one store curation:
   `edges` had the same gap and is typed the same way now, with a test.
 - Splits to hold 300 lines: `memory_stats` moved to `handlers/stats.py`,
   `compute_hygiene` to `hygiene_stats.py`.
-- **Pin skew**, fixed in the store rather than the code: the largest pin's
-  instance log moved to an unpinned `child_of`, per the 2026-08-31 precedent.
+- **Pin skew**, fixed in the store rather than the code, per the 2026-08-31
+  precedent: the two largest pins each kept their rule and moved their
+  growing instance log to an unpinned `child_of`. The global pinned tier went
+  from 48.1k to 38.0k characters, and its largest pin from 9,180 characters
+  (19%) to 3,593 (9.5%), with the next at 3,356 - no single pin dominates it
+  any more.
 
 **Also on this branch:** the repo's log-only `WorktreeCreate` and
 `WorktreeRemove` hooks are removed.
