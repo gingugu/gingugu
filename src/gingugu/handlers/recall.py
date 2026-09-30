@@ -18,6 +18,7 @@ from .. import context as context_mod
 from .. import search as search_mod
 from ..models import Confidence, Memory, MemoryType
 from . import ServerContext
+from .context_merge import merge_namespace_context
 from .helpers import (
     _attach_review_hints,
     _collect_related,
@@ -30,50 +31,6 @@ from .scope import read_scope, run_widening
 from .summaries import _summarizer
 
 logger = logging.getLogger(__name__)
-
-
-def _merge_namespace_context(
-    pins: list[Memory],
-    tails: list[list[Memory]],
-    best: dict[str, Memory],
-) -> list[Memory]:
-    """Merge per-namespace context loads without destroying their order.
-
-    ``build_context`` has already ordered each namespace: pins, then a
-    quota-selected ranked tail. This preserves both, because composite scores
-    are not comparable *across* namespaces - corpora differ in size, access
-    volume and age, so the same number means something different in each - and
-    they are not comparable across buckets *within* one either, since only the
-    task bucket carries a real search relevance. Sorting the merged set by that
-    number ranks memories against each other on a scale none of them share.
-
-    So: every namespace's pins first, then the ranked tails interleaved by rank
-    position. Interleaving is what keeps a multi-namespace load honest - plain
-    concatenation would bury the second namespace's freshest memory beneath the
-    first namespace's entire list.
-    """
-    out: list[Memory] = []
-    seen: set[str] = set()
-
-    def emit(mem: Memory, *, authoritative: bool = False) -> None:
-        # A memory surfacing in two namespaces is emitted once, at its earliest
-        # position, using whichever instance won de-duplication.
-        #
-        # A pin is emitted as ITSELF. De-dup keeps the highest-scoring instance
-        # and a pin scores None, so a scored duplicate from another namespace's
-        # cross-namespace bucket wins - and scorelessness is precisely how a
-        # caller knows the memory bypassed ranking.
-        if mem.id not in seen:
-            seen.add(mem.id)
-            out.append(mem if authoritative else best.get(mem.id, mem))
-
-    for mem in pins:
-        emit(mem, authoritative=True)
-    for rank in range(max((len(t) for t in tails), default=0)):
-        for tail in tails:
-            if rank < len(tail):
-                emit(tail[rank])
-    return out
 
 
 def register(mcp, ctx: ServerContext) -> None:
@@ -168,6 +125,8 @@ def register(mcp, ctx: ServerContext) -> None:
             # Credit the returned seeds as a real access (bumps access_count,
             # refreshes last_accessed, writes access_log row).
             ctx.store.record_accesses(seed_ids)
+            everywhere = scope.is_all or widened_from is not None
+            ctx.store.log_query("recall", query, seed_ids, None if everywhere else scope.names)
             # Spreading activation: recalling these memories wakes their cluster.
             _spread_activation(ctx, seed_ids)
             # Every read surface stamps a readable per-memory namespace
@@ -270,13 +229,14 @@ def register(mcp, ctx: ServerContext) -> None:
                     if current is None or (mem.score or 0.0) > (current.score or 0.0):
                         best[mem.id] = mem
 
-            results = _merge_namespace_context(pins, tails, best)
+            results = merge_namespace_context(pins, tails, best)
             ctx.store.load_tags(results)
             seed_ids = [m.id for m in results]
             # A context load is a protocol-driven read, not a real access:
             # refresh the dormancy clock only (no access_count bump, no
             # access_log row) so session-start loads don't inflate ranking.
             ctx.store.touch_many(seed_ids)
+            ctx.store.log_query("context", task_hint, seed_ids, ns_names)
             # Spreading activation: surfacing context wakes the related cluster.
             _spread_activation(ctx, seed_ids)
 

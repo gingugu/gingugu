@@ -74,8 +74,8 @@ def _count(conn: sqlite3.Connection, sql: str, params: tuple = ()) -> int:
 
 
 def compute_global_stats(conn: sqlite3.Connection) -> dict:
-    """The three namespace-independent fields: inventory, access-log volume,
-    and credential health.
+    """The namespace-independent fields: inventory, access-log and query-log
+    volume, and credential health.
 
     Split out of ``compute_stats`` so a multi-namespace ``memory_stats`` call
     can compute this once and reuse it across every namespace's block, instead
@@ -96,6 +96,7 @@ def compute_global_stats(conn: sqlite3.Connection) -> dict:
     return {
         "namespaces": namespaces,
         "access_log_rows": _count(conn, "SELECT COUNT(*) FROM access_log"),
+        "query_log_rows": _count(conn, "SELECT COUNT(*) FROM query_log"),
         "credentials": _credential_health(conn),
     }
 
@@ -106,9 +107,9 @@ def _compute_namespace_stats(
     namespace_id: str | None = None,
     review_limit: int | None = None,
 ) -> dict:
-    """Everything ``compute_stats`` returns *except* the three global fields
-    (``namespaces``, ``access_log_rows``, ``credentials``) - see
-    ``compute_global_stats``. Scoped to ``namespace_id`` when given."""
+    """Everything ``compute_stats`` returns *except* the four global fields
+    (``namespaces``, ``access_log_rows``, ``query_log_rows``, ``credentials``) -
+    see ``compute_global_stats``. Scoped to ``namespace_id`` when given."""
     ns_clause = " WHERE namespace_id = ?" if namespace_id else ""
     ns_params: tuple = (namespace_id,) if namespace_id else ()
 
@@ -173,10 +174,11 @@ def compute_stats(
 ) -> dict:
     """Health overview: counts, staleness, and per-type/confidence breakdowns.
 
-    Includes the three namespace-independent fields (``namespaces``,
-    ``access_log_rows``, ``credentials`` - see ``compute_global_stats``)
-    alongside the namespace-scoped ones, exactly as it always has: this is the
-    single-namespace and unscoped shape memory_stats returns under ``stats``.
+    Includes the four namespace-independent fields (``namespaces``,
+    ``access_log_rows``, ``query_log_rows``, ``credentials`` - see
+    ``compute_global_stats``) alongside the namespace-scoped ones, exactly as
+    it always has: this is the single-namespace and unscoped shape
+    memory_stats returns under ``stats``.
     A multi-namespace call instead calls ``compute_global_stats`` once and
     ``_compute_namespace_stats`` per namespace, so the global fields are never
     recomputed once per namespace.

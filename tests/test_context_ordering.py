@@ -262,7 +262,7 @@ def test_pin_survives_dedup_against_a_scored_duplicate() -> None:
     heuristic, and a test that depends on it would assert the contract only by
     luck.
     """
-    from gingugu.handlers.recall import _merge_namespace_context
+    from gingugu.handlers.context_merge import merge_namespace_context
 
     pin = _mem("shared", namespace_id="crow", score=None, pinned=True)
     scored_duplicate = _mem("shared", namespace_id="crow", score=0.775, pinned=True)
@@ -271,7 +271,7 @@ def test_pin_survives_dedup_against_a_scored_duplicate() -> None:
     # What the handler builds: the pin came from crow's pin tier, while ship's
     # ranked tail reached the same memory and scored it.
     best = {"shared": scored_duplicate, "other": other}
-    out = _merge_namespace_context([pin], [[other, scored_duplicate]], best)
+    out = merge_namespace_context([pin], [[other, scored_duplicate]], best)
 
     emitted = {m.id: m for m in out}
     assert [m.id for m in out] == ["shared", "other"], "pin still leads, emitted once"

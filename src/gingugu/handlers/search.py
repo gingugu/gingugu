@@ -182,6 +182,10 @@ def register(mcp, ctx: ServerContext) -> None:
             # activation neighbours are intentionally not credited here —
             # search has no relation traversal.
             ctx.store.record_accesses([m.id for m in results])
+            everywhere = scope.is_all or widened_from is not None
+            ctx.store.log_query(
+                "search", query, [m.id for m in results], None if everywhere else scope.names
+            )
             # Every read surface stamps a readable per-memory namespace
             # (matches memory_context).
             _stamp_namespace_names(ctx, summaries)
