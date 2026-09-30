@@ -560,7 +560,36 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-## The Board (current: 2026-09-28)
+## The Board (current: 2026-09-29)
+
+**Resequenced 2026-09-29 into build order.** The table below is the order the
+work gets done in, top first; `#` is that position. Item numbers used to be
+stable IDs, which read out of sequence, so each row keeps its **old #** and the
+per-item sections further down still carry those old numbers - that is how
+older notes and memories that cite "item 10" still resolve. The old row 7
+(`--adopt` + manage repo CLAUDE.md / AGENTS.md) is **removed: it shipped as
+`52bc6cf` (#63) on 2026-08-27** and was left on the board by mistake.
+
+| # | Item | Old # | Why this position |
+|---|---|---|---|
+| 1 | **Hygiene** | 8 | Cheap, and it clears debris before anything is built on top: `serve --help`, multi-namespace `memory_stats`, bulk `memory_relate`, pin skew |
+| 2 | **Query-text logging** (step one of the paraphrase set) | 9 | Tiny, and it starts a clock: the paraphrase set needs weeks of real queries that are not being recorded today |
+| 3 | **Tripwires: involuntary recall at the action** | 10 | The user's top pick. Built local-first, with a seam for a remote brain |
+| 4 | **Capability pointer** | 5 | The cheaper half of aboutness; builds straight on the shipped `about` field |
+| 5 | **Scoped serve tokens** | 12 | The foundation for everything that runs over the network |
+| 6 | **One central brain, several clients** | 11 | Mostly built; the rest is physical setup, so it can run in parallel whenever that happens |
+| 7 | **Warm minions** | 13 | Needs 5 |
+| 8 | **A shared board between agents** | 15 | Needs 5 and 6 |
+| 9 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
+| 10 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
+| 11 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries 2 has been logging; arbitration needs this set to be measured on |
+| 12 | **A referee for rival memory tools** | 17 | Only a fair comparison once 11 exists |
+| 13 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
+| 14 | **Secrets broker** | 16 | Needs 5, and a security review before any build |
+| 15 | Session flight recorder (low priority) | 18 | Check prior art first |
+| - | **Template/sibling noise in retrieval - PARKED** | 1 | Ten dead fixes and no live hypothesis; see below |
+
+### Previous board (2026-09-28), kept for its numbering
 
 **Sixteen items.** Item 4 (provenance) shipped 2026-09-28 with the declared-field
 half of item 5 (`about`), on `feature/provenance-aboutness`; item 4 is off the
@@ -615,8 +644,8 @@ without a target there is nothing to build. Re-open it only with a new
 hypothesis, measured on the full 383-question stratified set. Items 2 and 3
 shipped 2026-09-28.
 
-**Recommended sequencing: 10 (tripwires)**, the user's top pick of the ten
-entered 2026-09-28, now that the write-time fields it can key off exist.
+**Sequencing is now the build-order table at the top of this section**
+(2026-09-29); this older table is kept only so its numbers can be looked up.
 
 ### 1. Template/sibling noise in retrieval - now reproducible, and the fix reversed
 
