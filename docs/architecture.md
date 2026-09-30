@@ -32,6 +32,10 @@ graph LR
         K[Credential Vault]
     end
 
+    subgraph Claude Code Hooks
+        Y[PreToolUse<br/>gingugu hook tool]
+    end
+
     subgraph OS Scheduler
         S[cron · launchd · Task Scheduler<br/>gingugu dream --if-idle]
     end
@@ -43,6 +47,7 @@ graph LR
         Q[(activity<br/>heartbeat)]
         R[(dream_lock)]
         T[(query_log<br/>questions asked)]
+        W[(tripwires<br/>action triggers)]
     end
 
     subgraph OS Secrets
@@ -68,6 +73,10 @@ graph LR
     K --> J
     C -->|stamps every tool call| Q
     C -->|records each query| T
+    C -->|add · list · remove · test| W
+    A -->|each pending tool call| Y
+    Y -->|reads matches| W
+    Y -->|logs each trip| T
     S -->|run only if idle| Q
     S -->|one runner at a time| R
     S --> L
@@ -79,6 +88,11 @@ there is no daemon in the server process. The OS timer supplies recurrence, the
 `dream_lock` keeps a scheduled run from colliding with a hand-run. Note the
 direction of the two dotted concerns - the handlers only ever *write* the
 heartbeat, and the scheduler only ever *reads* it.
+
+The `PreToolUse` path is the other client-side entry: Claude Code runs
+`gingugu hook tool` before every tool call, it reads `tripwires` and, on a
+match, denies the call once with the memory as the reason and logs the trip to
+`query_log`. It never touches the MCP server process.
 
 ---
 
@@ -239,7 +253,7 @@ pruned.
 CREATE TABLE query_log (
     id          TEXT PRIMARY KEY,
     session_id  TEXT,           -- MCP session id (Claude Code's for hook rows); NULL if unknown
-    tool        TEXT NOT NULL,  -- recall | search | context | hook
+    tool        TEXT NOT NULL,  -- recall | search | context | hook | tripwire
     query       TEXT NOT NULL,  -- stripped, capped at MAX_QUERY_CHARS (2000)
     namespaces  TEXT NOT NULL,  -- comma-separated scope searched, or '*' for every namespace
     result_ids  TEXT NOT NULL,  -- JSON array of memory ids, rank order, de-duplicated
@@ -258,7 +272,8 @@ table because it is written once, read whole, and its order is the point.
 Written by `memory_recall` (always), `memory_search` (only with a `query`),
 `memory_context` (only with a `task_hint`) and the involuntary-recall hook
 (`tool='hook'`, which carries Claude Code's session id, so hook rows do not join
-to `access_log`). `namespaces` is `*` for an unscoped read and for a scoped read
+to `access_log`) and the tripwire hook (`tool='tripwire'`: the matched text and the
+tripped memory ids; misses are not logged). `namespaces` is `*` for an unscoped read and for a scoped read
 that widened. Blank queries are not logged. Logging is best-effort: it never
 commits on its own and swallows `sqlite3.Error`, so retrieval never fails over
 bookkeeping.
@@ -266,6 +281,37 @@ bookkeeping.
 **Retention:** never pruned. `access_log` can be trimmed because its aggregate
 lives on `memories.access_count`; nothing summarises `query_log`, so its rows
 are the only copy.
+
+#### `tripwires`
+```sql
+CREATE TABLE tripwires (
+    id            TEXT PRIMARY KEY,
+    memory_id     TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    tool_pattern  TEXT NOT NULL,  -- regex, FULL-matched against the tool name
+    input_pattern TEXT NOT NULL,  -- regex, SEARCHED in the call's match text
+    created_at    TEXT NOT NULL
+);
+
+CREATE INDEX idx_tripwires_memory ON tripwires(memory_id);
+```
+
+One row per trigger (migration 016). Its own table because one memory can guard
+several calls and a trigger has its own lifecycle; `ON DELETE CASCADE` means a
+hard-deleted memory takes its tripwires with it. `memories` and `memories_fts`
+are untouched. Patterns are capped at 500 characters.
+
+The match text is what `input_pattern` is searched in: the command for `Bash`,
+`file_path` for `Edit` / `Write` / `Read`, `notebook_path` for `NotebookEdit`,
+and the input as sorted JSON for any other tool. Matching is pure regex - no
+embeddings, no model judgment - because a risky command and a harmless one can
+read alike to an encoder. Deprecated and superseded memories are skipped; pinned
+ones are not, since a pin loaded at session start is not in front of the agent
+at the moment it acts.
+
+Read by the `PreToolUse` hook (`gingugu hook tool`), which denies the first
+matching call per session per memory and logs the trip to `query_log`
+(`tool='tripwire'`). Per-session suppression lives beside the DB in
+`hook-sessions/tripwires-<session_id>.json`, not in SQLite.
 
 #### `memory_chunks`
 ```sql
@@ -1298,6 +1344,30 @@ the same call returns the same answer every time. Reading a memory this way
 credits a real access, like naming it in `memory_search(ids=…)`. No spreading
 activation: it traverses no relations.
 
+### `memory_tripwire`
+Bind a memory to a tool call so it is put in front of the agent at the moment
+it acts, not only at session start. For the memories that must not be missed.
+
+**Parameters:**
+- `action` (required) — `add`, `list`, `remove`, or `test`
+- `memory_id` — the memory to guard (`add`; optional filter for `list`)
+- `tool` — regex FULL-matched against the tool name (`add`, `test`); `Bash`
+  does not catch `BashOutput`
+- `pattern` — regex SEARCHED in the call's input (`add`)
+- `tripwire_id` — the row to delete (`remove`)
+- `input` — the tool input as a JSON object (`test`)
+- `namespace` — comma-separated scope for `list` and `test` (`test` defaults
+  to the active namespace plus `crow`)
+
+`test` is a dry run of the real matching: it never denies and never logs. Use it
+to check a pattern before relying on it. Errors are structured, never raised.
+
+At run time the `PreToolUse` hook denies the first matching call per session
+per memory, with the memory's title and summary as the reason and "re-issue
+unchanged to pass"; the re-issued call passes. `mcp__gingugu__*` tools never
+trip, so a bad tripwire can always be repaired. `MEMORY_TRIPWIRES=off` disables
+the hook.
+
 ### `memory_export`
 Export memories to a portable JSON payload (backup/transfer). Credentials are
 intentionally excluded — their secrets live in the OS keychain.
@@ -1547,7 +1617,7 @@ src/gingugu/
 ├── __init__.py             # Package init + version
 │
 │   # ── Entry points ──────────────────────────────────────────────
-├── server.py               # MCP server; stdio / serve / promote / init / ui dispatch
+├── server.py               # MCP server; stdio / serve / promote / init / ui / dream / embed / hook dispatch
 ├── serve.py                # gingugu serve: streamable HTTP + Bearer auth + /healthz
 ├── webui.py                # gingugu ui: serves the built Memory Explorer bundle
 ├── promote.py              # gingugu promote: local "gold" -> a central brain
@@ -1569,7 +1639,8 @@ src/gingugu/
 │   ├── claim_derivation.py # Row migrations + claim backfill
 │   ├── runtime.py          # Coordination tables: activity, dream_lock
 │   ├── fields.py           # Write-time declared fields: provenance, about; FTS5 rebuild
-│   └── queries.py          # The query log: query_log (migration 015)
+│   ├── queries.py          # The query log: query_log (migration 015)
+│   └── tripwires.py        # Tripwire triggers: tripwires (migration 016)
 ├── models.py               # Data models + MEMORY_COLUMNS, the one column list
 ├── storage.py              # CRUD for the memories row and its transaction boundary
 ├── storage_derived.py      # The four satellite tables a memory drags along, plus the query log
@@ -1615,10 +1686,12 @@ src/gingugu/
 ├── dream_lock.py           # Single-instance lock; a row, not a lockfile
 ├── activity.py             # Heartbeat: when the brain was last USED, not last alive
 │
-│   # ── Involuntary recall (UserPromptSubmit hook) ────────────────
+│   # ── Involuntary recall (UserPromptSubmit) + tripwires (PreToolUse) ──
 ├── recall_gate.py          # Decision half: pure arithmetic, built around refusing
 ├── recall_sweep.py         # I/O half: read-only cosine sweep + BM25 lexical matches; sqlite_uri()
 ├── prompt_hook.py          # gingugu hook prompt: the entry point; log_prompt() is its one write
+├── tripwire.py             # Tripwire matching (pure regex) + load_tripwires, the remote-brain seam
+├── tool_hook.py            # gingugu hook tool: PreToolUse entry point; deny once, re-issue passes
 │
 │   # ── Claims (checkable state assertions) ───────────────────────
 ├── claims.py               # Extracts repo-qualified PR/MR refs from prose
@@ -1655,6 +1728,7 @@ src/gingugu/
     ├── consolidate.py      # consolidate
     ├── dream.py            # dream
     ├── credentials.py      # credential_store / get / list / delete
+    ├── tripwires.py        # memory_tripwire: add / list / remove / test
     ├── admin.py            # namespaces, export, import
     ├── summaries.py        # Payload shapes: full summary, compact summary, the picker
     ├── choices.py          # Enum argument parsing, shared error wording

@@ -70,6 +70,9 @@ batching to the end, build a relation only when it records something search
 cannot infer. There is no rules file to paste and nothing to remember to do —
 the harness runs it whether or not the agent feels like it. A **stop hook**
 then checks that a session with real work in it actually wrote something down.
+Two more hooks bring memory to you: **involuntary recall** surfaces what your
+prompt woke, and **tripwires** stop a tool call that a memory says must not be
+missed, before it runs.
 
 That is the part that makes the memory worth having, and it is in the box.
 
@@ -104,7 +107,7 @@ Where this goes long-term — federated, org-wide agent memory — lives in
 Those are great if you live in one tool. The moment you switch between
 Claude Code in the morning and Cursor in the afternoon, the memory is gone.
 Gingugu's memory follows you across every MCP client, lives on your machine,
-and is programmable (18 tools, structured types, relationships, confidence
+and is programmable (21 tools, structured types, relationships, confidence
 levels). The built-ins are convenience features. Gingugu is infrastructure.
 
 </details>
@@ -136,7 +139,7 @@ fall back to BM25-only.
 <details>
 <summary><strong>Is this ready to use?</strong></summary>
 
-Usable today for local personal workflows. 406 tests passing covering
+Usable today for local personal workflows. 1118 tests passing covering
 storage, search, migrations, concurrency, credentials, and edges.
 Hardened against adversarial input and write contention. WAL mode for
 concurrency. CI matrix across Python 3.11–3.13 on Linux/macOS/Windows.
@@ -251,7 +254,7 @@ uv run gingugu  # or pip install -e .
 
 </details>
 
-> **Usable today.** 18 MCP tools live. 532 tests passing. Dogfooded daily in
+> **Usable today.** 21 MCP tools live. 1118 tests passing. Dogfooded daily in
 > Claude Code and Windsurf — this repo's own memories live in a Gingugu
 > database. Early and seeking broader real-world validation.
 
@@ -541,12 +544,20 @@ It installs:
   search on is recorded, with what it surfaced, in the local `query_log` table
   of your memory database - the same file as the memories, never sent
   anywhere. Set `MEMORY_RECALL_HOOK=off` to disable it.
+- **`.claude/hooks/pre_tool_tripwire.py`** — a `PreToolUse` hook for
+  **tripwires**: memories bound, with `memory_tripwire`, to a tool call that
+  should not go unchallenged (a tag written into a commit, a merge of a stacked
+  PR). Triggers are plain regexes over the tool name and its input, with no
+  model judging relevance. The first matching call in a session is denied once,
+  with the memory as the reason; re-issue it unchanged and it passes. Your
+  memory tools never trip, so a bad tripwire can always be fixed. Each trip is
+  recorded in `query_log`. Set `MEMORY_TRIPWIRES=off` to disable it.
 - **`.claude/skills/sink-the-ship/SKILL.md`** — a `/sink-the-ship` skill to flush
   everything worth keeping before you close a session. If an older install left a
   `.claude/commands/sink-the-ship.md` behind, `gingugu init` retires it and keeps
   a `.bak` - but only if it is untouched. Edit that file and it is yours: it stays
   put, and the output tells you it did.
-- All three hooks wired into `.claude/settings.json`, **merged non-destructively** —
+- All four hooks wired into `.claude/settings.json`, **merged non-destructively** —
   any existing config is backed up (`settings.json.bak`) and preserved.
 - The runtime artifacts the hooks generate (`logs/`, `.claude/data/`,
   `.claude/settings.local.json`), and the `.bak` copies `init` itself saves,
@@ -778,6 +789,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_unrelate` | Retype an edge in place, reverse a backwards one, or remove it; one at a time or a batch, with `dry_run` |
 | `memory_consolidate` | Merge/summarize/deduplicate; call without ids for a read-only near-dupe scan |
 | `memory_dream` | Run the deterministic consolidation pass, read its proposal queue, and accept or reject a finding. PageRank, community detection and orphan reconnection over the relation graph - staged for you to decide, never written |
+| `memory_tripwire` | Bind a memory to a tool call so it stops that call once, before it runs: `add` (a tool-name regex + an input regex), `list`, `remove`, and `test` (a dry run that never denies) |
 | `memory_forget` | Deprecate or remove a memory |
 | `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo) |
 | `memory_export` | Export memories + tags + relations to portable JSON |

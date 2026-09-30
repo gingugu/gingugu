@@ -434,6 +434,44 @@ governs truth status governs this.
 
 `bench/gate.py` reproduces the sweep against a real corpus. Read `cap3`.
 
+## Tripwires (PreToolUse)
+
+```
+PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
+  → drops mcp__gingugu__* HERE, before the package is imported: our own tools
+    are how a bad tripwire gets repaired, so they never trip
+  → survivors piped to `gingugu hook tool`   (MEMORY_TRIPWIRES=off: exit)
+      → load_tripwires(crow + <cwd-derived project>)   read-only SQLite
+          skips deprecated and superseded memories; pinned ones DO trip
+          (a pin loaded at session start is not in front of the agent now)
+      → matching: tool_pattern FULL-matched against the tool name,
+        input_pattern SEARCHED in match_text (Bash -> command; Edit/Write/Read
+        -> file_path; NotebookEdit -> notebook_path; else sorted-JSON input)
+        one hit per memory, at most 3
+      → drop memories already tripped this session
+        (hook-sessions/tripwires-<session_id>.json, its own file beside the
+        prompt hook's state)
+      → first match: permissionDecision "deny", reason = title + summary +
+        "re-issue unchanged to pass"; systemMessage tells the user a tripwire
+        stopped a call; ids recorded in the state file; one query_log row
+        (tool='tripwire', query = the matched text, result_ids = memory ids)
+  → the re-issued call finds its memory already tripped and passes
+```
+
+**Deny, not inject.** A `PreToolUse` `additionalContext` is delivered next to
+the tool *result*, after the call ran, so it cannot warn in time. Denying is the
+only way to speak first; the retry passing keeps the block to one interruption
+per memory per session. Misses are not logged (the hook runs on every tool
+call), and every failure exits 0 silently, which is the normal permission flow.
+`load_tripwires` is the single seam a remote brain would replace.
+
+Matching is pure regex: no encoder, no model judgment, since a risky command
+and a harmless one can read alike to an embedding. `memory_tripwire` manages
+the rows (`add` / `list` / `remove`) and `test` is a dry run of the same
+matching that never denies and never logs. Accepted v1 limitation: after
+context compaction the memory may drop out of context while suppression still
+counts it as shown.
+
 ## Relations + spreading activation
 
 ```
@@ -604,7 +642,7 @@ without a person passing through the accept step first.
   does re-embed, since it is part of the text the vector is built from.
   Neither advances `last_confirmed`.
 - `memory_forget` — the ONLY removal path (deprecate or hard-delete). Nothing is
-  auto-forgotten.
+  auto-forgotten. A hard delete cascades to the memory's `tripwires` rows.
 - `memory_consolidate` - merge / summarize / deduplicate a cluster; without
   `memory_ids`, a read-only suggest scan surfaces near-dupe clusters
   (pairwise embedding cosine, title-only fallback) to feed back in.
@@ -631,7 +669,8 @@ database.py on startup:
         migrations/schema.py (structural), migrations/claim_derivation.py
         (re-derives rows from prose that never changed), migrations/runtime.py
         (coordination state), migrations/fields.py (write-time declared
-        fields + FTS rebuild) and migrations/queries.py (the query log)
+        fields + FTS rebuild), migrations/queries.py (the query log) and
+        migrations/tripwires.py (tripwire triggers)
       → ensure FTS5 virtual table + sync triggers exist and match `memories`
 ```
 

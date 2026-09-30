@@ -42,7 +42,7 @@
 
 | Module | Responsibility |
 |---|---|
-| `server.py` | MCP server entrypoint; `gingugu` (stdio) / `serve` / `promote` / `init` / `ui` dispatch; tool registration; must never crash |
+| `server.py` | MCP server entrypoint; `gingugu` (stdio) / `serve` / `promote` / `init` / `ui` / `dream` / `embed` / `hook` (`prompt` | `tool`) dispatch; tool registration; must never crash |
 | `serve.py` | `gingugu serve`: streamable-HTTP transport + Bearer-token auth + `/healthz` |
 | `webui.py` | `gingugu ui`: serves the built Memory Explorer bundle + live `/api/export` on one port (prod, no Node), or spawns the Vite dev server (`--dev`); assets ship in the wheel at `gingugu/_ui_dist` |
 | `promote.py` | `gingugu promote`: MCP client that promotes local "gold" to a central brain (filter + provenance + idempotent store) — not part of the server |
@@ -58,6 +58,7 @@
 | `migrations/runtime.py` | Coordination migrations (012): `activity`, `dream_lock`. Split from `schema.py` on the line between *state about memories* and *state about the processes touching them* - these carry no knowledge, survive no export, and a store that lost them would lose nothing a person put there |
 | `migrations/fields.py` | Migration 014: `provenance` and `about`, two write-time declared columns on `memories`. Both start NULL, no backfill - a guessed provenance would be the model-free-but-invented judgment the field exists to rule out. Rebuilds `memories_fts` (and its three sync triggers) in one transaction to index `about` alongside `title`/`content`, then runs FTS5's `rebuild` command. Re-runnable: checks `pragma_table_info` before each `ADD COLUMN` |
 | `migrations/queries.py` | Migration 015: `query_log`, the questions asked of the store. Its own module because it is neither structure, re-derivation, coordination state, nor a declared field - and because `access_log` cannot hold it: that table has one row per *returned memory*, so it never sees the question or a miss |
+| `migrations/tripwires.py` | Migration 016: `tripwires`, explicit per-memory triggers (tool-name regex + input regex) for the `PreToolUse` hook. Its own table because one memory can guard several calls and a trigger has its own lifecycle; `ON DELETE CASCADE` so a hard-deleted memory takes its tripwires with it. Does not touch `memories` or `memories_fts` |
 | `query_log.py` | `record(conn, *, tool, query, result_ids, namespaces, session_id=None)`: one row per query. Never commits, swallows `sqlite3.Error` (logs a warning) so retrieval never fails over bookkeeping. Blank queries are skipped; text is stripped and capped at `MAX_QUERY_CHARS` (2000). Never pruned |
 | `models.py` | Memory / namespace / relation data models. Also owns `Provenance` (the `provenance` vocabulary: user-asserted/measured/file-derived/self-concluded, enforced at the application layer, never a SQL `CHECK`) and `MEMORY_COLUMNS` - the one declared `memories` column list - plus `memory_columns_sql()` / `memory_placeholders_sql()`. Every module that reads or inserts a memory row derives its SQL from these; private copies drifted and silently dropped `pinned`. Field normalizers live here too: `normalize_tag`, `normalize_metadata` |
 | `storage.py` | CRUD for the `memories` row itself, and the transaction boundary around it. Owns nothing else |
@@ -101,6 +102,8 @@
 | `recall_gate.py` | Involuntary recall, decision half: pure arithmetic over scored candidates. Length floor, affect stripping, absolute bar, **margin vs the sweep median** (the gate that stops the cap from doing the threshold's job), lexical requirement, cap, per-session suppression. No I/O, so it is unit-testable without a brain |
 | `recall_sweep.py` | Involuntary recall, I/O half: read-only (`mode=ro`) cosine sweep + BM25 `lexical_matches`. Also `sqlite_uri(db_path, mode)`, the one place a `file:` URI is built (resolved path, percent-encoded, so a `#` or `?` in a path cannot end the filename early and drop `mode=`). Excludes deprecated, **pinned** (already loaded unconditionally at session start) and **superseded** (replaced knowledge arriving as current) in SQL |
 | `prompt_hook.py` | `gingugu hook prompt`: the `UserPromptSubmit` entry point. Orchestrates gate + sweep, writes `hookSpecificOutput.additionalContext`, keeps suppression state beside the DB. The sweep stays read-only; its one write is `log_prompt`, which records the prompt and the ids injected to `query_log` (`tool='hook'`) over its own short best-effort connection, even when nothing surfaced. Exits 0 on every path |
+| `tripwire.py` | Tripwires, decision half: `match_text` (Bash -> command; Edit/Write/Read -> `file_path`; NotebookEdit -> `notebook_path`; else sorted-JSON input), full-match of `tool_pattern` on the tool name, search of `input_pattern` in the text. One hit per memory, at most `MAX_TRIPPED` (3), patterns capped at 500 chars. `load_tripwires` skips deprecated and superseded memories, **not pinned ones**, and is the single seam a remote brain would replace; today it reads SQLite read-only |
+| `tool_hook.py` | `gingugu hook tool`: the `PreToolUse` entry point. A `PreToolUse` `additionalContext` lands next to the tool *result*, so the only way to speak before the call is to deny it: the first match per session per memory is denied with title + summary + "re-issue unchanged to pass", and the re-issue passes (state in `hook-sessions/tripwires-<session_id>.json`). `mcp__gingugu__*` never trips; `MEMORY_TRIPWIRES=off` disables; every failure exits 0. Each trip is logged to `query_log` (`tool='tripwire'`) |
 | `staleness.py` | Advisory review hints for point-in-time memories |
 | `claims.py` | Extracts checkable state claims (repo-qualified PR/MR refs) from prose; ignores refs inside `[[wiki-links]]` |
 | `claim_qualify.py` | Decides **which repo** a ref names: URL, then a repo the prose names next to it, then a binding stated elsewhere in the same memory, then the namespace default. Requires the `#`/`!` sigil so plan ordinals ("PR 1") are not refs |
@@ -111,7 +114,7 @@
 | `credentials.py` | OS-keychain credential vault. `get` redacts secret values unless `reveal`; `write_secret` hands one secret to a file |
 | `secret_file.py` | Safe owner-only file write for `credential_get(into=…)`: absolute path, no symlink/dir, parent must exist; `O_NOFOLLOW`, mode 0600 |
 | `portability.py` | Export / import a namespace. `import_data` takes an `embedder` and embeds what it writes; vectors are recomputed, never carried in the payload (they are model-specific and derived) |
-| `handlers/` | MCP tool handlers: `memory.py` (store/update), `forget.py` (the one destructive tool), `hints.py` (write-time similar/relation hints), `recall.py` (recall/context), `search.py`, `stats.py` (`memory_stats`: single, unscoped, or a comma list returning `global` once plus `by_namespace`), `scope.py` (read scope for recall/search: all namespaces when unconfigured, widen an empty scoped lookup to every namespace), `excerpt.py` (`memory_excerpt`: one memory, never ranked), `relations.py` (relate/edges/unrelate) with `relation_ops.py` (batch parsing + per-edge dispatch for both; the relate batch is all-or-nothing inside one `atomic()`), `consolidate.py`, `dream.py` (run/read/decide the proposal queue; an accept that would need a judgment the pass declined to make is REFUSED, not defaulted, and `reverse=True` writes an edge object-to-subject since the orphan pass's subject order is an artifact of retrieval rather than a claim about direction), `admin.py`, `credentials.py`, `summaries.py` (payload shapes: full summary, compact summary, the picker between them), `choices.py` (enum argument parsing shared across store/update: one error format naming the field, the bad value, and the vocabulary), `helpers.py`, `context_merge.py` (`merge_namespace_context`: pure merge of per-namespace context loads - pins first, then ranked tails interleaved by rank) |
+| `handlers/` | MCP tool handlers: `memory.py` (store/update), `forget.py` (the one destructive tool), `hints.py` (write-time similar/relation hints), `recall.py` (recall/context), `search.py`, `stats.py` (`memory_stats`: single, unscoped, or a comma list returning `global` once plus `by_namespace`), `scope.py` (read scope for recall/search: all namespaces when unconfigured, widen an empty scoped lookup to every namespace), `excerpt.py` (`memory_excerpt`: one memory, never ranked), `relations.py` (relate/edges/unrelate) with `relation_ops.py` (batch parsing + per-edge dispatch for both; the relate batch is all-or-nothing inside one `atomic()`), `consolidate.py`, `dream.py` (run/read/decide the proposal queue; an accept that would need a judgment the pass declined to make is REFUSED, not defaulted, and `reverse=True` writes an edge object-to-subject since the orphan pass's subject order is an artifact of retrieval rather than a claim about direction), `admin.py`, `credentials.py`, `tripwires.py` (`memory_tripwire`: add/list/remove/test; `test` is a dry run that never denies and never logs), `summaries.py` (payload shapes: full summary, compact summary, the picker between them), `choices.py` (enum argument parsing shared across store/update: one error format naming the field, the bad value, and the vocabulary), `helpers.py`, `context_merge.py` (`merge_namespace_context`: pure merge of per-namespace context loads - pins first, then ranked tails interleaved by rank) |
 
 Dev-only tooling at the repo root (never shipped in the wheel): **`bench/`** —
 golden-set retrieval benchmark (Recall@K, MRR, precision, token cost;
@@ -143,6 +146,9 @@ Generated sets hold real memory content and stay in `bench/local/`.
   `memory_excerpt` searches or slices inside one memory by character offset)
 - **Graph:** `memory_relate`, `memory_edges` (enumerate, read-only),
   `memory_unrelate` (retype / reverse / remove, single or batch, `dry_run`)
+- **Tripwires:** `memory_tripwire` (`add` / `list` / `remove` / `test`) - explicit
+  triggers that stop a matching tool call once, with the memory as the reason.
+  The `PreToolUse` hook (`gingugu hook tool`) reads them; `test` is a dry run
 - **Lifecycle:** `memory_consolidate`, `memory_export`, `memory_import`,
   `memory_namespaces`
 - **Consolidation (dream pass):** `memory_dream` (`run` / `list` / `accept` /
@@ -163,7 +169,8 @@ Query text is recorded in `query_log`: every `memory_recall`, a `memory_search`
 that carries a `query` (an `ids` fetch or a filter/sort listing is not logged),
 and a `memory_context` given a `task_hint` (`tool='context'`; context still
 does not bump `access_count` or write `access_log`). The involuntary-recall hook
-logs its prompts too (`tool='hook'`). `memory_stats` reports `query_log_rows`.
+logs its prompts too (`tool='hook'`), and each tripwire trip is logged as `tool='tripwire'`.
+`memory_stats` reports `query_log_rows`.
 
 `memory_store` / `memory_update` return non-blocking `similar_memories` (merge
 candidates) and `suggested_relations` hints. The latter are candidates to
@@ -267,7 +274,12 @@ gap between the count and the rows.
   because its aggregate lives on `access_count`, but nothing summarises
   `query_log`, so the rows are the only copy. See `migrations/queries.py`,
   `query_log.py`.
-- Schema versioned via `PRAGMA user_version` (**currently 15**); migrations
+- `tripwires` table (migration 016): `id`, `memory_id` (`REFERENCES
+  memories(id) ON DELETE CASCADE`), `tool_pattern` (regex, full-matched against
+  the tool name), `input_pattern` (regex, searched in the call's match text),
+  `created_at`; indexed on `memory_id`. Own table because one memory can guard
+  several calls. See `migrations/tripwires.py`, `tripwire.py`.
+- Schema versioned via `PRAGMA user_version` (**currently 16**); migrations
   additive by default. Migration 006 adds no schema — it re-runs the claims
   backfill to repair DBs that reached v5 from pre-fix code and so can never
   run 005 again. Migration 007 adds `default_repo` and re-derives every claim
@@ -295,7 +307,9 @@ gap between the count and the rows.
   before each `ADD COLUMN`); measured on a copy of a 2716-memory real brain,
   ran in 0.30s with every row, every FTS hit, and every `source` value
   preserved. Migration 015 adds `query_log` (`migrations/queries.py`), purely
-  additive: a store with no rows there behaves exactly as before.
+  additive: a store with no rows there behaves exactly as before. Migration 016
+  adds `tripwires` (`migrations/tripwires.py`), likewise additive: no rows, no
+  change in behaviour.
 
 ---
 
