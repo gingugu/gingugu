@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Tripwires: involuntary recall at the action.** A new `memory_tripwire`
+  tool (`add` / `list` / `remove` / `test`) binds a memory to a tool call with
+  two regexes: one full-matched against the tool name, one searched in the
+  call's input (the command for `Bash`, `file_path` for `Edit` / `Write` /
+  `Read`, `notebook_path` for `NotebookEdit`, otherwise the input as sorted
+  JSON). A new `PreToolUse` hook, `gingugu hook tool`, checks each pending call
+  and denies the first match per session per memory, with the memory's title
+  and summary as the reason; the same call re-issued unchanged passes. A deny
+  is the only way to speak before a call runs, since a `PreToolUse`
+  `additionalContext` lands beside the result. No embeddings and no model
+  judgment. `mcp__gingugu__*` tools never trip, so a bad tripwire can always
+  be repaired; pinned memories still trip. `test` is a dry run that never
+  denies and never logs. Each trip is recorded in `query_log` as
+  `tool='tripwire'`. Every failure exits 0 into the normal permission flow.
+
+- **`MEMORY_TRIPWIRES=off` disables the tripwire hook.**
+
+- **`gingugu init` wires a fourth hook.** It merges a `PreToolUse` entry into
+  `.claude/settings.json` and installs `.claude/hooks/pre_tool_tripwire.py`,
+  which drops `mcp__gingugu__*` in stdlib before the package is loaded.
+
 - **Retrieval queries are recorded in a new `query_log` table** (schema
   migration 015). One row per query from `memory_recall`, a `memory_search`
   with a `query`, a `memory_context` `task_hint`, and the involuntary-recall
@@ -76,6 +97,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   after `serve` is now a hard error (exit 2) instead of being ignored.
 
 ### Changed
+
+- **Schema version 16.** Adds the `tripwires` table (`memory_id` cascades on
+  delete) and its `memory_id` index. Nothing existing is altered.
 
 - **Schema version 15.** Adds the `query_log` table and its `created_at`
   index. Nothing existing is altered.

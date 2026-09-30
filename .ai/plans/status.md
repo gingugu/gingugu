@@ -4,7 +4,61 @@ _Last updated: 2026-09-30_
 
 ## In Flight
 
-**Board #1 (query-text logging), on `feature/query-log`.** Step one of the
+**Board #1 (tripwires): IN FLIGHT on `feature/tripwires`.** Involuntary recall
+at the action: a `PreToolUse` hook matches the pending tool call against
+explicit per-memory triggers and stops the call once with the memory in front
+of the agent. Pure regex, no embeddings, no model judgment - a risky command
+and a harmless one can read alike to an encoder.
+
+- **Migration 016, a `tripwires` table** (new `migrations/tripwires.py`):
+  `id`, `memory_id` (`REFERENCES memories(id) ON DELETE CASCADE`),
+  `tool_pattern`, `input_pattern`, `created_at`, plus `idx_tripwires_memory`.
+  Its own table because one memory can guard several calls and a trigger has
+  its own lifecycle; the cascade means a hard-deleted memory takes its
+  tripwires with it. `memories` and `memories_fts` are untouched.
+- **`tripwire.py`:** `match_text` picks what a pattern is searched in (Bash ->
+  the command; Edit/Write/Read -> `file_path`; NotebookEdit ->
+  `notebook_path`; anything else -> the input as sorted JSON). `tool_pattern`
+  is a regex full-matched against the tool name (`Bash` does not catch
+  `BashOutput`); `input_pattern` is searched in the match text. One hit per
+  memory, at most 3 (`MAX_TRIPPED`), patterns capped at 500 chars.
+  `load_tripwires` skips deprecated and superseded memories but **not pinned
+  ones**, and is the single seam where a remote brain would plug in.
+- **`tool_hook.py` (`gingugu hook tool`, `PreToolUse`):** a `PreToolUse`
+  `additionalContext` is delivered next to the tool *result*, after the call
+  ran, so the only way to speak before the call is to deny it. The first
+  matching call per session per memory is denied with the memory's title and
+  summary plus "re-issue unchanged to pass", and a `systemMessage` tells the
+  user a tripwire stopped a call. The re-issued call passes (suppression lives
+  in `hook-sessions/tripwires-<session_id>.json`, separate from the prompt
+  hook's state). `mcp__gingugu__*` tools never trip, so a bad tripwire can
+  always be repaired. `MEMORY_TRIPWIRES=off` disables. Every failure exits 0
+  silently, which is the normal permission flow. Each trip is logged to
+  `query_log` as `tool='tripwire'`; misses are not (it runs on every tool
+  call). Measured cost is about 150ms per tool call.
+- **`memory_tripwire` tool** (`handlers/tripwires.py`): `add`, `list`,
+  `remove`, and `test` (a dry run that never denies and never logs). The 17th
+  memory tool; 21 tools with the four credential ones.
+- **`gingugu init`** now wires four hooks: `PreToolUse` runs
+  `.claude/hooks/pre_tool_tripwire.py` (timeout 15s), installed from
+  `bootstrap/templates/pre_tool_tripwire.py.tmpl`. The doorway drops
+  `mcp__gingugu__*` in stdlib before loading the package.
+- **Accepted v1 limitation:** after context compaction the memory may drop out
+  of context while suppression still counts it as shown.
+- **Also carries** the Windows `?` test skip (`2287e2c`) from #89's follow-up:
+  the `?` case of the URI-hostile-path test cannot create its fixture on
+  Windows, where `?` is not a legal filename character. Skipped on Windows
+  only; the `#` and `%` cases passed there, which confirms the
+  `Path.as_uri()` fix on Windows too.
+- **Verified live:** after a server restart the brain migrated to schema 16.
+  Two tripwires were seeded (`gh pr merge ... --delete-branch`, and a
+  `Co-Authored-By: Claude` trailer). A matching Bash call was denied in a real
+  Claude Code session, and the unchanged re-issue went through.
+- Suite: 1118 passed, 1 xfailed. Unreleased; 0.18.0 is the latest release.
+
+## Recently Completed
+
+**Board #1 (query-text logging): MERGED as `844005a` (#89).** Step one of the
 paraphrase question set (old #9): it starts the clock on collecting real
 queries, which that set needs weeks of.
 
@@ -33,15 +87,13 @@ queries, which that set needs weeks of.
   the "read-only" sweep opened - and created - a stray empty database.
 - `_merge_namespace_context` moved to `handlers/context_merge.py` to keep
   `handlers/recall.py` under 300 lines.
-- **Also on this branch:** `gingugu init` run on this repo (the
+- **Also in #89:** `gingugu init` run on this repo (the
   `UserPromptSubmit` hook entry and `.claude/hooks/user_prompt_recall.py`), and
   init's gitignore block now covers `.claude/**/*.bak`, the copies it saves
   before replacing a user's settings or hook.
 
-Out of scope, and board #10's job: labelling which memory a session then
+Out of scope, and board #9's job: labelling which memory a session then
 acted on. 1064 tests pass (+38).
-
-## Recently Completed
 
 **Board #1 (hygiene): MERGED as `344215e` (#88).** Three code changes and
 one store curation:
@@ -642,25 +694,25 @@ older notes and memories that cite "item 10" still resolve. The old row 7
 (`--adopt` + manage repo CLAUDE.md / AGENTS.md) is **removed: it shipped as
 `52bc6cf` (#63) on 2026-08-27** and was left on the board by mistake.
 
-**2026-09-30:** hygiene (old #8) shipped as #88 and came off; every row moved up
-one. A shipped item leaves the table and the rest keep their order.
+**2026-09-30:** hygiene (old #8) shipped as #88 and query-text logging (old #9)
+as #89; both came off and every row moved up. A shipped item leaves the table
+and the rest keep their order.
 
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **Query-text logging** (step one of the paraphrase set) - IN FLIGHT on `feature/query-log` | 9 | Tiny, and it starts a clock: the paraphrase set needs weeks of real queries that are not being recorded today |
-| 2 | **Tripwires: involuntary recall at the action** | 10 | The user's top pick. Built local-first, with a seam for a remote brain |
-| 3 | **Capability pointer** | 5 | The cheaper half of aboutness; builds straight on the shipped `about` field |
-| 4 | **Scoped serve tokens** | 12 | The foundation for everything that runs over the network |
-| 5 | **One central brain, several clients** | 11 | Mostly built; the rest is physical setup, so it can run in parallel whenever that happens |
-| 6 | **Warm minions** | 13 | Needs 4 |
-| 7 | **A shared board between agents** | 15 | Needs 4 and 5 |
-| 8 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
-| 9 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
-| 10 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries 1 has been logging; arbitration needs this set to be measured on |
-| 11 | **A referee for rival memory tools** | 17 | Only a fair comparison once 10 exists |
-| 12 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
-| 13 | **Secrets broker** | 16 | Needs 4, and a security review before any build |
-| 14 | Session flight recorder (low priority) | 18 | Check prior art first |
+| 1 | **Tripwires: involuntary recall at the action** | 10 | The user's top pick. Built local-first, with a seam for a remote brain. Built on `feature/tripwires`; PR pending |
+| 2 | **Capability pointer** | 5 | The cheaper half of aboutness; builds straight on the shipped `about` field |
+| 3 | **Scoped serve tokens** | 12 | The foundation for everything that runs over the network |
+| 4 | **One central brain, several clients** | 11 | Mostly built; the rest is physical setup, so it can run in parallel whenever that happens |
+| 5 | **Warm minions** | 13 | Needs 3 |
+| 6 | **A shared board between agents** | 15 | Needs 3 and 4 |
+| 7 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
+| 8 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
+| 9 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
+| 10 | **A referee for rival memory tools** | 17 | Only a fair comparison once 9 exists |
+| 11 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
+| 12 | **Secrets broker** | 16 | Needs 3, and a security review before any build |
+| 13 | Session flight recorder (low priority) | 18 | Check prior art first |
 | - | **Template/sibling noise in retrieval - PARKED** | 1 | Ten dead fixes and no live hypothesis; see below |
 
 ### Previous board (2026-09-28), kept for its numbering
@@ -1169,8 +1221,8 @@ fetched by id). Deterministic, no model judging, so it keeps the design law.
 session id (`access.py`), not the query - so the log says which memories a
 session read and never what it asked. Step one is recording the query text of
 recall and search calls (local, in the same file as the memories themselves).
-**Step one is in flight (2026-09-30):** `query_log`, migration 015 - see In
-Flight at the top. Open: what counts as "acted on", and how to keep a session that simply re-read
+**Step one shipped 2026-09-30 (#89):** `query_log`, migration 015 - see
+Recently Completed at the top. Open: what counts as "acted on", and how to keep a session that simply re-read
 the top hit from labelling that hit correct by default.
 
 ### 10-14. Entered 2026-09-28: approved directions, not designed
@@ -1178,6 +1230,9 @@ the top hit from labelling that hit correct by default.
 Five items the user approved in one sitting. Each is recorded as a direction
 with what already exists under it; **none is designed**, and design waits for an
 explicit go. The user's order of priority puts 10 first.
+
+**Update:** item 10 has since been designed and built (see the top entry under
+In Flight); 11-14 remain undesigned.
 
 ### 10. Tripwires: involuntary recall at the action
 
@@ -1196,6 +1251,21 @@ the matches before the call runs. Pure arithmetic, no model judging relevance.
 - Constraint: `prompt_hook` reads the SQLite file directly
   (`connect_readonly(app.db_path)`). Against a remote brain the hooks need a
   path through `gingugu serve`.
+
+**Built 2026-09-30:** on `feature/tripwires`.
+
+- Triggers are regex rows in a `tripwires` table (migration 016): the leaning
+  above became the decision. A tool-name regex plus an input regex, per memory.
+- **Deny once, not inject.** A `PreToolUse` `additionalContext` lands next to
+  the tool result, after the call has run, so it cannot warn in time. The first
+  matching call per session per memory is denied with the memory as the reason;
+  the same call re-issued unchanged passes.
+- `mcp__gingugu__*` tools are exempt, so a bad tripwire can always be repaired.
+- `load_tripwires` is the seam for a remote brain (the constraint bullet
+  above): today it reads SQLite read-only, and a `gingugu serve` path would
+  replace only that function.
+- Pinned memories still trip: a pin loaded at session start is not in front of
+  the agent at the moment it acts.
 
 ### 11. One central brain, several clients
 

@@ -22,8 +22,8 @@ The SQLite database is the product's durable state. Treat it with care.
   `migrations/claim_derivation.py` if it only re-reads prose that never
   changed, `migrations/runtime.py` for coordination state about the processes
   touching the store, `migrations/fields.py` for write-time declared fields
-  on the memory record, `migrations/queries.py` for the query log. A new
-  concern gets a new module, as `queries.py` did.
+  on the memory record, `migrations/queries.py` for the query log, `migrations/tripwires.py` for the
+  tripwire triggers. A new concern gets a new module, as `queries.py` did.
 - **A released migration can never run again.** `migrate()` selects pending
   work with `current < target`, so editing migration N fixes nothing on any
   store already stamped at N - no reinstall or restart reaches it. Only a new
