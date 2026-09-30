@@ -679,3 +679,19 @@ async def test_dry_run_previews_a_reverse_without_writing(server) -> None:
 
     edge = (await _edges(server))["edges"][0]
     assert (edge["source_id"], edge["target_id"]) == (a, b)
+
+
+@pytest.mark.asyncio
+async def test_batch_with_a_non_object_op_fails_structurally(server) -> None:
+    """A malformed element must reach the handler's own validation and come
+    back as ``ok: false`` naming the index, not escape as a raw argument
+    validation error before the handler runs."""
+    a, b = await _store(server, "alpha"), await _store(server, "beta")
+    await _relate(server, a, b, "related_to")
+    result = await _unrelate(
+        server,
+        edges=[{"source_id": a, "target_id": b, "relation_type": "related_to"}, "nope"],
+    )
+    assert result["ok"] is False
+    assert "edges[1]" in result["error"]
+    assert (await _edges(server))["total"] == 1

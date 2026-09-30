@@ -26,6 +26,26 @@ logger = logging.getLogger(__name__)
 
 _HEALTH_PATH = "/healthz"
 
+SERVE_USAGE = """\
+gingugu serve - run the MCP server over streamable HTTP
+
+Usage:
+  gingugu serve              Start the HTTP server.
+  gingugu serve -h|--help    Show this help and exit.
+
+`gingugu serve` takes no command-line arguments - every knob is an
+environment variable, since the process is meant to run under a supervisor
+(systemd, a container entrypoint) rather than typed by hand each time:
+
+  MEMORY_SERVE_HOST            Host to bind (default: 127.0.0.1)
+  MEMORY_SERVE_PORT            Port to bind (default: 8765)
+  MEMORY_SERVE_TOKEN           Bearer token required on every request
+                                (default: a token persisted next to the DB,
+                                generated on first run if none exists)
+  MEMORY_LOG_LEVEL             Log verbosity (default: INFO)
+  MEMORY_CREDENTIALS_ENABLED   Enable the credential_* tools (default: true)
+"""
+
 
 class BearerAuthMiddleware(BaseHTTPMiddleware):
     """Reject any request lacking a matching ``Authorization: Bearer`` header.

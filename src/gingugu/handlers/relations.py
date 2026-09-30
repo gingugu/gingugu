@@ -7,7 +7,7 @@ import logging
 from ..relations import RelationManager
 from . import ServerContext
 from .helpers import _err, _single_namespace_not_found
-from .relation_ops import MAX_BATCH_EDGES, _apply, _parse_edges, _parse_type
+from .relation_ops import MAX_BATCH_EDGES, _apply, _parse_edges, _parse_type, _relate_batch
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +19,10 @@ def register(mcp, ctx: ServerContext) -> None:
 
     @mcp.tool()
     def memory_relate(
-        source_id: str,
-        target_id: str,
-        relation_type: str,
+        source_id: str | None = None,
+        target_id: str | None = None,
+        relation_type: str | None = None,
+        edges: list | None = None,
     ) -> dict:
         """Create a directional link between two memories. Relations are used by
         spreading activation (recalling one memory wakes its related cluster) and are
@@ -51,10 +52,37 @@ def register(mcp, ctx: ServerContext) -> None:
         must be one of: supersedes (source replaces target), contradicts (conflicting
         claims), caused_by (source was caused by target), parent_of (source contains
         target), child_of (source belongs to target), related_to (fallback: a real
-        connection none of the above captures)."""
+        connection none of the above captures).
+
+        **Batch** by passing ``edges`` instead of the single-edge fields - an array of
+        up to ``MAX_BATCH_EDGES`` objects, each with ``source_id``, ``target_id`` and
+        ``relation_type`` (all required; there is no default type for a batch op):
+
+            [{"source_id": "a", "target_id": "b", "relation_type": "supersedes"},
+             {"source_id": "a", "target_id": "c", "relation_type": "caused_by"}]
+
+        **All-or-nothing**, same as ``memory_unrelate``'s batch: every op is validated
+        (both memories exist, the type is real, no self-edge) before anything is
+        written, and the whole set is applied in one transaction, so a failure on op k
+        leaves ops 0..k-1 unwritten too - a half-applied relation set is the graph
+        state hardest to notice and hardest to repair. Relate is idempotent on
+        (source, target, type), so each result reports ``created`` or ``exists``
+        rather than pretending a no-op was a write. Pass either ``edges`` or the
+        single-edge fields, never both."""
         try:
+            if edges is not None:
+                if source_id is not None or target_id is not None or relation_type is not None:
+                    return _err(
+                        "pass either `edges` for a batch or the single-edge fields, not both"
+                    )
+                return _relate_batch(relations, edges)
+            if not source_id or not target_id or not relation_type:
+                return _err(
+                    "source_id, target_id, and relation_type are required (or pass `edges`)"
+                )
             rel = _parse_type(relation_type)
             result = relations.relate(source_id=source_id, target_id=target_id, relation_type=rel)
+            result.pop("created", None)
             return {"ok": True, "relation": result}
         except ValueError as exc:
             return _err(str(exc))
@@ -128,7 +156,9 @@ def register(mcp, ctx: ServerContext) -> None:
         relation_type: str | None = None,
         new_relation_type: str | None = None,
         reverse: bool = False,
-        edges: list[dict] | None = None,
+        # ``list``, not ``list[dict]``: element validation belongs to
+        # ``_parse_edges``, which names the bad index and returns ``ok: false``.
+        edges: list | None = None,
         dry_run: bool = False,
     ) -> dict:
         """Repair the graph: retype a mislabelled edge, turn a backwards one around, or

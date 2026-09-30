@@ -47,7 +47,14 @@ class RelationManager(RelationRepairMixin, TransactionParticipant):
         relation_type: RelationType,
         metadata: str | None = None,
     ) -> dict:
-        """Create a directed relation. Idempotent on (source, target, type)."""
+        """Create a directed relation. Idempotent on (source, target, type).
+
+        The returned dict carries an internal ``created`` bool (True if this
+        call inserted a new row, False if the edge already existed) so a batch
+        caller (``memory_relate``'s ``edges`` form) can report each op's
+        outcome as ``created`` or ``exists``. Single-edge callers should strip
+        it before returning the dict to a client.
+        """
         if source_id == target_id:
             raise ValueError("a memory cannot relate to itself")
         if not self._exists(source_id):
@@ -57,7 +64,7 @@ class RelationManager(RelationRepairMixin, TransactionParticipant):
 
         relation_id = str(uuid.uuid4())
         now = utcnow_iso()
-        self._conn.execute(
+        cur = self._conn.execute(
             "INSERT INTO relations(id, source_id, target_id, relation_type, created_at, metadata) "
             "VALUES (?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(source_id, target_id, relation_type) DO NOTHING",
@@ -68,6 +75,7 @@ class RelationManager(RelationRepairMixin, TransactionParticipant):
             "source_id": source_id,
             "target_id": target_id,
             "relation_type": relation_type.value,
+            "created": cur.rowcount > 0,
         }
 
     def get_relations(self, memory_id: str) -> list[dict]:
