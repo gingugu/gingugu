@@ -36,7 +36,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `hints`, `recall` (+ `context_merge`, the pure merge of per-namespace context
    loads: pins first, then ranked tails interleaved by rank), `search`, `stats`,
    `excerpt`, `relations` (+ `relation_ops`),
-   `consolidate`, `dream`, `admin`, `credentials`, plus `summaries` (payload
+   `consolidate`, `dream`, `admin`, `credentials`, `tripwires`, plus `summaries` (payload
    shapes: full summary, compact summary, the picker between them), `choices`
    (enum argument parsing shared by every write-surface field with a controlled
    vocabulary), `helpers` and `scope` (the read scope recall and search share:
@@ -44,7 +44,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
    namespace).
 3. **Core** - `storage`, `search`, `embeddings`, `embedding_text`, `chunking`,
    `context`, `relations`, `consolidation`, `decay`, `stats`, `namespaces`,
-   `portability`. `storage` owns the `memories` row only; the satellite tables
+   `portability`, `tripwire` (the decision half of the `PreToolUse` hook; see
+   Key Decisions). `storage` owns the `memories` row only; the satellite tables
    it drags along have their own owners (`tags`, `access`, `embedding_sync`,
    `claim_sync`), reached through the `storage_derived.DerivedTables`
    delegation surface, which also carries `log_query` for `query_log` (owned by
@@ -63,7 +64,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
    processes touching the store rather than the memories in it (`activity`,
    `dream_lock`), `fields.py` for write-time declared fields on the memory
    record (`provenance`, `about`) and the FTS5 rebuild that indexes them,
-   `queries.py` for the query log (`query_log`, migration 015), and
+   `queries.py` for the query log (`query_log`, migration 015),
+   `tripwires.py` for the tripwire triggers (`tripwires`, migration 016), and
    `__init__.py` for the ordered registry and the runner. `config.py` resolves
    the DB path.
 
@@ -191,6 +193,10 @@ AI client (Claude Code / Cursor / Windsurf / …)
   the authority of the system instead of the tentativeness of a search hit.
   A miss is free; a false positive misleads. Every stage is therefore a
   rejection.
+
+  It is the first of two hook-driven paths. **Tripwires** are the second: a
+  `PreToolUse` hook that reacts to what the agent is about to *do* rather than
+  to what the user typed (see Key Decisions).
 
   The split is `recall_gate.py` (pure arithmetic, no I/O, unit-testable
   without a brain) and `recall_sweep.py` (everything that touches the world),
@@ -412,12 +418,14 @@ read-only suggest half against the write half - to keep both under the
   server code - it copies packaged templates (`bootstrap/templates/*.tmpl`) into
   a target repo: for Claude Code, a `SessionStart` hook that auto-injects the
   memory startup contract every session (a rules file is not guaranteed to load
-  into context; a hook is), a `Stop` save-discipline hook, and the
+  into context; a hook is), a `Stop` save-discipline hook, a `UserPromptSubmit` hook (involuntary
+  recall), a `PreToolUse` hook (tripwires, via the
+  `.claude/hooks/pre_tool_tripwire.py` doorway), and the
   `/sink-the-ship` skill (`.claude/skills/sink-the-ship/SKILL.md`, the format
   Anthropic's docs steer new work to; the legacy `.claude/commands/` copy is
   retired with a `.bak` only when it is byte-identical to the template we would
   have written, and kept when it differs - the marker says we once wrote a file,
-  not that the user left it alone) - merging both hooks into `.claude/settings.json`
+  not that the user left it alone) - merging all four hooks into `.claude/settings.json`
   non-destructively (`settings.py`) and appending the hooks' runtime artifacts
   (`logs/`, `.claude/data/`, `.claude/settings.local.json`,
   `.claude/hooks/**/__pycache__/`, `.claude/**/*.bak`) to the target's `.gitignore`
@@ -635,6 +643,29 @@ read-only suggest half against the write half - to keep both under the
   awkward writer - its sweep is `mode=ro` by design - so `log_prompt` opens a
   separate short-lived write connection after selection rather than loosening
   the sweep's connection.
+- **Tripwires are regex triggers in their own table, and they deny once.**
+  (2026-09-30.) Involuntary recall reacts to the prompt, but the costliest
+  repeat mistakes happen at a specific action the prompt rarely names. A
+  `tripwires` row (migration 016) pairs a memory with a tool-name regex
+  (full-matched) and an input regex (searched in the call's match text). Own
+  table because one memory can guard several calls and a trigger has its own
+  lifecycle; `ON DELETE CASCADE` so a hard-deleted memory takes its tripwires
+  with it. Pure regex, no embeddings, no model judgment: a risky command and a
+  harmless one can read alike to an encoder. The decision that shaped the hook
+  is **deny, not inject**: a `PreToolUse` `additionalContext` is delivered next
+  to the tool *result*, after the call ran, so the only way to speak before the
+  call is to deny it. The first matching call per session per memory is denied
+  with the memory as the reason; the same call re-issued unchanged passes
+  (per-session suppression, separate from the prompt hook's state).
+  `mcp__gingugu__*` tools never trip, so a bad tripwire can always be repaired.
+  Pinned memories still trip - a pin loaded at session start is not in front
+  of the agent at the moment it acts - while deprecated and superseded ones do
+  not. `tripwire.load_tripwires` is the single seam where a remote brain (via
+  `gingugu serve`) would plug in; today it reads SQLite read-only. Every
+  failure exits 0 silently, which is the normal permission flow, and each trip
+  is logged to `query_log` as `tool='tripwire'`. Accepted v1 limitation: after
+  context compaction the memory may drop out of context while suppression still
+  counts it as shown.
 - **Server resilience over strictness.** Handlers fail soft (structured errors)
   so a bad call never takes down the client's memory layer.
 

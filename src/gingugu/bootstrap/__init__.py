@@ -101,6 +101,13 @@ def init_claude_code(target: Path, *, force: bool, dry_run: bool, adopt: bool = 
         dry_run=dry_run,
         results=results,
     )
+    _write_file(
+        hooks_dir / "pre_tool_tripwire.py",
+        _read_template("pre_tool_tripwire.py.tmpl"),
+        force=force,
+        dry_run=dry_run,
+        results=results,
+    )
     # `sink-the-ship` ships as a SKILL, not a `.claude/commands/*.md` slash
     # command. Anthropic documents the commands directory inside `skills.md` as
     # the predecessor format and says to prefer skills for new work: a command
