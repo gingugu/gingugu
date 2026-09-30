@@ -89,10 +89,12 @@ def register_all(mcp, ctx: ServerContext) -> None:
         relations,
         search,
         stats,
+        tripwires,
     )
 
     memory.register(mcp, ctx)
     forget.register(mcp, ctx)
+    tripwires.register(mcp, ctx)
     recall.register(mcp, ctx)
     search.register(mcp, ctx)
     stats.register(mcp, ctx)

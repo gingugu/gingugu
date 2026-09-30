@@ -1,8 +1,9 @@
 """Non-destructive merge of Gingugu hooks into a repo's .claude/settings.json.
 
 The target repo may already have a settings.json with its own hooks and
-permissions. We add only our SessionStart + Stop entries, back up any existing
-file first, and never touch anything else. Idempotent: re-running is a no-op.
+permissions. We add only our own hook entries (SessionStart, Stop, UserPromptSubmit,
+PreToolUse), back up any existing file first, and never touch anything else.
+Idempotent: re-running is a no-op.
 """
 
 from __future__ import annotations
@@ -14,16 +15,21 @@ from pathlib import Path
 SESSION_START_CMD = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/session_start.py"
 STOP_CMD = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/stop.py --check-memory-saves"
 PROMPT_RECALL_CMD = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/user_prompt_recall.py"
+TRIPWIRE_CMD = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/pre_tool_tripwire.py"
 
 # (event name, command, timeout, marker used to detect an existing entry)
 #
 # UserPromptSubmit gets 20s rather than the event's 30s default: the hook is
 # sequential and the user is waiting on it, so a hung encoder should surrender
 # the turn well before Claude Code would give up on it.
+#
+# PreToolUse gets 15s rather than the 600s default: it runs on every tool call,
+# so a hung hook should surrender well before it stalls the whole session.
 _HOOKS = [
     ("SessionStart", SESSION_START_CMD, 15, "session_start.py"),
     ("Stop", STOP_CMD, 30, "stop.py"),
     ("UserPromptSubmit", PROMPT_RECALL_CMD, 20, "user_prompt_recall.py"),
+    ("PreToolUse", TRIPWIRE_CMD, 15, "pre_tool_tripwire.py"),
 ]
 
 
@@ -35,6 +41,7 @@ _KNOWN_FLAGS = {
     "session_start.py": set(),
     "stop.py": {"--check-memory-saves", "--min-tool-calls"},
     "user_prompt_recall.py": set(),
+    "pre_tool_tripwire.py": set(),
 }
 
 # `parser.add_argument("--flag"` / `'--flag'`, across line breaks.
