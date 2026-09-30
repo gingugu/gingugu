@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 from . import claim_queries
 from .decay import DEPRECATE_SUGGEST_AFTER_DAYS, DORMANT_AFTER_DAYS
 from .graph_stats import compute_graph
+from .hygiene_stats import compute_hygiene
 from .size_stats import compute_size
 from .staleness import REVIEW_HINT_AFTER_DAYS, review_signals
 
@@ -72,15 +73,42 @@ def _count(conn: sqlite3.Connection, sql: str, params: tuple = ()) -> int:
     return conn.execute(sql, params).fetchone()[0]
 
 
-def compute_stats(
+def compute_global_stats(conn: sqlite3.Connection) -> dict:
+    """The three namespace-independent fields: inventory, access-log volume,
+    and credential health.
+
+    Split out of ``compute_stats`` so a multi-namespace ``memory_stats`` call
+    can compute this once and reuse it across every namespace's block, instead
+    of repeating a namespace-independent computation once per namespace.
+    Prunes the access log as a side effect (throttled - see
+    ``prune_access_log``), so a caller building several namespace blocks should
+    call this exactly once per ``memory_stats`` call.
+    """
+    prune_access_log(conn)
+    namespaces = [
+        {"name": row["name"], "count": row["n"]}
+        for row in conn.execute(
+            "SELECT n.name AS name, COUNT(m.id) AS n FROM namespaces n "
+            "LEFT JOIN memories m ON m.namespace_id = n.id "
+            "GROUP BY n.id ORDER BY n DESC"
+        ).fetchall()
+    ]
+    return {
+        "namespaces": namespaces,
+        "access_log_rows": _count(conn, "SELECT COUNT(*) FROM access_log"),
+        "credentials": _credential_health(conn),
+    }
+
+
+def _compute_namespace_stats(
     conn: sqlite3.Connection,
     *,
     namespace_id: str | None = None,
     review_limit: int | None = None,
 ) -> dict:
-    """Health overview: counts, staleness, and per-type/confidence breakdowns."""
-    prune_access_log(conn)
-
+    """Everything ``compute_stats`` returns *except* the three global fields
+    (``namespaces``, ``access_log_rows``, ``credentials``) - see
+    ``compute_global_stats``. Scoped to ``namespace_id`` when given."""
     ns_clause = " WHERE namespace_id = ?" if namespace_id else ""
     ns_params: tuple = (namespace_id,) if namespace_id else ()
 
@@ -119,15 +147,6 @@ def compute_stats(
 
     size = compute_size(conn, ns_clause, ns_params)
 
-    namespaces = [
-        {"name": row["name"], "count": row["n"]}
-        for row in conn.execute(
-            "SELECT n.name AS name, COUNT(m.id) AS n FROM namespaces n "
-            "LEFT JOIN memories m ON m.namespace_id = n.id "
-            "GROUP BY n.id ORDER BY n DESC"
-        ).fetchall()
-    ]
-
     return {
         "total_memories": total,
         "by_type": by_type,
@@ -136,16 +155,35 @@ def compute_stats(
         # Back-compat alias for older consumers; dormancy supersedes staleness.
         "stale_count": dormant_count,
         "deprecation_suggested": deprecate_suggest,
-        "namespaces": namespaces,
-        "access_log_rows": _count(conn, "SELECT COUNT(*) FROM access_log"),
         "size": size,
-        "credentials": _credential_health(conn),
         "graph": compute_graph(conn, namespace_id=namespace_id, sample_limit=review_limit),
         "hygiene": compute_hygiene(conn, namespace_id=namespace_id),
         "review": compute_review(conn, namespace_id=namespace_id, sample_limit=review_limit),
         "claims": claim_queries.claim_stats(
             conn, namespace_id=namespace_id, sample_limit=review_limit
         ),
+    }
+
+
+def compute_stats(
+    conn: sqlite3.Connection,
+    *,
+    namespace_id: str | None = None,
+    review_limit: int | None = None,
+) -> dict:
+    """Health overview: counts, staleness, and per-type/confidence breakdowns.
+
+    Includes the three namespace-independent fields (``namespaces``,
+    ``access_log_rows``, ``credentials`` - see ``compute_global_stats``)
+    alongside the namespace-scoped ones, exactly as it always has: this is the
+    single-namespace and unscoped shape memory_stats returns under ``stats``.
+    A multi-namespace call instead calls ``compute_global_stats`` once and
+    ``_compute_namespace_stats`` per namespace, so the global fields are never
+    recomputed once per namespace.
+    """
+    return {
+        **compute_global_stats(conn),
+        **_compute_namespace_stats(conn, namespace_id=namespace_id, review_limit=review_limit),
     }
 
 
@@ -205,69 +243,6 @@ def compute_review(
     return {
         "review_suggested": len(flagged),
         "sample": flagged[:limit],
-    }
-
-
-# Cap on how many duplicate-title clusters we surface in the stats sample.
-# The full count is always reported; the sample is just for human inspection.
-_HYGIENE_SAMPLE_LIMIT = 5
-
-
-def compute_hygiene(conn: sqlite3.Connection, *, namespace_id: str | None = None) -> dict:
-    """Cheap, SQL-only hygiene signals for catching cleanup candidates.
-
-    Surfaces three things the manual namespace-scan workflow looks for first:
-
-    * ``ghost_namespaces`` — namespaces with zero memories (skipped when a
-      ``namespace_id`` filter is applied, since the scope is a single ns).
-    * ``duplicate_title_count`` — number of (namespace, title) pairs that
-      appear in 2+ active memories. A strong signal of literal duplication.
-    * ``duplicate_title_sample`` — up to ``_HYGIENE_SAMPLE_LIMIT`` of those
-      clusters with their memory ids, so the caller can inspect or merge.
-
-    Semantic near-duplicate detection is intentionally NOT done here — the
-    N² comparisons would be too expensive for a stats call. Stores get a
-    semantic hint via ``memory_store``'s ``similar_memories``.
-    """
-    ghost_namespaces: list[str] = []
-    if namespace_id is None:
-        ghost_namespaces = [
-            row["name"]
-            for row in conn.execute(
-                "SELECT n.name AS name FROM namespaces n "
-                "LEFT JOIN memories m ON m.namespace_id = n.id "
-                "GROUP BY n.id HAVING COUNT(m.id) = 0 ORDER BY n.name"
-            ).fetchall()
-        ]
-
-    and_ns = " AND namespace_id = ?" if namespace_id else ""
-    ns_params: tuple = (namespace_id,) if namespace_id else ()
-
-    clusters = conn.execute(
-        "SELECT namespace_id, title, GROUP_CONCAT(id) AS ids, COUNT(*) AS n "
-        "FROM memories WHERE confidence != 'deprecated'" + and_ns + " "
-        "GROUP BY namespace_id, title HAVING n > 1 "
-        "ORDER BY n DESC, title ASC",
-        ns_params,
-    ).fetchall()
-
-    ns_names = {
-        row["id"]: row["name"] for row in conn.execute("SELECT id, name FROM namespaces").fetchall()
-    }
-
-    sample = [
-        {
-            "namespace": ns_names.get(row["namespace_id"], "?"),
-            "title": row["title"],
-            "ids": row["ids"].split(","),
-        }
-        for row in clusters[:_HYGIENE_SAMPLE_LIMIT]
-    ]
-
-    return {
-        "ghost_namespaces": ghost_namespaces,
-        "duplicate_title_count": len(clusters),
-        "duplicate_title_sample": sample,
     }
 
 

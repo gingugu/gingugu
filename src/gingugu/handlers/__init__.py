@@ -88,12 +88,14 @@ def register_all(mcp, ctx: ServerContext) -> None:
         recall,
         relations,
         search,
+        stats,
     )
 
     memory.register(mcp, ctx)
     forget.register(mcp, ctx)
     recall.register(mcp, ctx)
     search.register(mcp, ctx)
+    stats.register(mcp, ctx)
     excerpt.register(mcp, ctx)
     relations.register(mcp, ctx)
     consolidate.register(mcp, ctx)
