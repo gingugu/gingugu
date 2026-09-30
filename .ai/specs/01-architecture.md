@@ -33,7 +33,9 @@ AI client (Claude Code / Cursor / Windsurf / …)
    where a caller-named path would be a file write on the server's disk.
 2. **Handlers** (`handlers/`) - thin adapters that validate input, call the core
    modules, and return structured dicts. Split by domain: `memory`, `forget`,
-   `hints`, `recall`, `search`, `stats`, `excerpt`, `relations` (+ `relation_ops`),
+   `hints`, `recall` (+ `context_merge`, the pure merge of per-namespace context
+   loads: pins first, then ranked tails interleaved by rank), `search`, `stats`,
+   `excerpt`, `relations` (+ `relation_ops`),
    `consolidate`, `dream`, `admin`, `credentials`, plus `summaries` (payload
    shapes: full summary, compact summary, the picker between them), `choices`
    (enum argument parsing shared by every write-surface field with a controlled
@@ -45,8 +47,10 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `portability`. `storage` owns the `memories` row only; the satellite tables
    it drags along have their own owners (`tags`, `access`, `embedding_sync`,
    `claim_sync`), reached through the `storage_derived.DerivedTables`
-   delegation surface. They are modules over a bare connection rather than
-   methods on `MemoryStore` because `portability.import_data` writes memory
+   delegation surface, which also carries `log_query` for `query_log` (owned by
+   `query_log.py`; per-query rather than per-memory, so not a satellite). They
+   are modules over a bare connection rather than methods on `MemoryStore`
+   because `portability.import_data` writes memory
    rows too, and an invariant locked inside that class is one the import path
    cannot honor. `embedding_text.embedding_input()` is the one text recipe
    every write path and every compare path shares - split out of `embeddings`
@@ -58,7 +62,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
    existing prose, `runtime.py` for coordination tables that describe the
    processes touching the store rather than the memories in it (`activity`,
    `dream_lock`), `fields.py` for write-time declared fields on the memory
-   record (`provenance`, `about`) and the FTS5 rebuild that indexes them, and
+   record (`provenance`, `about`) and the FTS5 rebuild that indexes them,
+   `queries.py` for the query log (`query_log`, migration 015), and
    `__init__.py` for the ordered registry and the runner. `config.py` resolves
    the DB path.
 
@@ -204,6 +209,17 @@ AI client (Claude Code / Cursor / Windsurf / …)
   thresholds are the right ones - only a real corpus against a real brain can,
   and neither belongs in a public repo. Harness committed, corpus not.
 
+  The sweep stays read-only. The hook's one write is `log_prompt`, called after
+  selection and before the early return so a prompt that surfaced nothing is
+  still a row: it records the affect-stripped prompt and the ids actually
+  injected to `query_log` (`tool='hook'`) over its own short write connection
+  (`mode=rw`, never creates a file, 0.5s busy timeout), swallowing every
+  exception so it cannot cost the turn its injection, and skipping silently on
+  a store not yet at migration 015. `recall_sweep.sqlite_uri` builds every
+  `file:` URI from the resolved path, percent-encoded - a raw path containing
+  `#` or `?` ended the filename early and dropped `mode=`, letting SQLite fall
+  back to read-write-create.
+
   Edge repair lives in `relation_repair.py`, mixed into `RelationManager`:
   `retype_relation` and `reverse_relation` are the two halves of "the pair is
   right, the label or the arrow is not", and both UPDATE the existing row so an
@@ -229,9 +245,15 @@ manufacture co-access between clients that never shared a conversation. Raw
 Outside a request the value is `NULL`, never a placeholder: "unknown" is true,
 where "these belong together" would not be.
 
+`query_log.session_id` carries the same id, so a question joins to the memories
+it returned in that session. Rows written by the involuntary-recall hook carry
+Claude Code's session id instead - a different namespace of ids, so hook rows
+do not join to `access_log`.
+
 Note the ceiling this inherits. `access_log` is pruned to a rolling 90-day
 window, so co-access is a moving picture. Anything built on it has to keep its
-own durable aggregate.
+own durable aggregate. `query_log` is the opposite case: it is never pruned,
+because nothing summarises it - the rows are the only copy.
 
 ## Transactions
 
@@ -275,7 +297,8 @@ read-only suggest half against the write half - to keep both under the
   comma-separated namespace list (one call per session, de-duped across
   namespaces) and a `compact` mode (title + excerpt). Context loads refresh
   the dormancy clock but don't count as accesses - `access_count` is a pure
-  recall/search usage signal. **Pinned** memories (`memory_update(pinned=True)`)
+  recall/search usage signal. A given `task_hint` is still recorded in
+  `query_log` (`tool='context'`). **Pinned** memories (`memory_update(pinned=True)`)
   load ahead of the ranked set and exempt from it, additive to `limit` and
   capped at 20 per namespace - the tier for rules that must never be missing,
   which is a different question from what ranking answers.
@@ -292,6 +315,10 @@ read-only suggest half against the write half - to keep both under the
   confidence), sort order, and exact fetch-by-`ids` (requested order,
   deprecated included, `missing` reported) - the companion to
   `memory_stats(review_limit=...)` for review sweeps.
+- **Every query is recorded.** `memory_recall` always, `memory_search` when it
+  carries a `query` (an `ids` fetch or filter/sort listing is not a question),
+  `memory_context` when given a `task_hint`, and the involuntary-recall hook:
+  one `query_log` row each, ids in rank order, zero-hit queries included.
 
 ## Key Decisions
 - **The dream pass computes structure and is forbidden from writing content.**
@@ -392,7 +419,8 @@ read-only suggest half against the write half - to keep both under the
   have written, and kept when it differs - the marker says we once wrote a file,
   not that the user left it alone) - merging both hooks into `.claude/settings.json`
   non-destructively (`settings.py`) and appending the hooks' runtime artifacts
-  (`logs/`, `.claude/data/`, `settings.local.json`) to the target's `.gitignore`
+  (`logs/`, `.claude/data/`, `.claude/settings.local.json`,
+  `.claude/hooks/**/__pycache__/`, `.claude/**/*.bak`) to the target's `.gitignore`
   so transcripts never get committed. Output is a themed 90s boot sequence
   (`theme.py`, degrades to monochrome off-TTY). Other clients (`--client`) get a
   rules file. This closes the gap where the repo's own hook-based install
@@ -593,6 +621,20 @@ read-only suggest half against the write half - to keep both under the
   scored by its strongest. Before 2026-08-27 the traversal grouped per edge, so
   such a pair spent two of a seed's three slots and appeared twice in the
   payload.
+- **Queries get their own table, and it is never pruned.** `query_log`
+  (migration 015) records the question, the scope actually searched (`*` for
+  every namespace, including a scoped read that widened), and the returned ids.
+  It is not an `access_log` column because `access_log` has one row per
+  *returned memory*: it never saw the question, and a miss leaves no row at
+  all - and misses are the point. `result_ids` is a JSON array in rank order
+  rather than a join table, since it is written once, read whole, and its order
+  is the point. Unlike `access_log`'s 90-day window (safe because its aggregate
+  lives on `access_count`), nothing summarises `query_log`, so pruning it would
+  destroy the only copy. `query_log.record` never commits and swallows
+  `sqlite3.Error`: retrieval must not fail over bookkeeping. The hook is the
+  awkward writer - its sweep is `mode=ro` by design - so `log_prompt` opens a
+  separate short-lived write connection after selection rather than loosening
+  the sweep's connection.
 - **Server resilience over strictness.** Handlers fail soft (structured errors)
   so a bad call never takes down the client's memory layer.
 

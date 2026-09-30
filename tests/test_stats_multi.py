@@ -14,7 +14,7 @@ import json
 
 import pytest
 
-GLOBAL_KEYS = {"namespaces", "access_log_rows", "credentials"}
+GLOBAL_KEYS = {"namespaces", "access_log_rows", "query_log_rows", "credentials"}
 
 
 def _payload(result) -> dict:

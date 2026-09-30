@@ -187,6 +187,11 @@ memory_recall(query, namespace | "ns1,ns2,…", filters)
     timestamps are dropped. Anchored on the freshness anchor, so a memory
     maintained since it was written reads "7 weeks ago (updated just now)"
     instead of looking 7 weeks stale
+  → query_log row (query_log.record, via the store): the query text, the
+    ids returned in rank order (de-duplicated), the scope actually searched
+    (`*` when unscoped or widened), the MCP session id. A zero-hit recall is
+    still a row. Best-effort: a failure logs a warning and the recall returns
+    normally
 ```
 
 A cohort member longer than the encoder's fixed token window carries pieces in
@@ -218,6 +223,10 @@ sort_by = created | accessed
 ids = "a,b,c"
   → exact fetch, requested order, deprecated included, `missing` reported
 ```
+
+A `memory_search` that carries a `query` also writes a `query_log` row
+(`tool='search'`, same shape as recall's). An `ids` fetch or a filter/sort
+listing with no query is not a question and is not logged.
 
 Every path selects its rows in the order it returns them. Sorting a pool that
 was truncated on a different axis reorders a biased sample rather than the
@@ -283,12 +292,16 @@ memory_context(namespace | "ns1,ns2,…", task_hint, limit, compact)
     plus the derived `age` - the protocol mandates compact here, so dropping
     every temporal signal left the agent time-blind while reading the
     RESUME memory)
+  → task_hint given: one query_log row (tool='context'), ids in rank order.
+    No task_hint, no row
 ```
 
 Context loads are protocol-driven reads: they refresh `last_accessed` (dormancy
 clock, via `touch_many`) but do **not** bump `access_count` or write
 `access_log` rows - those are reserved for `memory_recall`/`memory_search`
-hits, so session-start loads can't inflate the access ranking signal.
+hits, so session-start loads can't inflate the access ranking signal. The
+`task_hint` is the exception that proves the split: it is a question, so it is
+recorded in `query_log` - a different table, which does not feed ranking.
 
 That reservation is what makes `access_log` a clean record of _deliberate_
 retrieval, and since 2026-08-30 each row also carries the id of the MCP session
@@ -301,7 +314,9 @@ a placeholder would fake co-access between unrelated rows.
 **The signal is a rolling window, not a permanent record.** `prune_access_log`
 deletes rows past `ACCESS_LOG_RETENTION_DAYS` (90), so anything built on
 co-access must accumulate its own durable aggregate rather than expecting to
-re-derive the full history from the log later.
+re-derive the full history from the log later. `query_log` is the opposite: it
+is **never pruned**, because nothing summarises it and its rows are the only
+copy of what was asked.
 
 That refresh is also why the recency bucket must not be ordered by
 `last_accessed`. It was, until 2026-08-26, and the result was a feedback loop:
@@ -392,6 +407,13 @@ UserPromptSubmit event  →  .claude/hooks/user_prompt_recall.py (pure stdlib)
       → BM25 over the same prompt: a hit must ALSO match lexically
       → gate: bar 0.78 AND (score - median of the full sweep) >= 0.15
       → cap 3, minus anything already injected this session
+  → log_prompt: the affect-stripped prompt + the ids actually injected go to
+    query_log (tool='hook'), BEFORE the early return, so a prompt that
+    surfaced nothing is still a row. The sweep stays read-only; this opens its
+    own short write connection (mode=rw, never creates a file, 0.5s busy
+    timeout), swallows every exception, and skips a store not yet at
+    migration 015. Rows carry Claude Code's session id, so they do not join
+    to access_log
   → hookSpecificOutput.additionalContext, or silence
 ```
 
@@ -606,8 +628,10 @@ database.py on startup:
       → read PRAGMA user_version
       → if migrations pending: snapshot to <db>.bak-before-vN via conn.backup()
       → apply pending migrations in order (additive by default), from
-        migrations/schema.py (structural) and migrations/claim_derivation.py
-        (re-derives rows from prose that never changed)
+        migrations/schema.py (structural), migrations/claim_derivation.py
+        (re-derives rows from prose that never changed), migrations/runtime.py
+        (coordination state), migrations/fields.py (write-time declared
+        fields + FTS rebuild) and migrations/queries.py (the query log)
       → ensure FTS5 virtual table + sync triggers exist and match `memories`
 ```
 

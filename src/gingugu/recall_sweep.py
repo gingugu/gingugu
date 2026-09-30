@@ -53,9 +53,19 @@ SELECT m.id
 """
 
 
+def sqlite_uri(db_path: Path, mode: str) -> str:
+    """A ``file:`` URI for ``db_path`` that SQLite cannot misread.
+
+    Interpolating the raw path would let a ``?`` or ``#`` in it end the
+    filename early, dropping ``mode`` so SQLite falls back to read-write-create
+    and makes a stray empty database. ``as_uri`` percent-encodes both.
+    """
+    return f"{Path(db_path).resolve().as_uri()}?mode={mode}"
+
+
 def connect_readonly(db_path: Path) -> sqlite3.Connection:
     """Open the brain read-only. Raises if the file is not there."""
-    return sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    return sqlite3.connect(sqlite_uri(db_path, "ro"), uri=True)
 
 
 def _cosine(query: list[float], vec: tuple[float, ...], query_norm: float) -> float:

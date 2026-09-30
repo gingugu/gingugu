@@ -537,8 +537,10 @@ It installs:
   margin above the median of its own sweep, a keyword match on the same
   prompt, and not have been surfaced already this session. Pinned memories are
   skipped (they already load every session) and so are superseded ones. On a
-  548-prompt sample it fires on about 5% of turns. Set `MEMORY_RECALL_HOOK=off`
-  to disable it.
+  548-prompt sample it fires on about 5% of turns. Every prompt long enough to
+  search on is recorded, with what it surfaced, in the local `query_log` table
+  of your memory database - the same file as the memories, never sent
+  anywhere. Set `MEMORY_RECALL_HOOK=off` to disable it.
 - **`.claude/skills/sink-the-ship/SKILL.md`** — a `/sink-the-ship` skill to flush
   everything worth keeping before you close a session. If an older install left a
   `.claude/commands/sink-the-ship.md` behind, `gingugu init` retires it and keeps
@@ -547,8 +549,9 @@ It installs:
 - All three hooks wired into `.claude/settings.json`, **merged non-destructively** —
   any existing config is backed up (`settings.json.bak`) and preserved.
 - The runtime artifacts the hooks generate (`logs/`, `.claude/data/`,
-  `.claude/settings.local.json`) appended to your `.gitignore` — so a session
-  transcript never gets committed, which matters most on a public repo.
+  `.claude/settings.local.json`), and the `.bak` copies `init` itself saves,
+  appended to your `.gitignore` — so a session transcript never gets
+  committed, which matters most on a public repo.
 - **The memory protocol in your user-level `~/.claude/CLAUDE.md`**, inside a
   marked block. This is what covers sessions started in a directory with no
   project protocol installed. It is strictly additive: the block goes *below*
@@ -779,7 +782,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo) |
 | `memory_export` | Export memories + tags + relations to portable JSON |
 | `memory_import` | Restore a JSON export (skip or replace on conflict) |
-| `memory_stats` | Health overview (dormancy, counts, coverage, review sweep, the `claims` backlog, a relation-graph block whose `orphan_sample` names the memories no edge reaches - `review_limit` raises every sample's cap, and a `size` block reporting the character cost of the store and of the always-loaded pinned tier); a comma-separated `namespace` list returns the global block once plus each namespace's own stats |
+| `memory_stats` | Health overview (dormancy, counts, coverage, review sweep, the `claims` backlog, a relation-graph block whose `orphan_sample` names the memories no edge reaches - `review_limit` raises every sample's cap, a `size` block reporting the character cost of the store and of the always-loaded pinned tier, and `query_log_rows`, the count of recorded queries); a comma-separated `namespace` list returns the global block once plus each namespace's own stats |
 | `memory_search` | Advanced filtered search (type, tags, confidence, dates; one or many namespaces; optional compact mode; fetch by exact `ids`; `claims` to work the reconciliation backlog or read refs the prose never resolved, `orphans` to work the graph backlog, `pinned` to enumerate the always-present tier; `explain` for a per-hit score breakdown) |
 | `memory_excerpt` | Read inside ONE memory: find literal matches with their character offsets, line numbers and surrounding context, and/or slice an exact character range |
 | `credential_store` | Store/update a service credential bundle |

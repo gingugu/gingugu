@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Retrieval queries are recorded in a new `query_log` table** (schema
+  migration 015). One row per query from `memory_recall`, a `memory_search`
+  with a `query`, a `memory_context` `task_hint`, and the involuntary-recall
+  hook's prompt, with the results in rank order and the namespace scope the
+  query ran in (`*` for every namespace). A query that found nothing is still
+  a row. Local to the same SQLite file as the memories and never pruned; it
+  is the raw material for measuring recall against real phrasing.
+  `memory_stats` reports `query_log_rows` alongside `access_log_rows`.
+
 - **`memory_store` and `memory_update` take `provenance` and `about`.**
   `provenance` declares how the writer came to believe the memory -
   `user-asserted`, `measured`, `file-derived`, or `self-concluded` - enforced
@@ -67,6 +76,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   after `serve` is now a hard error (exit 2) instead of being ignored.
 
 ### Changed
+
+- **Schema version 15.** Adds the `query_log` table and its `created_at`
+  index. Nothing existing is altered.
 
 - **Schema version 14.** `memories_fts` gains a third indexed column,
   `about` (`title`, `content`, `about`), with all three sync triggers rebuilt
@@ -354,6 +366,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   48 proposals. Schema migration 011.
 
 ### Fixed
+
+- **The involuntary-recall hook opens the brain it was pointed at, and only
+  that.** A database path containing `#` or `?` cut the SQLite `file:` URI
+  short and dropped its `mode=ro`, so the read-only sweep created and read a
+  stray empty database instead. The URI is now built with `Path.as_uri()`,
+  which escapes both.
+
+- **`gingugu init` git-ignores its own `.bak` files.** The copies it saves
+  before replacing a settings file or hook are covered by
+  `.claude/**/*.bak`, so they cannot be committed by accident.
 
 - **A malformed element in `memory_unrelate`'s `edges` batch now returns a
   structured error.** A non-object element was rejected by argument validation

@@ -30,12 +30,14 @@ CLIENT_RULES_FILES = {
 
 # Runtime artifacts the installed hooks (and Claude Code itself) generate. These
 # must be git-ignored so a session transcript or local override never lands in
-# the repo — especially on a public one.
+# the repo — especially on a public one. The ``.bak`` files are init's own:
+# the copy of a user's settings or hook it saves before replacing one.
 GITIGNORE_ENTRIES = [
     "logs/",
     ".claude/data/",
     ".claude/settings.local.json",
     ".claude/hooks/**/__pycache__/",
+    ".claude/**/*.bak",
 ]
 
 _MCP_HINT = (

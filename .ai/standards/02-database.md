@@ -17,9 +17,13 @@ The SQLite database is the product's durable state. Treat it with care.
 
 - Keyed off **`PRAGMA user_version`**. Add the migration to the `MIGRATIONS`
   registry in `migrations/__init__.py`; it is applied in order when a
-  connection opens. Put the function in `migrations/schema.py` if it changes
-  the schema's shape, or `migrations/claim_derivation.py` if it only re-reads
-  prose that never changed, and keep its DDL beside it.
+  connection opens. Pick the module by what the migration does, and keep its
+  DDL beside it: `migrations/schema.py` for the schema's shape,
+  `migrations/claim_derivation.py` if it only re-reads prose that never
+  changed, `migrations/runtime.py` for coordination state about the processes
+  touching the store, `migrations/fields.py` for write-time declared fields
+  on the memory record, `migrations/queries.py` for the query log. A new
+  concern gets a new module, as `queries.py` did.
 - **A released migration can never run again.** `migrate()` selects pending
   work with `current < target`, so editing migration N fixes nothing on any
   store already stamped at N - no reinstall or restart reaches it. Only a new
