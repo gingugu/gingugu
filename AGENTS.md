@@ -30,8 +30,9 @@ Gingugu is your long-term brain. Memory is split into **two layers**:
    de-duplicated across namespaces. Load them all speculatively rather than
    asking which one to focus on. Add `compact=true` for a lighter payload and
    pull full bodies with `memory_recall` as needed.
-2. `memory_stats(namespace="crow")` — global health.
-3. `memory_stats(namespace="<project>")` for each project namespace.
+2. `memory_stats(namespace="crow,<project>[,<project2>…]")` - the same
+   namespace list as step 1, in one call: global health once plus each
+   namespace's own breakdown.
 
 If a repo has no project namespace yet, create it:
 `memory_namespaces(action="create", name="<project>")`.
@@ -129,14 +130,17 @@ src/gingugu/
   relations.py       → graph edges between memories
   consolidation.py   → merge / summarize / deduplicate clusters
   decay.py           → dormancy as a resting signal (NEVER auto-forgets)
-  stats.py           → health stats (counts, confidence, dormancy, hygiene)
+  stats.py           → health stats (counts, confidence, dormancy); global vs.
+                       per-namespace split so a multi-namespace call computes
+                       the shared block once, not once per namespace
+  hygiene_stats.py   → memory_stats' hygiene block (ghost namespaces, duplicate titles)
   namespaces.py      → namespace CRUD
   credentials.py     → OS-keychain credential vault
   portability.py     → export / import a namespace
   handlers/          → MCP tool handlers: memory.py, forget.py, hints.py,
-                       recall.py, search.py, scope.py, excerpt.py, relations.py,
-                       relation_ops.py, consolidate.py, dream.py, admin.py,
-                       credentials.py, helpers.py
+                       recall.py, search.py, stats.py, scope.py, excerpt.py,
+                       relations.py, relation_ops.py, consolidate.py, dream.py,
+                       admin.py, credentials.py, helpers.py
 ui/                  → Memory Explorer (api.py backend + React/Vite frontend)
 docs/                → architecture.md (mermaids = source of truth), roadmap.md, future-architecture.md
 tests/               → pytest suites (unit + integration MCP flows)

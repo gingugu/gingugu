@@ -873,12 +873,29 @@ Update an existing memory's content, type, confidence, or metadata.
   exactly the memories where staleness costs most
 
 ### `memory_relate`
-Create a relationship between two memories.
+Create a relationship between two memories, one at a time or as a batch.
 
 **Parameters:**
-- `source_id` (required) — UUID of source memory
-- `target_id` (required) — UUID of target memory
-- `relation_type` (required) — supersedes|contradicts|caused_by|parent_of|child_of|related_to
+- `source_id` / `target_id` / `relation_type` - the single-edge form (required
+  together unless `edges` is given): UUIDs of the two memories, and
+  supersedes|contradicts|caused_by|parent_of|child_of|related_to
+- `edges` (optional) - the batch form: an array of up to `MAX_BATCH_EDGES`
+  (100) objects, each with `source_id`, `target_id`, and `relation_type` (all
+  required per op - a batch op has no default type). Mutually exclusive with
+  the single-edge fields; passing neither form is an error.
+
+**Batch is all-or-nothing**, same principle as [`memory_unrelate`](#memory_unrelate)'s
+batch: every op is validated in full (both memories exist, the type is real,
+no self-edge, `edges[i]` names the offending op) before anything is written,
+and the whole set is then applied inside one transaction - a write failure on
+op *k* rolls back every op before it too, since a half-applied relation set is
+the graph state hardest to notice and hardest to repair. Relate is idempotent
+on `(source_id, target_id, relation_type)`, so each result reports `created`
+or `exists` per edge instead of claiming a no-op was a write. Response:
+`{"ok": true, "processed": n, "outcomes": {"created": x, "exists": y},
+"results": [{"source_id", "target_id", "relation_type", "outcome"}, ...]}`
+(`outcomes` only lists non-zero keys). The single-edge response is unchanged:
+`{"ok": true, "relation": {"source_id", "target_id", "relation_type"}}`.
 
 **An edge must encode what search cannot infer.** Recall already ranks by hybrid
 BM25 + semantic similarity, so "these two memories are about the same topic" is
@@ -1109,7 +1126,19 @@ List and manage namespaces.
 Get health overview of the memory system.
 
 **Parameters:**
-- `namespace` (optional) — scope to namespace, or global if omitted
+- `namespace` (optional) - a single name, a comma-separated list, or omitted
+  for global (same CSV semantics as `memory_recall`/`memory_search`: names are
+  de-duplicated order-preserving, an unknown name fails the whole call and
+  names it). A single name and the unscoped call keep the shape below under
+  `stats`. A comma list instead returns `{"ok": true, "flagged_stale": 0,
+  "namespaces": [...], "global": {...}, "by_namespace": {"<name>": {...},
+  ...}}` - `global` is the three namespace-independent fields
+  (`namespaces`, `access_log_rows`, `credentials`) computed once, and each
+  `by_namespace` entry is that namespace's own scoped stats minus those three
+  fields. This is what collapses the session-start protocol's old two-call
+  pattern (`memory_stats(namespace="crow")` then one per project) into one
+  call that computes the shared block once instead of once per namespace.
+  `review_limit` applies to every namespace's block.
 - `flag_stale` (optional, **deprecated**) — ignored no-op kept for backward
   compatibility; the old auto-demotion contradicted the never-forget model and
   was removed. Stats report `dormant_count` (a resting signal) instead and

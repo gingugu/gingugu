@@ -19,8 +19,9 @@ Gingugu is your long-term brain. Memory is split into **two layers**:
    de-duplicated across namespaces. Load them all speculatively rather than
    asking which one to focus on. Add `compact=true` for a lighter payload and
    pull full bodies with `memory_recall` as needed.
-2. `memory_stats(namespace="crow")` — global health.
-3. `memory_stats(namespace="<project>")` for each project namespace.
+2. `memory_stats(namespace="crow,<project>[,<project2>…]")` - the same
+   namespace list as step 1, in one call: global health once plus each
+   namespace's own breakdown.
 
 If a repo has no project namespace yet, create it:
 `memory_namespaces(action="create", name="<project>")`.

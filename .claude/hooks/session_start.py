@@ -159,8 +159,9 @@ def build_startup_contract(cwd):
         f'  - mcp__gingugu__memory_context(namespace="crow,{project}", task_hint=...)\n'
         "    # ONE call: identity + this repo, deduped. Use compact=true for a\n"
         "    # lighter payload; pull full bodies via memory_recall.\n"
-        '  - mcp__gingugu__memory_stats(namespace="crow")\n'
-        f'  - mcp__gingugu__memory_stats(namespace="{project}")\n'
+        f'  - mcp__gingugu__memory_stats(namespace="crow,{project}")\n'
+        "    # Same namespace list as memory_context, in one call: global\n"
+        "    # health once plus each namespace's own breakdown.\n"
         "Before asking for ANY secret/token/credential: mcp__gingugu__credential_list()\n"
         f'NAMESPACES: crow + "{project}" is the floor, always - it is derived from\n'
         "cwd, so it is never a guess. Load any OTHER namespace only when the work\n"

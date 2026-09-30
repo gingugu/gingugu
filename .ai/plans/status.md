@@ -1,8 +1,44 @@
 # Project Status
 
-_Last updated: 2026-09-28_
+_Last updated: 2026-09-29_
 
 ## In Flight
+
+**Board item 8, three small fixes, on `feature/hygiene`.**
+`gingugu serve -h`/`--help` now prints a usage block (env-only knobs:
+`MEMORY_SERVE_HOST`, `MEMORY_SERVE_PORT`, `MEMORY_SERVE_TOKEN`,
+`MEMORY_LOG_LEVEL`, `MEMORY_CREDENTIALS_ENABLED`) and returns without starting
+the server; any other argument after `serve` is now a hard error (exit 2).
+`memory_stats` takes a comma-separated `namespace` list (same CSV semantics as
+`memory_recall`/`memory_search`): the three namespace-independent fields
+(`namespaces`, `access_log_rows`, `credentials`) come back once under
+`global`, each namespace's own stats under `by_namespace` - `stats.py` split
+into `compute_global_stats` + `_compute_namespace_stats`, reused by both the
+single-namespace and multi-namespace paths so there is one computation to keep
+correct. `memory_stats` moved out of `handlers/search.py` into its own
+`handlers/stats.py` (search.py was at 271 lines and the multi-namespace
+docstring would have pushed it past 300); `compute_hygiene` moved out of
+`stats.py` into `hygiene_stats.py` for the same reason, mirroring the existing
+`graph_stats.py`/`size_stats.py` split. `memory_relate` gained an `edges`
+batch: validated in full (both memories exist, type is real, no self-edge, no
+default type per op) before anything is written, then applied inside one
+`transactions.atomic()` block so a write failure mid-batch rolls back
+everything before it - `RelationManager.relate` now returns an internal
+`created` bool (rowcount-derived) so the batch can report `created`/`exists`
+per edge without changing the single-edge response shape. The session-start
+protocol's two-call `memory_stats` pattern collapsed to one call with the same
+namespace list as `memory_context`, across both bootstrap templates, the
+checked-in `.claude/hooks/session_start.py`, `CLAUDE.md`, `AGENTS.md`, and
+`README.md`. Full suite: 1095 tests, 1094 passed, 1 pre-existing xfail
+(`test_bench.py` board item 1), 0 failed. `ruff` + `black` clean.
+
+**Latitude taken against the spec:** `memory_relate`'s `edges` parameter is
+typed `list | None` rather than `list[dict] | None` - FastMCP's pydantic
+argument validation rejects a non-dict list element before the handler ever
+runs, which would turn a bad batch entry into an uncaught `ToolError` instead
+of the graceful `{"ok": false, "error": ...}` the spec's "not an object" case
+requires. `memory_unrelate`'s existing `edges: list[dict]` has the same latent
+gap, untouched here (out of scope for this pass).
 
 **Board items 4 + 5: provenance and aboutness, on `feature/provenance-aboutness`.**
 Two write-time declared fields on the memory record, one migration (014,
@@ -1046,32 +1082,16 @@ field. Remaining directions, neither designed:
   semantically right answer. Worth measuring whether hybrid weighting should back
   off when lexical hit rate is high and semantic agreement is low.
 
-### 8. Hygiene - grew again
+### 8. Hygiene - three items IMPLEMENTED 2026-09-29 on `feature/hygiene`, pending PR
 
-`gingugu serve --help` **starts the server**. `serve()` is the only subcommand
-that takes no argv, so `--help` is matched and discarded (`server.py`). Its five
-knobs - host, port, token, log level, credentials-enabled - are environment-only
-and prefixed **`MEMORY_*`, not `GINGUGU_*`**. That is the same env-var trap
-already boarded, so one `serve --help` printing the real names discharges both.
+`gingugu serve --help` no longer starts the server, `memory_stats` sends its
+global fields once per call instead of once per namespace, and `memory_relate`
+takes a batch. See In Flight for what shipped and where the design deviated
+from this entry's sketch.
 
-Also: the pinned tier is skewed again. One pin is 23% of it, nearly twice the
-next largest. The 2026-08-31 precedent applies - keep the rule pinned, move its
-instance log to an unpinned `child_of`.
-
-**New 2026-09-20, both small:**
-
-- **`memory_stats` re-sends its global fields on every call.** The startup
-  contract mandates two calls, one per namespace, and each response repeats the
-  same namespace-independent payload: the full namespace inventory with counts,
-  `access_log_rows`, and the `credentials` block. Measured byte-identical across
-  the two calls in one transcript. Make the global block opt-in, or return it only
-  once per session. Cheapest fix on the whole board.
-- **Bulk `memory_relate`.** Requested by the user, and a normal session makes
-  several relate calls in a row, each its own round trip for a four-line ack.
-  Accept a list of triples, validated as a set and applied in one transaction.
-  One design call to settle first: **all-or-nothing, not best-effort** - a
-  half-applied relation set is the graph state hardest to notice and hardest to
-  repair, and a trustworthy graph is the point of relations.
+Still open, not touched by this pass: the pinned tier is skewed again - one pin
+is 23% of it, nearly twice the next largest. The 2026-08-31 precedent applies -
+keep the rule pinned, move its instance log to an unpinned `child_of`.
 
 ### 9. A paraphrase question set, from the access log
 
