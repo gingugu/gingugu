@@ -4,11 +4,53 @@ _Last updated: 2026-09-30_
 
 ## In Flight
 
-**Board #1 follow-up, on `fix/windows-uri-test`.** The `?` case of the
-URI-hostile-path test cannot create its fixture on Windows, where `?` is not a
-legal filename character, so it failed the two Windows CI cells that finished
-after #89 merged. Skipped on Windows only; the `#` and `%` cases passed there,
-which confirms the `Path.as_uri()` fix on Windows too.
+**Board #1 (tripwires): IN FLIGHT on `feature/tripwires`.** Involuntary recall
+at the action: a `PreToolUse` hook matches the pending tool call against
+explicit per-memory triggers and stops the call once with the memory in front
+of the agent. Pure regex, no embeddings, no model judgment - a risky command
+and a harmless one can read alike to an encoder.
+
+- **Migration 016, a `tripwires` table** (new `migrations/tripwires.py`):
+  `id`, `memory_id` (`REFERENCES memories(id) ON DELETE CASCADE`),
+  `tool_pattern`, `input_pattern`, `created_at`, plus `idx_tripwires_memory`.
+  Its own table because one memory can guard several calls and a trigger has
+  its own lifecycle; the cascade means a hard-deleted memory takes its
+  tripwires with it. `memories` and `memories_fts` are untouched.
+- **`tripwire.py`:** `match_text` picks what a pattern is searched in (Bash ->
+  the command; Edit/Write/Read -> `file_path`; NotebookEdit ->
+  `notebook_path`; anything else -> the input as sorted JSON). `tool_pattern`
+  is a regex full-matched against the tool name (`Bash` does not catch
+  `BashOutput`); `input_pattern` is searched in the match text. One hit per
+  memory, at most 3 (`MAX_TRIPPED`), patterns capped at 500 chars.
+  `load_tripwires` skips deprecated and superseded memories but **not pinned
+  ones**, and is the single seam where a remote brain would plug in.
+- **`tool_hook.py` (`gingugu hook tool`, `PreToolUse`):** a `PreToolUse`
+  `additionalContext` is delivered next to the tool *result*, after the call
+  ran, so the only way to speak before the call is to deny it. The first
+  matching call per session per memory is denied with the memory's title and
+  summary plus "re-issue unchanged to pass", and a `systemMessage` tells the
+  user a tripwire stopped a call. The re-issued call passes (suppression lives
+  in `hook-sessions/tripwires-<session_id>.json`, separate from the prompt
+  hook's state). `mcp__gingugu__*` tools never trip, so a bad tripwire can
+  always be repaired. `MEMORY_TRIPWIRES=off` disables. Every failure exits 0
+  silently, which is the normal permission flow. Each trip is logged to
+  `query_log` as `tool='tripwire'`; misses are not (it runs on every tool
+  call). Measured cost is about 150ms per tool call.
+- **`memory_tripwire` tool** (`handlers/tripwires.py`): `add`, `list`,
+  `remove`, and `test` (a dry run that never denies and never logs). The 17th
+  memory tool; 21 tools with the four credential ones.
+- **`gingugu init`** now wires four hooks: `PreToolUse` runs
+  `.claude/hooks/pre_tool_tripwire.py` (timeout 15s), installed from
+  `bootstrap/templates/pre_tool_tripwire.py.tmpl`. The doorway drops
+  `mcp__gingugu__*` in stdlib before loading the package.
+- **Accepted v1 limitation:** after context compaction the memory may drop out
+  of context while suppression still counts it as shown.
+- **Also carries** the Windows `?` test skip (`2287e2c`) from #89's follow-up:
+  the `?` case of the URI-hostile-path test cannot create its fixture on
+  Windows, where `?` is not a legal filename character. Skipped on Windows
+  only; the `#` and `%` cases passed there, which confirms the
+  `Path.as_uri()` fix on Windows too.
+- Suite: 1118 passed, 1 xfailed. Unreleased; 0.18.0 is the latest release.
 
 ## Recently Completed
 
@@ -654,7 +696,7 @@ and the rest keep their order.
 
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **Tripwires: involuntary recall at the action** | 10 | The user's top pick. Built local-first, with a seam for a remote brain |
+| 1 | **Tripwires: involuntary recall at the action** | 10 | The user's top pick. Built local-first, with a seam for a remote brain. Built on `feature/tripwires`; PR pending |
 | 2 | **Capability pointer** | 5 | The cheaper half of aboutness; builds straight on the shipped `about` field |
 | 3 | **Scoped serve tokens** | 12 | The foundation for everything that runs over the network |
 | 4 | **One central brain, several clients** | 11 | Mostly built; the rest is physical setup, so it can run in parallel whenever that happens |
@@ -1185,6 +1227,9 @@ Five items the user approved in one sitting. Each is recorded as a direction
 with what already exists under it; **none is designed**, and design waits for an
 explicit go. The user's order of priority puts 10 first.
 
+**Update:** item 10 has since been designed and built (see the top entry under
+In Flight); 11-14 remain undesigned.
+
 ### 10. Tripwires: involuntary recall at the action
 
 Involuntary recall (`prompt_hook.py`, `recall_gate.py`) fires on
@@ -1202,6 +1247,21 @@ the matches before the call runs. Pure arithmetic, no model judging relevance.
 - Constraint: `prompt_hook` reads the SQLite file directly
   (`connect_readonly(app.db_path)`). Against a remote brain the hooks need a
   path through `gingugu serve`.
+
+**Built 2026-09-30:** on `feature/tripwires`.
+
+- Triggers are regex rows in a `tripwires` table (migration 016): the leaning
+  above became the decision. A tool-name regex plus an input regex, per memory.
+- **Deny once, not inject.** A `PreToolUse` `additionalContext` lands next to
+  the tool result, after the call has run, so it cannot warn in time. The first
+  matching call per session per memory is denied with the memory as the reason;
+  the same call re-issued unchanged passes.
+- `mcp__gingugu__*` tools are exempt, so a bad tripwire can always be repaired.
+- `load_tripwires` is the seam for a remote brain (the constraint bullet
+  above): today it reads SQLite read-only, and a `gingugu serve` path would
+  replace only that function.
+- Pinned memories still trip: a pin loaded at session start is not in front of
+  the agent at the moment it acts.
 
 ### 11. One central brain, several clients
 
