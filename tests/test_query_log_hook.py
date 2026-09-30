@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import sys
 
 import pytest
 
@@ -108,7 +109,19 @@ def test_a_missing_db_with_uri_characters_is_never_created(tmp_path, name):
     assert list(tmp_path.iterdir()) == []
 
 
-@pytest.mark.parametrize("name", ["we#ird.db", "we?ird.db", "per%20cent.db"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "we#ird.db",
+        pytest.param(
+            "we?ird.db",
+            marks=pytest.mark.skipif(
+                sys.platform == "win32", reason="'?' is not a legal Windows filename character"
+            ),
+        ),
+        "per%20cent.db",
+    ],
+)
 def test_a_db_path_with_uri_characters_is_logged_to_the_right_file(tmp_path, name):
     path = tmp_path / name
     database = Database(path)
