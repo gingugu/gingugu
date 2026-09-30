@@ -42,6 +42,7 @@ graph LR
         P[(proposals<br/>queue)]
         Q[(activity<br/>heartbeat)]
         R[(dream_lock)]
+        T[(query_log<br/>questions asked)]
     end
 
     subgraph OS Secrets
@@ -66,6 +67,7 @@ graph LR
     K --> H
     K --> J
     C -->|stamps every tool call| Q
+    C -->|records each query| T
     S -->|run only if idle| Q
     S -->|one runner at a time| R
     S --> L
@@ -229,7 +231,41 @@ on **both** `memory_stats` calls and write operations (`memory_store` /
 `memory_update`), guarded by a cheap throttle (skip if pruned within the last
 hour) so it can't grow unbounded when `memory_stats` is rarely called. Aggregate
 counts are denormalized onto `memories.access_count`, so trimming the log is
-non-destructive to ranking.
+non-destructive to ranking. `query_log` (below) is the opposite: it is never
+pruned.
+
+#### `query_log`
+```sql
+CREATE TABLE query_log (
+    id          TEXT PRIMARY KEY,
+    session_id  TEXT,           -- MCP session id (Claude Code's for hook rows); NULL if unknown
+    tool        TEXT NOT NULL,  -- recall | search | context | hook
+    query       TEXT NOT NULL,  -- stripped, capped at MAX_QUERY_CHARS (2000)
+    namespaces  TEXT NOT NULL,  -- comma-separated scope searched, or '*' for every namespace
+    result_ids  TEXT NOT NULL,  -- JSON array of memory ids, rank order, de-duplicated
+    created_at  TEXT NOT NULL
+);
+
+CREATE INDEX idx_query_log_created ON query_log(created_at);
+```
+
+One row per query (migration 015). `access_log` has one row per *returned
+memory*, so it never sees the question and a query that returned nothing leaves
+no trace; `query_log` records both, and those misses are the point. It is its
+own table for that reason. `result_ids` is a JSON array rather than a join
+table because it is written once, read whole, and its order is the point.
+
+Written by `memory_recall` (always), `memory_search` (only with a `query`),
+`memory_context` (only with a `task_hint`) and the involuntary-recall hook
+(`tool='hook'`, which carries Claude Code's session id, so hook rows do not join
+to `access_log`). `namespaces` is `*` for an unscoped read and for a scoped read
+that widened. Blank queries are not logged. Logging is best-effort: it never
+commits on its own and swallows `sqlite3.Error`, so retrieval never fails over
+bookkeeping.
+
+**Retention:** never pruned. `access_log` can be trimmed because its aggregate
+lives on `memories.access_count`; nothing summarises `query_log`, so its rows
+are the only copy.
 
 #### `memory_chunks`
 ```sql
@@ -706,7 +742,8 @@ cost more context than the memory being saved. Fetch a candidate's body with
 is *not* compacted — that is the payload the caller asked for.
 
 ### `memory_recall`
-Search and retrieve memories ranked by relevance × freshness.
+Search and retrieve memories ranked by relevance × freshness. Every call is
+recorded in `query_log`, including one that returns nothing.
 
 **Parameters:**
 - `query` (required) — natural language search query
@@ -737,6 +774,7 @@ Search and retrieve memories ranked by relevance × freshness.
 
 ### `memory_context`
 Auto-surface relevant memories for the current workspace. Called on session start.
+A `task_hint`, when given, is recorded in `query_log` (`tool='context'`).
 
 **Parameters:**
 - `namespace` (optional) - a single name **or a comma-separated list**
@@ -786,7 +824,9 @@ incremented and no `access_log` row is written** - those are reserved for
 `memory_recall`/`memory_search` hits. This keeps mandatory session-start loads
 from inflating the access component of the composite score (a rich-get-richer
 feedback loop where whatever already ranks high gets auto-loaded, bumped, and
-ranks higher still).
+ranks higher still). The `task_hint` is the one thing a context load does
+record - a question is not an access - and it goes to `query_log`, which does
+not feed ranking.
 
 **Pinned memories load first, unconditionally.** A pin
 (`memory_update(pinned=True)`) removes a memory from the ranking contest
@@ -1132,10 +1172,10 @@ Get health overview of the memory system.
   names it). A single name and the unscoped call keep the shape below under
   `stats`. A comma list instead returns `{"ok": true, "flagged_stale": 0,
   "namespaces": [...], "global": {...}, "by_namespace": {"<name>": {...},
-  ...}}` - `global` is the three namespace-independent fields
-  (`namespaces`, `access_log_rows`, `credentials`) computed once, and each
-  `by_namespace` entry is that namespace's own scoped stats minus those three
-  fields. This is what collapses the session-start protocol's old two-call
+  ...}}` - `global` is the four namespace-independent fields
+  (`namespaces`, `access_log_rows`, `query_log_rows`, `credentials`) computed
+  once, and each `by_namespace` entry is that namespace's own scoped stats
+  minus those four fields. This is what collapses the session-start protocol's old two-call
   pattern (`memory_stats(namespace="crow")` then one per project) into one
   call that computes the shared block once instead of once per namespace.
   `review_limit` applies to every namespace's block.
@@ -1185,6 +1225,8 @@ counting the same thing.
 
 ### `memory_search`
 Advanced search with full filter support, plus a precise fetch-by-ID path.
+A call with a `query` is recorded in `query_log`; an `ids` fetch or a
+filter/sort listing is not.
 
 **Parameters:**
 - `query` (optional) — text search query
@@ -1488,7 +1530,7 @@ def migrate(conn):
 
 **Rules:**
 - Migrations are **additive by default** — adding columns/tables/indexes is fine
-- **Destructive migrations** (drop column, change type) require explicit user approval and a pre-migration backup of the DB file to `memories.db.bak-{version}`
+- **Destructive migrations** (drop column, change type) require explicit user approval and a pre-migration backup of the DB file to `memories.db.bak-before-vN`
 - WAL mode (`PRAGMA journal_mode=WAL`) is enabled on every connection open
 - Foreign keys enforced (`PRAGMA foreign_keys=ON`)
 
@@ -1526,10 +1568,12 @@ src/gingugu/
 │   ├── schema.py           # Structural migrations: tables, indexes, FTS5 triggers
 │   ├── claim_derivation.py # Row migrations + claim backfill
 │   ├── runtime.py          # Coordination tables: activity, dream_lock
-│   └── fields.py           # Write-time declared fields: provenance, about; FTS5 rebuild
+│   ├── fields.py           # Write-time declared fields: provenance, about; FTS5 rebuild
+│   └── queries.py          # The query log: query_log (migration 015)
 ├── models.py               # Data models + MEMORY_COLUMNS, the one column list
 ├── storage.py              # CRUD for the memories row and its transaction boundary
-├── storage_derived.py      # The four satellite tables a memory drags along
+├── storage_derived.py      # The four satellite tables a memory drags along, plus the query log
+├── query_log.py            # record(): one row per query; best-effort, never pruned
 ├── tags.py                 # tags / memory_tags
 ├── access.py               # access_log; record (a real hit) vs touch (reactivation)
 ├── transactions.py         # atomic(): one BEGIN IMMEDIATE across components
@@ -1573,8 +1617,8 @@ src/gingugu/
 │
 │   # ── Involuntary recall (UserPromptSubmit hook) ────────────────
 ├── recall_gate.py          # Decision half: pure arithmetic, built around refusing
-├── recall_sweep.py         # I/O half: read-only cosine sweep + BM25 lexical matches
-├── prompt_hook.py          # gingugu hook prompt: the entry point
+├── recall_sweep.py         # I/O half: read-only cosine sweep + BM25 lexical matches; sqlite_uri()
+├── prompt_hook.py          # gingugu hook prompt: the entry point; log_prompt() is its one write
 │
 │   # ── Claims (checkable state assertions) ───────────────────────
 ├── claims.py               # Extracts repo-qualified PR/MR refs from prose
@@ -1601,6 +1645,7 @@ src/gingugu/
     ├── forget.py           # The one destructive tool
     ├── hints.py            # Write-time similar + relation hints
     ├── recall.py           # recall / context
+    ├── context_merge.py    # Pure merge of per-namespace context loads: pins, then ranked tails
     ├── search.py           # search
     ├── stats.py            # memory_stats (single or multi-namespace)
     ├── scope.py            # Read scope + widen-on-empty for recall / search

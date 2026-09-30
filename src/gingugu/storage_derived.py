@@ -7,6 +7,10 @@ connection - ``tags``, ``access``, ``embedding_sync``, ``claim_sync`` - because
 ``MemoryStore`` is not the only writer of memory rows and an invariant locked
 inside that class is one ``memory_import`` has no way to honor.
 
+The query log is not a fifth satellite - it hangs off a question, not a memory
+row - but its ``log_query`` pass-through lives here too, so this one file also
+answers "what else does a retrieval touch?".
+
 What is left over is the pass-through surface callers actually hold, and this
 is it. Keeping it here means ``storage`` reads as the row's own CRUD, and the
 question "what else does writing a memory touch?" has one answer in one file.
