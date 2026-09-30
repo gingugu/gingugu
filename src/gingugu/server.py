@@ -86,6 +86,9 @@ Usage:
   gingugu hook prompt          Involuntary recall: reads a UserPromptSubmit
                                event on stdin and surfaces memories the prompt
                                woke. Wired by `gingugu init`; not run by hand.
+  gingugu hook tool            Tripwires: reads a PreToolUse event on stdin and
+                               stops a call that matches a memory's tripwire.
+                               Wired by `gingugu init`; not run by hand.
 
 Options:
   -h, --help                   Show this help and exit.
@@ -156,8 +159,12 @@ def main() -> None:
     if cmd == ["hook"]:
         # Runs on the user's keystroke via a Claude Code hook. Reads the event
         # payload on stdin; never raises, never blocks a prompt.
+        if sys.argv[2:3] == ["tool"]:
+            from .tool_hook import main as tool_hook_main
+
+            raise SystemExit(tool_hook_main())
         if sys.argv[2:3] != ["prompt"]:
-            print("gingugu hook: expected 'prompt'", file=sys.stderr)
+            print("gingugu hook: expected 'prompt' or 'tool'", file=sys.stderr)
             raise SystemExit(2)
         from .prompt_hook import main as hook_main
 
