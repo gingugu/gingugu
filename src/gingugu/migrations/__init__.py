@@ -50,6 +50,7 @@ from .schema import (
     _migration_011_proposals,
     _migration_013_chunks,
 )
+from .tripwires import _migration_016_tripwires
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,7 @@ MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
     (13, _migration_013_chunks),
     (14, _migration_014_provenance_about),
     (15, _migration_015_query_log),
+    (16, _migration_016_tripwires),
 ]
 
 # The version a fully-migrated DB lands on. Derived rather than written down so
