@@ -266,6 +266,17 @@
   code. That is fine, but it must be written down in the test itself, otherwise
   the next reader counts it among the guards and the suite looks stronger than
   it is. Say which ones bite and which ones describe.
+- **An access boundary is gated by a canary and a mutation sweep.** Scoped
+  serve tokens set the pattern (`tests/test_scoped_canary.py`): seed a hidden
+  namespace with a marker string, make it the worst case (here, also the
+  server's configured default), drive every tool at it, and require that the
+  marker, its ids and its name never appear in any response and that its rows
+  are byte-identical afterwards - a write or a touch that never surfaced still
+  fails. Then disable each chokepoint in turn and watch the suite go red. A
+  layer that is defence in depth behind another is invisible end to end, so it
+  gets its own unit test (`tests/test_grants.py`), or the sweep reports it as
+  unguarded. A new tool or a new raw query over `memories`, `relations` or
+  `namespaces` joins the canary's call list in the same PR.
 
 ## Docs in lockstep
 
