@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import stat
 import sys
@@ -133,3 +134,11 @@ def test_loose_persisted_token_is_tightened(tmp_path):
     path.chmod(0o644)
     assert _resolve_token(None, path) == "old-token"
     assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+
+
+def test_generated_token_is_never_logged(tmp_path, caplog):
+    path = tmp_path / "serve_token"
+    with caplog.at_level(logging.DEBUG, logger="gingugu.serve"):
+        token = _resolve_token(None, path)
+    assert token not in caplog.text
+    assert str(path) in caplog.text

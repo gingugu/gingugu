@@ -343,8 +343,8 @@ gingugu serve   # streamable HTTP on http://127.0.0.1:8765/mcp
 ```
 
 Every request needs a Bearer token. Set `MEMORY_SERVE_TOKEN` to pin one, or let
-the server generate and persist it to `<db-dir>/serve_token` (printed on first
-start, reused after). Set `MEMORY_SERVE_HOST=0.0.0.0` to accept remote
+the server generate and persist it to `<db-dir>/serve_token` (`0600`, reused
+after; the log shows the path, never the token). Set `MEMORY_SERVE_HOST=0.0.0.0` to accept remote
 connections, and put it behind HTTPS in production — a Bearer token over plain
 HTTP is sniffable. Point a client at it with:
 
@@ -770,7 +770,7 @@ Environment variables (all optional):
 | `MEMORY_CREDENTIALS_ENABLED` | `true` | Expose the `credential_*` vault tools. Set `false` to run an instance without a secret vault (e.g. a shared/central server) |
 | `MEMORY_SERVE_HOST` | `127.0.0.1` | Bind host for `gingugu serve` (set `0.0.0.0` to accept remote connections) |
 | `MEMORY_SERVE_PORT` | `8765` | Bind port for `gingugu serve` |
-| `MEMORY_SERVE_TOKEN` | *(unset)* | The owner's Bearer token for `gingugu serve` (full access). If unset, a token is read from `<db-dir>/serve_token`, or generated, saved `0600`, and printed. Other clients get scoped tokens from `gingugu token add` |
+| `MEMORY_SERVE_TOKEN` | *(unset)* | The owner's Bearer token for `gingugu serve` (full access). If unset, a token is read from `<db-dir>/serve_token`, or generated and saved `0600` (its path is logged, never the token). Other clients get scoped tokens from `gingugu token add` |
 | `MEMORY_DREAM_IDLE_MINUTES` | `20` | How long the brain must go untouched before `gingugu dream --if-idle` will run. Also the threshold that cancels a run in progress when you come back |
 | `MEMORY_LOG_LEVEL` | `INFO` | Logging verbosity (logs go to **stderr** — stdout is the MCP transport) |
 | `MEMORY_DEBUG` | `false` | Convenience switch for `DEBUG` logging (`MEMORY_LOG_LEVEL` wins if also set) |
