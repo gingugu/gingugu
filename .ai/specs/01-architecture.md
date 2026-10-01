@@ -37,7 +37,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `hints`, `recall` (+ `context_merge`, the pure merge of per-namespace context
    loads: pins first, then ranked tails interleaved by rank), `search`, `stats`,
    `excerpt`, `relations` (+ `relation_ops`),
-   `consolidate`, `dream`, `admin`, `credentials`, `tripwires`, plus `summaries` (payload
+   `consolidate`, `dream`, `admin`, `credentials`, `tripwires`, `capability_view`, `fence`
+   (the scoped-token policy; see Scoped tokens), plus `summaries` (payload
    shapes: full summary, compact summary, the picker between them), `choices`
    (enum argument parsing shared by every write-surface field with a controlled
    vocabulary), `helpers` and `scope` (the read scope recall and search share:
@@ -45,7 +46,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
    namespace).
 3. **Core** - `storage`, `search`, `embeddings`, `embedding_text`, `chunking`,
    `context`, `relations`, `consolidation`, `decay`, `stats`, `namespaces`,
-   `portability`, `tripwire` (the decision half of the `PreToolUse` hook; see
+   `portability`, `capability`, `grants` (the per-call grant every chokepoint
+   consults), `serve_tokens`, `tripwire` (the decision half of the `PreToolUse` hook; see
    Key Decisions). `storage` owns the `memories` row only; the satellite tables
    it drags along have their own owners (`tags`, `access`, `embedding_sync`,
    `claim_sync`), reached through the `storage_derived.DerivedTables`

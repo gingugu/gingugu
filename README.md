@@ -139,7 +139,7 @@ fall back to BM25-only.
 <details>
 <summary><strong>Is this ready to use?</strong></summary>
 
-Usable today for local personal workflows. 1118 tests passing covering
+Usable today for local personal workflows. 1236 tests passing covering
 storage, search, migrations, concurrency, credentials, and edges.
 Hardened against adversarial input and write contention. WAL mode for
 concurrency. CI matrix across Python 3.11–3.13 on Linux/macOS/Windows.
@@ -254,7 +254,7 @@ uv run gingugu  # or pip install -e .
 
 </details>
 
-> **Usable today.** 21 MCP tools live. 1118 tests passing. Dogfooded daily in
+> **Usable today.** 21 MCP tools live. 1236 tests passing. Dogfooded daily in
 > Claude Code and Windsurf — this repo's own memories live in a Gingugu
 > database. Early and seeking broader real-world validation.
 

@@ -26,7 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an edge needs write on both ends. `memory_export`, `memory_import`,
   `memory_dream`, the `credential_*` tools and every `memory_namespaces` action
   except `list` are closed to scoped tokens. stdio, the CLI and the owner token
-  behave exactly as before. No schema migration and no tool signature change.
+  behave exactly as before. A grant of `*=write` is the owner token's access
+  and is refused for a scoped token. No schema migration and no tool signature
+  change.
 
 - **Capability pointers: memory can say a tool exists, not just how to do the
   job by hand.** A new `capability` memory type carries
@@ -426,6 +428,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   48 proposals. Schema migration 011.
 
 ### Fixed
+
+- **The owner token `gingugu serve` generates is `0600` from the moment the
+  file exists**, rather than tightened after the write, and a looser existing
+  `serve_token` is tightened on start. A non-ASCII `Authorization` header is a
+  `401`, not a server error.
 
 - **`memory_recall`'s capability lane stays inside the recall's scope when that
   scope resolves to no namespaces** (for example, a configured namespace that
