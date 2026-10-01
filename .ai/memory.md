@@ -7,8 +7,9 @@
 ## What This Repo Does
 
 - Exposes a **Model Context Protocol (MCP)** server — **stdio** by default, or
-  **streamable HTTP** via `gingugu serve` (Bearer-token auth) for a hosted/central
-  instance — that any MCP client (Claude Code, Claude Desktop, Cursor, Windsurf,
+  **streamable HTTP** via `gingugu serve` (Bearer-token auth: the owner token has full
+  access; per-client scoped tokens carry per-namespace read/write grants) for a
+  hosted/central instance — that any MCP client (Claude Code, Claude Desktop, Cursor, Windsurf,
   Cline, …) can use as long-term memory.
 - Stores memories in a single local **SQLite** database (FTS5 full-text +
   semantic embeddings) at the platform data dir — never inside the repo.
@@ -43,7 +44,10 @@
 | Module | Responsibility |
 |---|---|
 | `server.py` | MCP server entrypoint; `gingugu` (stdio) / `serve` / `promote` / `init` / `ui` / `dream` / `embed` / `hook` (`prompt` | `tool`) dispatch; tool registration; must never crash |
-| `serve.py` | `gingugu serve`: streamable-HTTP transport + Bearer-token auth + `/healthz` |
+| `serve.py` | `gingugu serve`: streamable-HTTP transport + `/healthz`. `BearerAuthMiddleware` resolves the `Authorization` header to a grant - the owner token (`MEMORY_SERVE_TOKEN` or the persisted `serve_token`) is `FULL`, a scoped token resolves through `TokenStore` - and attaches it as `request.state.grant`; no match is a 401 |
+| `serve_tokens.py` | Scoped serve tokens and the `gingugu token add NAME --ns a=write,b=read` / `list` / `revoke NAME` CLI. `TokenStore` keeps only SHA-256 hashes in `<db-dir>/serve_tokens.json` (0600, atomic replace); the plaintext is printed once. Re-reads the file when it changes on disk, so a revoke lands on the next request with no restart; an unreadable file resolves to no grant (fails closed) |
+| `grants.py` | `Grant` (namespace name -> `read` or `write`, `*` matches any), `FULL`, the `bind`/`current` contextvar, `AccessDenied`, and the store-side helpers (`scope_clause`, `readable_memories`, `require_memory_write`). `current()` is None on stdio, CLI, background passes, and the owner token - those run unfenced. Out-of-grant reads as not found, never forbidden |
+| `handlers/fence.py` | Tool-level half of the fence: `request_grant` reads the grant off the HTTP request the call arrived on (stdio = `FULL`; HTTP with no grant = refused), `refusal` closes whole-brain tools to scoped tokens (`memory_export`, `memory_import`, `memory_dream`, every `credential_*`, every `memory_namespaces` action except `list`) |
 | `webui.py` | `gingugu ui`: serves the built Memory Explorer bundle + live `/api/export` on one port (prod, no Node), or spawns the Vite dev server (`--dev`); assets ship in the wheel at `gingugu/_ui_dist` |
 | `promote.py` | `gingugu promote`: MCP client that promotes local "gold" to a central brain (filter + provenance + idempotent store) — not part of the server |
 | `bootstrap/` | `gingugu init`: writes packaged hook/skill/rules templates into a target repo (Claude Code hooks + the `/sink-the-ship` skill at `.claude/skills/sink-the-ship/SKILL.md` + non-destructive settings merge, or a `--client` rules file). Retires a legacy `.claude/commands/sink-the-ship.md` only when it is byte-identical to a shipped template - an edited one is kept and reported - not part of the server |
