@@ -109,7 +109,10 @@ def test_a_relative_path_with_no_repo_on_record_is_unknown_not_missing():
 
 
 def test_home_relative_paths_expand(tmp_path, monkeypatch):
+    # expanduser reads HOME on POSIX and USERPROFILE on Windows (3.8+ ignores
+    # HOME there), so point both at the fake home.
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     (tmp_path / "bin").mkdir()
     (tmp_path / "bin" / "tool").write_text("")
     out = capability.describe({"run": "r", "path": "~/bin/tool"}, base=None, local=True)
