@@ -63,6 +63,10 @@ class MemoryType(StrEnum):
     PREFERENCE = "preference"
     WORKFLOW = "workflow"
     CONTEXT = "context"
+    # A thing that exists and can be run, as distinct from a `workflow` that
+    # says how to do something by hand. Its structure lives in metadata; see
+    # `capability.py`.
+    CAPABILITY = "capability"
 
 
 class Confidence(StrEnum):
