@@ -9,6 +9,7 @@ export const TYPE_COLORS: Record<MemoryType, string> = {
   context: '#6b7280',
   preference: '#ec4899',
   workflow: '#22c55e',
+  capability: '#eab308',
 }
 
 export const CONFIDENCE_COLORS: Record<Confidence, string> = {

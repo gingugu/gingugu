@@ -48,6 +48,7 @@ export type MemoryType =
   | 'preference'
   | 'workflow'
   | 'context'
+  | 'capability'
 
 // Mirrors the backend Confidence enum (src/gingugu/models.py). `stale` is a
 // legacy value (no longer auto-assigned under the never-forget model) but is

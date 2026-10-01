@@ -11,17 +11,13 @@ from __future__ import annotations
 
 import logging
 
+from .. import capability
 from ..models import Confidence, MemoryType, Provenance
 from . import ServerContext
+from .capability_view import summary_with_capability, write_error
 from .choices import parse_choice, parse_clearable
-from .helpers import (
-    _check_pin_budget,
-    _coerce_metadata,
-    _err,
-    _split_csv,
-)
+from .helpers import _check_pin_budget, _coerce_metadata, _err, _split_csv
 from .hints import find_similar, suggest_relations
-from .summaries import _memory_summary
 
 logger = logging.getLogger(__name__)
 
@@ -48,12 +44,18 @@ def register(mcp, ctx: ServerContext) -> None:
         session-only notes.
 
         ``type`` must be one of: fact, decision, pattern, bug, architecture, preference,
-        workflow, context. ``confidence`` is one of: verified (confirmed true), inferred
+        workflow, context, capability. ``confidence`` is one of: verified (confirmed true), inferred
         (assumed, not yet confirmed), stale (outdated), deprecated (no longer valid) —
         defaults to "inferred". ``tags`` is comma-separated. ``namespace`` scopes the
         memory to a project or domain; omit to use the configured default namespace.
         ``source`` records what generated this memory (e.g. a file path or tool name).
         ``metadata`` is an optional free-form JSON string for extra structured data.
+
+        ``capability`` records that a thing EXISTS and how to run it, where a
+        ``workflow`` says how to do it by hand. It requires
+        ``metadata={"capability": {"run": "...", "path": "..."}}`` (``run``
+        required; a relative ``path`` resolves against the namespace's repo
+        path). Reads report whether ``path`` still ``exists``.
 
         ``provenance`` declares how you came to believe this: user-asserted (the
         user said so), measured (a command or test showed it), file-derived (read
@@ -120,6 +122,9 @@ def register(mcp, ctx: ServerContext) -> None:
                     "comma-separated lists are only supported by memory_context, "
                     "memory_recall, and memory_search"
                 )
+            coerced = _coerce_metadata(metadata)
+            if cap_error := capability.check(mem_type.value, coerced):
+                return _err(cap_error)
             ns_name = ctx.namespaces.resolve_name(namespace)
             ns = ctx.namespaces.get_or_create(ns_name)
             similar = (
@@ -134,7 +139,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 content=content,
                 confidence=conf,
                 source=source,
-                metadata=_coerce_metadata(metadata),
+                metadata=coerced,
                 tags=_split_csv(tags),
                 provenance=prov,
                 about=about,
@@ -153,7 +158,7 @@ def register(mcp, ctx: ServerContext) -> None:
             )
             response = {
                 "ok": True,
-                "memory": _memory_summary(mem),
+                "memory": summary_with_capability(ctx, mem),
                 "namespace": ns_name,
                 "similar_memories": similar,
                 "suggested_relations": relations,
@@ -196,6 +201,8 @@ def register(mcp, ctx: ServerContext) -> None:
         reference material saved as ``workflow`` picks up point-in-time review
         hints, because ``pattern``/``preference`` are the types exempt from them.
         Retyping does not re-embed: the vector derives from title + about + content.
+        Capability validation applies to the FINAL state, so retyping to or from
+        ``capability`` must bring or clear the ``metadata.capability`` block.
 
         ``provenance`` and ``about`` declare how the claim was reached and what it
         is for (see memory_store); pass ``""`` to clear either. Neither touches
@@ -244,6 +251,10 @@ def register(mcp, ctx: ServerContext) -> None:
                 prov = parse_clearable(Provenance, provenance, "provenance")
             except ValueError as e:
                 return _err(str(e))
+            coerced = _coerce_metadata(metadata)
+            existing = ctx.store.get(memory_id, record_access=False)
+            if existing and (cap_error := write_error(existing, mem_type, metadata, coerced)):
+                return _err(cap_error)
             if pinned:
                 refused = _check_pin_budget(ctx, memory_id)
                 if refused is not None:
@@ -254,7 +265,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 content=content,
                 type=mem_type,
                 confidence=conf,
-                metadata=_coerce_metadata(metadata),
+                metadata=coerced,
                 pinned=pinned,
                 provenance=prov,
                 about=about,
@@ -264,7 +275,7 @@ def register(mcp, ctx: ServerContext) -> None:
             if tags is not None:
                 ctx.store.set_tags(memory_id, _split_csv(tags))
             mem.tags = ctx.store.get_tags(memory_id)
-            response: dict = {"ok": True, "memory": _memory_summary(mem)}
+            response: dict = {"ok": True, "memory": summary_with_capability(ctx, mem)}
             if resolve_claims is not None:
                 response["resolved_claims"] = ctx.store.resolve_claims(
                     memory_id, _split_csv(resolve_claims)

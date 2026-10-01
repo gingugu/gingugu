@@ -192,7 +192,29 @@ memory_recall(query, namespace | "ns1,ns2,…", filters)
     (`*` when unscoped or widened), the MCP session id. A zero-hit recall is
     still a row. Best-effort: a failure logs a warning and the recall returns
     normally
+  → capability lane (skipped when the caller passed `type`): a second,
+    capability-only pass - cosine of the raw query against every
+    non-deprecated, non-superseded `capability` memory in the same scope the
+    main search ran in, kept at ≥ 0.68 (`capability.LANE_BAR`), best 2, never
+    an id already in the response. Returned as `capabilities` (compact shape +
+    `similarity` + `capability` + `namespace`), absent when empty. Not credited
+    as an access, not a spreading-activation seed, not in the query_log row.
+    No embedder, no lane: there is no calibrated lexical floor to fall back to
 ```
+
+A `capability` memory records that a thing exists and how to run it, as distinct
+from a `workflow` that says how to do something by hand. Its structure lives in
+`metadata.capability` = `{run, path?}`, validated on store and on the final state
+of an update: the type and the block come together or not at all. Every read
+shape (full and compact, every surface) carries `capability: {run, path?,
+exists?}`. `exists` is a plain filesystem check made at read time - a relative
+`path` resolves against the namespace's repo `path`, and with none on record it
+is `null`, as it always is under `gingugu serve`, where the server's disk is not
+the caller's. The separate lane exists because a pointer competes in the main
+ranking against the very procedure memories it replaces, which are many, long
+and frequently read. Its floor was measured on recall queries, not borrowed from
+the prompt gate: short queries score lower against the same memory than whole
+prompts do, and the gate's 0.78 missed most relevant queries.
 
 A cohort member longer than the encoder's fixed token window carries pieces in
 `memory_chunks` (migration 013): window-sized slices cut on the encoder's own
