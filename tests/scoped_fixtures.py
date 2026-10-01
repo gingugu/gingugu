@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from gingugu.grants import READ, WRITE, Grant
+from gingugu.grants import FULL, READ, WRITE, Grant
 from tests.test_embeddings import FakeEmbedder
 
 MARKER = "ZEBRAFISH-CANARY-7731"
@@ -103,11 +103,20 @@ async def brain(tmp_path, monkeypatch) -> Brain:
 
     server = build_server(transport="http")
     b = Brain(server=server, db_path=str(db))
+    with monkeypatch.context() as seeding:
+        # An in-process call carries no HTTP request, so under the http
+        # transport it is refused; seed as the owner, then drop the override.
+        seeding.setattr("gingugu.handlers.fence.request_grant", lambda _t: FULL)
+        await _seed(b)
+    return b
+
+
+async def _seed(b: Brain) -> None:
+    server = b.server
     # Hidden memories share the visible ones' words - and FakeEmbedder's
     # "alpha" axis - so every lexical and semantic path would rank them.
     shared = "deploy pipeline rollout checklist"
     common = {"type": "pattern", "confidence": "verified", "tags": "rollout"}
-    # Seeded before any grant is patched in: an in-process call is unfenced.
     b.ids["A1"] = await _store(server, "alpha", f"alpha {shared}", f"alpha {shared}", **common)
     b.ids["A2"] = await _store(server, "alpha", "alpha second note", f"second {shared}")
     b.ids["G1"] = await _store(server, "gamma", f"gamma {shared}", f"gamma {shared}", **common)
@@ -139,7 +148,6 @@ async def brain(tmp_path, monkeypatch) -> Brain:
     )
     assert out["ok"], out
     b.tripwire_id = out["tripwire"]["id"]
-    return b
 
 
 def scope_to(monkeypatch, grant: Grant = GRANT) -> None:

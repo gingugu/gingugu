@@ -21,6 +21,7 @@ from starlette.responses import JSONResponse, PlainTextResponse, Response
 
 from .config import load_config
 from .grants import FULL, Grant
+from .secret_file import write_private
 from .serve_tokens import TokenStore, default_path
 from .server import build_server
 
@@ -44,11 +45,11 @@ environment variable, since the process is meant to run under a supervisor
   MEMORY_SERVE_TOKEN           The owner's Bearer token, full access
                                 (default: a token persisted next to the DB,
                                 generated on first run if none exists)
+  MEMORY_LOG_LEVEL             Log verbosity (default: INFO)
+  MEMORY_CREDENTIALS_ENABLED   Enable the credential_* tools (default: true)
 
 Scoped tokens, each limited to named namespaces read-only or read-write, are
 managed with `gingugu token add|list|revoke` and take effect without a restart.
-  MEMORY_LOG_LEVEL             Log verbosity (default: INFO)
-  MEMORY_CREDENTIALS_ENABLED   Enable the credential_* tools (default: true)
 """
 
 
@@ -72,7 +73,10 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         self._tokens = tokens
 
     def _grant_for(self, header: str) -> Grant | None:
-        if secrets.compare_digest(header, self._expected):
+        # Bytes, not str: compare_digest raises on a non-ASCII str, and a
+        # header is attacker-chosen.
+        raw = header.encode("utf-8", "surrogateescape")
+        if secrets.compare_digest(raw, self._expected.encode("utf-8")):
             return FULL
         scheme, _, presented = header.partition(" ")
         if self._tokens is None or scheme != "Bearer" or not presented:
@@ -102,15 +106,16 @@ def _resolve_token(configured: str | None, token_path: Path) -> str:
     if token_path.exists():
         existing = token_path.read_text(encoding="utf-8").strip()
         if existing:
+            try:  # an older or hand-made file may be looser than owner-only
+                token_path.chmod(0o600)
+            except OSError:  # pragma: no cover - platform-dependent (e.g. Windows)
+                pass
             logger.info("Using persisted serve token from %s", token_path)
             return existing
     token = secrets.token_urlsafe(32)
     token_path.parent.mkdir(parents=True, exist_ok=True)
-    token_path.write_text(token, encoding="utf-8")
-    try:
-        token_path.chmod(0o600)
-    except OSError:  # pragma: no cover - platform-dependent (e.g. Windows)
-        pass
+    # 0600 from the moment the file exists - never written first and narrowed after.
+    write_private(token_path, token)
     logger.warning(
         "No serve token found — generated one and saved it to %s:\n" "    Authorization: Bearer %s",
         token_path,

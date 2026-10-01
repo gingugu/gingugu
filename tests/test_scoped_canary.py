@@ -156,6 +156,7 @@ async def test_hidden_namespace_never_leaks_or_changes(brain, monkeypatch):
         ("memory_excerpt", {"memory_id": "B1"}),
         ("memory_forget", {"memory_id": "B1"}),
         ("memory_update", {"memory_id": "B1", "content": "x"}),
+        ("memory_tripwire", {"action": "add", "memory_id": "B1", "tool": "Bash", "pattern": "x"}),
     ],
 )
 async def test_hidden_id_reads_exactly_like_an_unknown_one(brain, monkeypatch, tool, args):

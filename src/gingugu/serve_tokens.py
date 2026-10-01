@@ -141,7 +141,11 @@ class TokenStore:
             raise ValueError("token name must not be empty")
         if not namespaces:
             raise ValueError("a token needs at least one namespace grant")
-        Grant(name, namespaces)  # validates levels and names
+        if Grant(name, namespaces).is_full:  # also validates levels and names
+            raise ValueError(
+                "'*=write' is full access - that is the owner token "
+                "(MEMORY_SERVE_TOKEN), not a scoped one"
+            )
         entries = self._load()  # raises on a corrupt file; never overwrite it
         if any(e.get("name") == name for e in entries):
             raise ValueError(f"a token named {name!r} already exists")
@@ -195,9 +199,11 @@ class TokenStore:
         if match is None:
             return None
         try:
-            return Grant(str(match.get("name", "")), dict(match.get("namespaces") or {}))
+            grant = Grant(str(match.get("name", "")), dict(match.get("namespaces") or {}))
         except (ValueError, TypeError):
             return None
+        # A scoped token never carries owner access, even if the file says so.
+        return None if grant.is_full else grant
 
 
 # --- CLI ---------------------------------------------------------------------

@@ -109,3 +109,20 @@ def test_capability_lane_only_offers_readable_pointers(brain, conn):
 def test_capability_lane_empty_scope_is_empty_not_everywhere(brain, conn):
     emb = FakeEmbedder()
     assert lane(conn, emb, "alpha fetcher", namespace_id=[], exclude=set(), bar=0.0) == []
+
+
+def test_edge_degrees_count_only_visible_edges(brain, conn):
+    rel = RelationManager(conn)
+    a1 = brain.ids["A1"]
+    row = rel.list_edges(memory_id=a1)["edges"]
+    assert {e["source_degree"] for e in row if e["source_id"] == a1} == {2}  # A2 + hidden B1
+    with grants.bind(GRANT, conn):
+        fenced = rel.list_edges(memory_id=a1)["edges"]
+    assert len(fenced) == 1
+    assert fenced[0]["source_degree"] == 1
+
+
+def test_get_relations_of_a_hidden_memory_is_empty(brain, conn):
+    rel = RelationManager(conn)
+    with grants.bind(GRANT, conn):
+        assert rel.get_relations(brain.ids["B1"]) == []

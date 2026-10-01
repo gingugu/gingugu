@@ -181,7 +181,9 @@ def add_tripwire(
     problem = validate_patterns(tool_pattern, input_pattern)
     if problem:
         raise ValueError(problem)
-    if conn.execute("SELECT 1 FROM memories WHERE id = ?", (memory_id,)).fetchone() is None:
+    exists = conn.execute("SELECT 1 FROM memories WHERE id = ?", (memory_id,)).fetchone()
+    # A memory a scoped token cannot see fails exactly like an unknown one.
+    if exists is None or not grants.readable_memories(conn, [memory_id]):
         raise ValueError(f"memory {memory_id!r} not found")
     grants.require_memory_write(conn, memory_id)
     row = {
