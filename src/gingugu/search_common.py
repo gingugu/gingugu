@@ -9,6 +9,7 @@ plain table scans.
 
 from __future__ import annotations
 
+from . import grants
 from .claim_queries import claim_filter
 from .graph_stats import orphan_filter
 from .models import CONFIDENCE_RANK, Confidence, memory_columns_sql, normalize_tag
@@ -78,6 +79,12 @@ def build_filters(
         clause, ns_params = namespace_filter(f"{alias}.namespace_id", namespace_id)
         where.append(clause)
         params.extend(ns_params)
+    # A scoped token's fence, ANDed on top of whatever was asked for: an
+    # omitted namespace ("everything") means everything the grant can read.
+    fence, fence_params = grants.scope_clause(f"{alias}.namespace_id")
+    if fence is not None:
+        where.append(fence)
+        params.extend(fence_params)
     if type is not None:
         where.append(f"{alias}.type = ?")
         params.append(type)

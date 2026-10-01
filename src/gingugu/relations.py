@@ -15,6 +15,7 @@ import logging
 import sqlite3
 import uuid
 
+from . import grants
 from .models import CONFIDENCE_RANK, RELATION_WEIGHT, RelationType, utcnow_iso
 from .relation_repair import RelationRepairMixin
 from .transactions import TransactionParticipant
@@ -34,10 +35,12 @@ class RelationManager(RelationRepairMixin, TransactionParticipant):
         self._conn = conn
 
     def _exists(self, memory_id: str) -> bool:
-        return (
+        """True if the memory exists and this call's grant can see it."""
+        found = (
             self._conn.execute("SELECT 1 FROM memories WHERE id = ?", (memory_id,)).fetchone()
             is not None
         )
+        return found and bool(grants.readable_memories(self._conn, [memory_id]))
 
     def relate(
         self,
@@ -61,6 +64,9 @@ class RelationManager(RelationRepairMixin, TransactionParticipant):
             raise ValueError(f"source memory {source_id!r} not found")
         if not self._exists(target_id):
             raise ValueError(f"target memory {target_id!r} not found")
+        # An edge changes what both endpoints recall, so it needs write on both.
+        grants.require_memory_write(self._conn, source_id)
+        grants.require_memory_write(self._conn, target_id)
 
         relation_id = str(uuid.uuid4())
         now = utcnow_iso()
@@ -86,8 +92,12 @@ class RelationManager(RelationRepairMixin, TransactionParticipant):
             "ORDER BY created_at",
             (memory_id, memory_id),
         ).fetchall()
+        others = {r["target_id"] if r["source_id"] == memory_id else r["source_id"] for r in rows}
+        visible = set(grants.readable_memories(self._conn, others))
         out: list[dict] = []
         for r in rows:
+            if (r["target_id"] if r["source_id"] == memory_id else r["source_id"]) not in visible:
+                continue
             outgoing = r["source_id"] == memory_id
             out.append(
                 {
@@ -130,6 +140,8 @@ class RelationManager(RelationRepairMixin, TransactionParticipant):
         """
         seen = set(seed_ids)
         out: list[str] = []
+        fence, fence_params = grants.scope_clause("m.namespace_id")
+        fence_sql = f"AND {fence} " if fence else ""
         for sid in seed_ids:
             if len(out) >= total:
                 break
@@ -145,8 +157,8 @@ class RelationManager(RelationRepairMixin, TransactionParticipant):
                 "FROM relations r "
                 "JOIN memories m ON m.id = "
                 "  CASE WHEN r.source_id = ? THEN r.target_id ELSE r.source_id END "
-                "WHERE r.source_id = ? OR r.target_id = ?",
-                (sid, sid, sid),
+                f"WHERE (r.source_id = ? OR r.target_id = ?) {fence_sql}",
+                (sid, sid, sid, *fence_params),
             ).fetchall()
             # One entry per NEIGHBOUR, not per edge. Two memories may be joined
             # by several edges (different types, or one in each direction), and
@@ -208,6 +220,12 @@ class RelationManager(RelationRepairMixin, TransactionParticipant):
         if memory_id:
             where.append("(r.source_id = ? OR r.target_id = ?)")
             params += [memory_id, memory_id]
+        # Fenced, an edge is listed only when the grant can read BOTH ends.
+        for alias in ("sm", "tm"):
+            fence, fence_params = grants.scope_clause(f"{alias}.namespace_id")
+            if fence is not None:
+                where.append(fence)
+                params += fence_params
         clause = f"WHERE {' AND '.join(where)}" if where else ""
 
         joins = (

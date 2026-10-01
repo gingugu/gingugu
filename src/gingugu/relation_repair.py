@@ -19,6 +19,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable
 
+from . import grants
 from .models import RelationType
 
 
@@ -31,9 +32,15 @@ class RelationRepairMixin:
     # an enclosing ``atomic()`` block instead of committing outright.
     _commit: Callable[[], None]
 
+    def _guard_edge(self, source_id: str, target_id: str) -> None:
+        """A repair touches both endpoints' recall, so it needs write on both."""
+        grants.require_memory_write(self._conn, source_id)
+        grants.require_memory_write(self._conn, target_id)
+
     def delete_relation(
         self, *, source_id: str, target_id: str, relation_type: RelationType
     ) -> bool:
+        self._guard_edge(source_id, target_id)
         cur = self._conn.execute(
             "DELETE FROM relations WHERE source_id = ? AND target_id = ? AND relation_type = ?",
             (source_id, target_id, relation_type.value),
@@ -43,6 +50,7 @@ class RelationRepairMixin:
 
     def delete_edges(self, *, source_id: str, target_id: str) -> list[str]:
         """Delete every edge in this direction, whatever its type. Returns the types removed."""
+        self._guard_edge(source_id, target_id)
         types = [
             row["relation_type"]
             for row in self._conn.execute(
@@ -81,6 +89,7 @@ class RelationRepairMixin:
         * ``unchanged`` — ``old_type`` and ``new_type`` are the same.
         * ``not_found`` — no such edge to repair.
         """
+        self._guard_edge(source_id, target_id)
         if old_type == new_type:
             return "unchanged" if self._edge_exists(source_id, target_id, old_type) else "not_found"
         if not self._edge_exists(source_id, target_id, old_type):
@@ -133,6 +142,7 @@ class RelationRepairMixin:
           by one; nothing is invented to keep the arithmetic tidy.
         * ``not_found`` — no such edge to repair.
         """
+        self._guard_edge(source_id, target_id)
         if not self._edge_exists(source_id, target_id, relation_type):
             return "not_found"
 

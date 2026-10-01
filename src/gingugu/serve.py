@@ -20,6 +20,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, Response
 
 from .config import load_config
+from .grants import FULL, Grant
+from .serve_tokens import TokenStore, default_path
 from .server import build_server
 
 logger = logging.getLogger(__name__)
@@ -39,31 +41,51 @@ environment variable, since the process is meant to run under a supervisor
 
   MEMORY_SERVE_HOST            Host to bind (default: 127.0.0.1)
   MEMORY_SERVE_PORT            Port to bind (default: 8765)
-  MEMORY_SERVE_TOKEN           Bearer token required on every request
+  MEMORY_SERVE_TOKEN           The owner's Bearer token, full access
                                 (default: a token persisted next to the DB,
                                 generated on first run if none exists)
+
+Scoped tokens, each limited to named namespaces read-only or read-write, are
+managed with `gingugu token add|list|revoke` and take effect without a restart.
   MEMORY_LOG_LEVEL             Log verbosity (default: INFO)
   MEMORY_CREDENTIALS_ENABLED   Enable the credential_* tools (default: true)
 """
 
 
 class BearerAuthMiddleware(BaseHTTPMiddleware):
-    """Reject any request lacking a matching ``Authorization: Bearer`` header.
+    """Reject any request lacking a known ``Authorization: Bearer`` token.
 
-    The health-check path is exempt so load-balancer probes don't need the
-    token. Comparison is constant-time to avoid leaking the token by timing.
+    Two kinds of token are accepted. The server token (``MEMORY_SERVE_TOKEN``
+    or the persisted ``serve_token``) is the owner's, with full access. A
+    scoped token from ``tokens`` (``gingugu token add``) carries its own grant.
+    The matching grant is attached as ``request.state.grant``; the MCP SDK
+    hands each tool call its own HTTP request, so the tool wrapper fences the
+    call to exactly the token that sent it (see ``handlers.fence``).
+
+    The health-check path is exempt so load-balancer probes don't need a
+    token. Comparison is constant-time to avoid leaking a token by timing.
     """
 
-    def __init__(self, app, token: str) -> None:
+    def __init__(self, app, token: str, tokens: TokenStore | None = None) -> None:
         super().__init__(app)
         self._expected = f"Bearer {token}"
+        self._tokens = tokens
+
+    def _grant_for(self, header: str) -> Grant | None:
+        if secrets.compare_digest(header, self._expected):
+            return FULL
+        scheme, _, presented = header.partition(" ")
+        if self._tokens is None or scheme != "Bearer" or not presented:
+            return None
+        return self._tokens.resolve(presented)
 
     async def dispatch(self, request: Request, call_next) -> Response:
         if request.url.path == _HEALTH_PATH:
             return PlainTextResponse("ok")
-        provided = request.headers.get("authorization", "")
-        if not secrets.compare_digest(provided, self._expected):
+        grant = self._grant_for(request.headers.get("authorization", ""))
+        if grant is None:
             return JSONResponse({"error": "unauthorized"}, status_code=401)
+        request.state.grant = grant
         return await call_next(request)
 
 
@@ -107,7 +129,7 @@ def serve() -> None:
     token = _resolve_token(config.serve_token, token_path)
 
     app = mcp.streamable_http_app()
-    app.add_middleware(BearerAuthMiddleware, token=token)
+    app.add_middleware(BearerAuthMiddleware, token=token, tokens=TokenStore(default_path()))
 
     logger.info(
         "gingugu serve -> http://%s:%d/mcp (credentials_enabled=%s)",

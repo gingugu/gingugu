@@ -1,0 +1,60 @@
+"""The tool-level half of scoped serve tokens: who is calling, and may they.
+
+``request_grant`` finds the grant `gingugu serve`'s middleware attached to
+the HTTP request this tool call arrived on. ``refusal`` is the coarse policy
+applied before a handler runs: tools whose blast radius is the whole brain
+are closed to any scoped token outright. Everything finer - which namespace,
+which memory - is enforced by the store's chokepoints (see ``grants``),
+because only they see what a call actually touches.
+"""
+
+from __future__ import annotations
+
+from ..grants import FULL, Grant
+
+# Whole-brain tools: export and import move every namespace at once, the dream
+# pass and its queue span the graph, and the credential vault has no namespace
+# at all. A scoped token gets none of them (the secrets broker is its own item).
+_CLOSED_TO_SCOPED = frozenset(
+    {
+        "memory_export",
+        "memory_import",
+        "memory_dream",
+        "credential_store",
+        "credential_get",
+        "credential_list",
+        "credential_delete",
+    }
+)
+
+
+def request_grant(transport: str) -> Grant | None:
+    """The grant for the tool call in progress, or None to refuse it.
+
+    stdio has no network caller, so it is the full grant. A call with no MCP
+    request context at all is an in-process ``call_tool`` - also no network
+    caller. Over HTTP, the grant is whatever the auth middleware attached; a
+    request that somehow arrives without one is refused, never waved through.
+    """
+    if transport == "stdio":
+        return FULL
+    from mcp.server.lowlevel.server import request_ctx
+
+    try:
+        request = request_ctx.get().request
+    except LookupError:
+        return FULL
+    state = getattr(request, "state", None)
+    grant = getattr(state, "grant", None) if state is not None else None
+    return grant if isinstance(grant, Grant) else None
+
+
+def refusal(tool: str, grant: Grant, kwargs: dict) -> str | None:
+    """Why a scoped token may not call ``tool`` at all, or None."""
+    if grant.is_full:
+        return None
+    if tool in _CLOSED_TO_SCOPED:
+        return f"{tool} is not available to a scoped token"
+    if tool == "memory_namespaces" and kwargs.get("action", "list") != "list":
+        return "memory_namespaces only allows action 'list' for a scoped token"
+    return None

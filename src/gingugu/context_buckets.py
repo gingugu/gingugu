@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import sqlite3
 
+from . import grants
 from .models import Memory, memory_columns_sql
 
 # Hard ceiling on pinned memories loaded per namespace. Pins bypass ranking
@@ -95,12 +96,17 @@ def pinned(conn: sqlite3.Connection, namespace_id: str, limit: int) -> list[Memo
 def cross_namespace_patterns(
     conn: sqlite3.Connection, exclude_ns: str, limit: int = 3
 ) -> list[Memory]:
-    """Verified patterns/preferences from *other* namespaces, by access count."""
+    """Verified patterns/preferences from *other* namespaces, by access count.
+
+    Under a scoped token, "other" means other namespaces the grant can read.
+    """
+    fence, fence_params = grants.scope_clause("namespace_id")
+    fence_sql = f"AND {fence} " if fence else ""
     rows = conn.execute(
         f"SELECT {_COLUMNS} FROM memories "
         "WHERE type IN ('pattern', 'preference') AND confidence = 'verified' "
-        "AND namespace_id != ? "
+        f"AND namespace_id != ? {fence_sql}"
         "ORDER BY access_count DESC LIMIT ?",
-        (exclude_ns, limit),
+        (exclude_ns, *fence_params, limit),
     ).fetchall()
     return [Memory(**dict(r)) for r in rows]
