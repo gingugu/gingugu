@@ -18,6 +18,7 @@ from .. import context as context_mod
 from .. import search as search_mod
 from ..models import Confidence, Memory, MemoryType
 from . import ServerContext
+from .capability_view import lane_entries, stamp_capabilities
 from .context_merge import merge_namespace_context
 from .helpers import (
     _attach_review_hints,
@@ -78,6 +79,12 @@ def register(mcp, ctx: ServerContext) -> None:
         included). ``include_related`` also surfaces memories directly linked to the top
         hits via spreading activation: useful for pulling in a related cluster.
 
+        Unless ``type`` is given, the response may carry a ``capabilities``
+        section: a separate, capability-only semantic pass (up to 2) so a pointer
+        is not buried under the procedure memories it replaces. It never repeats
+        a main hit, and is absent when nothing clears the similarity floor. Each
+        entry is compact, with ``similarity`` and the ``capability`` block.
+
         ``explain=True`` adds a ``score_breakdown`` to each hit: the weighted
         ``relevance``/``freshness``/``access``/``confidence`` terms that ``score``
         is the sum of. Use it to answer "why did this rank here?": a result
@@ -132,7 +139,20 @@ def register(mcp, ctx: ServerContext) -> None:
             # Every read surface stamps a readable per-memory namespace
             # (matches memory_context).
             _stamp_namespace_names(ctx, summaries)
+            stamp_capabilities(ctx, summaries)
             payload: dict = {"ok": True, "count": len(summaries), "memories": summaries}
+            if type is None:
+                lane_scope = None if everywhere else scope.ns_ids
+                if lane_scope is not None and len(lane_scope) == 1:
+                    lane_scope = lane_scope[0]
+                lane = lane_entries(
+                    ctx,
+                    query,
+                    namespace_id=lane_scope,
+                    exclude={s["id"] for s in summaries},
+                )
+                if lane:
+                    payload["capabilities"] = lane
             if scope.is_all or widened_from is not None:
                 payload["scope"] = "all"
                 if widened_from is not None:
@@ -247,6 +267,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 summary = summarize(mem)
                 summary["namespace"] = ns_name_by_id.get(mem.namespace_id, mem.namespace_id)
                 summaries.append(_attach_review_hints(summary, mem))
+            stamp_capabilities(ctx, summaries)
 
             payload: dict = {"ok": True, "count": len(results), "memories": summaries}
             if len(ns_names) == 1:

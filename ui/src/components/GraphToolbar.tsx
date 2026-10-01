@@ -4,7 +4,7 @@ import { Memory, MemoryNamespace, MemoryType, GraphFilters, GraphLayoutSettings 
 import { TYPE_COLORS } from '../lib/colors'
 
 const ALL_TYPES: MemoryType[] = [
-  'fact', 'decision', 'pattern', 'bug', 'architecture', 'preference', 'workflow', 'context',
+  'fact', 'decision', 'pattern', 'bug', 'architecture', 'preference', 'workflow', 'context', 'capability',
 ]
 const ALL_CONFIDENCES = ['verified', 'inferred', 'stale', 'deprecated'] as const
 
