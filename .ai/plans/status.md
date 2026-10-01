@@ -1,10 +1,36 @@
 # Project Status
 
-_Last updated: 2026-09-30_
+_Last updated: 2026-10-01_
 
 ## In Flight
 
-Nothing in flight.
+**Board #1 (capability pointer) on `feature/capability-pointer`.** Memory can
+now say a tool exists, not just how to do the job by hand.
+
+- **`capability` memory type, no migration.** `{run, path?}` lives under a
+  reserved `metadata.capability` key. `capability.check` holds the
+  equivalence on the final state of every store/update: the type and the
+  block come together or not at all, and unknown fields are refused so a typo
+  cannot hide. Columns were rejected (migration plus FTS rebuild for no
+  retrieval gain); a separate tool like `memory_tripwire` was rejected (a
+  capability is 1:1 with its memory, and a two-call write goes unused).
+- **Every read shows `capability: {run, path, exists}`**, compact too, since
+  the run line is the point. `exists` is a read-time filesystem check:
+  relative paths resolve against the namespace's repo `path`, and it is
+  `null` when there is none on record (true today for most namespaces,
+  `gingugu` included) and always `null` under `gingugu serve`.
+- **A `capabilities` lane on `memory_recall`**: a capability-only cosine pass,
+  best 2, never repeating a main hit, not credited as an access. Main ranking
+  untouched. **The floor is 0.68, measured, not the prompt gate's 0.78**:
+  three sample capabilities against ten written queries and every query in
+  the live `query_log`. Relevant queries scored 0.647-0.852 (mostly
+  0.69-0.75), so 0.78 missed 7 of 10; unrelated logged queries topped out at
+  0.667. The three highest "unrelated" hits (0.69-0.79) were real logged
+  queries asking how to read a Jira ticket - the rebuild this item was boarded
+  for. Small sample; re-measure once real capability memories exist.
+- **The prompt hook treats `capability` as actionable**, and the managed
+  rules block teaches the write habit (store a reusable script as a
+  capability; check `capabilities` before writing one).
 
 ## Recently Completed
 
@@ -703,7 +729,7 @@ order.
 
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **Capability pointer** | 5 | The cheaper half of aboutness; builds straight on the shipped `about` field |
+| 1 | **Capability pointer** - IN FLIGHT | 5 | The cheaper half of aboutness; builds straight on the shipped `about` field. See In Flight |
 | 2 | **Scoped serve tokens** | 12 | The foundation for everything that runs over the network |
 | 3 | **One central brain, several clients** | 11 | Mostly built; the rest is physical setup, so it can run in parallel whenever that happens |
 | 4 | **Warm minions** | 13 | Needs 2 |

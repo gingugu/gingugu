@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Capability pointers: memory can say a tool exists, not just how to do the
+  job by hand.** A new `capability` memory type carries
+  `metadata={"capability": {"run": "...", "path": "..."}}`: `run` (how to
+  invoke it) is required, `path` (where it lives) is optional. `memory_store` and
+  `memory_update` validate the final state: a `capability` needs a valid block,
+  the key is refused on every other type, and unknown fields are refused. Every
+  read (full and compact, on every surface) shows `capability: {run, path,
+  exists}`, where `exists` checks the path on disk at read time. Relative paths
+  resolve against the namespace's repo path, and `exists` is `null` when that is
+  unknown or under `gingugu serve`. `memory_recall` gains a `capabilities`
+  section from a second, capability-only semantic pass (up to 2, cosine floor
+  0.68, never repeating a main hit), so a pointer is not buried under the
+  procedure notes it replaces. The involuntary-recall hook treats capabilities
+  as actionable. No schema migration.
+
+- **The memory protocol teaches the habit.** `gingugu init`'s managed rules
+  block now says to store a reusable script as a `capability`, and to check a
+  recall's `capabilities` before writing one.
+
 - **Tripwires: involuntary recall at the action.** A new `memory_tripwire`
   tool (`add` / `list` / `remove` / `test`) binds a memory to a tool call with
   two regexes: one full-matched against the tool name, one searched in the
