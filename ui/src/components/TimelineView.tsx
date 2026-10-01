@@ -13,7 +13,7 @@ interface Props {
 }
 
 const ALL_TYPES: MemoryType[] = [
-  'fact', 'decision', 'pattern', 'bug', 'architecture', 'preference', 'workflow', 'context',
+  'fact', 'decision', 'pattern', 'bug', 'architecture', 'preference', 'workflow', 'context', 'capability',
 ]
 
 function bucketKey(iso: string, gran: Granularity): string {

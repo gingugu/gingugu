@@ -1,10 +1,40 @@
 # Project Status
 
-_Last updated: 2026-09-30_
+_Last updated: 2026-10-01_
 
 ## In Flight
 
-**Board #1 (tripwires): IN FLIGHT on `feature/tripwires`.** Involuntary recall
+**Board #1 (capability pointer) on `feature/capability-pointer`.** Memory can
+now say a tool exists, not just how to do the job by hand.
+
+- **`capability` memory type, no migration.** `{run, path?}` lives under a
+  reserved `metadata.capability` key. `capability.check` holds the
+  equivalence on the final state of every store/update: the type and the
+  block come together or not at all, and unknown fields are refused so a typo
+  cannot hide. Columns were rejected (migration plus FTS rebuild for no
+  retrieval gain); a separate tool like `memory_tripwire` was rejected (a
+  capability is 1:1 with its memory, and a two-call write goes unused).
+- **Every read shows `capability: {run, path, exists}`**, compact too, since
+  the run line is the point. `exists` is a read-time filesystem check:
+  relative paths resolve against the namespace's repo `path`, and it is
+  `null` when there is none on record (true today for most namespaces,
+  `gingugu` included) and always `null` under `gingugu serve`.
+- **A `capabilities` lane on `memory_recall`**: a capability-only cosine pass,
+  best 2, never repeating a main hit, not credited as an access. Main ranking
+  untouched. **The floor is 0.68, measured, not the prompt gate's 0.78**:
+  three sample capabilities against ten written queries and every query in
+  the live `query_log`. Relevant queries scored 0.647-0.852 (mostly
+  0.69-0.75), so 0.78 missed 7 of 10; unrelated logged queries topped out at
+  0.667. The three highest "unrelated" hits (0.69-0.79) were real logged
+  queries asking how to read a Jira ticket - the rebuild this item was boarded
+  for. Small sample; re-measure once real capability memories exist.
+- **The prompt hook treats `capability` as actionable**, and the managed
+  rules block teaches the write habit (store a reusable script as a
+  capability; check `capabilities` before writing one).
+
+## Recently Completed
+
+**Board #1 (tripwires): MERGED as `64b9b08` (#90).** Involuntary recall
 at the action: a `PreToolUse` hook matches the pending tool call against
 explicit per-memory triggers and stops the call once with the memory in front
 of the agent. Pure regex, no embeddings, no model judgment - a risky command
@@ -55,8 +85,6 @@ and a harmless one can read alike to an encoder.
   `Co-Authored-By: Claude` trailer). A matching Bash call was denied in a real
   Claude Code session, and the unchanged re-issue went through.
 - Suite: 1118 passed, 1 xfailed. Unreleased; 0.18.0 is the latest release.
-
-## Recently Completed
 
 **Board #1 (query-text logging): MERGED as `844005a` (#89).** Step one of the
 paraphrase question set (old #9): it starts the clock on collecting real
@@ -695,24 +723,24 @@ older notes and memories that cite "item 10" still resolve. The old row 7
 `52bc6cf` (#63) on 2026-08-27** and was left on the board by mistake.
 
 **2026-09-30:** hygiene (old #8) shipped as #88 and query-text logging (old #9)
-as #89; both came off and every row moved up. A shipped item leaves the table
-and the rest keep their order.
+as #89; both came off and every row moved up. Tripwires (old #10) shipped as #90
+and came off too. A shipped item leaves the table and the rest keep their
+order.
 
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **Tripwires: involuntary recall at the action** | 10 | The user's top pick. Built local-first, with a seam for a remote brain. Built on `feature/tripwires`; PR pending |
-| 2 | **Capability pointer** | 5 | The cheaper half of aboutness; builds straight on the shipped `about` field |
-| 3 | **Scoped serve tokens** | 12 | The foundation for everything that runs over the network |
-| 4 | **One central brain, several clients** | 11 | Mostly built; the rest is physical setup, so it can run in parallel whenever that happens |
-| 5 | **Warm minions** | 13 | Needs 3 |
-| 6 | **A shared board between agents** | 15 | Needs 3 and 4 |
-| 7 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
-| 8 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
-| 9 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
-| 10 | **A referee for rival memory tools** | 17 | Only a fair comparison once 9 exists |
-| 11 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
-| 12 | **Secrets broker** | 16 | Needs 3, and a security review before any build |
-| 13 | Session flight recorder (low priority) | 18 | Check prior art first |
+| 1 | **Capability pointer** - IN FLIGHT | 5 | The cheaper half of aboutness; builds straight on the shipped `about` field. See In Flight |
+| 2 | **Scoped serve tokens** | 12 | The foundation for everything that runs over the network |
+| 3 | **One central brain, several clients** | 11 | Mostly built; the rest is physical setup, so it can run in parallel whenever that happens |
+| 4 | **Warm minions** | 13 | Needs 2 |
+| 5 | **A shared board between agents** | 15 | Needs 2 and 3 |
+| 6 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
+| 7 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
+| 8 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
+| 9 | **A referee for rival memory tools** | 17 | Only a fair comparison once 8 exists |
+| 10 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
+| 11 | **Secrets broker** | 16 | Needs 2, and a security review before any build |
+| 12 | Session flight recorder (low priority) | 18 | Check prior art first |
 | - | **Template/sibling noise in retrieval - PARKED** | 1 | Ten dead fixes and no live hypothesis; see below |
 
 ### Previous board (2026-09-28), kept for its numbering
@@ -1234,7 +1262,7 @@ explicit go. The user's order of priority puts 10 first.
 **Update:** item 10 has since been designed and built (see the top entry under
 In Flight); 11-14 remain undesigned.
 
-### 10. Tripwires: involuntary recall at the action
+### 10. Tripwires: involuntary recall at the action - SHIPPED 2026-09-30
 
 Involuntary recall (`prompt_hook.py`, `recall_gate.py`) fires on
 `UserPromptSubmit`, so it can only react to what the user typed. The costliest
@@ -1252,7 +1280,7 @@ the matches before the call runs. Pure arithmetic, no model judging relevance.
   (`connect_readonly(app.db_path)`). Against a remote brain the hooks need a
   path through `gingugu serve`.
 
-**Built 2026-09-30:** on `feature/tripwires`.
+**SHIPPED 2026-09-30** as `64b9b08` (#90), off the board.
 
 - Triggers are regex rows in a `tripwires` table (migration 016): the leaning
   above became the decision. A tool-name regex plus an input regex, per memory.

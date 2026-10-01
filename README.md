@@ -692,6 +692,7 @@ Use `confidence="inferred"` for conclusions you drew.
 - `workflow` — process steps, sequences
 - `context` — background, reflections, milestones, the *why*
 - `preference` — your opinions, working style, tool choices
+- `capability` — a script or tool that exists, with how to run it (`metadata.capability = {run, path}`)
 ````
 
 > **Tip:** A ready-to-use example lives at

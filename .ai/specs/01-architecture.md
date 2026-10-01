@@ -74,8 +74,9 @@ AI client (Claude Code / Cursor / Windsurf / …)
 - **Two namespaces layers:** `crow` (global identity/cross-project) + one per
   project. Every memory belongs to exactly one namespace.
 - **Typed memories:** `type` ∈ {fact, decision, pattern, bug, architecture,
-  preference, workflow, context}; `confidence` ∈ {verified, inferred, stale,
-  deprecated}.
+  preference, workflow, context, capability}; `confidence` ∈ {verified,
+  inferred, stale, deprecated}. A `capability` carries `metadata.capability` =
+  `{run, path?}` (see `capability.py`).
 - **Write-time declared fields (migration 014):** `provenance` ∈
   {user-asserted, measured, file-derived, self-concluded} - how the writer
   came to believe the memory, enforced at the application layer rather than a
@@ -666,6 +667,21 @@ read-only suggest half against the write half - to keep both under the
   is logged to `query_log` as `tool='tripwire'`. Accepted v1 limitation: after
   context compaction the memory may drop out of context while suppression still
   counts it as shown.
+- **A capability is a memory type with its structure in metadata, and recall
+  gives it its own lane.** (2026-10-01.) Memory recorded procedures and never
+  artifacts: one integration's REST mechanics were written down four times and
+  not one memory said a script existed, so it was rebuilt from the notes. A new
+  `capability` type says "this exists, run it like this", distinct from
+  `workflow`. Its `{run, path?}` lives under a reserved `metadata.capability`
+  key rather than new columns: no migration, no FTS rebuild, and export/import
+  carry it unchanged; the cost is a soft schema, held by validation on every
+  write (type and block come together or not at all, unknown fields refused).
+  Reads stat `path` so a deleted script shows as a dead pointer (`exists:
+  false`), never on a non-local transport. Rejected: boosting the type in the
+  main composite (unmeasured ranking change) and a separate tool like
+  `memory_tripwire` (a capability is 1:1 with its memory, and a two-call write
+  goes unused). The lane's 0.68 cosine floor was measured on real recall
+  queries; the prompt gate's 0.78 missed most of them.
 - **Server resilience over strictness.** Handlers fail soft (structured errors)
   so a bad call never takes down the client's memory layer.
 

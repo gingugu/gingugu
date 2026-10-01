@@ -117,7 +117,7 @@ CREATE TABLE namespaces (
 CREATE TABLE memories (
     id              TEXT PRIMARY KEY,  -- UUID
     namespace_id    TEXT NOT NULL REFERENCES namespaces(id),
-    type            TEXT NOT NULL,     -- fact|decision|pattern|bug|architecture|preference|workflow|context
+    type            TEXT NOT NULL,     -- fact|decision|pattern|bug|architecture|preference|workflow|context|capability
     title           TEXT NOT NULL,
     content         TEXT NOT NULL,
     confidence      TEXT NOT NULL DEFAULT 'inferred',  -- verified|inferred|stale|deprecated
@@ -740,12 +740,18 @@ Store a new memory with full metadata.
 **Parameters:**
 - `content` (required) — the knowledge to remember
 - `title` (required) — short descriptive title
-- `type` (required) — fact|decision|pattern|bug|architecture|preference|workflow|context
+- `type` (required) — fact|decision|pattern|bug|architecture|preference|workflow|context|capability
 - `namespace` (optional) — auto-detected from workspace if not provided
 - `tags` (optional) — comma-separated concept tags
 - `confidence` (optional) — defaults to `inferred`
 - `source` (optional) — where this knowledge came from
-- `metadata` (optional) — JSON string of additional data
+- `metadata` (optional) — JSON string of additional data. The
+  `capability` key is reserved: a `type="capability"` memory requires
+  `{"capability": {"run": "...", "path": "..."}}` (`run` required, `path`
+  optional), and no other type may carry it. Reads report
+  `capability: {run, path, exists}`, with `exists` checked on disk at read time
+  (relative paths against the namespace's repo path; `null` when unknown or
+  under `gingugu serve`)
 - `provenance` (optional) - how the writer came to believe this:
   `user-asserted`, `measured`, `file-derived`, or `self-concluded`. Enforced at
   the application layer, not a SQL constraint - any other value is rejected.
@@ -817,6 +823,14 @@ recorded in `query_log`, including one that returns nothing.
   compacted too. Use for broad exploratory queries that would otherwise
   exceed MCP clients' tool-result token budgets; compact recalls still
   credit access.
+
+**`capabilities`.** Unless `type` is passed, a second pass scores every
+`capability` memory in the same scope against the query by cosine and returns
+up to 2 that clear 0.68 and are not already in `memories`, each as a compact
+entry with `similarity`, `capability` and `namespace`. Absent when nothing
+clears the floor or embeddings are off. A pointer to an existing tool would
+otherwise compete in the main ranking with the procedure notes it replaces.
+Lane entries are not credited as accesses.
 
 ### `memory_context`
 Auto-surface relevant memories for the current workspace. Called on session start.
