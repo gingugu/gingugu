@@ -49,12 +49,17 @@ detail still exists. Save whenever you:
 - completed a task
 - formed an opinion about a tool or approach
 - noticed something about how the user works or decides
+- built a script or tool worth running again: store it as a `capability`
+  (`metadata={"capability": {"run": "…", "path": "…"}}`) so the next
+  session runs it instead of rebuilding it from notes
 
 Project namespace for anything naming a repo, file, commit, or decision; `crow`
 for opinions, working style, and conclusions that outlive this one project.
 
 **Before asking the user any question** — run `memory_recall` or `memory_search`
 first. If the answer is in memory, use it. Don't ask the same thing twice.
+The same before writing a script: a `capabilities` section on a recall means
+the tool already exists - run it.
 
 Use `memory_update` when something changes. Set `confidence="verified"` when
 proven; `inferred` for conclusions. When something turns out to be **wrong**, use
@@ -87,7 +92,7 @@ Gingugu carries an OS-keychain vault, so secrets never belong in files or chat.
 
 ### Memory types
 `fact`, `decision`, `architecture`, `bug`, `pattern`, `workflow`, `context`,
-`preference`.
+`preference`, `capability`.
 
 <!-- END GINGUGU MEMORY PROTOCOL -->
 ## What This Repo Is
@@ -120,6 +125,7 @@ your own session, on the `gingugu` namespace.
 ```
 src/gingugu/
   server.py          → MCP server entrypoint; registers tools, never crashes
+  capability.py      → capability pointers: write validation, read-time exists check, recall lane
   config.py          → config + cross-platform DB path (platformdirs)
   database.py        → SQLite connection, schema, WAL, migrations (PRAGMA user_version), FTS5 triggers
   migrations/queries.py → migration 015: the query_log table
