@@ -136,6 +136,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`gingugu serve` logs where it saved a newly generated owner token, never
+  the token itself.** Read it from `<db-dir>/serve_token`. Under a supervisor,
+  stderr is a retained journal that other users and log shipping can reach,
+  and the owner token is full access, credential vault included.
+
 - **Schema version 16.** Adds the `tripwires` table (`memory_id` cascades on
   delete) and its `memory_id` index. Nothing existing is altered.
 

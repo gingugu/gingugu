@@ -2,8 +2,8 @@
 
 Turns the same in-process server used by stdio into a network endpoint so a
 hosted/central brain can be reached remotely. Access is gated by a Bearer
-token (``MEMORY_SERVE_TOKEN``); if none is provided one is generated and
-announced on stderr so the server never starts silently open.
+token (``MEMORY_SERVE_TOKEN``); if none is provided one is generated, saved
+owner-only, and its path logged, so the server never starts silently open.
 
 Streamable HTTP is the current MCP transport (it supersedes the legacy
 HTTP+SSE transport) and tolerates load-balancer idle timeouts better.
@@ -98,8 +98,9 @@ def _resolve_token(configured: str | None, token_path: Path) -> str:
 
     1. ``MEMORY_SERVE_TOKEN`` — explicit override always wins; not persisted.
     2. A token previously saved at ``token_path``.
-    3. A freshly generated token, saved to ``token_path`` (owner-only) and
-       announced on stderr — stable across restarts, no external secret store.
+    3. A freshly generated token, saved to ``token_path`` (owner-only); its
+       path, never its value, is logged - stable across restarts, no external
+       secret store.
     """
     if configured:
         return configured
@@ -116,10 +117,12 @@ def _resolve_token(configured: str | None, token_path: Path) -> str:
     token_path.parent.mkdir(parents=True, exist_ok=True)
     # 0600 from the moment the file exists - never written first and narrowed after.
     write_private(token_path, token)
+    # The path, never the token: under a supervisor stderr is a journal that
+    # keeps it, other groups can read, and log shipping can carry off the box.
     logger.warning(
-        "No serve token found — generated one and saved it to %s:\n" "    Authorization: Bearer %s",
+        "No serve token found - generated the owner token at %s (0600). " "Read it with: cat %s",
         token_path,
-        token,
+        token_path,
     )
     return token
 
