@@ -74,6 +74,7 @@ Usage:
   gingugu                      Run the MCP server over stdio (default transport
                                for local clients like Claude Code / Cursor).
   gingugu serve                Run over streamable HTTP for a remote/central brain.
+  gingugu token add|list|revoke  Manage scoped tokens for `gingugu serve`.
   gingugu promote [options]    Promote local gold memories up to a central brain.
   gingugu init [options]       Bootstrap a repo so an AI assistant uses Gingugu.
   gingugu ui [options]         Launch the Memory Explorer web UI in a browser.
@@ -140,6 +141,10 @@ def main() -> None:
 
         promote_main(sys.argv[2:])
         return
+    if cmd == ["token"]:
+        from .serve_tokens import main as token_main
+
+        raise SystemExit(token_main(sys.argv[2:]))
     if cmd == ["init"]:
         from .bootstrap import main as init_main
 
