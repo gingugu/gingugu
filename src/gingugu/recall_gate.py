@@ -30,8 +30,10 @@ from dataclasses import dataclass, field
 # the same conversational register the user types in, so it matches affect
 # rather than subject. Reflections are the single largest class in a mature
 # personal namespace and they behave as semantic flypaper.
+# A capability is the most actionable thing a prompt can wake: it says the tool
+# already exists.
 ACTIONABLE_TYPES = frozenset(
-    {"preference", "decision", "bug", "architecture", "pattern", "fact", "workflow"}
+    {"preference", "decision", "bug", "architecture", "pattern", "fact", "workflow", "capability"}
 )
 
 # Below this, a prompt carries no retrievable subject. "go", "lfg", "ship it".

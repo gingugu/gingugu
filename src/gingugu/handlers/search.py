@@ -11,6 +11,7 @@ from .. import search_filters as search_mod
 from ..claim_queries import CLAIM_FILTERS
 from ..models import Confidence, MemoryType
 from . import ServerContext
+from .capability_view import stamp_capabilities
 from .helpers import _attach_review_hints, _err, _split_csv, _stamp_namespace_names
 from .scope import read_scope, run_widening
 from .summaries import _summarizer
@@ -123,6 +124,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 summaries = [_attach_review_hints(summarize(m), m) for m in results]
                 ctx.store.record_accesses([m.id for m in results])
                 _stamp_namespace_names(ctx, summaries)
+                stamp_capabilities(ctx, summaries)
                 payload = {"ok": True, "count": len(results), "memories": summaries}
                 if missing:
                     payload["missing"] = missing
@@ -189,6 +191,7 @@ def register(mcp, ctx: ServerContext) -> None:
             # Every read surface stamps a readable per-memory namespace
             # (matches memory_context).
             _stamp_namespace_names(ctx, summaries)
+            stamp_capabilities(ctx, summaries)
             payload: dict = {
                 "ok": True,
                 "count": len(results),
