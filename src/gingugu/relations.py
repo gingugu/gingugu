@@ -86,6 +86,8 @@ class RelationManager(RelationRepairMixin, TransactionParticipant):
 
     def get_relations(self, memory_id: str) -> list[dict]:
         """All edges touching this memory, with direction relative to it."""
+        if not grants.readable_memories(self._conn, [memory_id]):
+            return []
         rows = self._conn.execute(
             "SELECT id, source_id, target_id, relation_type, created_at, metadata "
             "FROM relations WHERE source_id = ? OR target_id = ? "
@@ -227,6 +229,16 @@ class RelationManager(RelationRepairMixin, TransactionParticipant):
                 where.append(fence)
                 params += fence_params
         clause = f"WHERE {' AND '.join(where)}" if where else ""
+        # Fenced, a degree counts only edges whose far end the grant can read;
+        # counting the rest would say a hidden edge exists.
+        far, far_params = grants.scope_clause("o.namespace_id")
+        degree_fence = (
+            " AND EXISTS (SELECT 1 FROM memories o WHERE o.id = "
+            "CASE WHEN d.source_id = {me} THEN d.target_id ELSE d.source_id END "
+            f"AND {far})"
+            if far is not None
+            else ""
+        )
 
         joins = (
             "FROM relations r "
@@ -244,13 +256,15 @@ class RelationManager(RelationRepairMixin, TransactionParticipant):
             "sm.title AS source_title, tm.title AS target_title, "
             "sns.name AS source_namespace, tns.name AS target_namespace, "
             "(SELECT COUNT(*) FROM relations d "
-            " WHERE d.source_id = sm.id OR d.target_id = sm.id) AS source_degree, "
+            " WHERE (d.source_id = sm.id OR d.target_id = sm.id)"
+            f"{degree_fence.format(me='sm.id')}) AS source_degree, "
             "(SELECT COUNT(*) FROM relations d "
-            " WHERE d.source_id = tm.id OR d.target_id = tm.id) AS target_degree "
+            " WHERE (d.source_id = tm.id OR d.target_id = tm.id)"
+            f"{degree_fence.format(me='tm.id')}) AS target_degree "
             f"{joins}{clause} "
             "ORDER BY sm.title, tm.title, r.relation_type "
             "LIMIT ? OFFSET ?",
-            (*params, limit, offset),
+            (*far_params, *far_params, *params, limit, offset),
         ).fetchall()
 
         return {

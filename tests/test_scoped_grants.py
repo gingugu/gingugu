@@ -110,9 +110,12 @@ async def test_full_grant_is_unfenced(brain, monkeypatch):
     await _ok(brain.server, "credential_list", {})
 
 
-async def test_http_request_without_a_grant_is_refused(brain, monkeypatch):
-    monkeypatch.setattr("gingugu.handlers.fence.request_grant", lambda _t: None)
+async def test_http_transport_without_a_request_is_refused(brain):
+    # The real request_grant, no override: an http-transport call that carries
+    # no HTTP request (here, in-process) fails closed rather than running full.
     out = await call(brain.server, "memory_namespaces", {})
+    assert out == {"ok": False, "error": "unauthorized"}
+    out = await call(brain.server, "credential_list", {})
     assert out == {"ok": False, "error": "unauthorized"}
 
 

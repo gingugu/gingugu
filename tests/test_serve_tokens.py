@@ -195,3 +195,17 @@ def test_top_level_dispatches_token_subcommand(cli_env, monkeypatch, capsys):
     with pytest.raises(SystemExit) as exc:
         server.main()
     assert exc.value.code == 0
+
+
+def test_owner_equivalent_grant_cannot_be_minted(store):
+    with pytest.raises(ValueError, match="owner"):
+        store.add("sneaky", {"*": WRITE})
+    assert store.list() == []
+
+
+def test_tampered_owner_equivalent_entry_never_resolves(store):
+    token = store.add("laptop-2", {"gingugu": READ})
+    data = json.loads(store.path.read_text(encoding="utf-8"))
+    data["tokens"][0]["namespaces"] = {"*": WRITE}
+    store.path.write_text(json.dumps(data), encoding="utf-8")
+    assert store.resolve(token) is None

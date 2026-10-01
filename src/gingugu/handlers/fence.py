@@ -31,10 +31,12 @@ _CLOSED_TO_SCOPED = frozenset(
 def request_grant(transport: str) -> Grant | None:
     """The grant for the tool call in progress, or None to refuse it.
 
-    stdio has no network caller, so it is the full grant. A call with no MCP
-    request context at all is an in-process ``call_tool`` - also no network
-    caller. Over HTTP, the grant is whatever the auth middleware attached; a
-    request that somehow arrives without one is refused, never waved through.
+    stdio has no network caller, so it is the full grant. Under any other
+    transport the grant is whatever the auth middleware attached to the HTTP
+    request; a call that arrives without one - no request context, no
+    request, no grant - is refused, never waved through. Fail closed even
+    where the SDK today always supplies a context: that is the SDK's
+    behaviour, not this server's guarantee.
     """
     if transport == "stdio":
         return FULL
@@ -43,7 +45,7 @@ def request_grant(transport: str) -> Grant | None:
     try:
         request = request_ctx.get().request
     except LookupError:
-        return FULL
+        return None
     state = getattr(request, "state", None)
     grant = getattr(state, "grant", None) if state is not None else None
     return grant if isinstance(grant, Grant) else None

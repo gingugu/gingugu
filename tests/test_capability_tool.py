@@ -41,8 +41,11 @@ def http_server(tmp_path, monkeypatch):
     monkeypatch.setenv("MEMORY_DB_PATH", str(tmp_path / "cap-http.db"))
     monkeypatch.setenv("MEMORY_NAMESPACE", "cap")
     monkeypatch.setattr("gingugu.server.build_provider", lambda **_: FakeEmbedder())
+    from gingugu.grants import FULL
     from gingugu.server import build_server
 
+    # In-process calls carry no HTTP request; call as the owner.
+    monkeypatch.setattr("gingugu.handlers.fence.request_grant", lambda _t: FULL)
     return build_server(transport="http")
 
 
