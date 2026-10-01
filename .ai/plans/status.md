@@ -4,7 +4,11 @@ _Last updated: 2026-10-01_
 
 ## In Flight
 
-**Board #1 (scoped serve tokens) on `feature/scoped-serve-tokens`.** Each
+Nothing in flight.
+
+## Recently Completed
+
+**Board #1 (scoped serve tokens): MERGED as `ad8f759` (#92).** Each
 client of `gingugu serve` gets only the namespaces it needs, and the server -
 not the client - holds the fence.
 
@@ -60,8 +64,6 @@ not the client - holds the fence.
   revoke with no restart, in `tests/test_scoped_grants.py`.
 - **Rode along:** `capability.lane` treated an empty namespace list as "every
   namespace".
-
-## Recently Completed
 
 **Board #1 (capability pointer): MERGED as `dcab9d4` (#91).** Memory can
 now say a tool exists, not just how to do the job by hand.
@@ -769,7 +771,7 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-## The Board (current: 2026-10-01)
+## The Board (current: 2026-10-01, after #92)
 
 **Resequenced 2026-09-29 into build order.** The table below is the order the
 work gets done in, top first; `#` is that position. Item numbers used to be
@@ -784,22 +786,21 @@ as #89; both came off and every row moved up. Tripwires (old #10) shipped as #90
 and came off too. A shipped item leaves the table and the rest keep their
 order.
 
-**2026-10-01:** the capability pointer (old #5) shipped as #91 and came off.
-Scoped serve tokens are now #1 and in flight.
+**2026-10-01:** the capability pointer (old #5) shipped as #91 and scoped serve
+tokens (old #12) as #92; both came off.
 
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **Scoped serve tokens** - IN FLIGHT | 12 | The foundation for everything that runs over the network. See In Flight |
-| 2 | **One central brain, several clients** | 11 | Mostly built; the rest is physical setup, so it can run in parallel whenever that happens |
-| 3 | **Warm minions** | 13 | Needs 1 |
-| 4 | **A shared board between agents** | 15 | Needs 1 and 2 |
-| 5 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
-| 6 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
-| 7 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
-| 8 | **A referee for rival memory tools** | 17 | Only a fair comparison once 7 exists |
-| 9 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
-| 10 | **Secrets broker** | 16 | Needs 1, and a security review before any build |
-| 11 | Session flight recorder (low priority) | 18 | Check prior art first |
+| 1 | **One central brain, several clients** | 11 | Mostly built; the rest is physical setup. Scoped tokens are in, so each client gets its own |
+| 2 | **Warm minions** | 13 | Scoped tokens are in; this is the read-only project + scratch-write grant put to work |
+| 3 | **A shared board between agents** | 15 | Needs 1 |
+| 4 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
+| 5 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
+| 6 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
+| 7 | **A referee for rival memory tools** | 17 | Only a fair comparison once 6 exists |
+| 8 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
+| 9 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
+| 10 | Session flight recorder (low priority) | 18 | Check prior art first |
 | - | **Template/sibling noise in retrieval - PARKED** | 1 | Ten dead fixes and no live hypothesis; see below |
 
 ### Previous board (2026-09-28), kept for its numbering
@@ -1362,7 +1363,7 @@ laptops and a non-Claude desktop client (ChatGPT desktop), which today runs
 against its own local copy. Separate copies diverge, which defeats the point of
 long-term memory. Open: which transport each existing client uses today.
 
-### 12. Scoped serve tokens - IN FLIGHT 2026-10-01 (see In Flight)
+### 12. Scoped serve tokens - SHIPPED 2026-10-01 as #92, off the board
 
 Per-client tokens, each carrying a per-namespace read or write grant, enforced
 at the store's chokepoints. Foundation for 11 (a second model family should not
