@@ -1667,7 +1667,7 @@ src/gingugu/
 ├── __init__.py             # Package init + version
 │
 │   # ── Entry points ──────────────────────────────────────────────
-├── server.py               # MCP server; stdio / serve / promote / init / ui / dream / embed / hook dispatch
+├── server.py               # MCP server; stdio / serve / token / promote / init / ui / dream / embed / hook dispatch
 ├── serve.py                # gingugu serve: streamable HTTP + Bearer auth + /healthz
 ├── serve_tokens.py         # Scoped serve tokens: hashed token store + `gingugu token` CLI
 ├── grants.py               # Per-namespace read/write grants, bound per tool call
@@ -1744,6 +1744,7 @@ src/gingugu/
 ├── prompt_hook.py          # gingugu hook prompt: the entry point; log_prompt() is its one write
 ├── tripwire.py             # Tripwire matching (pure regex) + load_tripwires, the remote-brain seam
 ├── tool_hook.py            # gingugu hook tool: PreToolUse entry point; deny once, re-issue passes
+├── capability.py           # Capability pointers: block validation, exists check, the recall lane
 │
 │   # ── Claims (checkable state assertions) ───────────────────────
 ├── claims.py               # Extracts repo-qualified PR/MR refs from prose
@@ -1770,6 +1771,7 @@ src/gingugu/
     ├── forget.py           # The one destructive tool
     ├── hints.py            # Write-time similar + relation hints
     ├── recall.py           # recall / context
+    ├── capability_view.py  # Stamps capability {run, path, exists} onto reads + the lane entries
     ├── context_merge.py    # Pure merge of per-namespace context loads: pins, then ranked tails
     ├── search.py           # search
     ├── stats.py            # memory_stats (single or multi-namespace)

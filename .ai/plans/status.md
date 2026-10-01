@@ -28,7 +28,7 @@ not the client - holds the fence.
   was rejected: it needs OAuth `AuthSettings` and adds protected-resource
   metadata routes for what is a static token table.
 - **Enforcement at store chokepoints, not handlers.** A Sonnet inventory of
-  all 22 tools found the leaks a handler-only fence misses: id-only calls
+  all 21 tools found the leaks a handler-only fence misses: id-only calls
   (`get`/`update`/`forget`, `search(ids=...)`, excerpt, relate, consolidate,
   tripwires), widening to every namespace on an empty scoped result, spreading
   activation and `include_related` crossing edges, `memory_context`'s
@@ -43,8 +43,20 @@ not the client - holds the fence.
   leaks of its marker text, ids or name, and its rows byte-identical after,
   access clocks included. Five chokepoints are defence in depth behind
   `store.get`, invisible end to end, so each is also unit-tested on its own
-  (`tests/test_grants.py`). Disabling any one of the 20 chokepoints fails the
-  suite. Positive paths, including a real HTTP round trip and a
+  (`tests/test_grants.py`). Disabling any one of the 28 guards (each
+  chokepoint, the fence, the token store, the owner-token write) fails the
+  suite.
+- **Security review** (`security-reviewer`) found no path to hidden content.
+  Fixed from it: an HTTP-transport call with no request context now fails
+  closed; `memory_tripwire add` answered a hidden id differently from an
+  unknown one; `--ns '*=write'` minted an owner-equivalent token and is now
+  refused (and such an entry never resolves); edge degrees counted hidden
+  edges; a non-ASCII `Authorization` header raised instead of a 401; and the
+  owner token file is now `0600` from creation, with a looser existing file
+  tightened on start. **Accepted, count-level only:** `orphans` and graph
+  stats still count edges into hidden namespaces; a concurrent `token add`
+  can undo a `revoke` (no file lock; the CLI is run by hand); stats
+  housekeeping and the activity heartbeat are store-wide side effects. Positive paths, including a real HTTP round trip and a
   revoke with no restart, in `tests/test_scoped_grants.py`.
 - **Rode along:** `capability.lane` treated an empty namespace list as "every
   namespace".
@@ -1352,10 +1364,10 @@ long-term memory. Open: which transport each existing client uses today.
 
 ### 12. Scoped serve tokens - IN FLIGHT 2026-10-01 (see In Flight)
 
-`BearerAuthMiddleware` (`serve.py`) checks one shared token, and holding it
-means read and write on every namespace. Per-client tokens, each carrying a
-namespace allowlist and a read-only or read-write grant. Foundation for 11 (a
-second model family should not need write access everywhere) and 13.
+Per-client tokens, each carrying a per-namespace read or write grant, enforced
+at the store's chokepoints. Foundation for 11 (a second model family should not
+need write access everywhere) and 13. The design and its tests are under In
+Flight.
 
 ### 13. Warm minions
 
