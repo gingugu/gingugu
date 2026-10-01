@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import decay
+from . import decay, grants
 from .models import Memory
 from .search import build_match_query
 from .search_common import BASE_COLUMNS, COLUMNS
@@ -46,6 +46,10 @@ def fetch_by_ids(conn: sqlite3.Connection, ids: list[str]) -> tuple[list[Memory]
     rows = conn.execute(
         f"SELECT {BASE_COLUMNS} FROM memories WHERE id IN ({placeholders})", ids
     ).fetchall()
+    # Outside a scoped token's grant reads exactly like an unknown id.
+    allowed = grants.readable_ids()
+    if allowed is not None:
+        rows = [row for row in rows if row["namespace_id"] in allowed]
     by_id = {row["id"]: Memory(**dict(row)) for row in rows}
     found = [by_id[mid] for mid in ids if mid in by_id]
     missing = [mid for mid in ids if mid not in by_id]

@@ -7,7 +7,7 @@ import sqlite3
 import time
 from datetime import UTC, datetime, timedelta
 
-from . import claim_queries
+from . import claim_queries, grants
 from .decay import DEPRECATE_SUGGEST_AFTER_DAYS, DORMANT_AFTER_DAYS
 from .graph_stats import compute_graph
 from .hygiene_stats import compute_hygiene
@@ -92,7 +92,12 @@ def compute_global_stats(conn: sqlite3.Connection) -> dict:
             "LEFT JOIN memories m ON m.namespace_id = n.id "
             "GROUP BY n.id ORDER BY n DESC"
         ).fetchall()
+        if grants.can_read_name(row["name"])
     ]
+    if grants.current() is not None:
+        # A scoped token sees its own namespaces' inventory and nothing
+        # store-wide: log volume and vault health describe every namespace.
+        return {"namespaces": namespaces}
     return {
         "namespaces": namespaces,
         "access_log_rows": _count(conn, "SELECT COUNT(*) FROM access_log"),

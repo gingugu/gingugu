@@ -28,7 +28,7 @@ import sqlite3
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from . import access, claim_sync, embedding_sync, query_log
+from . import access, claim_sync, embedding_sync, grants, query_log
 from . import tags as tags_mod
 from .embeddings import EmbeddingProvider
 from .models import Memory
@@ -59,6 +59,7 @@ class DerivedTables:
         self, memory_id: str, refs: list[str], *, resolved_by: str | None = None
     ) -> list[str]:
         """Mark open claims resolved without touching the memory's prose."""
+        grants.require_memory_write(self._conn, memory_id)
         return claim_sync.resolve(
             self._conn, memory_id=memory_id, refs=refs, resolved_by=resolved_by
         )
@@ -78,7 +79,7 @@ class DerivedTables:
         The bulk primitive retrieval handlers (recall, search, context) use to
         credit the seeds they actually returned. See ``access.record``.
         """
-        ids = access.dedupe(memory_ids)
+        ids = grants.readable_memories(self._conn, access.dedupe(memory_ids))
         if not ids:
             return 0
         updated = access.record(self._conn, ids, session_id=current_session_id())
@@ -110,7 +111,7 @@ class DerivedTables:
         their dormancy clock reset, but nobody asked for them, so
         ``access_count`` is untouched. See ``access.touch``.
         """
-        ids = access.dedupe(memory_ids)
+        ids = grants.readable_memories(self._conn, access.dedupe(memory_ids))
         if not ids:
             return 0
         updated = access.touch(self._conn, ids)
@@ -121,6 +122,7 @@ class DerivedTables:
 
     def set_tags(self, memory_id: str, tags: list[str], *, commit: bool = True) -> list[str]:
         """Replace all tags on a memory with the normalized, de-duplicated set."""
+        grants.require_memory_write(self._conn, memory_id)
         normalized = tags_mod.set_for(self._conn, memory_id, tags)
         if commit:
             self._commit()
@@ -128,6 +130,7 @@ class DerivedTables:
 
     def add_tags(self, memory_id: str, tags: list[str], *, commit: bool = True) -> list[str]:
         """Add tags to a memory without removing existing ones."""
+        grants.require_memory_write(self._conn, memory_id)
         tags_mod.add_to(self._conn, memory_id, tags)
         if commit:
             self._commit()

@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 
 from .. import context as context_mod
+from .. import grants
 from .. import search as search_mod
 from ..models import Confidence, Memory, MemoryType
 from . import ServerContext
@@ -32,6 +33,15 @@ from .scope import read_scope, run_widening
 from .summaries import _summarizer
 
 logger = logging.getLogger(__name__)
+
+
+def _default_context_names(ctx: ServerContext) -> list[str]:
+    """What an omitted ``namespace`` loads: the configured one, or under a
+    scoped token whose grant does not cover it, every namespace it can read."""
+    try:
+        return [ctx.namespaces.resolve_name(None)]
+    except grants.AccessDenied:
+        return [ns.name for ns in ctx.namespaces.list()]
 
 
 def register(mcp, ctx: ServerContext) -> None:
@@ -210,7 +220,7 @@ def register(mcp, ctx: ServerContext) -> None:
         ranking at all."""
         try:
             requested = _split_csv(namespace)
-            ns_names = list(dict.fromkeys(requested)) or [ctx.namespaces.resolve_name(None)]
+            ns_names = list(dict.fromkeys(requested)) or _default_context_names(ctx)
             eff_limit = limit if limit is not None else ctx.config.auto_context_limit
 
             # Load each namespace, de-duplicating across them: a memory that

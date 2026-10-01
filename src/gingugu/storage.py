@@ -12,7 +12,7 @@ import logging
 import sqlite3
 import uuid
 
-from . import claim_sync
+from . import claim_sync, grants
 from .embeddings import EmbeddingProvider, NullEmbeddingProvider
 from .models import (
     Confidence,
@@ -64,6 +64,7 @@ class MemoryStore(DerivedTables, TransactionParticipant):
         provenance: Provenance | None = None,
         about: str | None = None,
     ) -> Memory:
+        grants.require_write_id(namespace_id, "this namespace")
         metadata = normalize_metadata(metadata)
         now = utcnow_iso()
         mem = Memory(
@@ -108,7 +109,8 @@ class MemoryStore(DerivedTables, TransactionParticipant):
         row = self._conn.execute(
             f"SELECT {_COLUMNS} FROM memories WHERE id = ?", (memory_id,)
         ).fetchone()
-        if row is None:
+        # Outside a scoped token's grant reads exactly like an unknown id.
+        if row is None or not grants.can_read_id(row["namespace_id"]):
             return None
         if record_access:
             self._record_access(memory_id)
@@ -132,6 +134,7 @@ class MemoryStore(DerivedTables, TransactionParticipant):
         existing = self.get(memory_id, record_access=False)
         if existing is None:
             return None
+        grants.require_write_id(existing.namespace_id, f"memory {memory_id!r}")
         now = utcnow_iso()
         new_type = type or existing.type
         new_confidence = confidence or existing.confidence
@@ -197,6 +200,10 @@ class MemoryStore(DerivedTables, TransactionParticipant):
         return self.get(memory_id, record_access=False)
 
     def delete(self, memory_id: str) -> bool:
+        existing = self.get(memory_id, record_access=False)
+        if existing is None:
+            return False
+        grants.require_write_id(existing.namespace_id, f"memory {memory_id!r}")
         cur = self._conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
         self._prune_orphan_tags()
         self._commit()

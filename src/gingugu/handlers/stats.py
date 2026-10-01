@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 
+from .. import grants
 from .. import stats as stats_mod
 from . import ServerContext
 from .helpers import _err, _resolve_namespaces, _single_namespace_not_found, _split_csv
@@ -86,6 +87,17 @@ def register(mcp, ctx: ServerContext) -> None:
         the never-forget model and has been removed. Retained so existing callers do not
         error."""
         try:
+            if namespace is None and grants.current() is not None:
+                # Store-wide stats under a scoped token means its namespaces.
+                namespace = ",".join(ns.name for ns in ctx.namespaces.list())
+                if not namespace:
+                    return {
+                        "ok": True,
+                        "flagged_stale": 0,
+                        "namespaces": [],
+                        "global": stats_mod.compute_global_stats(ctx.conn),
+                        "by_namespace": {},
+                    }
             names = list(dict.fromkeys(_split_csv(namespace))) if namespace is not None else []
             if len(names) > 1:
                 resolved, error = _resolve_namespaces(ctx, names)

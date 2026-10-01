@@ -29,35 +29,53 @@ class ServerContext:
 
 
 class _HeartbeatMCP:
-    """Proxy that stamps the activity heartbeat around every registered tool.
+    """Proxy that fences and stamps the activity heartbeat around every tool.
 
     Wrapping the ``tool`` decorator once here, rather than editing thirteen
-    handler modules, is what makes the heartbeat impossible to forget: a tool
-    added next year is instrumented by the act of registering it. Nothing in a
+    handler modules, is what makes both impossible to forget: a tool added next
+    year is fenced and instrumented by the act of registering it. Nothing in a
     handler knows this exists, and nothing has to.
+
+    The fence binds the caller's grant (see ``fence`` and ``grants``) for the
+    duration of the call, so every store chokepoint the handler reaches is
+    scoped to it. A refusal is a structured error, like any other.
 
     Only ``tool`` is intercepted; every other attribute passes straight through
     to the real FastMCP instance.
     """
 
-    def __init__(self, mcp, conn) -> None:
+    def __init__(self, mcp, ctx: ServerContext) -> None:
         self._mcp = mcp
-        self._conn = conn
+        self._ctx = ctx
 
     def __getattr__(self, name):
         return getattr(self._mcp, name)
 
     def tool(self, *d_args, **d_kwargs):
         inner = self._mcp.tool(*d_args, **d_kwargs)
-        conn = self._conn
+        ctx = self._ctx
+        conn = ctx.conn
 
         def decorator(fn):
             @functools.wraps(fn)
             def wrapper(*args, **kwargs):
+                from .. import grants
                 from ..activity import stamp
+                from .fence import refusal, request_grant
 
                 try:
-                    return fn(*args, **kwargs)
+                    grant = request_grant(ctx.transport)
+                    if grant is None:
+                        return {"ok": False, "error": "unauthorized"}
+                    refused = refusal(fn.__name__, grant, kwargs)
+                    if refused is not None:
+                        return {"ok": False, "error": refused}
+                    with grants.bind(grant, conn):
+                        return fn(*args, **kwargs)
+                except grants.AccessDenied as exc:
+                    # Raised by a store chokepoint the handler did not catch;
+                    # the message is safe to return by construction.
+                    return {"ok": False, "error": str(exc)}
                 finally:
                     # In a finally, so a tool that raised still counts as the
                     # user reaching for the brain. Stamping only on success
@@ -76,7 +94,7 @@ def register_all(mcp, ctx: ServerContext) -> None:
     Handlers receive a ``_HeartbeatMCP`` proxy rather than the raw server, so
     every tool they attach records that the brain was used. See ``activity``.
     """
-    mcp = _HeartbeatMCP(mcp, ctx.conn)
+    mcp = _HeartbeatMCP(mcp, ctx)
     from . import (
         admin,
         consolidate,
