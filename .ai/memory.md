@@ -320,7 +320,16 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.18.0** (PyPI). The largest release to date: twelve PRs,
+- Current version: **0.19.0** (PyPI). The largest release to date: twenty-nine
+  PRs (#65-#93). Adds per-client scoped tokens for `gingugu serve` (`gingugu
+  token add|list|revoke`, per-namespace read/write grants enforced at the store),
+  tripwires (`memory_tripwire` + the `PreToolUse` hook), capability pointers,
+  write-time `provenance` and `about`, query-text logging, involuntary recall,
+  tail-aware semantic search over window-sized pieces plus `gingugu embed`, the
+  dream pass on a schedule, auto-widening of an empty scoped lookup, batch
+  `memory_relate`, and multi-namespace `memory_stats`. **Breaking:**
+  `credential_get` redacts secret values by default (`into=` / `reveal=true`).
+- Previous: **0.18.0** - twelve PRs,
   seven of them correctness fixes. Adds `memory_excerpt` (read inside one
   memory by literal `query` scan and/or a `start`/`end` character range),
   `explain=True` per-hit score breakdowns on all three read paths, and repo
@@ -332,7 +341,7 @@ gap between the count and the rows.
   presents pins first and orders its recency bucket by write recency, write-time
   hints report an absolute `similarity`, and `memory_import` embeds what it
   writes. Public repo `gingugu/gingugu`.
-- Previous: **0.17.0** - the `unverified` claim state (a ref a memory names
+- **0.17.0** - the `unverified` claim state (a ref a memory names
   without ever saying what became of it - excluded from `claims.open` and read
   via `memory_search(claims="unverified")`) and the orphan-enumeration +
   edge-reversal work (`graph.orphan_sample`, `memory_search(orphans=True)`,

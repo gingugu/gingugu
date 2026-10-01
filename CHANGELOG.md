@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.19.0] - 2026-10-01
+
+Twenty-nine PRs (#65-#93). The brain can now be shared safely: `gingugu serve`
+gains per-client scoped tokens. Memory learns to stop an agent at the action
+(tripwires), to say a tool exists (capability pointers), and to record how a
+claim was reached and what it is for (provenance, aboutness). Retrieval reads
+past the embedder's 512-token window, and a scoped lookup that finds nothing
+widens on its own. **Breaking:** `credential_get` redacts secret values by
+default.
+
 ### Added
 
 - **Scoped serve tokens: each client of `gingugu serve` gets only the
@@ -133,99 +145,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`MEMORY_SERVE_HOST`, `MEMORY_SERVE_PORT`, `MEMORY_SERVE_TOKEN`,
   `MEMORY_LOG_LEVEL`, `MEMORY_CREDENTIALS_ENABLED`), and any other argument
   after `serve` is now a hard error (exit 2) instead of being ignored.
-
-### Changed
-
-- **`gingugu serve` logs where it saved a newly generated owner token, never
-  the token itself.** Read it from `<db-dir>/serve_token`. Under a supervisor,
-  stderr is a retained journal that other users and log shipping can reach,
-  and the owner token is full access, credential vault included.
-
-- **Schema version 16.** Adds the `tripwires` table (`memory_id` cascades on
-  delete) and its `memory_id` index. Nothing existing is altered.
-
-- **Schema version 15.** Adds the `query_log` table and its `created_at`
-  index. Nothing existing is altered.
-
-- **Schema version 14.** `memories_fts` gains a third indexed column,
-  `about` (`title`, `content`, `about`), with all three sync triggers rebuilt
-  to match and a full FTS `rebuild` after. The migration is re-runnable and,
-  measured on a copy of a 2716-memory real brain, ran in 0.30s with every
-  row, every FTS hit, and every `source` value preserved.
-
-- **`memory_recall` with no `namespace` on an unconfigured server searches
-  every namespace** instead of the `default` fallback, and reports
-  `scope: "all"`. With neither `MEMORY_NAMESPACE` nor `MEMORY_NAMESPACE_PATH`
-  set there is no current project to scope a read to. Writes still fall back
-  to `default`.
-
-- **BREAKING: `credential_get` redacts secret values by default.** A secret
-  field now comes back as `{"is_secret": true, "redacted": true}` instead of its
-  value, and a redacted get does not read the keychain at all. A tool response
-  lands in the transcript and in any client-side tool log, so returning the
-  value by default put every secret there on every use. Two new parameters:
-  - `into` - an absolute path. Writes exactly one secret field to that file with
-    mode `0600` (raw value, no trailing newline) and returns only the path, byte
-    count and mode. Symlinks, directories, missing parents, relative paths,
-    non-secret fields and a locked keychain are all refused before a byte is
-    written. Refused under `gingugu serve`, where it would write to the
-    server's disk.
-  - `reveal=true` - the previous behaviour, as an explicit opt-in. Cannot be
-    combined with `into`.
-
-  Callers that read `value` from a secret field must pass `reveal=true` or move
-  to `into`. The memory protocol installed by `gingugu init` now teaches `into`.
-  Non-secret fields and `credential_list` are unchanged.
-- **`gingugu init` now installs `sink-the-ship` as a skill, not a slash
-  command.** It writes `.claude/skills/sink-the-ship/SKILL.md` in place of
-  `.claude/commands/sink-the-ship.md`. Anthropic's docs describe the commands
-  directory as the predecessor format and steer new work to skills, which are
-  directories that can carry supporting files - and supporting files load only
-  when they are actually opened, so reference material stops costing context
-  until it is needed. The invocation is unchanged: it is still `/sink-the-ship`,
-  because a skill takes its command name from its directory.
-
-  Shipping the older format did not just date the install, it pinned every repo
-  that ran `gingugu init` to it. A repo that converted its own copy to a skill
-  got the command written back on the next run, leaving two definitions
-  answering to one name.
-
-  An existing `.claude/commands/sink-the-ship.md` is therefore **retired** on
-  the next run, with a `.bak` kept, and this needs no `--force` - the duplicate
-  is a correctness problem and nothing is lost by fixing it.
-
-  Retirement requires the file to be **byte-identical** to the template we would
-  have written. A copy that differs by so much as a line is yours: it is never
-  deleted, and the run says so. That covers both a file we never wrote and one we
-  wrote that you have since edited - the managed-file marker records only that it
-  left our hands, and it sits in a comment above the part you would actually
-  change. Ownership is never the test for whether bytes may be destroyed, which
-  is the lesson the `--force` backup bug already taught once.
-
-- **Cluster proposals are ranked on tag evidence instead of an arbitrary
-  order.** Every community that clears the density floor scores exactly 1.0 on
-  a real graph, so the previous sort left findings tied and broke the tie by
-  id while the queue claimed "strongest finding first". Ranking now uses the
-  one signal about a group that does not encode *when* it was written: the
-  tags its members already carry, weighted by inverse document frequency.
-
-  Coverage alone is not enough, and that is measured rather than assumed. Every
-  store grows a handful of tags carried by a large share of it; those blanket
-  any group drawn from that region while saying nothing about it, exactly as a
-  date tag does. Scored against 15 hand-decided clusters (AUC, 0.500 = chance):
-  plain coverage 0.560, coverage x IDF 0.680, plus the skip below **0.750**.
-
-  Cluster proposals now carry `tag_score`, `tag_cohesion`, `tag_gap`,
-  `dominant_tag` and `shared_tags`, so the basis for an ordering can be checked
-  rather than trusted. Date-shaped and sail-ordinal tags are excluded from all
-  of it.
-
-- **A cluster whose strongest tag is already on every member is no longer
-  staged.** Accepting it could apply nothing, so it spends a reviewer's
-  attention to reach "no change". A logical rule rather than a tuned one, and
-  the single largest improvement to the ranking.
-
-### Added
 
 - **Long memories get a vector for their tail, and a keyword match picks which
   piece search compares.** The encoder reads a fixed token window - 512 for
@@ -432,6 +351,134 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Measured on a 1,891-memory store: 2,208 edges, 192 orphans, one run staging
   48 proposals. Schema migration 011.
 
+### Changed
+
+- **`gingugu serve` logs where it saved a newly generated owner token, never
+  the token itself.** Read it from `<db-dir>/serve_token`. Under a supervisor,
+  stderr is a retained journal that other users and log shipping can reach,
+  and the owner token is full access, credential vault included.
+
+- **Schema version 16.** Adds the `tripwires` table (`memory_id` cascades on
+  delete) and its `memory_id` index. Nothing existing is altered.
+
+- **Schema version 15.** Adds the `query_log` table and its `created_at`
+  index. Nothing existing is altered.
+
+- **Schema version 14.** `memories_fts` gains a third indexed column,
+  `about` (`title`, `content`, `about`), with all three sync triggers rebuilt
+  to match and a full FTS `rebuild` after. The migration is re-runnable and,
+  measured on a copy of a 2716-memory real brain, ran in 0.30s with every
+  row, every FTS hit, and every `source` value preserved.
+
+- **`memory_recall` with no `namespace` on an unconfigured server searches
+  every namespace** instead of the `default` fallback, and reports
+  `scope: "all"`. With neither `MEMORY_NAMESPACE` nor `MEMORY_NAMESPACE_PATH`
+  set there is no current project to scope a read to. Writes still fall back
+  to `default`.
+
+- **BREAKING: `credential_get` redacts secret values by default.** A secret
+  field now comes back as `{"is_secret": true, "redacted": true}` instead of its
+  value, and a redacted get does not read the keychain at all. A tool response
+  lands in the transcript and in any client-side tool log, so returning the
+  value by default put every secret there on every use. Two new parameters:
+  - `into` - an absolute path. Writes exactly one secret field to that file with
+    mode `0600` (raw value, no trailing newline) and returns only the path, byte
+    count and mode. Symlinks, directories, missing parents, relative paths,
+    non-secret fields and a locked keychain are all refused before a byte is
+    written. Refused under `gingugu serve`, where it would write to the
+    server's disk.
+  - `reveal=true` - the previous behaviour, as an explicit opt-in. Cannot be
+    combined with `into`.
+
+  Callers that read `value` from a secret field must pass `reveal=true` or move
+  to `into`. The memory protocol installed by `gingugu init` now teaches `into`.
+  Non-secret fields and `credential_list` are unchanged.
+- **`gingugu init` now installs `sink-the-ship` as a skill, not a slash
+  command.** It writes `.claude/skills/sink-the-ship/SKILL.md` in place of
+  `.claude/commands/sink-the-ship.md`. Anthropic's docs describe the commands
+  directory as the predecessor format and steer new work to skills, which are
+  directories that can carry supporting files - and supporting files load only
+  when they are actually opened, so reference material stops costing context
+  until it is needed. The invocation is unchanged: it is still `/sink-the-ship`,
+  because a skill takes its command name from its directory.
+
+  Shipping the older format did not just date the install, it pinned every repo
+  that ran `gingugu init` to it. A repo that converted its own copy to a skill
+  got the command written back on the next run, leaving two definitions
+  answering to one name.
+
+  An existing `.claude/commands/sink-the-ship.md` is therefore **retired** on
+  the next run, with a `.bak` kept, and this needs no `--force` - the duplicate
+  is a correctness problem and nothing is lost by fixing it.
+
+  Retirement requires the file to be **byte-identical** to the template we would
+  have written. A copy that differs by so much as a line is yours: it is never
+  deleted, and the run says so. That covers both a file we never wrote and one we
+  wrote that you have since edited - the managed-file marker records only that it
+  left our hands, and it sits in a comment above the part you would actually
+  change. Ownership is never the test for whether bytes may be destroyed, which
+  is the lesson the `--force` backup bug already taught once.
+
+- **Cluster proposals are ranked on tag evidence instead of an arbitrary
+  order.** Every community that clears the density floor scores exactly 1.0 on
+  a real graph, so the previous sort left findings tied and broke the tie by
+  id while the queue claimed "strongest finding first". Ranking now uses the
+  one signal about a group that does not encode *when* it was written: the
+  tags its members already carry, weighted by inverse document frequency.
+
+  Coverage alone is not enough, and that is measured rather than assumed. Every
+  store grows a handful of tags carried by a large share of it; those blanket
+  any group drawn from that region while saying nothing about it, exactly as a
+  date tag does. Scored against 15 hand-decided clusters (AUC, 0.500 = chance):
+  plain coverage 0.560, coverage x IDF 0.680, plus the skip below **0.750**.
+
+  Cluster proposals now carry `tag_score`, `tag_cohesion`, `tag_gap`,
+  `dominant_tag` and `shared_tags`, so the basis for an ordering can be checked
+  rather than trusted. Date-shaped and sail-ordinal tags are excluded from all
+  of it.
+
+- **A cluster whose strongest tag is already on every member is no longer
+  staged.** Accepting it could apply nothing, so it spends a reviewer's
+  attention to reach "no change". A logical rule rather than a tuned one, and
+  the single largest improvement to the ranking.
+
+- **The two modules still over the 300-line limit were split, each along a seam
+  it already had.** Both were long because they were heavily documented, so
+  cutting on the line count would have separated every migration's reasoning
+  from the code it explains - the documentation was the thing worth keeping.
+
+  `database.py` (547 lines) split on *what a migration does*: `migrations/`
+  now holds the ordered registry, `LATEST_SCHEMA_VERSION`, the WAL-aware
+  pre-migration backup and `migrate()`, with `migrations/schema.py` for
+  structural work (tables, columns, FTS5 triggers) and
+  `migrations/claim_derivation.py` for the five migrations whose whole job is
+  re-reading prose that never changed. `database.py` keeps the SQLite
+  connection and its PRAGMAs, and nothing else.
+
+  `storage.py` (401 lines) split on *the memory row versus what hangs off it*.
+  `MemoryStore` keeps the `memories` row and its transaction boundary; the
+  satellite tables move to `tags.py` and `access.py`, reached with
+  `embedding_sync` and `claim_sync` through one `DerivedTables` delegation
+  surface. `normalize_metadata` joins `normalize_tag` in `models.py`.
+
+  These are modules over a connection rather than methods for a reason that
+  had already cost something: `MemoryStore` was not the only writer of memory
+  rows, and because its tag helper was unreachable from outside, the import
+  path had grown a byte-identical private copy of it. Both callers now share
+  one function. No behavior changed, and the migration registry is identical
+  in order and targets.
+
+- Three unreachable methods removed from `MemoryStore` rather than carried
+  into the split: `list_unembedded_ids`, `embed_memories` and
+  `_embedding_input` had no callers anywhere in the project. The docstring on
+  `backfill_embeddings` recommending `embed_memories` for bulk imports now
+  points at `embedding_sync.embed_ids`, which is what a bulk importer can
+  actually reach.
+
+- Repo qualification moved from `claims.py` into a new `claim_qualify.py`,
+  keeping both modules inside the 300-line limit. No behavior depends on the
+  split.
+
 ### Fixed
 
 - **The owner token `gingugu serve` generates is `0600` from the moment the
@@ -530,45 +577,6 @@ resolution state survives, as with migrations 007 and 009. Measured over the
 prose names, no claim's asserted state changed, and the unreconciled backlog
 falls from 48 to 33. The eleven resolutions dropped all belonged to rows that
 were never valid refs.
-
-### Changed
-
-- **The two modules still over the 300-line limit were split, each along a seam
-  it already had.** Both were long because they were heavily documented, so
-  cutting on the line count would have separated every migration's reasoning
-  from the code it explains - the documentation was the thing worth keeping.
-
-  `database.py` (547 lines) split on *what a migration does*: `migrations/`
-  now holds the ordered registry, `LATEST_SCHEMA_VERSION`, the WAL-aware
-  pre-migration backup and `migrate()`, with `migrations/schema.py` for
-  structural work (tables, columns, FTS5 triggers) and
-  `migrations/claim_derivation.py` for the five migrations whose whole job is
-  re-reading prose that never changed. `database.py` keeps the SQLite
-  connection and its PRAGMAs, and nothing else.
-
-  `storage.py` (401 lines) split on *the memory row versus what hangs off it*.
-  `MemoryStore` keeps the `memories` row and its transaction boundary; the
-  satellite tables move to `tags.py` and `access.py`, reached with
-  `embedding_sync` and `claim_sync` through one `DerivedTables` delegation
-  surface. `normalize_metadata` joins `normalize_tag` in `models.py`.
-
-  These are modules over a connection rather than methods for a reason that
-  had already cost something: `MemoryStore` was not the only writer of memory
-  rows, and because its tag helper was unreachable from outside, the import
-  path had grown a byte-identical private copy of it. Both callers now share
-  one function. No behavior changed, and the migration registry is identical
-  in order and targets.
-
-- Three unreachable methods removed from `MemoryStore` rather than carried
-  into the split: `list_unembedded_ids`, `embed_memories` and
-  `_embedding_input` had no callers anywhere in the project. The docstring on
-  `backfill_embeddings` recommending `embed_memories` for bulk imports now
-  points at `embedding_sync.embed_ids`, which is what a bulk importer can
-  actually reach.
-
-- Repo qualification moved from `claims.py` into a new `claim_qualify.py`,
-  keeping both modules inside the 300-line limit. No behavior depends on the
-  split.
 
 ---
 

@@ -86,7 +86,7 @@ Memory linking, tagging, and consolidation.
 |------|--------|-------|
 | Tag system (CRUD + query) | ✅ | `storage.py` set/add/get/load_tags, normalized; tag filter in `search.py` (all-required) |
 | `memory_relate` tool | ✅ | `relations.py` RelationManager; 6 relation types, idempotent edges |
-| `memory_edges` + `memory_unrelate` tools | ✅ | Unreleased: enumerate the graph, then retype in place or remove; single or batched reviewed ops, `dry_run` |
+| `memory_edges` + `memory_unrelate` tools | ✅ | v0.16.0: enumerate the graph, then retype in place or remove; single or batched reviewed ops, `dry_run` |
 | Relationship traversal in search | ✅ | `memory_recall(include_related=True)` appends linked memories (flagged `via_relation`) |
 | `memory_consolidate` tool | ✅ | `consolidation.py`: merge / summarize / deduplicate + `keep_originals` |
 | `memory_update` tool | ✅ | content/title/confidence/metadata/tags |
@@ -155,7 +155,7 @@ their head. Cold-crawl breadth is the seed; promoted organic gold is the moat.
 | Task | Status | Notes |
 |------|--------|-------|
 | `gingugu serve` - streamable HTTP + Bearer auth | ✅ | Same server over the network; self-persisting token, `/healthz`, `MEMORY_CREDENTIALS_ENABLED=false` for shared instances |
-| Scoped serve tokens: `gingugu token add/list/revoke` | ✅ | Per-client Bearer tokens with per-namespace `read`/`write` grants, enforced at the store chokepoints (not-found, never forbidden); whole-brain and credential tools closed to scoped tokens; hashed at rest, revocation without restart. Owner token unchanged. Unreleased |
+| Scoped serve tokens: `gingugu token add/list/revoke` | ✅ | Per-client Bearer tokens with per-namespace `read`/`write` grants, enforced at the store chokepoints (not-found, never forbidden); whole-brain and credential tools closed to scoped tokens; hashed at rest, revocation without restart. Owner token unchanged. v0.19.0 |
 | Promotion **Stage 1**: `gingugu promote` | ✅ | MCP client (server stays a pure store). Exclusion filter (verified, minus episodic/personal tags, minus secret-looking content), provenance stamp, idempotent re-runs, read-only on source |
 | Promotion **Stage 2**: consolidate near-dupes into one canonical memory with `contributors[]` | ⬜ | Dupes from multiple devs = single source of truth + independent confirmation strengthens trust |
 | Promotion **Stage 3**: conflict detection → human-reviewed `contradicts` edges | ⬜ | Small local LLM judge (Ollama), never auto-overwrite |
@@ -268,8 +268,6 @@ for agents." Crystallized after an external architectural review on
 
 ---
 
-*Next action: cut the next release (CHANGELOG [Unreleased] holds the benchmark
-toolset, true hybrid retrieval, and hub dampening), then Phase 5.5 Stages 2-4
-(consolidation with contributors, conflict detection — pending the design-law
-reconciliation for the Stage 3 judge — and wiring promotion to the real local
-brain). Gingugu is public, self-hosting, and shipping.*
+*Next action: the central brain on the Pi - one brain, several clients, each
+on its own scoped token - then warm minions on the same grant model. Gingugu is
+public, self-hosting, and shipping.*

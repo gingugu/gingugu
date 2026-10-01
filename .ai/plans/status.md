@@ -8,6 +8,13 @@ Nothing in flight.
 
 ## Recently Completed
 
+**Released 0.19.0 to PyPI (2026-10-01).** Twenty-nine PRs, #65-#93: scoped
+serve tokens, tripwires, capability pointers, provenance and aboutness,
+query-text logging, involuntary recall, tail-aware semantic search, the dream
+pass on a schedule, auto-widen. Breaking: `credential_get` redacts by default.
+Cut ahead of the central brain (board #1) on purpose, so that work starts
+from a published baseline.
+
 **Board #1 (scoped serve tokens): MERGED as `ad8f759` (#92).** Each
 client of `gingugu serve` gets only the namespaces it needs, and the server -
 not the client - holds the fence.
