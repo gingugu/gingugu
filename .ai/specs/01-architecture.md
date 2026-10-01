@@ -4,7 +4,7 @@
 
 Gingugu is a single-process **MCP server**. By default an AI client spawns it
 over **stdio**; it can also run over **streamable HTTP** (`gingugu serve`, gated
-by a Bearer token) so a hosted/central instance is reachable remotely. It owns
+by Bearer tokens - the owner's, or per-client scoped ones) so a hosted/central instance is reachable remotely. It owns
 one local SQLite database and exposes a set of memory tools - the entire system
 is the server process plus the DB file plus an optional local web UI.
 
@@ -26,7 +26,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
    It is the crash boundary: no exception escapes to the client. Two transports
    share this path: **stdio** (default) and **streamable HTTP** via `serve.py`
    (`gingugu serve`), which wraps the same server in a Starlette app with
-   Bearer-token auth middleware and a `/healthz` probe. The `credential_*` tools
+   Bearer-token auth middleware and a `/healthz` probe; the middleware resolves
+   each token to a grant (see **Scoped tokens** below). The `credential_*` tools
    are gated by `MEMORY_CREDENTIALS_ENABLED` so a shared instance can omit the
    secret vault. `ServerContext.transport` records which transport built the
    server (`"stdio"` / `"http"`); `credential_get(into=…)` refuses under HTTP,
@@ -327,6 +328,49 @@ read-only suggest half against the write half - to keep both under the
   `memory_context` when given a `task_hint`, and the involuntary-recall hook:
   one `query_log` row each, ids in rank order, zero-hit queries included.
 
+## Scoped tokens (the grant fence)
+
+`gingugu serve` accepts the owner token (full access, unchanged) plus scoped
+tokens from `gingugu token add NAME --ns gingugu=write,crow=read`. A **grant**
+(`grants.py`) maps namespace names to `read` or `write`; `*` matches any.
+
+```
+Authorization: Bearer <token>
+  → BearerAuthMiddleware (serve.py): owner token → FULL; scoped → TokenStore
+    (SHA-256 lookup in serve_tokens.json); none → 401; sets request.state.grant
+  → tool wrapper (handlers/__init__.py, the _HeartbeatMCP proxy):
+    fence.request_grant reads the grant off this call's own HTTP request
+    (the SDK's request_ctx), fence.refusal closes whole-brain tools, then
+    grants.bind(grant) scopes the call
+  → handler → store chokepoints consult grants.current()
+```
+
+**Why the fence sits at the store, not in handlers.** A handler-level check sees
+the arguments a caller *names*; the leaks are in what a call *reaches*. Id-only
+calls (`memory_update`, `memory_forget`, `memory_relate`) name no namespace.
+Widening reruns a scoped search across every namespace. Spreading activation
+and `include_related` walk edges into other namespaces. Context buckets
+aggregate across namespaces. Each of those funnels through the same few store
+functions, so the grant is enforced there: `NamespaceManager`
+(get/list/get_or_create/resolve_name/update/delete), `search_common.build_filters`
+(feeds both the BM25 and semantic pools), `search_listing.fetch_by_ids`,
+`MemoryStore` get/create/update/delete, tags and `resolve_claims`,
+`record_accesses`/`touch_many`, `RelationManager` (an edge write needs write on
+**both** endpoints), the relation repair ops, `cross_namespace_patterns`,
+`capability.lane`, tripwire load/list/add/remove, and the global block of
+`memory_stats` (scoped: namespace inventory only, no log or credential counts).
+
+**Semantics.** Anything outside a grant reads as *not found*, never
+*forbidden*: no existence oracle. An omitted namespace means the grant's own
+namespaces for recall/search/stats/context; a tool that needs exactly one
+namespace under a grant that cannot read the server's default errors
+`namespace is required for this token` without naming the default. Widening stays
+inside the grant. A granted but not-yet-existing namespace is created on first
+write. stdio, CLI commands, background passes (dream, hooks) and the owner
+token are unfenced. No schema change; no MCP tool signature changed.
+
+---
+
 ## Key Decisions
 - **The dream pass computes structure and is forbidden from writing content.**
   A scheduled pass (`dream/`, `gingugu dream`, `memory_dream`) runs PageRank,
@@ -407,9 +451,11 @@ read-only suggest half against the write half - to keep both under the
 - **Local-first, single file.** No server to run, no cloud dependency; the DB is
   portable and inspectable. Trade-off: no built-in multi-user sync (out of scope).
 - **Optional network transport, still single-owner.** `gingugu serve` exposes
-  the brain over HTTP behind one shared Bearer token for a hosted/central
-  instance, but it stays a single SQLite file with no per-user RBAC -
-  multi-tenant auth remains roadmap (see `docs/future-architecture.md`).
+  the brain over HTTP for a hosted/central instance. The owner token keeps full
+  access; each additional client can hold a scoped token limited to named
+  namespaces (see **Scoped tokens**). It stays a single SQLite file and a
+  single owner - scoped tokens partition one owner's brain between clients, not
+  tenants - so multi-tenant auth remains roadmap (see `docs/future-architecture.md`).
 - **Promotion is a client, not server logic.** `gingugu promote` (`promote.py`)
   speaks the public MCP tool surface to two instances - read-only `memory_export`
   from a local brain, filtered `memory_store` into a central brain with a

@@ -60,7 +60,8 @@ Gingugu instance serves Windsurf and Claude Code against one DB.
 | A rewrite is a confirmation | `memory_update` advances `last_confirmed` when title/content actually changed; retype/tag/metadata edits do not | ✅ Shipped (v0.18.0) |
 | Memory Explorer UI | Browse graph + dashboard | ✅ Shipped |
 | `gingugu ui` (launcher) | One command serves the built UI + live `/api/export` on one port (no Node); `--dev` for Vite hot reload. Bundle ships in the wheel | 🔧 Built (v0.9.0, pending release) |
-| `gingugu serve` (transport) | Run over streamable HTTP + Bearer auth (hosted/central). `serve --help` lists its environment-only knobs (`MEMORY_SERVE_*`, `MEMORY_LOG_LEVEL`, `MEMORY_CREDENTIALS_ENABLED`) instead of starting the server; stray arguments exit 2 | ✅ Shipped (`--help` unreleased) |
+| `gingugu serve` (transport) | Run over streamable HTTP + Bearer auth (hosted/central): the owner token has full access, scoped tokens carry per-namespace grants. `serve --help` lists its environment-only knobs (`MEMORY_SERVE_*`, `MEMORY_LOG_LEVEL`, `MEMORY_CREDENTIALS_ENABLED`) instead of starting the server; stray arguments exit 2 | ✅ Shipped (`--help` unreleased) |
+| Scoped serve tokens | `gingugu token add NAME --ns gingugu=write,crow=read` / `list` / `revoke NAME` mint per-client Bearer tokens for `gingugu serve`, each with a per-namespace `read`/`write` grant (`*` = any namespace). Enforced at the store chokepoints; out-of-grant reads as not found. Whole-brain tools (`memory_export`/`import`/`dream`, `credential_*`, namespace admin beyond `list`) are closed to scoped tokens. Hashes only in `<db-dir>/serve_tokens.json` (0600); revocation applies on the next request. The owner token, stdio, CLI and background passes stay unfenced | ✅ Shipped (unreleased) |
 | `MEMORY_CREDENTIALS_ENABLED` flag | Run an instance without the credential vault | ✅ Shipped |
 | `gingugu promote` (client) | Promote local gold → central brain (filter + provenance, idempotent) | ✅ Shipped (Stage 1) |
 | `gingugu init` (bootstrap) | Install the four hooks (SessionStart, Stop, UserPromptSubmit, PreToolUse) + the `/sink-the-ship` skill (Claude Code) or a rules file (`--client`); non-destructive settings merge; `--force` copies anything it replaces to `<name>.bak` first, on every write path, and the target's `.gitignore` gains `.claude/**/*.bak` so those copies are never committed. Ships `sink-the-ship` as `.claude/skills/sink-the-ship/SKILL.md` rather than the legacy `.claude/commands/*.md` format, and retires a legacy copy with a `.bak` so a repo is never left with two definitions answering to one name. Retirement requires a byte-identical match against the current template: no marker means it was never ours, and a marker with changed content means it was ours and the user edited it since. Both are kept and reported | ✅ Shipped (skill format unreleased; backup-on-force v0.18.0) |
@@ -81,8 +82,10 @@ Gingugu instance serves Windsurf and Claude Code against one DB.
 ## Out of Scope (today)
 
 - Multi-user / team sync and per-user RBAC. (A single hosted instance is now
-  possible via `gingugu serve` behind one shared Bearer token, but multi-tenant
-  auth and selective local→central knowledge promotion are roadmap.)
+  possible via `gingugu serve`, with an owner token plus per-client scoped
+  tokens limiting each client to named namespaces - still a single owner, not
+  multi-tenant. Multi-tenant auth and selective local→central knowledge
+  promotion are roadmap.)
 - Cloud storage / managed service.
 - Auto-truth / unattended belief governance (see `docs/future-architecture.md` — roadmap).
 

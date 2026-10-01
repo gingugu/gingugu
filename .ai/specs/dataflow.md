@@ -100,6 +100,14 @@ registered and the freshness signal — which drives scoring, the spread-neighbo
 sort, staleness and `age` — silently rotted. Accepted trade: a one-word typo fix
 also resets the staleness clock.
 
+Under `gingugu serve` a scoped token's grant (`grants.py`) is bound for the
+call and consulted at the same store functions every step above runs through:
+the filter builder that feeds both candidate pools, `fetch_by_ids`, the
+neighbourhood walk, and the access-credit write. A namespace-less recall under
+a grant means the grant's namespaces, widening stays inside it, and a row
+outside it is simply absent - the same as not existing. stdio, CLI, background
+passes and the owner token carry no grant and flow exactly as described.
+
 ## Reconcile
 
 ```

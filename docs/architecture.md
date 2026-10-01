@@ -8,7 +8,9 @@ Two transports ship. **stdio** is the default (`gingugu`): the client spawns the
 server as a child process, and the brain stays entirely on one machine.
 **Streamable HTTP** (`gingugu serve`) puts the same tool surface behind a
 Bearer-token-authenticated endpoint with a `/healthz` probe, for a single brain
-shared across machines or clients. The transport is the only thing that differs;
+shared across machines or clients. The owner token has full access; each extra
+client can hold a scoped token limited to named namespaces (see
+[Scoped Tokens](#scoped-tokens)). The transport is the only thing that differs;
 tools, storage and ranking are identical on both.
 
 ---
@@ -1590,6 +1592,40 @@ it). See README for an example.
 
 ---
 
+## Scoped Tokens
+
+`gingugu serve` accepts two kinds of Bearer token. The **owner token**
+(`MEMORY_SERVE_TOKEN`, or the persisted `<db-dir>/serve_token`) has full access.
+**Scoped tokens** give one client a slice of the brain:
+
+```bash
+gingugu token add laptop-2 --ns gingugu=write,crow=read   # printed once
+gingugu token list
+gingugu token revoke laptop-2                              # effective on the next request
+```
+
+A grant maps namespace names to `read` or `write`; `*` matches any namespace
+(`*=read,scratch=write`). Only SHA-256 hashes are stored, in
+`<db-dir>/serve_tokens.json` (0600, atomic replace).
+
+The auth middleware attaches the resolved grant to the request, the tool wrapper
+binds it for the call, and the store enforces it at its chokepoints (namespace
+lookup, search filters, id fetches, memory writes, relation reads/writes,
+tripwires, stats) rather than in handlers, so id-only calls, widening, spreading
+activation and cross-namespace context buckets cannot step outside it. Anything
+outside a grant reads as **not found**, never forbidden. An omitted namespace
+means the grant's namespaces; a tool needing one namespace under a grant that
+cannot read the server's default errors `namespace is required for this token`.
+A granted namespace that does not exist yet is created on first write. An edge
+write needs `write` on both endpoints.
+
+Whole-brain tools are closed to scoped tokens: `memory_export`, `memory_import`,
+`memory_dream`, every `credential_*` tool, and every `memory_namespaces` action
+except `list`. stdio, CLI commands, background passes (dream, hooks) and the
+owner token are unfenced.
+
+---
+
 ## Schema Migrations
 
 Hand-rolled, keyed off `PRAGMA user_version`. No Alembic, no external tooling
@@ -1633,6 +1669,8 @@ src/gingugu/
 │   # ── Entry points ──────────────────────────────────────────────
 ├── server.py               # MCP server; stdio / serve / promote / init / ui / dream / embed / hook dispatch
 ├── serve.py                # gingugu serve: streamable HTTP + Bearer auth + /healthz
+├── serve_tokens.py         # Scoped serve tokens: hashed token store + `gingugu token` CLI
+├── grants.py               # Per-namespace read/write grants, bound per tool call
 ├── webui.py                # gingugu ui: serves the built Memory Explorer bundle
 ├── promote.py              # gingugu promote: local "gold" -> a central brain
 ├── config.py               # Config + cross-platform DB path (platformdirs)
@@ -1741,6 +1779,7 @@ src/gingugu/
     ├── relation_ops.py     # Batch parsing for relate and unrelate
     ├── consolidate.py      # consolidate
     ├── dream.py            # dream
+    ├── fence.py            # Scoped-token policy: request grant + whole-brain tool refusal
     ├── credentials.py      # credential_store / get / list / delete
     ├── tripwires.py        # memory_tripwire: add / list / remove / test
     ├── admin.py            # namespaces, export, import
