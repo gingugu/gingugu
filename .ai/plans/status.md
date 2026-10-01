@@ -4,7 +4,54 @@ _Last updated: 2026-10-01_
 
 ## In Flight
 
-**Board #1 (capability pointer) on `feature/capability-pointer`.** Memory can
+**Board #1 (scoped serve tokens) on `feature/scoped-serve-tokens`.** Each
+client of `gingugu serve` gets only the namespaces it needs, and the server -
+not the client - holds the fence.
+
+- **Grant model (`grants.py`).** A token's grant maps namespace names to
+  `read` or `write`, `*` for any. Per-namespace rather than per-token because
+  warm minions (#3) need read on a project and write on a scratch namespace.
+  The grant is bound in a `ContextVar` for one tool call; a full grant binds
+  nothing, so stdio, the CLI, background passes and the owner token run
+  exactly the old code path.
+- **Tokens (`serve_tokens.py`, `gingugu token add|list|revoke`).** SHA-256
+  hashes only, in `<db-dir>/serve_tokens.json` (`0600`, atomic replace). The
+  server re-reads the file when its `(mtime, size, inode)` changes, so a
+  revoke is live on the next request. A file in a database table was
+  rejected: a migration for a handful of rows, and the tokens would ride
+  along in every DB backup.
+- **Request to grant.** `BearerAuthMiddleware` resolves the header (owner
+  token = full) and sets `request.state.grant`; the MCP SDK hands every tool
+  call its own HTTP request through `request_ctx`, so the existing tool
+  wrapper (`handlers/__init__.py`) reads it (`handlers/fence.py`) and binds it.
+  An HTTP call with no grant is refused. The SDK's own `token_verifier` path
+  was rejected: it needs OAuth `AuthSettings` and adds protected-resource
+  metadata routes for what is a static token table.
+- **Enforcement at store chokepoints, not handlers.** A Sonnet inventory of
+  all 22 tools found the leaks a handler-only fence misses: id-only calls
+  (`get`/`update`/`forget`, `search(ids=...)`, excerpt, relate, consolidate,
+  tripwires), widening to every namespace on an empty scoped result, spreading
+  activation and `include_related` crossing edges, `memory_context`'s
+  cross-namespace bucket, `memory_edges`' far endpoint, the stats global
+  block. Each now consults the grant: outside it reads as **not found**, never
+  forbidden, so a token cannot probe for what exists. An omitted namespace
+  means the grant, and never echoes the server's default name back.
+- **Whole-brain tools closed** to scoped tokens: export, import, dream, the
+  credential vault, and every `memory_namespaces` action except `list`.
+- **The gate is a canary** (`tests/test_scoped_canary.py`): a hidden namespace
+  that is also the server's configured default, every tool driven at it, zero
+  leaks of its marker text, ids or name, and its rows byte-identical after,
+  access clocks included. Five chokepoints are defence in depth behind
+  `store.get`, invisible end to end, so each is also unit-tested on its own
+  (`tests/test_grants.py`). Disabling any one of the 20 chokepoints fails the
+  suite. Positive paths, including a real HTTP round trip and a
+  revoke with no restart, in `tests/test_scoped_grants.py`.
+- **Rode along:** `capability.lane` treated an empty namespace list as "every
+  namespace".
+
+## Recently Completed
+
+**Board #1 (capability pointer): MERGED as `dcab9d4` (#91).** Memory can
 now say a tool exists, not just how to do the job by hand.
 
 - **`capability` memory type, no migration.** `{run, path?}` lives under a
@@ -31,8 +78,6 @@ now say a tool exists, not just how to do the job by hand.
 - **The prompt hook treats `capability` as actionable**, and the managed
   rules block teaches the write habit (store a reusable script as a
   capability; check `capabilities` before writing one).
-
-## Recently Completed
 
 **Board #1 (tripwires): MERGED as `64b9b08` (#90).** Involuntary recall
 at the action: a `PreToolUse` hook matches the pending tool call against
@@ -712,7 +757,7 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-## The Board (current: 2026-09-30)
+## The Board (current: 2026-10-01)
 
 **Resequenced 2026-09-29 into build order.** The table below is the order the
 work gets done in, top first; `#` is that position. Item numbers used to be
@@ -727,20 +772,22 @@ as #89; both came off and every row moved up. Tripwires (old #10) shipped as #90
 and came off too. A shipped item leaves the table and the rest keep their
 order.
 
+**2026-10-01:** the capability pointer (old #5) shipped as #91 and came off.
+Scoped serve tokens are now #1 and in flight.
+
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **Capability pointer** - IN FLIGHT | 5 | The cheaper half of aboutness; builds straight on the shipped `about` field. See In Flight |
-| 2 | **Scoped serve tokens** | 12 | The foundation for everything that runs over the network |
-| 3 | **One central brain, several clients** | 11 | Mostly built; the rest is physical setup, so it can run in parallel whenever that happens |
-| 4 | **Warm minions** | 13 | Needs 2 |
-| 5 | **A shared board between agents** | 15 | Needs 2 and 3 |
-| 6 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
-| 7 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
-| 8 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
-| 9 | **A referee for rival memory tools** | 17 | Only a fair comparison once 8 exists |
-| 10 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
-| 11 | **Secrets broker** | 16 | Needs 2, and a security review before any build |
-| 12 | Session flight recorder (low priority) | 18 | Check prior art first |
+| 1 | **Scoped serve tokens** - IN FLIGHT | 12 | The foundation for everything that runs over the network. See In Flight |
+| 2 | **One central brain, several clients** | 11 | Mostly built; the rest is physical setup, so it can run in parallel whenever that happens |
+| 3 | **Warm minions** | 13 | Needs 1 |
+| 4 | **A shared board between agents** | 15 | Needs 1 and 2 |
+| 5 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
+| 6 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
+| 7 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
+| 8 | **A referee for rival memory tools** | 17 | Only a fair comparison once 7 exists |
+| 9 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
+| 10 | **Secrets broker** | 16 | Needs 1, and a security review before any build |
+| 11 | Session flight recorder (low priority) | 18 | Check prior art first |
 | - | **Template/sibling noise in retrieval - PARKED** | 1 | Ten dead fixes and no live hypothesis; see below |
 
 ### Previous board (2026-09-28), kept for its numbering
@@ -1303,7 +1350,7 @@ laptops and a non-Claude desktop client (ChatGPT desktop), which today runs
 against its own local copy. Separate copies diverge, which defeats the point of
 long-term memory. Open: which transport each existing client uses today.
 
-### 12. Scoped serve tokens
+### 12. Scoped serve tokens - IN FLIGHT 2026-10-01 (see In Flight)
 
 `BearerAuthMiddleware` (`serve.py`) checks one shared token, and holding it
 means read and write on every namespace. Per-client tokens, each carrying a

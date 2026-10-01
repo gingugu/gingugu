@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Scoped serve tokens: each client of `gingugu serve` gets only the
+  namespaces it needs.** `gingugu token add NAME --ns my-project=write,crow=read`
+  mints a token (printed once) whose grant maps namespaces to `read` or `write`,
+  with `*` for any namespace; `gingugu token list` and `gingugu token revoke`
+  manage them, and a revoke takes effect on the next request without a restart.
+  Only a SHA-256 of each token is stored, in `<db-dir>/serve_tokens.json`
+  (`0600`). The owner token (`MEMORY_SERVE_TOKEN` or `<db-dir>/serve_token`)
+  keeps full access. The grant is enforced by the server at the store, not by
+  the client: anything outside it reads as not found rather than forbidden; an
+  omitted `namespace` means the token's namespaces; widening, spreading
+  activation, related extras, the context cross-namespace bucket, the
+  capability lane, edges, tripwires and stats all stay inside it; and writing
+  an edge needs write on both ends. `memory_export`, `memory_import`,
+  `memory_dream`, the `credential_*` tools and every `memory_namespaces` action
+  except `list` are closed to scoped tokens. stdio, the CLI and the owner token
+  behave exactly as before. No schema migration and no tool signature change.
+
 - **Capability pointers: memory can say a tool exists, not just how to do the
   job by hand.** A new `capability` memory type carries
   `metadata={"capability": {"run": "...", "path": "..."}}`: `run` (how to
@@ -409,6 +426,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   48 proposals. Schema migration 011.
 
 ### Fixed
+
+- **`memory_recall`'s capability lane stays inside the recall's scope when that
+  scope resolves to no namespaces** (for example, a configured namespace that
+  has not been created yet). An empty scope now yields an empty lane rather
+  than one drawn from every namespace.
 
 - **The involuntary-recall hook opens the brain it was pointed at, and only
   that.** A database path containing `#` or `?` cut the SQLite `file:` URI
