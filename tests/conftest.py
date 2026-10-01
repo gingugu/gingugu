@@ -16,6 +16,7 @@ from gingugu.database import Database
 from gingugu.namespaces import NamespaceManager
 from gingugu.relations import RelationManager
 from gingugu.storage import MemoryStore
+from tests.scoped_fixtures import brain  # noqa: F401 - shared fixture for the scoped suites
 
 
 class _MemoryKeyring(KeyringBackend):

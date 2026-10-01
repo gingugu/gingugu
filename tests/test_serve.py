@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+import os
+import stat
+import sys
+
 import pytest
 from starlette.applications import Starlette
 from starlette.responses import PlainTextResponse
@@ -79,6 +84,12 @@ def test_auth_accepts_correct_token():
     assert resp.text == "secret"
 
 
+def test_non_ascii_header_is_a_401_not_a_crash():
+    client = TestClient(_wrapped_app("s3cret"))
+    resp = client.get("/mcp", headers={"Authorization": "Bearer s3cr\u00e9t".encode("latin-1")})
+    assert resp.status_code == 401
+
+
 def test_health_exempt_from_auth():
     resp = TestClient(_wrapped_app("s3cret")).get("/healthz")
     assert resp.status_code == 200
@@ -107,3 +118,27 @@ def test_resolve_token_reuses_persisted(tmp_path):
     first = _resolve_token(None, path)
     second = _resolve_token(None, path)  # stable across restarts
     assert first == second
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
+def test_generated_token_is_owner_only_from_creation(tmp_path):
+    path = tmp_path / "serve_token"
+    _resolve_token(None, path)
+    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
+def test_loose_persisted_token_is_tightened(tmp_path):
+    path = tmp_path / "serve_token"
+    path.write_text("old-token", encoding="utf-8")
+    path.chmod(0o644)
+    assert _resolve_token(None, path) == "old-token"
+    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+
+
+def test_generated_token_is_never_logged(tmp_path, caplog):
+    path = tmp_path / "serve_token"
+    with caplog.at_level(logging.DEBUG, logger="gingugu.serve"):
+        token = _resolve_token(None, path)
+    assert token not in caplog.text
+    assert str(path) in caplog.text

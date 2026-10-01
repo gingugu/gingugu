@@ -139,7 +139,7 @@ fall back to BM25-only.
 <details>
 <summary><strong>Is this ready to use?</strong></summary>
 
-Usable today for local personal workflows. 1118 tests passing covering
+Usable today for local personal workflows. 1236 tests passing covering
 storage, search, migrations, concurrency, credentials, and edges.
 Hardened against adversarial input and write contention. WAL mode for
 concurrency. CI matrix across Python 3.11–3.13 on Linux/macOS/Windows.
@@ -192,7 +192,7 @@ or Rust toolchain required to use it. The MCP SDK is first-class in Python.
 | 📊 **Health Metrics** | Memory stats, dormancy reports, review sweep, namespace overviews |
 | 🔐 **Credential Vault** | Secure service-bundle storage for API keys/tokens via OS Keychain |
 | 🌐 **Memory Explorer UI** | Interactive knowledge graph + dashboard for visualizing memory data |
-| 📡 **Central Brain (optional)** | `gingugu serve` runs the same server over HTTP behind a Bearer token; `gingugu promote` harvests a local brain's durable knowledge up to it with provenance stamps |
+| 📡 **Central Brain (optional)** | `gingugu serve` runs the same server over HTTP behind Bearer tokens, each client scoped to its own namespaces; `gingugu promote` harvests a local brain's durable knowledge up to it with provenance stamps |
 
 ---
 
@@ -254,7 +254,7 @@ uv run gingugu  # or pip install -e .
 
 </details>
 
-> **Usable today.** 21 MCP tools live. 1118 tests passing. Dogfooded daily in
+> **Usable today.** 21 MCP tools live. 1236 tests passing. Dogfooded daily in
 > Claude Code and Windsurf — this repo's own memories live in a Gingugu
 > database. Early and seeking broader real-world validation.
 
@@ -343,8 +343,8 @@ gingugu serve   # streamable HTTP on http://127.0.0.1:8765/mcp
 ```
 
 Every request needs a Bearer token. Set `MEMORY_SERVE_TOKEN` to pin one, or let
-the server generate and persist it to `<db-dir>/serve_token` (printed on first
-start, reused after). Set `MEMORY_SERVE_HOST=0.0.0.0` to accept remote
+the server generate and persist it to `<db-dir>/serve_token` (`0600`, reused
+after; the log shows the path, never the token). Set `MEMORY_SERVE_HOST=0.0.0.0` to accept remote
 connections, and put it behind HTTPS in production — a Bearer token over plain
 HTTP is sniffable. Point a client at it with:
 
@@ -355,8 +355,25 @@ HTTP is sniffable. Point a client at it with:
 } } }
 ```
 
-This is a single shared secret with no per-user RBAC — right-sized for a trusted
-internal endpoint, not a multi-tenant service.
+That token is the owner's and has full access. Give every other client - a
+second laptop, another assistant, a subagent - its own **scoped token** instead,
+limited to the namespaces it needs, each read-only or read-write:
+
+```bash
+gingugu token add laptop-2 --ns my-project=write,crow=read   # printed once
+gingugu token add reviewer --ns '*=read,scratch=write'       # * = any namespace
+gingugu token list
+gingugu token revoke laptop-2                                # live on the next request
+```
+
+The server enforces the grant, not the client: anything outside it reads as
+not found, an omitted `namespace` means the token's namespaces, and the
+whole-brain tools (`memory_export`, `memory_import`, `memory_dream`, the
+credential vault, and namespace admin) are closed to scoped tokens. Only a
+SHA-256 of each token is stored, in `<db-dir>/serve_tokens.json` (`0600`).
+
+This is one owner sharing a brain with their own clients, not a multi-tenant
+service.
 
 ### Promote memories to a central brain (optional)
 
@@ -753,7 +770,7 @@ Environment variables (all optional):
 | `MEMORY_CREDENTIALS_ENABLED` | `true` | Expose the `credential_*` vault tools. Set `false` to run an instance without a secret vault (e.g. a shared/central server) |
 | `MEMORY_SERVE_HOST` | `127.0.0.1` | Bind host for `gingugu serve` (set `0.0.0.0` to accept remote connections) |
 | `MEMORY_SERVE_PORT` | `8765` | Bind port for `gingugu serve` |
-| `MEMORY_SERVE_TOKEN` | *(unset)* | Bearer token required by `gingugu serve`. If unset, a token is read from `<db-dir>/serve_token`, or generated, saved `0600`, and printed |
+| `MEMORY_SERVE_TOKEN` | *(unset)* | The owner's Bearer token for `gingugu serve` (full access). If unset, a token is read from `<db-dir>/serve_token`, or generated and saved `0600` (its path is logged, never the token). Other clients get scoped tokens from `gingugu token add` |
 | `MEMORY_DREAM_IDLE_MINUTES` | `20` | How long the brain must go untouched before `gingugu dream --if-idle` will run. Also the threshold that cancels a run in progress when you come back |
 | `MEMORY_LOG_LEVEL` | `INFO` | Logging verbosity (logs go to **stderr** — stdout is the MCP transport) |
 | `MEMORY_DEBUG` | `false` | Convenience switch for `DEBUG` logging (`MEMORY_LOG_LEVEL` wins if also set) |

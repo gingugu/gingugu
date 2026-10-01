@@ -22,6 +22,7 @@ import sqlite3
 import uuid
 from dataclasses import dataclass
 
+from . import grants
 from .models import utcnow_iso
 
 # Long enough for any real command pattern; short enough that a pasted blob is
@@ -111,6 +112,7 @@ def load_tripwires(conn: sqlite3.Connection, namespaces: list[str]) -> list[Trip
     Pinned ones are NOT skipped. A pin loaded at session start is not the same
     as a pin in front of the agent at the moment it acts.
     """
+    namespaces = [n for n in namespaces if grants.can_read_name(n)]
     if not namespaces:
         return []
     marks = ",".join("?" * len(namespaces))
@@ -179,8 +181,11 @@ def add_tripwire(
     problem = validate_patterns(tool_pattern, input_pattern)
     if problem:
         raise ValueError(problem)
-    if conn.execute("SELECT 1 FROM memories WHERE id = ?", (memory_id,)).fetchone() is None:
+    exists = conn.execute("SELECT 1 FROM memories WHERE id = ?", (memory_id,)).fetchone()
+    # A memory a scoped token cannot see fails exactly like an unknown one.
+    if exists is None or not grants.readable_memories(conn, [memory_id]):
         raise ValueError(f"memory {memory_id!r} not found")
+    grants.require_memory_write(conn, memory_id)
     row = {
         "id": str(uuid.uuid4()),
         "memory_id": memory_id,
@@ -211,6 +216,10 @@ def list_tripwires(
     if namespaces:
         clauses.append(f"n.name IN ({','.join('?' * len(namespaces))})")
         params.extend(namespaces)
+    fence, fence_params = grants.scope_clause("m.namespace_id")
+    if fence is not None:
+        clauses.append(fence)
+        params.extend(fence_params)  # type: ignore[arg-type]
     sql = _LIST_SQL + (" WHERE " + " AND ".join(clauses) if clauses else "")
     sql += " ORDER BY t.created_at, t.id"
     cols = ("id", "memory_id", "tool_pattern", "input_pattern", "created_at", "title", "namespace")
@@ -218,4 +227,13 @@ def list_tripwires(
 
 
 def remove_tripwire(conn: sqlite3.Connection, tripwire_id: str) -> bool:
+    """Delete one trigger. Under a scoped token, a trigger on a memory the
+    grant cannot see is "not found", and removing one needs write on it."""
+    if grants.current() is not None:
+        row = conn.execute(
+            "SELECT memory_id FROM tripwires WHERE id = ?", (tripwire_id,)
+        ).fetchone()
+        if row is None or not grants.readable_memories(conn, [row[0]]):
+            return False
+        grants.require_memory_write(conn, row[0])
     return conn.execute("DELETE FROM tripwires WHERE id = ?", (tripwire_id,)).rowcount > 0

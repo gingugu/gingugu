@@ -27,7 +27,7 @@ import json
 import os
 import sqlite3
 
-from . import embedding_sync
+from . import embedding_sync, grants
 from .embeddings import EmbeddingProvider, cosine
 
 CAPABILITY_TYPE = "capability"
@@ -171,9 +171,16 @@ def lane(
     if isinstance(namespace_id, str):
         sql += " AND namespace_id = ?"
         params.append(namespace_id)
-    elif namespace_id:
+    elif namespace_id is not None:
+        # An empty list is a scope that resolved to nothing - not "everywhere".
+        if not namespace_id:
+            return []
         sql += f" AND namespace_id IN ({', '.join('?' for _ in namespace_id)})"
         params.extend(namespace_id)
+    fence, fence_params = grants.scope_clause("namespace_id")
+    if fence is not None:
+        sql += f" AND {fence}"
+        params.extend(fence_params)
     ids = [r["id"] for r in conn.execute(sql, params).fetchall() if r["id"] not in exclude]
     if not ids:
         return []

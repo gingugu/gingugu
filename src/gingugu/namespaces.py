@@ -11,6 +11,7 @@ import logging
 import sqlite3
 import uuid
 
+from . import grants
 from .config import Config
 from .models import Namespace, utcnow_iso
 
@@ -28,14 +29,21 @@ class NamespaceManager:
         return Namespace(**dict(row))
 
     def resolve_name(self, explicit: str | None = None) -> str:
-        """Resolve the effective namespace name for a request."""
+        """Resolve the effective namespace name for a request.
+
+        Under a scoped token whose grant does not cover the server's default,
+        an omitted namespace is an error that does not name the default -
+        echoing it back would disclose a namespace the token cannot see.
+        """
         if explicit:
             return explicit
         resolved = self._config.resolved_namespace
-        if resolved:
-            return resolved
-        logger.warning("No namespace configured; falling back to %r", DEFAULT_NAMESPACE)
-        return DEFAULT_NAMESPACE
+        if not resolved:
+            logger.warning("No namespace configured; falling back to %r", DEFAULT_NAMESPACE)
+            resolved = DEFAULT_NAMESPACE
+        if not grants.can_read_name(resolved):
+            raise grants.AccessDenied("namespace is required for this token")
+        return resolved
 
     def get_or_create(
         self,
@@ -44,10 +52,18 @@ class NamespaceManager:
         description: str | None = None,
         default_repo: str | None = None,
     ) -> Namespace:
-        """Fetch a namespace by name, creating it if absent."""
+        """Fetch a namespace by name, creating it if absent.
+
+        Under a scoped grant, a namespace the grant cannot read is "not found"
+        whether or not it exists, and minting one takes write on that name.
+        """
+        if not grants.can_read_name(name):
+            raise grants.AccessDenied(f"namespace {name!r} not found")
         row = self._conn.execute("SELECT * FROM namespaces WHERE name = ?", (name,)).fetchone()
         if row is not None:
             return self._row_to_model(row)
+        if not grants.can_write_name(name):
+            raise grants.AccessDenied(f"namespace {name!r} not found")
 
         now = utcnow_iso()
         ns = Namespace(
@@ -78,11 +94,15 @@ class NamespaceManager:
         return ns
 
     def list(self) -> list[Namespace]:
+        """Every namespace this call can see - all of them unless fenced."""
         rows = self._conn.execute("SELECT * FROM namespaces ORDER BY name").fetchall()
-        return [self._row_to_model(r) for r in rows]
+        return [self._row_to_model(r) for r in rows if grants.can_read_name(r["name"])]
 
     def get(self, name: str) -> Namespace | None:
-        """Fetch a namespace by name, or None if it does not exist."""
+        """Fetch a namespace by name, or None if it does not exist (or the
+        call's grant cannot read it - the two are deliberately the same)."""
+        if not grants.can_read_name(name):
+            return None
         row = self._conn.execute("SELECT * FROM namespaces WHERE name = ?", (name,)).fetchone()
         return self._row_to_model(row) if row is not None else None
 
@@ -112,6 +132,8 @@ class NamespaceManager:
         existing = self.get(name)
         if existing is None:
             return None
+        if not grants.can_write_name(name):
+            raise grants.AccessDenied(f"namespace {name!r} is read-only for this token")
         now = utcnow_iso()
         new_default = default_repo if default_repo is not None else existing.default_repo
         self._conn.execute(
@@ -170,6 +192,8 @@ class NamespaceManager:
         existing = self.get(name)
         if existing is None:
             raise ValueError(f"namespace {name!r} not found")
+        if not grants.can_write_name(name):
+            raise grants.AccessDenied(f"namespace {name!r} is read-only for this token")
         memory_count = self.count_memories(existing.id)
         if memory_count > 0 and not cascade:
             raise ValueError(

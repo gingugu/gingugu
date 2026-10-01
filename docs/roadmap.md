@@ -155,6 +155,7 @@ their head. Cold-crawl breadth is the seed; promoted organic gold is the moat.
 | Task | Status | Notes |
 |------|--------|-------|
 | `gingugu serve` - streamable HTTP + Bearer auth | ✅ | Same server over the network; self-persisting token, `/healthz`, `MEMORY_CREDENTIALS_ENABLED=false` for shared instances |
+| Scoped serve tokens: `gingugu token add/list/revoke` | ✅ | Per-client Bearer tokens with per-namespace `read`/`write` grants, enforced at the store chokepoints (not-found, never forbidden); whole-brain and credential tools closed to scoped tokens; hashed at rest, revocation without restart. Owner token unchanged. Unreleased |
 | Promotion **Stage 1**: `gingugu promote` | ✅ | MCP client (server stays a pure store). Exclusion filter (verified, minus episodic/personal tags, minus secret-looking content), provenance stamp, idempotent re-runs, read-only on source |
 | Promotion **Stage 2**: consolidate near-dupes into one canonical memory with `contributors[]` | ⬜ | Dupes from multiple devs = single source of truth + independent confirmation strengthens trust |
 | Promotion **Stage 3**: conflict detection → human-reviewed `contradicts` edges | ⬜ | Small local LLM judge (Ollama), never auto-overwrite |
