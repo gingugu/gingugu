@@ -149,13 +149,44 @@ def require_write_id(namespace_id: str, what: str) -> None:
         raise AccessDenied(f"{what} is read-only for this token")
 
 
-def visible(ids: Iterable[str], namespace_of: Mapping[str, str]) -> list[str]:
-    """Keep the ids whose namespace (looked up in ``namespace_of``) is readable."""
+def _namespaces_of(conn: sqlite3.Connection, memory_ids: list[str]) -> dict[str, str]:
+    if not memory_ids:
+        return {}
+    marks = ", ".join("?" for _ in memory_ids)
+    rows = conn.execute(
+        f"SELECT id, namespace_id FROM memories WHERE id IN ({marks})", memory_ids
+    ).fetchall()
+    return {row[0]: row[1] for row in rows}
+
+
+def readable_memories(conn: sqlite3.Connection, memory_ids: Iterable[str]) -> list[str]:
+    """Keep the memory ids whose namespace this call can read, order preserved.
+
+    Unfenced, every id passes through untouched - including unknown ones, so
+    existing callers see no change. Fenced, an unknown id is dropped too.
+    """
+    ids = list(memory_ids)
     allowed = readable_ids()
     if allowed is None:
-        return list(ids)
+        return ids
     keep = set(allowed)
-    return [i for i in ids if namespace_of.get(i) in keep]
+    owner = _namespaces_of(conn, ids)
+    return [i for i in ids if owner.get(i) in keep]
+
+
+def require_memory_write(conn: sqlite3.Connection, memory_id: str) -> None:
+    """Raise unless this call may modify ``memory_id``.
+
+    Unfenced, this is a no-op. Fenced, an unknown id and a memory the grant
+    cannot read raise the same not-found error, so the refusal is no
+    existence oracle.
+    """
+    if _current.get() is None:
+        return
+    owner = _namespaces_of(conn, [memory_id]).get(memory_id)
+    if owner is None or not can_read_id(owner):
+        raise AccessDenied(f"memory {memory_id!r} not found")
+    require_write_id(owner, f"memory {memory_id!r}")
 
 
 def scope_clause(column: str) -> tuple[str | None, list[object]]:

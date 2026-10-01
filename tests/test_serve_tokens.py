@@ -153,9 +153,7 @@ def test_cli_add_prints_token_once_and_stores_next_to_db(cli_env, capsys):
     assert main(["add", "laptop-2", "--ns", "gingugu=write,crow=read"]) == 0
     out = capsys.readouterr().out
     token = out.strip().splitlines()[-1].strip()
-    assert TokenStore(cli_env).resolve(token) == Grant(
-        "laptop-2", {"gingugu": WRITE, "crow": READ}
-    )
+    assert TokenStore(cli_env).resolve(token) == Grant("laptop-2", {"gingugu": WRITE, "crow": READ})
 
 
 def test_cli_list_and_revoke(cli_env, capsys):

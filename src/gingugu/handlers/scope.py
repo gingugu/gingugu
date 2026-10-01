@@ -16,6 +16,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from .. import grants
 from ..models import Memory
 from . import ServerContext
 from .helpers import _resolve_namespaces, _split_csv
@@ -51,7 +52,9 @@ def read_scope(
             return None, error
         return ReadScope(requested, [ns.id for ns in resolved.values()]), None
     configured = ctx.config.resolved_namespace if use_config else None
-    if not configured:
+    # A scoped token that cannot read the server's configured namespace has
+    # no current project here: an omitted namespace means its whole grant.
+    if not configured or not grants.can_read_name(configured):
         return ReadScope([], []), None
     ns = ctx.namespaces.get(configured)
     return ReadScope([configured], [ns.id] if ns else []), None
