@@ -1,11 +1,26 @@
 # Project Status
 
-_Last updated: 2026-10-01_
+_Last updated: 2026-10-02_
 
 ## In Flight
 
-**Board #2 (warm minions): built on `feature/warm-minions`, tests green,
-awaiting PR.** A subagent gets its own fenced, pre-loaded brain.
+Nothing in flight. Next up is board #1, the central brain.
+
+## Recently Completed
+
+**AI Fridays talk on the Claude Code harness (2026-10-02).** A 12-slide deck
+at `docs/talks/ai-fridays/`, served by GitHub Pages at `/gingugu/talks/ai-fridays/`.
+Covers CLAUDE.md, hooks, permissions, subagent tiers, the model resolution order
+and warm minions, drawn as inline SVG diagrams.
+
+- One HTML partial per slide under `slides/`, fetched in order by `deck.js`, so
+  every file stays under 300 lines. Needs HTTP; `file://` shows an error slide.
+- `ui-pages.yml` copies `docs/talks/` into the built bundle and redeploys on
+  changes there. The talks stay out of `ui/public/` because `ui/dist` ships
+  inside the wheel.
+
+**Board #2 (warm minions): MERGED as `00b070d` (#96).** A subagent gets its
+own fenced, pre-loaded brain.
 
 - `MEMORY_GRANT` fences a stdio server like a scoped serve token; a bad spec or
   `*=write` exits 2 at startup.
@@ -31,8 +46,6 @@ awaiting PR.** A subagent gets its own fenced, pre-loaded brain.
   audit-trigger undo log considered and declined.
 - Tests: `test_stdio_grant`, `test_minion_fence`, `test_subagent_hook`,
   `test_minion_wiring`.
-
-## Recently Completed
 
 **Released 0.19.0 to PyPI (2026-10-01).** Twenty-nine PRs, #65-#93: scoped
 serve tokens, tripwires, capability pointers, provenance and aboutness,
@@ -807,7 +820,7 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-## The Board (current: 2026-10-01, after #92)
+## The Board (current: 2026-10-02, after #96)
 
 **Resequenced 2026-09-29 into build order.** The table below is the order the
 work gets done in, top first; `#` is that position. Item numbers used to be
@@ -825,18 +838,20 @@ order.
 **2026-10-01:** the capability pointer (old #5) shipped as #91 and scoped serve
 tokens (old #12) as #92; both came off.
 
+**2026-10-02:** warm minions (old #13) shipped as #96 and came off; every row
+below it moved up one, and the row-position cross-references moved with them.
+
 | # | Item | Old # | Why this position |
 |---|---|---|---|
 | 1 | **One central brain, several clients** | 11 | Mostly built; the rest is physical setup. Scoped tokens are in, so each client gets its own |
-| 2 | **Warm minions** | 13 | **Built on `feature/warm-minions`, PR pending** (see In Flight); comes off on merge |
-| 3 | **A shared board between agents** | 15 | Needs 1 |
-| 4 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
-| 5 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
-| 6 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
-| 7 | **A referee for rival memory tools** | 17 | Only a fair comparison once 6 exists |
-| 8 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
-| 9 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
-| 10 | Session flight recorder (low priority) | 18 | Check prior art first |
+| 2 | **A shared board between agents** | 15 | Needs 1 |
+| 3 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
+| 4 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
+| 5 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
+| 6 | **A referee for rival memory tools** | 17 | Only a fair comparison once 5 exists |
+| 7 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
+| 8 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
+| 9 | Session flight recorder (low priority) | 18 | Check prior art first |
 | - | **Template/sibling noise in retrieval - PARKED** | 1 | Ten dead fixes and no live hypothesis; see below |
 
 ### Previous board (2026-09-28), kept for its numbering
@@ -1406,13 +1421,13 @@ at the store's chokepoints. Foundation for 11 (a second model family should not
 need write access everywhere) and 13. The design and its tests are under In
 Flight.
 
-### 13. Warm minions
+### 13. Warm minions - SHIPPED 2026-10-02 as #96, off the board
 
 A subagent starts with none of the store's context. Give it read-only access
 scoped to the project namespace, and a scratch namespace to write findings into
 that the main thread reviews before anything reaches a real namespace. The
 fence has to be the server's (item 12), not an instruction. Depends on 12.
-**Built 2026-10-01 on `feature/warm-minions`; see In Flight.**
+The build is under Recently Completed.
 
 ### 14. A calibration ledger
 

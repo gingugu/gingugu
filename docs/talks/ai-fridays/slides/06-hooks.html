@@ -1,0 +1,48 @@
+<section class="slide">
+  <p class="tag">Hooks</p>
+  <h2>Hooks <em>enforce</em> what an instruction can only request</h2>
+  <figure>
+    <svg viewBox="0 0 1000 250" role="img" aria-label="A session timeline with six hooks: SessionStart, UserPromptSubmit, PreToolUse, SubagentStart, PreCompact and Stop. UserPromptSubmit and PreToolUse fire on every turn.">
+      <path d="M250,62 V50 H410 V62" class="ln"/>
+      <text x="330" y="40" text-anchor="middle" class="t-s">every turn</text>
+      <line x1="30" y1="110" x2="970" y2="110" class="ln"/>
+
+      <text x="90" y="84" text-anchor="middle" class="t-m">SessionStart</text>
+      <circle cx="90" cy="110" r="11" class="dot-hot"/>
+      <text x="90" y="146" text-anchor="middle" class="t-s">injects the memory</text>
+      <text x="90" y="162" text-anchor="middle" class="t-s">contract + project facts</text>
+
+      <text x="250" y="84" text-anchor="middle" class="t-m">UserPromptSubmit</text>
+      <circle cx="250" cy="110" r="11" class="dot-hot"/>
+      <text x="250" y="146" text-anchor="middle" class="t-s">surfaces memories the</text>
+      <text x="250" y="162" text-anchor="middle" class="t-s">prompt matches</text>
+
+      <text x="410" y="84" text-anchor="middle" class="t-m">PreToolUse</text>
+      <circle cx="410" cy="110" r="11" class="dot-hot"/>
+      <text x="410" y="146" text-anchor="middle" class="t-s">blocks .env writes and</text>
+      <text x="410" y="162" text-anchor="middle" class="t-s">rm -rf, fires tripwires</text>
+      <rect x="350" y="176" width="120" height="26" rx="13" class="box-no"/>
+      <text x="410" y="194" text-anchor="middle" class="t-no">exit 2 = blocked</text>
+
+      <text x="570" y="84" text-anchor="middle" class="t-m">SubagentStart</text>
+      <circle cx="570" cy="110" r="11" class="dot-hot"/>
+      <text x="570" y="146" text-anchor="middle" class="t-s">warms up a subagent</text>
+      <text x="570" y="162" text-anchor="middle" class="t-s">with task-ranked memories</text>
+
+      <text x="730" y="84" text-anchor="middle" class="t-m">PreCompact</text>
+      <circle cx="730" cy="110" r="11" class="dot-hot"/>
+      <text x="730" y="146" text-anchor="middle" class="t-s">backs up the transcript</text>
+      <text x="730" y="162" text-anchor="middle" class="t-s">before it is summarized</text>
+
+      <text x="890" y="84" text-anchor="middle" class="t-m">Stop</text>
+      <circle cx="890" cy="110" r="11" class="dot-hot"/>
+      <text x="890" y="146" text-anchor="middle" class="t-s">won't end a busy</text>
+      <text x="890" y="162" text-anchor="middle" class="t-s">session with no saves</text>
+    </svg>
+  </figure>
+  <div class="grid g3" style="margin-top:8px">
+    <div class="card hot"><span class="emoji">🧱</span><b>Exit code 2 is a wall</b>It stops the call before permission rules are even checked, so an allow rule can't let it through.</div>
+    <div class="card"><span class="emoji">🪤</span><b>Tripwires</b>A memory pinned to a command. Pin one to <code>git push</code> and it appears right before Claude pushes.</div>
+    <div class="card"><span class="emoji">🧩</span><b>23 events wired</b>Each hook is a small script. Type <code>/hooks</code> to see what yours run.</div>
+  </div>
+</section>

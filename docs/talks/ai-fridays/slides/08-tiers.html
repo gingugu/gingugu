@@ -1,0 +1,39 @@
+<section class="slide">
+  <p class="tag">Subagents</p>
+  <h2><em>Opus</em> decides. <span style="color:var(--sonnet)">Sonnet</span> and <span style="color:var(--haiku)">Haiku</span> do the legwork.</h2>
+  <figure>
+    <svg viewBox="0 0 1000 330" role="img" aria-label="The Opus main thread briefs four subagents and gets findings back: repo-scout and schema-ladder-scout on Haiku, ai-docs-auditor and security-reviewer on Sonnet.">
+      <defs>
+        <marker id="a8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
+      </defs>
+      <rect x="30" y="105" width="280" height="120" rx="18" class="box-hot"/>
+      <text x="170" y="148" text-anchor="middle" class="t-big">Main thread</text>
+      <text x="170" y="172" text-anchor="middle" class="t-b t-hot">Opus</text>
+      <text x="170" y="195" text-anchor="middle" class="t-s">designs, decides, debugs</text>
+
+      <path d="M310,150 C470,150 470,40 636,40" class="ln" marker-end="url(#a8)"/>
+      <path d="M310,160 C480,160 480,125 636,125" class="ln" marker-end="url(#a8)"/>
+      <path d="M310,170 C480,170 480,210 636,210" class="ln" marker-end="url(#a8)"/>
+      <path d="M310,180 C470,180 470,295 636,295" class="ln" marker-end="url(#a8)"/>
+
+      <rect x="640" y="10" width="330" height="60" rx="12" class="box-hai"/>
+      <text x="660" y="36" class="t-m">repo-scout</text><text x="950" y="36" text-anchor="end" class="t-b">Haiku</text>
+      <text x="660" y="55" class="t-s">find every place X appears</text>
+      <rect x="640" y="95" width="330" height="60" rx="12" class="box-hai"/>
+      <text x="660" y="121" class="t-m">schema-ladder-scout</text><text x="950" y="121" text-anchor="end" class="t-b">Haiku</text>
+      <text x="660" y="140" class="t-s">inventory the database migrations</text>
+      <rect x="640" y="180" width="330" height="60" rx="12" class="box-son"/>
+      <text x="660" y="206" class="t-m">ai-docs-auditor</text><text x="950" y="206" text-anchor="end" class="t-b">Sonnet</text>
+      <text x="660" y="225" class="t-s">docs that drifted from the code</text>
+      <rect x="640" y="265" width="330" height="60" rx="12" class="box-son"/>
+      <text x="660" y="291" class="t-m">security-reviewer</text><text x="950" y="291" text-anchor="end" class="t-b">Sonnet</text>
+      <text x="660" y="310" class="t-s">secrets, PII, unsafe paths</text>
+    </svg>
+    <figcaption>Each spawn gets a short brief and a named model. What comes back is findings, not file dumps, so the main thread's context stays clean.</figcaption>
+  </figure>
+  <div class="grid g3" style="margin-top:10px">
+    <div class="card"><b style="color:var(--haiku)">Haiku</b>Mechanical work with one right answer: searches, counts, inventories.</div>
+    <div class="card"><b style="color:var(--sonnet)">Sonnet</b>Bounded reasoning against a clear spec: audits, reviews, code for a settled design.</div>
+    <div class="card hot"><b style="color:var(--hot-ink)">Opus: never a subagent</b>Architecture and debugging stay on the main thread, where the context is.</div>
+  </div>
+</section>

@@ -1,0 +1,50 @@
+<section class="slide">
+  <p class="tag">The fix</p>
+  <h2>Built-in helpers run on Opus unless you <em>name a model</em></h2>
+  <figure>
+    <svg viewBox="0 0 1000 330" role="img" aria-label="Claude Code picks a subagent's model from four sources in order. Explore with no model passed falls all the way to the main conversation's model, Opus. Passing a model on the call stops it at the first rung.">
+      <defs>
+        <marker id="a9" class="m-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
+      </defs>
+      <rect x="20" y="50" width="560" height="56" rx="12" class="box"/>
+      <circle cx="50" cy="78" r="15" class="dot-hot"/><text x="50" y="83" text-anchor="middle" style="fill:#fff;font-weight:800">1</text>
+      <text x="80" y="73" class="t-m">model: on the spawn call</text>
+      <text x="80" y="92" class="t-s">beats everything below it</text>
+      <rect x="20" y="120" width="560" height="56" rx="12" class="box"/>
+      <circle cx="50" cy="148" r="15" class="dot-hot"/><text x="50" y="153" text-anchor="middle" style="fill:#fff;font-weight:800">2</text>
+      <text x="80" y="143" class="t-m">model: in the agent file</text>
+      <text x="80" y="162" class="t-s">"inherit" means use the main model</text>
+      <rect x="20" y="190" width="560" height="56" rx="12" class="box"/>
+      <circle cx="50" cy="218" r="15" class="dot-hot"/><text x="50" y="223" text-anchor="middle" style="fill:#fff;font-weight:800">3</text>
+      <text x="80" y="213" class="t-m">CLAUDE_CODE_SUBAGENT_MODEL</text>
+      <text x="80" y="232" class="t-s">environment default, used by general-purpose</text>
+      <rect x="20" y="260" width="560" height="56" rx="12" class="box-hot"/>
+      <circle cx="50" cy="288" r="15" class="dot-hot"/><text x="50" y="293" text-anchor="middle" style="fill:#fff;font-weight:800">4</text>
+      <text x="80" y="283" class="t-b">The main conversation's model</text>
+      <text x="80" y="302" class="t-s">Opus, for us</text>
+
+      <text x="660" y="22" text-anchor="middle" class="t-m">repo-scout</text>
+      <text x="660" y="38" text-anchor="middle" class="t-s">agent file says haiku</text>
+      <line x1="660" y1="46" x2="660" y2="136" class="ln-dash"/>
+      <circle cx="660" cy="148" r="12" class="dot-hai"/>
+      <text x="680" y="153" class="t-b">Haiku</text>
+
+      <text x="800" y="22" text-anchor="middle" class="t-m">Explore</text>
+      <text x="800" y="38" text-anchor="middle" class="t-s">no model passed</text>
+      <line x1="800" y1="46" x2="800" y2="272" class="ln-hot" marker-end="url(#a9)"/>
+      <circle cx="800" cy="288" r="12" class="dot-hot"/>
+      <text x="820" y="293" class="t-b t-hot">Opus</text>
+
+      <text x="930" y="22" text-anchor="middle" class="t-m">Explore</text>
+      <text x="930" y="38" text-anchor="middle" class="t-s">model: haiku</text>
+      <line x1="930" y1="46" x2="930" y2="66" class="ln-dash"/>
+      <circle cx="930" cy="78" r="12" class="dot-hai"/>
+      <text x="930" y="108" text-anchor="middle" class="t-b">Haiku</text>
+    </svg>
+  </figure>
+  <div class="grid g3" style="margin-top:10px">
+    <div class="card hot"><span class="emoji">✅</span><b>Pass a model on every spawn</b>Rung 1 wins for every agent, built-in or not. Our CLAUDE.md tells Claude to name a tier every time.</div>
+    <div class="card"><span class="emoji">🛟</span><b>Set a default</b><code>CLAUDE_CODE_SUBAGENT_MODEL=sonnet</code> catches general-purpose when someone forgets. Explore and Plan still inherit.</div>
+    <div class="card"><span class="emoji">🚫</span><b>Deny Opus by name</b><code>Agent(model:opus)</code> in deny blocks any spawn that asks for Opus.</div>
+  </div>
+</section>
