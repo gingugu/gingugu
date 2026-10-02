@@ -38,7 +38,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    loads: pins first, then ranked tails interleaved by rank), `search`, `stats`,
    `excerpt`, `relations` (+ `relation_ops`),
    `consolidate`, `dream`, `admin`, `credentials`, `tripwires`, `capability_view`, `fence`
-   (the scoped-token policy; see Scoped tokens), plus `summaries` (payload
+   (the scoped-token policy and the stdio `MEMORY_GRANT` policy, `stdio_grant`; see Scoped tokens and Warm minions), plus `summaries` (payload
    shapes: full summary, compact summary, the picker between them), `choices`
    (enum argument parsing shared by every write-surface field with a controlled
    vocabulary), `helpers` and `scope` (the read scope recall and search share:
@@ -48,7 +48,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `context`, `relations`, `consolidation`, `decay`, `stats`, `namespaces`,
    `portability`, `capability`, `grants` (the per-call grant every chokepoint
    consults), `serve_tokens`, `tripwire` (the decision half of the `PreToolUse` hook; see
-   Key Decisions). `storage` owns the `memories` row only; the satellite tables
+   Key Decisions), `minion_fence` and `subagent_hook` (see Warm minions). `storage` owns the `memories` row only; the satellite tables
    it drags along have their own owners (`tags`, `access`, `embedding_sync`,
    `claim_sync`), reached through the `storage_derived.DerivedTables`
    delegation surface, which also carries `log_query` for `query_log` (owned by
@@ -368,8 +368,44 @@ namespaces for recall/search/stats/context; a tool that needs exactly one
 namespace under a grant that cannot read the server's default errors
 `namespace is required for this token` without naming the default. Widening stays
 inside the grant. A granted but not-yet-existing namespace is created on first
-write. stdio, CLI commands, background passes (dream, hooks) and the owner
-token are unfenced. No schema change; no MCP tool signature changed.
+write. stdio without `MEMORY_GRANT`, CLI commands, background passes (dream,
+hooks) and the owner token are unfenced. No schema change; no MCP tool
+signature changed.
+
+## Warm minions (stdio grant, warm-up, minion fence)
+
+A subagent gets its own fenced brain and arrives already knowing the task.
+
+- **`MEMORY_GRANT`** (`config.grant`, `handlers/fence.stdio_grant`,
+  `ServerContext.stdio_grant`): a stdio server started with
+  `MEMORY_GRANT="ns=read|write,..."` runs under that grant through the same
+  chokepoints as a scoped token - whole-brain tools closed, outside the grant
+  reads as not found. Unset is the full grant. Parsed before the database
+  opens; a bad spec or `*=write` raises and `main` exits 2, so a typo can never
+  fall back to the whole brain.
+- **Fenced agent files** declare an inline `brain` stdio server with
+  `MEMORY_GRANT` and `MEMORY_CREDENTIALS_ENABLED=false`, list `mcp__brain` in
+  `tools`, and put `mcp__gingugu` in `disallowedTools`: a subagent otherwise
+  inherits the parent's full-brain server.
+- **Warm-up** (`subagent_hook.py`, `SubagentStart` doorway): `SubagentStart`
+  has no task prompt, so the `PreToolUse` hook stashes the spawning `Agent`
+  call's prompt (`hook-sessions/spawns-<session>.json`, 300s TTL, 0600, only for
+  fenced agents) and the
+  warm-up takes it as `task_hint`. Ranking is `build_context` on a read-only
+  connection under `grants.bind`; compact lines go out as `additionalContext`.
+  No grant in the agent file, no warm-up.
+- **Minion fence** (`minion_fence.py`, first thing in `tool_hook.run`): only
+  when the payload has `agent_id`. Denies file tools on the data dir (and
+  Grep/Glob rooted at or above it), shell
+  commands naming the data dir, the database file, the sqlite CLI or the
+  gingugu CLI in command position (a speed bump), and the write and
+  `credential_*` tools of the inherited `mcp__gingugu__` server (reads open),
+  which also covers built-in agents such as Explore. Own switch
+  `MEMORY_MINION_FENCE=off`, independent of `MEMORY_TRIPWIRES`. The tripwire
+  doorway passes `mcp__gingugu__*` through when `agent_id` is set so the fence
+  decides.
+- **Threat model:** prevents accidents, not a hostile same-user process. An OS
+  sandbox and an audit-trigger undo log were considered and declined.
 
 ---
 
@@ -474,7 +510,7 @@ token are unfenced. No schema change; no MCP tool signature changed.
   Anthropic's docs steer new work to; the legacy `.claude/commands/` copy is
   retired with a `.bak` only when it is byte-identical to the template we would
   have written, and kept when it differs - the marker says we once wrote a file,
-  not that the user left it alone) - merging all four hooks into `.claude/settings.json`
+  not that the user left it alone) - plus a `SubagentStart` hook (minion warm-up, `.claude/hooks/subagent_warmup.py`) - merging all five hooks into `.claude/settings.json`
   non-destructively (`settings.py`) and appending the hooks' runtime artifacts
   (`logs/`, `.claude/data/`, `.claude/settings.local.json`,
   `.claude/hooks/**/__pycache__/`, `.claude/**/*.bak`) to the target's `.gitignore`
@@ -706,7 +742,8 @@ token are unfenced. No schema change; no MCP tool signature changed.
   call is to deny it. The first matching call per session per memory is denied
   with the memory as the reason; the same call re-issued unchanged passes
   (per-session suppression, separate from the prompt hook's state).
-  `mcp__gingugu__*` tools never trip, so a bad tripwire can always be repaired.
+  `mcp__gingugu__*` tools never trip, so a bad tripwire can always be repaired
+  (inside a subagent the separate minion fence still denies their writes).
   Pinned memories still trip - a pin loaded at session start is not in front
   of the agent at the moment it acts - while deprecated and superseded ones do
   not. `tripwire.load_tripwires` is the single seam where a remote brain (via
