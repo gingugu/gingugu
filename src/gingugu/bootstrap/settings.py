@@ -2,7 +2,7 @@
 
 The target repo may already have a settings.json with its own hooks and
 permissions. We add only our own hook entries (SessionStart, Stop, UserPromptSubmit,
-PreToolUse), back up any existing file first, and never touch anything else.
+PreToolUse, SubagentStart), back up any existing file first, and never touch anything else.
 Idempotent: re-running is a no-op.
 """
 
@@ -16,6 +16,7 @@ SESSION_START_CMD = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/session_start.py"
 STOP_CMD = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/stop.py --check-memory-saves"
 PROMPT_RECALL_CMD = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/user_prompt_recall.py"
 TRIPWIRE_CMD = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/pre_tool_tripwire.py"
+WARMUP_CMD = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/subagent_warmup.py"
 
 # (event name, command, timeout, marker used to detect an existing entry)
 #
@@ -25,11 +26,15 @@ TRIPWIRE_CMD = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/pre_tool_tripwire.py"
 #
 # PreToolUse gets 15s rather than the 600s default: it runs on every tool call,
 # so a hung hook should surrender well before it stalls the whole session.
+#
+# SubagentStart gets 20s: the spawn waits on it, and a cold encoder load for the
+# task hint is the slow part. Past that the minion simply starts cold.
 _HOOKS = [
     ("SessionStart", SESSION_START_CMD, 15, "session_start.py"),
     ("Stop", STOP_CMD, 30, "stop.py"),
     ("UserPromptSubmit", PROMPT_RECALL_CMD, 20, "user_prompt_recall.py"),
     ("PreToolUse", TRIPWIRE_CMD, 15, "pre_tool_tripwire.py"),
+    ("SubagentStart", WARMUP_CMD, 20, "subagent_warmup.py"),
 ]
 
 
@@ -42,6 +47,7 @@ _KNOWN_FLAGS = {
     "stop.py": {"--check-memory-saves", "--min-tool-calls"},
     "user_prompt_recall.py": set(),
     "pre_tool_tripwire.py": set(),
+    "subagent_warmup.py": set(),
 }
 
 # `parser.add_argument("--flag"` / `'--flag'`, across line breaks.

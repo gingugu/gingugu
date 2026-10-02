@@ -11,6 +11,7 @@ import functools
 from dataclasses import dataclass
 
 from ..config import Config
+from ..grants import FULL, Grant
 from ..namespaces import NamespaceManager
 from ..storage import MemoryStore
 
@@ -26,6 +27,9 @@ class ServerContext:
     # "stdio", so the default fails closed: a context that never said what it
     # is gets no file writes.
     transport: str = "unknown"
+    # What a stdio caller may touch: full, unless MEMORY_GRANT narrowed it for
+    # a warm minion's own server. Ignored under any other transport.
+    stdio_grant: Grant = FULL
 
 
 class _HeartbeatMCP:
@@ -64,7 +68,7 @@ class _HeartbeatMCP:
                 from .fence import refusal, request_grant
 
                 try:
-                    grant = request_grant(ctx.transport)
+                    grant = request_grant(ctx.transport, ctx.stdio_grant)
                     if grant is None:
                         return {"ok": False, "error": "unauthorized"}
                     refused = refusal(fn.__name__, grant, kwargs)
