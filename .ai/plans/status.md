@@ -22,8 +22,11 @@ awaiting PR.** A subagent gets its own fenced, pre-loaded brain.
   only; session ids sanitised; set-but-blank `MEMORY_GRANT` refuses to start;
   grant parsed only from the `mcpServers` env block. Accepted: the fence keys on
   the server name `gingugu`; a failed hook fails open (accidents threat model).
-- Inline agent-file servers on Claude Code >= 2.1.238 load only in a trusted
-  folder; verified loading in a trusted repo on 2.1.287.
+- Inline agent-file servers: verified on Claude Code 2.1.215 and 2.1.287. On
+  2.1.287 a project agent file needs the folder trusted; a user-level agent
+  (`~/.claude/agents/`) loads untrusted.
+- `gingugu init` allows `mcp__brain` in the repo and user-level settings, so a
+  fenced minion's calls are not denied in repos that never allowed it.
 - Threat model: accidents, not a hostile same-user process; OS sandbox and an
   audit-trigger undo log considered and declined.
 - Tests: `test_stdio_grant`, `test_minion_fence`, `test_subagent_hook`,

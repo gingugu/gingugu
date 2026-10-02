@@ -140,7 +140,7 @@ fall back to BM25-only.
 <details>
 <summary><strong>Is this ready to use?</strong></summary>
 
-Usable today for local personal workflows. 1361 tests passing covering
+Usable today for local personal workflows. 1370 tests passing covering
 storage, search, migrations, concurrency, credentials, and edges.
 Hardened against adversarial input and write contention. WAL mode for
 concurrency. CI matrix across Python 3.11–3.13 on Linux/macOS/Windows.
@@ -255,7 +255,7 @@ uv run gingugu  # or pip install -e .
 
 </details>
 
-> **Usable today.** 21 MCP tools live. 1361 tests passing. Dogfooded daily in
+> **Usable today.** 21 MCP tools live. 1370 tests passing. Dogfooded daily in
 > Claude Code and Windsurf — this repo's own memories live in a Gingugu
 > database. Early and seeking broader real-world validation.
 
@@ -587,6 +587,10 @@ It installs:
   you. Set `MEMORY_MINION_FENCE=off` to disable the fence.
 - All five hooks wired into `.claude/settings.json`, **merged non-destructively** —
   any existing config is backed up (`settings.json.bak`) and preserved.
+- `mcp__brain` added to `permissions.allow`, in the repo's `.claude/settings.json`
+  and in your user-level `~/.claude/settings.json` (backed up, idempotent), so a
+  fenced minion's calls to its own `brain` server are not denied or prompted in
+  any repo. The server enforces the grant; the allow grants nothing beyond it.
 - The runtime artifacts the hooks generate (`logs/`, `.claude/data/`,
   `.claude/settings.local.json`), and the `.bak` copies `init` itself saves,
   appended to your `.gitignore` — so a session transcript never gets

@@ -511,7 +511,8 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   retired with a `.bak` only when it is byte-identical to the template we would
   have written, and kept when it differs - the marker says we once wrote a file,
   not that the user left it alone) - plus a `SubagentStart` hook (minion warm-up, `.claude/hooks/subagent_warmup.py`) - merging all five hooks into `.claude/settings.json`
-  non-destructively (`settings.py`) and appending the hooks' runtime artifacts
+  non-destructively (`settings.py`), allowing `mcp__brain` there and in the
+  user-level `~/.claude/settings.json` (`init_user_permissions`) and appending the hooks' runtime artifacts
   (`logs/`, `.claude/data/`, `.claude/settings.local.json`,
   `.claude/hooks/**/__pycache__/`, `.claude/**/*.bak`) to the target's `.gitignore`
   so transcripts never get committed. Output is a themed 90s boot sequence

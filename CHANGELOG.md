@@ -47,6 +47,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `gingugu init` now wires five hooks (adds `SubagentStart`). The tripwire
   doorway passes `mcp__gingugu__*` through inside a subagent so the minion
   fence, not the tripwire, decides those calls.
+- `gingugu init` allows `mcp__brain` in `permissions.allow`, both in the repo's
+  `.claude/settings.json` and the user-level `~/.claude/settings.json` (backed
+  up to `settings.json.bak`, idempotent, an unparseable file left alone), so
+  fenced minions - including global ones in `~/.claude/agents/` - can call their
+  own server in any repo.
 
 ---
 

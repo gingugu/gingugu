@@ -170,3 +170,57 @@ def load_settings(path: Path) -> dict:
 def write_settings(path: Path, settings: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(settings, indent=2) + "\n")
+
+
+# --- the warm-minion permission ---------------------------------------------
+#
+# A fenced minion's memory calls go to its own `brain` server. Where
+# `mcp__brain` is not allowed they are permission-denied (or prompt), so init
+# allows it wherever it installs the rest of the wiring. The server enforces the
+# fence, so allowing the tools grants nothing the grant does not.
+
+MINION_ALLOW = "mcp__brain"
+
+
+def merge_permissions(settings: dict) -> bool:
+    """Add ``MINION_ALLOW`` to ``permissions.allow``; True when it changed.
+
+    An unexpected shape (``permissions`` or ``allow`` not what Claude Code
+    writes) is left untouched rather than clobbered.
+    """
+    permissions = settings.setdefault("permissions", {})
+    if not isinstance(permissions, dict):
+        return False
+    allow = permissions.setdefault("allow", [])
+    if not isinstance(allow, list) or MINION_ALLOW in allow:
+        return False
+    allow.append(MINION_ALLOW)
+    return True
+
+
+def user_settings_path() -> Path:
+    return Path.home() / ".claude" / "settings.json"
+
+
+def init_user_permissions(*, dry_run: bool, path: Path | None = None) -> list[str]:
+    """Allow ``mcp__brain`` in the user-level settings, for global minions.
+
+    Additive and idempotent, with a ``settings.json.bak`` of the previous bytes.
+    A file that does not parse is a hand-edited file mid-change: never
+    overwrite it.
+    """
+    path = path or user_settings_path()
+    raw = path.read_text() if path.exists() else None
+    try:
+        settings = json.loads(raw) if raw else {}
+    except json.JSONDecodeError:
+        return [f"  WARNING: {path} does not parse; {MINION_ALLOW} not allowed there"]
+    if not isinstance(settings, dict) or not merge_permissions(settings):
+        return [f"  {MINION_ALLOW} already allowed (no change) {path}"]
+    if dry_run:
+        return [f"  would allow {MINION_ALLOW} in {path}"]
+    if raw is not None:
+        path.with_name("settings.json.bak").write_text(raw)
+    write_settings(path, settings)
+    note = " (backed up existing to settings.json.bak)" if raw is not None else ""
+    return [f"  allowed {MINION_ALLOW} in {path}{note}"]

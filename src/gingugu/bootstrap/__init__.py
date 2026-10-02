@@ -20,7 +20,14 @@ from ._files import read_template as _read_template
 from ._files import retire_file as _retire_file
 from ._files import write_file as _write_file
 from .global_rules import init_global_rules, init_repo_rules
-from .settings import load_settings, merge_settings, write_settings
+from .settings import (
+    MINION_ALLOW,
+    init_user_permissions,
+    load_settings,
+    merge_permissions,
+    merge_settings,
+    write_settings,
+)
 
 CLIENT_RULES_FILES = {
     "windsurf": ".windsurfrules",
@@ -147,6 +154,8 @@ def init_claude_code(target: Path, *, force: bool, dry_run: bool, adopt: bool = 
     settings_path = target / ".claude" / "settings.json"
     raw = settings_path.read_text() if settings_path.exists() else None
     settings, added, warnings = merge_settings(load_settings(settings_path), hooks_dir=hooks_dir)
+    if merge_permissions(settings):
+        added = [*added, f"permissions.allow {MINION_ALLOW}"]
     if added:
         if not dry_run:
             if raw is not None:
@@ -174,6 +183,9 @@ def init_claude_code(target: Path, *, force: bool, dry_run: bool, adopt: bool = 
     # touching a hand-authored file loaded in every session.
     results.append("")
     results.extend(init_global_rules(dry_run=dry_run, adopt=adopt))
+    # Global minions (~/.claude/agents) run in every repo, so their permission
+    # lives in the user-level settings too. Additive, backed up, idempotent.
+    results.extend(init_user_permissions(dry_run=dry_run))
 
     # Same rationale, aimed at the repo's own CLAUDE.md / AGENTS.md instead of
     # the user-level file. Only touches files that already exist — see
