@@ -253,7 +253,13 @@ def test_init_backs_up_and_warns_on_a_stop_py_it_did_not_write(tmp_path):
 
 def test_merge_settings_reports_added_events():
     settings, added, warnings = merge_settings({})
-    assert set(added) == {"SessionStart", "Stop", "UserPromptSubmit", "PreToolUse"}
+    assert set(added) == {
+        "SessionStart",
+        "Stop",
+        "UserPromptSubmit",
+        "PreToolUse",
+        "SubagentStart",
+    }
     assert warnings == []
     _, added_again, _ = merge_settings(settings)
     assert added_again == []

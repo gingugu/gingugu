@@ -106,7 +106,7 @@ async def brain(tmp_path, monkeypatch) -> Brain:
     with monkeypatch.context() as seeding:
         # An in-process call carries no HTTP request, so under the http
         # transport it is refused; seed as the owner, then drop the override.
-        seeding.setattr("gingugu.handlers.fence.request_grant", lambda _t: FULL)
+        seeding.setattr("gingugu.handlers.fence.request_grant", lambda *_: FULL)
         await _seed(b)
     return b
 
@@ -152,4 +152,4 @@ async def _seed(b: Brain) -> None:
 
 def scope_to(monkeypatch, grant: Grant = GRANT) -> None:
     """Make every later tool call arrive as ``grant``'s token."""
-    monkeypatch.setattr("gingugu.handlers.fence.request_grant", lambda _transport: grant)
+    monkeypatch.setattr("gingugu.handlers.fence.request_grant", lambda *_: grant)

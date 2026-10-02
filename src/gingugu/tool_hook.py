@@ -1,4 +1,9 @@
-"""``gingugu hook tool`` - the PreToolUse entry point for tripwires.
+"""``gingugu hook tool`` - the PreToolUse entry point for tripwires and minions.
+
+Inside a subagent the minion fence (``minion_fence``) is asked first, and it
+runs even with tripwires switched off: the two are separate switches. A call
+that spawns a subagent has its task prompt stashed for the SubagentStart
+warm-up (``subagent_hook``), which is never told what the task is.
 
 Claude Code runs this before every tool call and waits for it. The only way
 to speak BEFORE a call runs is to deny it: a PreToolUse ``additionalContext``
@@ -35,7 +40,9 @@ def enabled() -> bool:
 def _state_path(db_path: Path, session_id: str) -> Path:
     # Its own file beside the prompt hook's: each hook rewrites its file whole,
     # so sharing one would let either erase the other's state.
-    return db_path.parent / "hook-sessions" / f"tripwires-{session_id}.json"
+    from .subagent_hook import safe_session
+
+    return db_path.parent / "hook-sessions" / f"tripwires-{safe_session(session_id)}.json"
 
 
 def load_tripped(db_path: Path, session_id: str) -> set[str]:
@@ -81,6 +88,38 @@ def _log_trip(db_path: Path, session_id: str, text: str, ids: list[str], ns: lis
         conn.close()
 
 
+def _deny_minion(reason: str) -> None:
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "deny",
+                    "permissionDecisionReason": f"gingugu minion fence: {reason}.",
+                }
+            }
+        )
+    )
+
+
+def _minion_and_spawn(payload: dict) -> bool:
+    """Fence a subagent's call, or stash a spawn's prompt. True = denied."""
+    from . import minion_fence, subagent_hook
+    from .config import load_config
+
+    if payload.get("agent_id"):
+        if not minion_fence.enabled():
+            return False
+        reason = minion_fence.decide(payload, load_config().db_path.parent)
+        if reason:
+            _deny_minion(reason)
+            return True
+        return False
+    if payload.get("tool_name") in subagent_hook.SPAWN_TOOLS:
+        subagent_hook.stash_spawn(load_config().db_path, payload)
+    return False
+
+
 def _emit(reason: str, count: int) -> None:
     print(
         json.dumps(
@@ -100,6 +139,8 @@ def _emit(reason: str, count: int) -> None:
 
 def run(payload: dict) -> int:
     """Decide and print. Returns the process exit code (always 0)."""
+    if _minion_and_spawn(payload):
+        return 0
     if not enabled():
         return 0
     tool_name = payload.get("tool_name") or ""

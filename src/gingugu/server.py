@@ -28,6 +28,11 @@ def build_server(transport: str = "stdio") -> FastMCP:
     """
     config = load_config()
     from .config import setup_logging
+    from .handlers.fence import stdio_grant
+
+    # Parsed before anything opens the database: a grant that cannot be
+    # honoured stops the server here rather than serving the whole brain.
+    grant = stdio_grant(config.grant) if transport == "stdio" else None
 
     setup_logging(config.log_level)
     logger.info("Starting Gingugu (namespace=%s)", config.resolved_namespace)
@@ -61,6 +66,10 @@ def build_server(transport: str = "stdio") -> FastMCP:
         conn=conn,
         transport=transport,
     )
+    if grant is not None:
+        ctx.stdio_grant = grant
+        if not grant.is_full:
+            logger.info("stdio fenced by MEMORY_GRANT: %s", dict(grant.namespaces))
 
     mcp = FastMCP("gingugu")
     register_all(mcp, ctx)
@@ -87,9 +96,13 @@ Usage:
   gingugu hook prompt          Involuntary recall: reads a UserPromptSubmit
                                event on stdin and surfaces memories the prompt
                                woke. Wired by `gingugu init`; not run by hand.
-  gingugu hook tool            Tripwires: reads a PreToolUse event on stdin and
-                               stops a call that matches a memory's tripwire.
-                               Wired by `gingugu init`; not run by hand.
+  gingugu hook tool            Tripwires + minion fence: reads a PreToolUse
+                               event on stdin; stops a call that matches a
+                               memory's tripwire, or a subagent reaching past
+                               its fence. Wired by `gingugu init`.
+  gingugu hook subagent        Warm minions: reads a SubagentStart event and
+                               injects the memories the subagent's grant can
+                               read. Wired by `gingugu init`; not run by hand.
 
 Options:
   -h, --help                   Show this help and exit.
@@ -168,8 +181,12 @@ def main() -> None:
             from .tool_hook import main as tool_hook_main
 
             raise SystemExit(tool_hook_main())
+        if sys.argv[2:3] == ["subagent"]:
+            from .subagent_hook import main as subagent_hook_main
+
+            raise SystemExit(subagent_hook_main())
         if sys.argv[2:3] != ["prompt"]:
-            print("gingugu hook: expected 'prompt' or 'tool'", file=sys.stderr)
+            print("gingugu hook: expected 'prompt', 'tool' or 'subagent'", file=sys.stderr)
             raise SystemExit(2)
         from .prompt_hook import main as hook_main
 
@@ -182,7 +199,12 @@ def main() -> None:
         print(f"gingugu: unknown command '{cmd[0]}'\n", file=sys.stderr)
         print(USAGE, file=sys.stderr)
         raise SystemExit(2)
-    build_server().run()
+    try:
+        server = build_server()
+    except ValueError as exc:
+        print(f"gingugu: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+    server.run()
 
 
 if __name__ == "__main__":

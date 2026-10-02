@@ -45,7 +45,7 @@ def http_server(tmp_path, monkeypatch):
     from gingugu.server import build_server
 
     # In-process calls carry no HTTP request; call as the owner.
-    monkeypatch.setattr("gingugu.handlers.fence.request_grant", lambda _t: FULL)
+    monkeypatch.setattr("gingugu.handlers.fence.request_grant", lambda *_: FULL)
     return build_server(transport="http")
 
 
