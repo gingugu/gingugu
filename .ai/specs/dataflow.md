@@ -105,8 +105,10 @@ call and consulted at the same store functions every step above runs through:
 the filter builder that feeds both candidate pools, `fetch_by_ids`, the
 neighbourhood walk, and the access-credit write. A namespace-less recall under
 a grant means the grant's namespaces, widening stays inside it, and a row
-outside it is simply absent - the same as not existing. stdio, CLI, background
-passes and the owner token carry no grant and flow exactly as described.
+outside it is simply absent - the same as not existing. A stdio server started
+with `MEMORY_GRANT` (a warm minion's own server) binds its grant the same way.
+stdio without it, CLI, background passes and the owner token carry no grant and
+flow exactly as described.
 
 ## Reconcile
 
@@ -468,9 +470,13 @@ governs truth status governs this.
 
 ```
 PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
-  → drops mcp__gingugu__* HERE, before the package is imported: our own tools
-    are how a bad tripwire gets repaired, so they never trip
-  → survivors piped to `gingugu hook tool`   (MEMORY_TRIPWIRES=off: exit)
+  → on the main thread, drops mcp__gingugu__* HERE, before the package is
+    imported: our own tools are how a bad tripwire gets repaired, so they never
+    trip (inside a subagent they pass through - see "Warm minions" below)
+  → survivors piped to `gingugu hook tool`
+      → minion fence / spawn stash first (see "Warm minions"; independent of
+        MEMORY_TRIPWIRES)
+      → MEMORY_TRIPWIRES=off: exit
       → load_tripwires(crow + <cwd-derived project>)   read-only SQLite
           skips deprecated and superseded memories; pinned ones DO trip
           (a pin loaded at session start is not in front of the agent now)
@@ -501,6 +507,44 @@ the rows (`add` / `list` / `remove`) and `test` is a dry run of the same
 matching that never denies and never logs. Accepted v1 limitation: after
 context compaction the memory may drop out of context while suppression still
 counts it as shown.
+
+## Warm minions (SubagentStart + the minion fence)
+
+```
+Agent tool call (main thread)  →  PreToolUse  →  `gingugu hook tool`
+  → no agent_id + tool Agent/Task: stash tool_input.prompt keyed by
+    (session_id, subagent_type) in hook-sessions/spawns-<session_id>.json
+    (300s TTL, 0600, stale files swept, unsafe session ids hashed) - only when
+    the spawned agent's file carries a grant; never blocks the spawn
+
+subagent starts  →  SubagentStart  →  .claude/hooks/subagent_warmup.py
+  → `gingugu hook subagent`
+      → take the oldest stashed prompt for (session, agent_type) = task_hint
+      → find the agent file whose frontmatter `name` is agent_type
+        ($CLAUDE_PROJECT_DIR, then ~/.claude/agents); read MEMORY_GRANT from
+        its frontmatter. No grant → exit silently (no warm-up)
+      → read-only SQLite, grants.bind(grant): build_context per readable
+        namespace (encoder only if there is a hint), de-duplicated
+      → additionalContext: compact lines + which namespaces it may write
+  → the subagent's own stdio server (inline `mcpServers` in the agent file)
+    runs with MEMORY_GRANT: same store chokepoints as a scoped serve token
+
+every subagent tool call  →  PreToolUse (agent_id present)
+  → minion_fence.decide (MEMORY_MINION_FENCE=off disables):
+      file tools on the data dir, or Grep/Glob rooted
+        at or above it                                 → deny  (holds)
+      shell naming data dir / memories.db / sqlite3 /
+        running the gingugu CLI in command position    → deny  (speed bump)
+      inherited mcp__gingugu__ write tools + credential_* → deny
+      anything else                                    → tripwires as usual
+```
+
+SubagentStart carries no task prompt, which is why the spawn is stashed one
+hook earlier; two parallel spawns of one type can swap hints, which costs
+ranking, never the fence (both share one grant). The shell check matches
+command text, so prose containing those words (a heredoc, an echo) can be
+denied too - a known speed-bump edge. Threat model: accidents, not a hostile
+same-user process.
 
 ## Relations + spreading activation
 

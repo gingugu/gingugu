@@ -70,9 +70,10 @@ batching to the end, build a relation only when it records something search
 cannot infer. There is no rules file to paste and nothing to remember to do —
 the harness runs it whether or not the agent feels like it. A **stop hook**
 then checks that a session with real work in it actually wrote something down.
-Two more hooks bring memory to you: **involuntary recall** surfaces what your
-prompt woke, and **tripwires** stop a tool call that a memory says must not be
-missed, before it runs.
+Three more hooks bring memory to you: **involuntary recall** surfaces what your
+prompt woke, **tripwires** stop a tool call that a memory says must not be
+missed, before it runs, and **warm minions** hand a subagent a fenced,
+pre-loaded brain of its own.
 
 That is the part that makes the memory worth having, and it is in the box.
 
@@ -139,7 +140,7 @@ fall back to BM25-only.
 <details>
 <summary><strong>Is this ready to use?</strong></summary>
 
-Usable today for local personal workflows. 1236 tests passing covering
+Usable today for local personal workflows. 1361 tests passing covering
 storage, search, migrations, concurrency, credentials, and edges.
 Hardened against adversarial input and write contention. WAL mode for
 concurrency. CI matrix across Python 3.11–3.13 on Linux/macOS/Windows.
@@ -254,7 +255,7 @@ uv run gingugu  # or pip install -e .
 
 </details>
 
-> **Usable today.** 21 MCP tools live. 1236 tests passing. Dogfooded daily in
+> **Usable today.** 21 MCP tools live. 1361 tests passing. Dogfooded daily in
 > Claude Code and Windsurf — this repo's own memories live in a Gingugu
 > database. Early and seeking broader real-world validation.
 
@@ -567,14 +568,24 @@ It installs:
   PR). Triggers are plain regexes over the tool name and its input, with no
   model judging relevance. The first matching call in a session is denied once,
   with the memory as the reason; re-issue it unchanged and it passes. Your
-  memory tools never trip, so a bad tripwire can always be fixed. Each trip is
-  recorded in `query_log`. Set `MEMORY_TRIPWIRES=off` to disable it.
+  memory tools never trip, so a bad tripwire can always be fixed. (Inside a
+  subagent the minion fence still denies their write tools - that is a separate
+  check, not a tripwire.) Each trip is recorded in `query_log`. Set `MEMORY_TRIPWIRES=off` to disable it.
 - **`.claude/skills/sink-the-ship/SKILL.md`** — a `/sink-the-ship` skill to flush
   everything worth keeping before you close a session. If an older install left a
   `.claude/commands/sink-the-ship.md` behind, `gingugu init` retires it and keeps
   a `.bak` - but only if it is untouched. Edit that file and it is yours: it stays
   put, and the output tells you it did.
-- All four hooks wired into `.claude/settings.json`, **merged non-destructively** —
+- **`.claude/hooks/subagent_warmup.py`** — a `SubagentStart` hook (`gingugu hook
+  subagent`) that **warms a minion**: a subagent whose agent file declares its own
+  fenced brain (`MEMORY_GRANT`, see the table below) starts with the memories its
+  task woke, read-only and inside that grant. Inside a subagent, `gingugu hook
+  tool` also keeps it off the brain's data directory and the `gingugu` CLI, and
+  denies the write and credential tools of the inherited full-brain server, so a
+  built-in agent like Explore can read the brain but not change it. This
+  prevents accidents; it is not a sandbox against a hostile process running as
+  you. Set `MEMORY_MINION_FENCE=off` to disable the fence.
+- All five hooks wired into `.claude/settings.json`, **merged non-destructively** —
   any existing config is backed up (`settings.json.bak`) and preserved.
 - The runtime artifacts the hooks generate (`logs/`, `.claude/data/`,
   `.claude/settings.local.json`), and the `.bak` copies `init` itself saves,
@@ -768,6 +779,8 @@ Environment variables (all optional):
 | `MEMORY_W_ACCESS` | `0.10` | Composite-score weight for access frequency |
 | `MEMORY_W_CONFIDENCE` | `0.35` | Composite-score weight for confidence (trust — the dominant standalone signal) |
 | `MEMORY_CREDENTIALS_ENABLED` | `true` | Expose the `credential_*` vault tools. Set `false` to run an instance without a secret vault (e.g. a shared/central server) |
+| `MEMORY_GRANT` | *(unset)* | Fence a stdio server like a scoped token: `ns=read\|write,...` (e.g. `my-project=read,minions=write`). Unset is full access. A bad spec, an empty value, or `*=write` refuses to start. Used by a subagent's own `brain` server in its agent file |
+| `MEMORY_MINION_FENCE` | `on` | Set `off` to disable the subagent fence in `gingugu hook tool` (data-dir file/shell access and inherited-server writes) |
 | `MEMORY_SERVE_HOST` | `127.0.0.1` | Bind host for `gingugu serve` (set `0.0.0.0` to accept remote connections) |
 | `MEMORY_SERVE_PORT` | `8765` | Bind port for `gingugu serve` |
 | `MEMORY_SERVE_TOKEN` | *(unset)* | The owner's Bearer token for `gingugu serve` (full access). If unset, a token is read from `<db-dir>/serve_token`, or generated and saved `0600` (its path is logged, never the token). Other clients get scoped tokens from `gingugu token add` |

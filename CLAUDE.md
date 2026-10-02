@@ -201,7 +201,7 @@ Before any write to external systems (GitHub API, PyPI, npm):
 
 ## Available Subagents (`.claude/agents/`)
 
-Tier rule: Opus is never a minion. All three are read-only - no `Bash`, and `disallowedTools: Agent`.
+Tier rule: Opus is never a minion. All three have no `Bash` and `disallowedTools: Agent, mcp__gingugu`. Each runs its own fenced `brain` server (inline `mcpServers`, `MEMORY_GRANT: gingugu=read,minions=write`): read the brain, write only the `minions` scratch namespace.
 
 | Agent | Tier | Use for |
 |---|---|---|
