@@ -1,0 +1,45 @@
+<section class="slide">
+  <p class="tag">Delegating code</p>
+  <h2>Hand off the <em>typing</em>, never the deciding</h2>
+  <figure>
+    <svg viewBox="0 0 1000 290" role="img" aria-label="The main thread designs and writes failing tests, a Sonnet subagent in its own worktree makes them pass, and the main thread runs the tests, reviews and merges.">
+      <defs>
+        <marker id="a11" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
+      </defs>
+      <rect x="0" y="0" width="1000" height="125" rx="14" class="lane"/>
+      <text x="18" y="24" class="t-s" style="font-weight:800;letter-spacing:.08em">MAIN THREAD · OPUS</text>
+      <rect x="0" y="160" width="1000" height="125" rx="14" class="lane"/>
+      <text x="18" y="184" class="t-s" style="font-weight:800;letter-spacing:.08em">SUBAGENT · SONNET · OWN GIT WORKTREE</text>
+
+      <rect x="40" y="45" width="150" height="58" rx="12" class="box-hot"/>
+      <text x="115" y="79" text-anchor="middle" class="t-b">1. Design</text>
+      <rect x="230" y="45" width="180" height="58" rx="12" class="box-hot"/>
+      <text x="320" y="72" text-anchor="middle" class="t-b">2. Write the tests</text>
+      <text x="320" y="90" text-anchor="middle" class="t-s">they fail for now</text>
+      <rect x="610" y="45" width="190" height="58" rx="12" class="box-hot"/>
+      <text x="705" y="72" text-anchor="middle" class="t-b">4. Run tests, review</text>
+      <text x="705" y="90" text-anchor="middle" class="t-s">cheap: it's a test run</text>
+      <rect x="840" y="45" width="130" height="58" rx="12" class="box-hot"/>
+      <text x="905" y="79" text-anchor="middle" class="t-b">5. Merge</text>
+
+      <rect x="400" y="205" width="200" height="58" rx="12" class="box-son"/>
+      <text x="500" y="232" text-anchor="middle" class="t-b">3. Make them pass</text>
+      <text x="500" y="250" text-anchor="middle" class="t-s">writes the code</text>
+      <path d="M600,222 H640 V250 H604" class="ln" marker-end="url(#a11)"/>
+      <text x="648" y="240" class="t-s">until green</text>
+
+      <line x1="190" y1="74" x2="226" y2="74" class="ln" marker-end="url(#a11)"/>
+      <path d="M320,103 V150 H450 V201" class="ln" marker-end="url(#a11)"/>
+      <text x="330" y="142" class="t-s">the tests are the spec</text>
+      <path d="M550,205 V150 H705 V107" class="ln" marker-end="url(#a11)"/>
+      <text x="580" y="142" class="t-s">green branch</text>
+      <line x1="800" y1="74" x2="836" y2="74" class="ln" marker-end="url(#a11)"/>
+    </svg>
+  </figure>
+  <div class="chips" style="margin-top:14px">
+    <b>Never handed off:</b>
+    <span class="chip no">schema migrations</span>
+    <span class="chip no">ranking and scoring math</span>
+    <span class="chip no">anything that needs a human "go"</span>
+  </div>
+</section>

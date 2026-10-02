@@ -1,0 +1,56 @@
+<section class="slide">
+  <p class="tag">The map</p>
+  <h2>Every prompt passes through <em>four checkpoints</em> you control</h2>
+  <figure>
+    <svg viewBox="0 0 1000 300" role="img" aria-label="A prompt flows from you, through the UserPromptSubmit hook, to the model, then any tool call passes permission rules and the PreToolUse hook before the tool runs and its result returns to the model.">
+      <defs>
+        <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a2h" class="m-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
+      </defs>
+      <rect x="250" y="6" width="310" height="46" rx="10" class="box-hot"/>
+      <text x="405" y="26" text-anchor="middle" class="t-b">SessionStart hook</text>
+      <text x="405" y="43" text-anchor="middle" class="t-s">loads CLAUDE.md + memory once</text>
+      <line x1="405" y1="52" x2="405" y2="94" class="ln-hot" marker-end="url(#a2h)"/>
+
+      <rect x="10" y="100" width="130" height="76" rx="12" class="box"/>
+      <text x="75" y="134" text-anchor="middle" class="t-b">You</text>
+      <text x="75" y="152" text-anchor="middle" class="t-s">type a prompt</text>
+
+      <rect x="175" y="100" width="130" height="76" rx="12" class="box-hot"/>
+      <text x="240" y="130" text-anchor="middle" class="t-b">UserPrompt-</text>
+      <text x="240" y="146" text-anchor="middle" class="t-b">Submit hook</text>
+      <text x="240" y="163" text-anchor="middle" class="t-s">adds memories</text>
+
+      <rect x="340" y="100" width="130" height="76" rx="12" class="box"/>
+      <text x="405" y="134" text-anchor="middle" class="t-b">Model</text>
+      <text x="405" y="152" text-anchor="middle" class="t-s">decides on a tool</text>
+
+      <rect x="505" y="100" width="130" height="76" rx="12" class="box-hot"/>
+      <text x="570" y="130" text-anchor="middle" class="t-b">Permission</text>
+      <text x="570" y="146" text-anchor="middle" class="t-b">rules</text>
+      <text x="570" y="163" text-anchor="middle" class="t-s">deny, ask or allow</text>
+
+      <rect x="670" y="100" width="130" height="76" rx="12" class="box-hot"/>
+      <text x="735" y="130" text-anchor="middle" class="t-b">PreToolUse</text>
+      <text x="735" y="146" text-anchor="middle" class="t-b">hook</text>
+      <text x="735" y="163" text-anchor="middle" class="t-s">your script can block</text>
+
+      <rect x="835" y="100" width="155" height="76" rx="12" class="box"/>
+      <text x="912" y="130" text-anchor="middle" class="t-b">Tool runs</text>
+      <text x="912" y="148" text-anchor="middle" class="t-s">Bash, edit, MCP</text>
+      <text x="912" y="163" text-anchor="middle" class="t-s">or a subagent</text>
+
+      <line x1="140" y1="138" x2="171" y2="138" class="ln" marker-end="url(#a2)"/>
+      <line x1="305" y1="138" x2="336" y2="138" class="ln" marker-end="url(#a2)"/>
+      <line x1="470" y1="138" x2="501" y2="138" class="ln" marker-end="url(#a2)"/>
+      <line x1="635" y1="138" x2="666" y2="138" class="ln" marker-end="url(#a2)"/>
+      <line x1="800" y1="138" x2="831" y2="138" class="ln" marker-end="url(#a2)"/>
+
+      <path d="M912,176 V236 H405 V180" class="ln" marker-end="url(#a2)"/>
+      <text x="660" y="256" text-anchor="middle" class="t-s">result goes back to the model, and the loop repeats</text>
+      <text x="735" y="208" text-anchor="middle" class="t-no">exit 2 = blocked</text>
+      <text x="570" y="208" text-anchor="middle" class="t-s">deny wins first</text>
+    </svg>
+    <figcaption>Orange boxes are the places you can change behaviour without touching your prompt.</figcaption>
+  </figure>
+</section>
