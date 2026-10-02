@@ -4,7 +4,33 @@ _Last updated: 2026-10-01_
 
 ## In Flight
 
-Nothing in flight.
+**Board #2 (warm minions): built on `feature/warm-minions`, tests green,
+awaiting PR.** A subagent gets its own fenced, pre-loaded brain.
+
+- `MEMORY_GRANT` fences a stdio server like a scoped serve token; a bad spec or
+  `*=write` exits 2 at startup.
+- Fenced agent files (inline `brain` stdio server, `mcp__gingugu` disallowed),
+  verified in two real Claude Code versions.
+- `gingugu hook subagent` + `SubagentStart` doorway: warm-up using the spawning
+  `Agent` prompt stashed by `gingugu hook tool`; `gingugu init` now wires five
+  hooks.
+- Minion fence in `gingugu hook tool` (data dir and searches rooted above it,
+  CLI, inherited-server writes, credentials), own switch
+  `MEMORY_MINION_FENCE=off`. The tripwire doorway now passes `mcp__gingugu__*`
+  through when `agent_id` is set, so the fence sees a minion's inherited calls.
+- Security review (`security-reviewer`): stash file 0600, swept, fenced agents
+  only; session ids sanitised; set-but-blank `MEMORY_GRANT` refuses to start;
+  grant parsed only from the `mcpServers` env block. Accepted: the fence keys on
+  the server name `gingugu`; a failed hook fails open (accidents threat model).
+- Inline agent-file servers: verified on Claude Code 2.1.215 and 2.1.287. On
+  2.1.287 a project agent file needs the folder trusted; a user-level agent
+  (`~/.claude/agents/`) loads untrusted.
+- `gingugu init` allows `mcp__brain` in the repo and user-level settings, so a
+  fenced minion's calls are not denied in repos that never allowed it.
+- Threat model: accidents, not a hostile same-user process; OS sandbox and an
+  audit-trigger undo log considered and declined.
+- Tests: `test_stdio_grant`, `test_minion_fence`, `test_subagent_hook`,
+  `test_minion_wiring`.
 
 ## Recently Completed
 
@@ -138,7 +164,10 @@ and a harmless one can read alike to an encoder.
 - **`gingugu init`** now wires four hooks: `PreToolUse` runs
   `.claude/hooks/pre_tool_tripwire.py` (timeout 15s), installed from
   `bootstrap/templates/pre_tool_tripwire.py.tmpl`. The doorway drops
-  `mcp__gingugu__*` in stdlib before loading the package.
+  `mcp__gingugu__*` in stdlib before loading the package. (Since warm minions,
+  board #2: five hooks, adding `SubagentStart`, and the doorway drops those
+  tools only on the main thread - inside a subagent they go to the minion
+  fence.)
 - **Accepted v1 limitation:** after context compaction the memory may drop out
   of context while suppression still counts it as shown.
 - **Also carries** the Windows `?` test skip (`2287e2c`) from #89's follow-up:
@@ -799,7 +828,7 @@ tokens (old #12) as #92; both came off.
 | # | Item | Old # | Why this position |
 |---|---|---|---|
 | 1 | **One central brain, several clients** | 11 | Mostly built; the rest is physical setup. Scoped tokens are in, so each client gets its own |
-| 2 | **Warm minions** | 13 | Scoped tokens are in; this is the read-only project + scratch-write grant put to work |
+| 2 | **Warm minions** | 13 | **Built on `feature/warm-minions`, PR pending** (see In Flight); comes off on merge |
 | 3 | **A shared board between agents** | 15 | Needs 1 |
 | 4 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
 | 5 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
@@ -1383,6 +1412,7 @@ A subagent starts with none of the store's context. Give it read-only access
 scoped to the project namespace, and a scratch namespace to write findings into
 that the main thread reviews before anything reaches a real namespace. The
 fence has to be the server's (item 12), not an instruction. Depends on 12.
+**Built 2026-10-01 on `feature/warm-minions`; see In Flight.**
 
 ### 14. A calibration ledger
 

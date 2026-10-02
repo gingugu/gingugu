@@ -91,8 +91,9 @@ def test_merge_preserves_existing_settings(tmp_path):
     main(["--path", str(tmp_path)])
     merged = json.loads(_read(claude / "settings.json"))
 
-    # Existing config untouched.
-    assert merged["permissions"]["allow"] == ["Bash(ls:*)"]
+    # Existing config untouched; the only permission init adds is the
+    # warm-minion server's, appended after the user's own.
+    assert merged["permissions"]["allow"] == ["Bash(ls:*)", "mcp__brain"]
     assert merged["hooks"]["PreToolUse"][0]["hooks"][0]["command"] == "custom.py"
     # New hooks added.
     assert "SessionStart" in merged["hooks"]
@@ -253,7 +254,13 @@ def test_init_backs_up_and_warns_on_a_stop_py_it_did_not_write(tmp_path):
 
 def test_merge_settings_reports_added_events():
     settings, added, warnings = merge_settings({})
-    assert set(added) == {"SessionStart", "Stop", "UserPromptSubmit", "PreToolUse"}
+    assert set(added) == {
+        "SessionStart",
+        "Stop",
+        "UserPromptSubmit",
+        "PreToolUse",
+        "SubagentStart",
+    }
     assert warnings == []
     _, added_again, _ = merge_settings(settings)
     assert added_again == []

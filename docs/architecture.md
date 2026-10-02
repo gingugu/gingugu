@@ -35,7 +35,13 @@ graph LR
     end
 
     subgraph Claude Code Hooks
-        Y[PreToolUse<br/>gingugu hook tool]
+        Y[PreToolUse<br/>gingugu hook tool<br/>tripwires · minion fence]
+        Z[SubagentStart<br/>gingugu hook subagent]
+    end
+
+    subgraph Subagent
+        M[Minion]
+        N[Fenced stdio server<br/>MEMORY_GRANT]
     end
 
     subgraph OS Scheduler
@@ -79,6 +85,13 @@ graph LR
     A -->|each pending tool call| Y
     Y -->|reads matches| W
     Y -->|logs each trip| T
+    A -->|spawns| M
+    Y -->|stashes a fenced agent's task prompt| Z
+    Z -->|read-only, under the grant| H
+    Z -->|warm-up context| M
+    M <-->|MCP| N
+    N -->|grant-scoped| H
+    M -->|each tool call: fence first| Y
     S -->|run only if idle| Q
     S -->|one runner at a time| R
     S --> L
@@ -95,6 +108,14 @@ The `PreToolUse` path is the other client-side entry: Claude Code runs
 `gingugu hook tool` before every tool call, it reads `tripwires` and, on a
 match, denies the call once with the memory as the reason and logs the trip to
 `query_log`. It never touches the MCP server process.
+
+`SubagentStart` is the third: `gingugu hook subagent` warms a minion whose agent
+file declares `MEMORY_GRANT`. The spawning `Agent` call's prompt is stashed by
+the `PreToolUse` hook (`hook-sessions/spawns-<session>.json`, 300s TTL) and used
+as the task hint; ranking runs on a read-only connection under the grant. Inside
+a subagent (`agent_id` present) the `PreToolUse` hook also applies the minion
+fence (`minion_fence.py`). A minion's own stdio server is fenced by
+`MEMORY_GRANT` through the same store chokepoints as a scoped serve token.
 
 ---
 
@@ -1381,8 +1402,10 @@ to check a pattern before relying on it. Errors are structured, never raised.
 At run time the `PreToolUse` hook denies the first matching call per session
 per memory, with the memory's title and summary as the reason and "re-issue
 unchanged to pass"; the re-issued call passes. `mcp__gingugu__*` tools never
-trip, so a bad tripwire can always be repaired. `MEMORY_TRIPWIRES=off` disables
-the hook.
+trip, so a bad tripwire can always be repaired. Inside a subagent the same hook
+runs the minion fence first, which does deny the write tools of the inherited
+`mcp__gingugu__*` server (see warm minions). `MEMORY_TRIPWIRES=off` disables
+tripwires; the minion fence has its own switch, `MEMORY_MINION_FENCE`.
 
 ### `memory_export`
 Export memories to a portable JSON payload (backup/transfer). Credentials are
@@ -1621,8 +1644,9 @@ write needs `write` on both endpoints.
 
 Whole-brain tools are closed to scoped tokens: `memory_export`, `memory_import`,
 `memory_dream`, every `credential_*` tool, and every `memory_namespaces` action
-except `list`. stdio, CLI commands, background passes (dream, hooks) and the
-owner token are unfenced.
+except `list`. stdio without `MEMORY_GRANT`, CLI commands, background passes
+(dream, hooks) and the owner token are unfenced; a stdio server started with
+`MEMORY_GRANT` is fenced the same way as a scoped token.
 
 ---
 
@@ -1744,6 +1768,8 @@ src/gingugu/
 ├── prompt_hook.py          # gingugu hook prompt: the entry point; log_prompt() is its one write
 ├── tripwire.py             # Tripwire matching (pure regex) + load_tripwires, the remote-brain seam
 ├── tool_hook.py            # gingugu hook tool: PreToolUse entry point; deny once, re-issue passes
+├── minion_fence.py         # Inside a subagent: deny data-dir access, CLI, inherited-server writes
+├── subagent_hook.py        # gingugu hook subagent: SubagentStart warm-up; stash/take of the spawn prompt
 ├── capability.py           # Capability pointers: block validation, exists check, the recall lane
 │
 │   # ── Claims (checkable state assertions) ───────────────────────
@@ -1781,7 +1807,7 @@ src/gingugu/
     ├── relation_ops.py     # Batch parsing for relate and unrelate
     ├── consolidate.py      # consolidate
     ├── dream.py            # dream
-    ├── fence.py            # Scoped-token policy: request grant + whole-brain tool refusal
+    ├── fence.py            # Grant policy: request grant (HTTP token or stdio MEMORY_GRANT) + whole-brain tool refusal
     ├── credentials.py      # credential_store / get / list / delete
     ├── tripwires.py        # memory_tripwire: add / list / remove / test
     ├── admin.py            # namespaces, export, import

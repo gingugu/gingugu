@@ -116,7 +116,7 @@ async def test_tool_into_refused_over_http(make_server, tmp_path, monkeypatch) -
     from gingugu.grants import FULL
 
     # As the owner: the refusal under test is the transport's, not auth's.
-    monkeypatch.setattr("gingugu.handlers.fence.request_grant", lambda _t: FULL)
+    monkeypatch.setattr("gingugu.handlers.fence.request_grant", lambda *_: FULL)
     server = make_server(transport="http")
     await _store(server)
     target = tmp_path / "token"

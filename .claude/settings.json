@@ -18,6 +18,7 @@
       "mcp__gingugu__memory_update",
       "mcp__gingugu__memory_namespaces",
       "mcp__gingugu__memory_forget",
+      "mcp__brain",
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git stash:*)",
@@ -203,6 +204,16 @@
             "type": "command",
             "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/subagent_start.py",
             "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/subagent_warmup.py",
+            "timeout": 20
           }
         ]
       }

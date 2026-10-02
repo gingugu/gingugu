@@ -9,6 +9,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Warm minions: a subagent gets a fenced, pre-loaded brain of its own.**
+  - `MEMORY_GRANT` fences a stdio server the way a scoped serve token fences
+    `gingugu serve`: `MEMORY_GRANT="my-project=read,minions=write"` runs through
+    the same store chokepoints, closes the whole-brain tools, and reads anything
+    outside the grant as not found. Unset means the full grant, as before. A bad
+    spec, a set-but-empty value, or `*=write` makes the server refuse to start
+    (exit 2) rather than fall back to the whole brain. A granted write namespace is created on first
+    write, so a minion can have a scratch namespace.
+  - Fenced agent files: a `.claude/agents/*.md` declares its own `brain` stdio
+    server (inline `mcpServers`, with `MEMORY_GRANT` and
+    `MEMORY_CREDENTIALS_ENABLED=false` in its `env`), lists `mcp__brain` in
+    `tools`, and disallows the inherited `mcp__gingugu` server, which would
+    otherwise hand it the parent's full brain.
+  - `gingugu hook subagent`, wired by `gingugu init` as a `SubagentStart` hook
+    (`.claude/hooks/subagent_warmup.py`): warms a minion before its first turn.
+    `SubagentStart` carries no task, so `gingugu hook tool` stashes the spawning
+    `Agent` call's prompt (300s TTL, owner-only file, stashed only for fenced
+    agents) and the warm-up uses it as the task hint,
+    ranks `memory_context`-style on a read-only connection under the agent
+    file's grant, and injects compact lines as context. An agent file with no
+    grant gets no warm-up.
+  - A minion fence in `gingugu hook tool`, active only inside a subagent
+    (`agent_id` in the payload): file tools on the brain's data directory, and
+    `Grep`/`Glob` searches rooted at or above it, are denied; shell commands that name the data directory, the database,
+    the `sqlite3` CLI or the `gingugu` CLI are denied (a speed bump, not a
+    wall); and the write tools and `credential_*` tools of the inherited
+    `gingugu` server are denied, so built-in agents such as Explore hold a
+    read-only brain. Independent of `MEMORY_TRIPWIRES`;
+    `MEMORY_MINION_FENCE=off` disables it. The fence prevents accidents; it
+    does not stop a hostile process running as the same user.
+
+### Changed
+
+- `gingugu init` now wires five hooks (adds `SubagentStart`). The tripwire
+  doorway passes `mcp__gingugu__*` through inside a subagent so the minion
+  fence, not the tripwire, decides those calls.
+- `gingugu init` allows `mcp__brain` in `permissions.allow`, both in the repo's
+  `.claude/settings.json` and the user-level `~/.claude/settings.json` (backed
+  up to `settings.json.bak`, idempotent, an unparseable file left alone), so
+  fenced minions - including global ones in `~/.claude/agents/` - can call their
+  own server in any repo.
+
 ---
 
 ## [0.19.0] - 2026-10-01
