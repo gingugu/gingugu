@@ -66,6 +66,21 @@ def sandboxed_global_rules(monkeypatch: pytest.MonkeyPatch, tmp_path_factory):
 
 
 @pytest.fixture(autouse=True)
+def sandboxed_user_settings(monkeypatch: pytest.MonkeyPatch, tmp_path_factory):
+    """Keep the suite out of the developer's real ``~/.claude/settings.json``.
+
+    ``gingugu init`` allows the warm-minion ``mcp__brain`` server there, so
+    every ``bootstrap.main()`` call would otherwise edit the permissions of
+    whoever ran ``pytest``. Same rule as ``sandboxed_global_rules``.
+    """
+    sandbox = tmp_path_factory.mktemp("user-settings") / ".claude" / "settings.json"
+    monkeypatch.setattr(
+        "gingugu.bootstrap.settings.user_settings_path", lambda: sandbox, raising=True
+    )
+    return sandbox
+
+
+@pytest.fixture(autouse=True)
 def offline_embeddings(monkeypatch: pytest.MonkeyPatch):
     """Keep the suite off the network — the sibling of ``fake_keyring``.
 

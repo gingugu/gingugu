@@ -102,6 +102,9 @@ class Config:
     # will run. Twenty minutes is long enough to sit outside a coffee break
     # and short enough that an overnight scheduler gets many chances.
     dream_idle_minutes: int = 20
+    # MEMORY_GRANT fences a stdio server to "name=level,..." (see
+    # handlers.fence.stdio_grant). Unset means the full grant, as always.
+    grant: str | None = None
 
     @property
     def resolved_namespace(self) -> str | None:
@@ -169,6 +172,8 @@ def load_config() -> Config:
         serve_port=_env_int("MEMORY_SERVE_PORT", 8765),
         serve_token=os.environ.get("MEMORY_SERVE_TOKEN") or None,
         dream_idle_minutes=_env_int("MEMORY_DREAM_IDLE_MINUTES", 20),
+        # Not `or None`: set-but-blank must reach the fence, which refuses it.
+        grant=os.environ.get("MEMORY_GRANT"),
     )
 
 

@@ -1,7 +1,8 @@
-"""The tool-level half of scoped serve tokens: who is calling, and may they.
+"""The tool-level half of scoped access: who is calling, and may they.
 
 ``request_grant`` finds the grant `gingugu serve`'s middleware attached to
-the HTTP request this tool call arrived on. ``refusal`` is the coarse policy
+the HTTP request this tool call arrived on, or for stdio the grant the process
+was started with (``MEMORY_GRANT``, see ``stdio_grant``). ``refusal`` is the coarse policy
 applied before a handler runs: tools whose blast radius is the whole brain
 are closed to any scoped token outright. Everything finer - which namespace,
 which memory - is enforced by the store's chokepoints (see ``grants``),
@@ -28,10 +29,32 @@ _CLOSED_TO_SCOPED = frozenset(
 )
 
 
-def request_grant(transport: str) -> Grant | None:
+def stdio_grant(spec: str | None) -> Grant:
+    """The grant a stdio server runs under, from ``MEMORY_GRANT``.
+
+    Unset is the full grant: the local client has always owned the brain. A
+    spec is how a warm minion's own server gets fenced. Anything that cannot be
+    honoured raises, so the server never starts: a typo - or a set-but-empty
+    value - must not fall back to the whole brain, and ``*=write`` is the owner
+    wearing a disguise.
+    """
+    if spec is None:
+        return FULL
+    if not spec.strip():
+        raise ValueError("MEMORY_GRANT is set but empty; unset it for full access")
+    from ..serve_tokens import parse_grant_spec
+
+    grant = Grant("MEMORY_GRANT", parse_grant_spec(spec))
+    if grant.is_full:
+        raise ValueError("MEMORY_GRANT may not grant '*=write'; unset it for full access")
+    return grant
+
+
+def request_grant(transport: str, stdio: Grant = FULL) -> Grant | None:
     """The grant for the tool call in progress, or None to refuse it.
 
-    stdio has no network caller, so it is the full grant. Under any other
+    stdio has no network caller: its grant is the one the process was started
+    with (``stdio``, full unless ``MEMORY_GRANT`` narrowed it). Under any other
     transport the grant is whatever the auth middleware attached to the HTTP
     request; a call that arrives without one - no request context, no
     request, no grant - is refused, never waved through. Fail closed even
@@ -39,7 +62,7 @@ def request_grant(transport: str) -> Grant | None:
     behaviour, not this server's guarantee.
     """
     if transport == "stdio":
-        return FULL
+        return stdio
     from mcp.server.lowlevel.server import request_ctx
 
     try:
