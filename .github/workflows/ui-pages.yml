@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'ui/**'
+      - 'docs/talks/**'
       - '.github/workflows/ui-pages.yml'
   workflow_dispatch:
 
@@ -36,6 +37,10 @@ jobs:
         env:
           VITE_BASE: /gingugu/
         run: npm run build
+      - name: Add talks
+        # Static slide decks, served at /gingugu/talks/. Kept out of ui/public
+        # so they never ship inside the Python wheel's bundled UI.
+        run: cp -r ../docs/talks dist/talks
       - uses: actions/configure-pages@v6
         with:
           # Auto-enable Pages (build via GitHub Actions) on first run instead of

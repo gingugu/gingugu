@@ -1,0 +1,47 @@
+<section class="slide">
+  <p class="tag">Memory</p>
+  <h2>Every session starts with <em>what the last one learned</em></h2>
+  <figure>
+    <svg viewBox="0 0 1000 290" role="img" aria-label="Session one saves memories into gingugu, a single SQLite file. Session two loads them at start and gets matching ones surfaced on each prompt.">
+      <defs>
+        <marker id="a4" class="m-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
+      </defs>
+      <rect x="20" y="70" width="230" height="120" rx="16" class="box"/>
+      <text x="135" y="112" text-anchor="middle" class="t-b">Monday's session</text>
+      <text x="135" y="136" text-anchor="middle" class="t-s">fixes a bug, makes a call,</text>
+      <text x="135" y="153" text-anchor="middle" class="t-s">learns a gotcha</text>
+
+      <path d="M410,78 a90,22 0 0 1 180,0 v124 a90,22 0 0 1 -180,0 z" class="box-hot"/>
+      <path d="M410,78 a90,22 0 0 0 180,0" class="ln-hot"/>
+      <text x="500" y="140" text-anchor="middle" class="t-b">gingugu</text>
+      <text x="500" y="160" text-anchor="middle" class="t-s">one SQLite file</text>
+      <text x="500" y="176" text-anchor="middle" class="t-s">local MCP server</text>
+      <text x="500" y="192" text-anchor="middle" class="t-s">text + semantic search</text>
+
+      <rect x="750" y="70" width="230" height="120" rx="16" class="box"/>
+      <text x="865" y="112" text-anchor="middle" class="t-b">Tuesday's session</text>
+      <text x="865" y="136" text-anchor="middle" class="t-s">already knows all of it</text>
+      <text x="865" y="153" text-anchor="middle" class="t-s">before the first reply</text>
+
+      <line x1="250" y1="130" x2="404" y2="130" class="ln-hot" marker-end="url(#a4)"/>
+      <text x="327" y="118" text-anchor="middle" class="t-s">saves as it works</text>
+      <line x1="590" y1="130" x2="744" y2="130" class="ln-hot" marker-end="url(#a4)"/>
+      <text x="667" y="118" text-anchor="middle" class="t-s">SessionStart loads</text>
+
+      <text x="135" y="232" text-anchor="middle" class="t-m">Stop hook</text>
+      <text x="135" y="250" text-anchor="middle" class="t-s">won't end a busy session</text>
+      <text x="135" y="266" text-anchor="middle" class="t-s">that saved nothing</text>
+      <text x="500" y="250" text-anchor="middle" class="t-m">global layer + one per repo</text>
+      <text x="500" y="268" text-anchor="middle" class="t-s">"how we work" vs "what happened here"</text>
+      <text x="865" y="232" text-anchor="middle" class="t-m">UserPromptSubmit hook</text>
+      <text x="865" y="250" text-anchor="middle" class="t-s">surfaces memories your</text>
+      <text x="865" y="266" text-anchor="middle" class="t-s">prompt matches, unasked</text>
+    </svg>
+  </figure>
+  <div class="stats">
+    <div class="stat"><span class="n">2,952</span><span class="l">memories</span></div>
+    <div class="stat"><span class="n">3,271</span><span class="l">links between them</span></div>
+    <div class="stat"><span class="n">18</span><span class="l">namespaces</span></div>
+    <div class="stat"><span class="n">0</span><span class="l">cloud services or API keys</span></div>
+  </div>
+</section>

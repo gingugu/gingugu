@@ -1,0 +1,36 @@
+<section class="slide">
+  <p class="tag">CLAUDE.md</p>
+  <h2>CLAUDE.md files stack up, and <em>every subagent</em> reads the whole stack</h2>
+  <div class="cols wide-r">
+    <figure>
+      <svg viewBox="0 0 380 330" role="img" aria-label="Three CLAUDE.md files, global, repo and folder, stack together and flow into both the main session and every subagent.">
+        <defs>
+          <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+        <rect x="20" y="10" width="340" height="54" rx="12" class="box"/>
+        <text x="40" y="33" class="t-m">~/.claude/CLAUDE.md</text>
+        <text x="40" y="52" class="t-s">you, in every repo</text>
+        <rect x="40" y="72" width="300" height="54" rx="12" class="box"/>
+        <text x="60" y="95" class="t-m">repo/CLAUDE.md</text>
+        <text x="60" y="114" class="t-s">the team, checked in</text>
+        <rect x="60" y="134" width="260" height="54" rx="12" class="box"/>
+        <text x="80" y="157" class="t-m">repo/src/CLAUDE.md</text>
+        <text x="80" y="176" class="t-s">one folder</text>
+        <line x1="140" y1="190" x2="95" y2="248" class="ln" marker-end="url(#a3)"/>
+        <line x1="240" y1="190" x2="285" y2="248" class="ln" marker-end="url(#a3)"/>
+        <rect x="10" y="254" width="170" height="62" rx="12" class="box-hot"/>
+        <text x="95" y="281" text-anchor="middle" class="t-b">Main session</text>
+        <text x="95" y="300" text-anchor="middle" class="t-s">Opus</text>
+        <rect x="200" y="254" width="170" height="62" rx="12" class="box-son"/>
+        <text x="285" y="281" text-anchor="middle" class="t-b">Every subagent</text>
+        <text x="285" y="300" text-anchor="middle" class="t-s">Sonnet or Haiku</text>
+      </svg>
+    </figure>
+    <div class="grid g2">
+      <div class="card"><span class="emoji">🔎</span><b>Verify, never recall</b>Check that any version, flag or tag exists in the official docs before using it.</div>
+      <div class="card hot"><span class="emoji">✋</span><b>Ask before external writes</b>Show the exact command, what it changes and how far it reaches, then wait for "go".</div>
+      <div class="card"><span class="emoji">📏</span><b>300-line file limit</b>Small files stay easy to review for you and cheap to read for the model.</div>
+      <div class="card"><span class="emoji">🧪</span><b>Drill into blockers</b>Change one variable at a time. Check your own test setup first.</div>
+    </div>
+  </div>
+</section>
