@@ -1,0 +1,63 @@
+<section class="slide">
+  <p class="tag">Permissions</p>
+  <h2>Allow the boring, deny the <em>irreversible</em>, get asked about the rest</h2>
+  <figure>
+    <svg viewBox="0 0 1000 250" role="img" aria-label="Permission rules are checked in order: deny blocks, then ask prompts, then allow runs. A command that matches nothing prompts you.">
+      <defs>
+        <marker id="a7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
+      </defs>
+      <rect x="10" y="150" width="170" height="70" rx="12" class="box"/>
+      <text x="95" y="181" text-anchor="middle" class="t-b">Claude wants to</text>
+      <text x="95" y="199" text-anchor="middle" class="t-b">run a command</text>
+
+      <polygon points="300,137 375,185 300,233 225,185" class="box"/>
+      <text x="300" y="182" text-anchor="middle" class="t-b">deny rule</text>
+      <text x="300" y="198" text-anchor="middle" class="t-b">matches?</text>
+      <polygon points="510,137 585,185 510,233 435,185" class="box"/>
+      <text x="510" y="182" text-anchor="middle" class="t-b">ask rule</text>
+      <text x="510" y="198" text-anchor="middle" class="t-b">matches?</text>
+      <polygon points="720,137 795,185 720,233 645,185" class="box"/>
+      <text x="720" y="182" text-anchor="middle" class="t-b">allow rule</text>
+      <text x="720" y="198" text-anchor="middle" class="t-b">matches?</text>
+
+      <rect x="235" y="30" width="130" height="56" rx="12" class="box-no"/>
+      <text x="300" y="63" text-anchor="middle" class="t-no">Blocked</text>
+      <rect x="445" y="30" width="130" height="56" rx="12" class="box-son"/>
+      <text x="510" y="63" text-anchor="middle" class="t-b">Asks you</text>
+      <rect x="655" y="30" width="130" height="56" rx="12" class="box-hai"/>
+      <text x="720" y="63" text-anchor="middle" class="t-b">Runs</text>
+      <rect x="830" y="150" width="160" height="70" rx="12" class="box-son"/>
+      <text x="910" y="181" text-anchor="middle" class="t-b">Asks you</text>
+      <text x="910" y="199" text-anchor="middle" class="t-s">the default</text>
+
+      <line x1="180" y1="185" x2="221" y2="185" class="ln" marker-end="url(#a7)"/>
+      <line x1="375" y1="185" x2="431" y2="185" class="ln" marker-end="url(#a7)"/>
+      <line x1="585" y1="185" x2="641" y2="185" class="ln" marker-end="url(#a7)"/>
+      <line x1="795" y1="185" x2="826" y2="185" class="ln" marker-end="url(#a7)"/>
+      <text x="403" y="176" text-anchor="middle" class="t-s">no</text>
+      <text x="613" y="176" text-anchor="middle" class="t-s">no</text>
+      <text x="810" y="176" text-anchor="middle" class="t-s">no</text>
+      <line x1="300" y1="137" x2="300" y2="90" class="ln" marker-end="url(#a7)"/>
+      <line x1="510" y1="137" x2="510" y2="90" class="ln" marker-end="url(#a7)"/>
+      <line x1="720" y1="137" x2="720" y2="90" class="ln" marker-end="url(#a7)"/>
+      <text x="312" y="118" class="t-s">yes</text>
+      <text x="522" y="118" class="t-s">yes</text>
+      <text x="732" y="118" class="t-s">yes</text>
+    </svg>
+  </figure>
+  <div class="cols" style="align-items:start;margin-top:10px">
+    <div class="card hot">
+      <b>🪤 The gotcha a review caught</b>
+      <div class="chips" style="margin:8px 0">
+        <span class="chip"><code>uv run twine upload</code></span><span class="arrow">&rarr;</span>
+        <span class="chip">deny <code>twine upload *</code> doesn't match</span><span class="arrow">&rarr;</span>
+        <span class="chip no">allow <code>uv run *</code> matches: it publishes</span>
+      </div>
+      <span class="small">Rules match the whole command text, and <code>uv run</code> isn't a wrapper Claude Code strips. Keep allow patterns narrow.</span>
+    </div>
+    <div class="stats" style="margin-top:0">
+      <div class="stat"><span class="n">79</span><span class="l">allow: tests, lint, git reads, edits in the repo</span></div>
+      <div class="stat"><span class="n">8</span><span class="l">deny: force push, <code>rm -rf</code>, publishing, Opus subagents</span></div>
+    </div>
+  </div>
+</section>

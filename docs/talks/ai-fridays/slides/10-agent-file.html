@@ -1,0 +1,25 @@
+<section class="slide">
+  <p class="tag">Subagent files</p>
+  <h2>A subagent is a markdown file <em>with a fence around it</em></h2>
+  <div class="cols">
+<pre class="code"><span class="c"># ~/.claude/agents/repo-scout.md</span>
+---
+name: repo-scout
+<span class="k">description:</span> Mechanical search and
+  inventory across a codebase...<span class="pin">1</span>
+<span class="k">model:</span> haiku<span class="pin">2</span>
+<span class="k">tools:</span> Read, Grep, Glob, mcp__brain<span class="pin">3</span>
+<span class="k">disallowedTools:</span> Agent, mcp__gingugu<span class="pin">4</span>
+---
+You are a search and inventory
+specialist. Answer with evidence,
+never with a summary...</pre>
+    <ol class="pins">
+      <li><span class="pin">1</span><div><b>The description decides when it gets used.</b> Claude reads it to pick a subagent, so say what sets this one apart.</div></li>
+      <li><span class="pin">2</span><div><b>Pin the model.</b> A search job never needs Opus.</div></li>
+      <li><span class="pin">3</span><div><b>Allowlist the tools.</b> With no <code>Bash</code> on the list, it can't run a shell command at all. Taking a tool away beats asking it not to use one.</div></li>
+      <li><span class="pin">4</span><div><b>No subagents of its own,</b> and no full-access memory. It gets a fenced copy instead (two slides on).</div></li>
+    </ol>
+  </div>
+  <div class="card" style="margin-top:18px"><span class="emoji">🛡️</span><b>It pays for itself</b>Our <code>security-reviewer</code> caught a data-loss bug in an install path after hand testing and seven unit tests had passed.</div>
+</section>
