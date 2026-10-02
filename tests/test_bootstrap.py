@@ -91,8 +91,9 @@ def test_merge_preserves_existing_settings(tmp_path):
     main(["--path", str(tmp_path)])
     merged = json.loads(_read(claude / "settings.json"))
 
-    # Existing config untouched.
-    assert merged["permissions"]["allow"] == ["Bash(ls:*)"]
+    # Existing config untouched; the only permission init adds is the
+    # warm-minion server's, appended after the user's own.
+    assert merged["permissions"]["allow"] == ["Bash(ls:*)", "mcp__brain"]
     assert merged["hooks"]["PreToolUse"][0]["hooks"][0]["command"] == "custom.py"
     # New hooks added.
     assert "SessionStart" in merged["hooks"]

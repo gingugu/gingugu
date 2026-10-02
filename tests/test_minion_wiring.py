@@ -58,6 +58,92 @@ def test_init_installs_the_warmup_doorway(tmp_path):
     assert '"subagent"' in script.read_text()
 
 
+# --- the mcp__brain permission ----------------------------------------------
+#
+# A fenced minion's calls go to its own `brain` server. In a repo that does not
+# allow `mcp__brain`, every one of them is permission-denied (or prompts), so
+# whatever installs the fenced agents also installs the allow.
+
+
+def test_merge_permissions_adds_the_allow_once_and_keeps_the_rest():
+    from gingugu.bootstrap.settings import MINION_ALLOW, merge_permissions
+
+    settings = {"permissions": {"allow": ["Read"], "deny": ["Bash(rm *)"]}}
+    assert merge_permissions(settings) is True
+    assert settings["permissions"]["allow"] == ["Read", MINION_ALLOW]
+    assert settings["permissions"]["deny"] == ["Bash(rm *)"]
+    assert merge_permissions(settings) is False
+    assert settings["permissions"]["allow"].count(MINION_ALLOW) == 1
+
+
+def test_merge_permissions_creates_the_block_when_missing():
+    from gingugu.bootstrap.settings import MINION_ALLOW, merge_permissions
+
+    settings: dict = {}
+    assert merge_permissions(settings) is True
+    assert settings == {"permissions": {"allow": [MINION_ALLOW]}}
+
+
+@pytest.mark.parametrize("odd", [{"permissions": "x"}, {"permissions": {"allow": "Read"}}])
+def test_merge_permissions_respects_an_unexpected_shape(odd):
+    from gingugu.bootstrap.settings import merge_permissions
+
+    before = json.loads(json.dumps(odd))
+    assert merge_permissions(odd) is False
+    assert odd == before
+
+
+def test_init_allows_brain_in_the_repo_settings(tmp_path):
+    from gingugu.bootstrap.settings import MINION_ALLOW
+
+    init_main(["--path", str(tmp_path)])
+    settings = json.loads((tmp_path / ".claude" / "settings.json").read_text())
+    assert MINION_ALLOW in settings["permissions"]["allow"]
+
+
+def test_init_allows_an_existing_repo_that_is_already_hooked(tmp_path):
+    from gingugu.bootstrap.settings import MINION_ALLOW
+
+    init_main(["--path", str(tmp_path)])
+    path = tmp_path / ".claude" / "settings.json"
+    settings = json.loads(path.read_text())
+    settings["permissions"]["allow"].remove(MINION_ALLOW)
+    path.write_text(json.dumps(settings))
+    init_main(["--path", str(tmp_path)])
+    assert MINION_ALLOW in json.loads(path.read_text())["permissions"]["allow"]
+
+
+def test_init_allows_brain_in_the_user_settings(tmp_path, sandboxed_user_settings):
+    from gingugu.bootstrap.settings import MINION_ALLOW
+
+    user = sandboxed_user_settings
+    user.parent.mkdir(parents=True, exist_ok=True)
+    user.write_text(json.dumps({"permissions": {"allow": ["Read"]}, "theme": "dark"}))
+    init_main(["--path", str(tmp_path)])
+    after = json.loads(user.read_text())
+    assert after["permissions"]["allow"] == ["Read", MINION_ALLOW]
+    assert after["theme"] == "dark"
+    assert json.loads(user.with_name("settings.json.bak").read_text())["theme"] == "dark"
+    init_main(["--path", str(tmp_path)])  # idempotent
+    assert json.loads(user.read_text())["permissions"]["allow"].count(MINION_ALLOW) == 1
+
+
+def test_init_dry_run_leaves_user_settings_alone(tmp_path, sandboxed_user_settings):
+    user = sandboxed_user_settings
+    user.parent.mkdir(parents=True, exist_ok=True)
+    user.write_text("{}")
+    init_main(["--path", str(tmp_path), "--dry-run"])
+    assert user.read_text() == "{}"
+
+
+def test_init_leaves_unparseable_user_settings_alone(tmp_path, sandboxed_user_settings):
+    user = sandboxed_user_settings
+    user.parent.mkdir(parents=True, exist_ok=True)
+    user.write_text("{not json")
+    init_main(["--path", str(tmp_path)])
+    assert user.read_text() == "{not json"
+
+
 def test_cli_dispatches_hook_subagent():
     proc = subprocess.run(
         [
