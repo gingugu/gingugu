@@ -1,4 +1,4 @@
-"""Scoped bearer tokens for `gingugu serve`, (the CLI lives in ``token_cli.py``).
+"""Scoped and owner bearer tokens for `gingugu serve` (the CLI is ``token_cli.py``).
 
 Each token is bound to a name and a grant (``{namespace: read|write}``, see
 ``grants.py``). The store is one JSON file next to the memory DB. Only the

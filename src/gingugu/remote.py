@@ -242,6 +242,8 @@ def _login(args: argparse.Namespace) -> int:
         "IdentitiesOnly=yes",
         "-o",
         "ConnectTimeout=10",
+        "-o",
+        "StrictHostKeyChecking=accept-new",  # a new machine's first login has no known_hosts entry
         args.ssh,
         "mint",
         name,
