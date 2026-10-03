@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -21,6 +22,7 @@ from pathlib import Path
 from .recall_gate import GateConfig, is_worth_embedding, render, select, strip_affect
 
 GLOBAL_NAMESPACE = "crow"
+_PERSONA_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 # How long logging the prompt may wait on a busy database. The hook holds the
 # user's turn, so losing one row beats a visible stall.
@@ -106,16 +108,30 @@ def _prune(directory: Path) -> None:
         pass
 
 
+def persona() -> str | None:
+    """This agent's own namespace from MEMORY_PERSONA, or None.
+
+    crow is shared by every persona; a persona's self lives in its own
+    namespace. A malformed value is ignored rather than raised: a hook must
+    never break a session.
+    """
+    raw = os.environ.get("MEMORY_PERSONA", "").strip()
+    if not _PERSONA_RE.fullmatch(raw) or raw == GLOBAL_NAMESPACE:
+        return None
+    return raw
+
+
 def namespaces_for(cwd: str) -> list[str]:
-    """The global namespace plus the one named for this repo.
+    """The global namespace, this agent's persona if set, then this repo's.
 
     Same derivation the SessionStart hook uses: the directory name, so the
     hook is portable into any repo without configuration.
     """
-    project = Path(cwd).name
-    if not project or project == GLOBAL_NAMESPACE:
-        return [GLOBAL_NAMESPACE]
-    return [GLOBAL_NAMESPACE, project]
+    names = [GLOBAL_NAMESPACE]
+    for name in (persona(), Path(cwd).name):
+        if name and name not in names:
+            names.append(name)
+    return names
 
 
 def _emit(context: str, count: int) -> None:
