@@ -101,9 +101,16 @@ class Served:
         self._uv.should_exit = True
         self._uv.force_exit = True
         await self._task
-        # A stopped uvicorn leaves sse-starlette's process-global exit flag set.
-        from sse_starlette.sse import AppStatus
+        # sse-starlette's exit watcher is a loop-level task holding the server it
+        # started under, so it can outlive that server and set the process-global
+        # exit flag again under the next one (seen on 3.11). Make it exit, wait
+        # it out, then clear the flag.
+        from sse_starlette.sse import AppStatus, _get_shutdown_state
 
+        AppStatus.should_exit = True
+        with anyio.fail_after(2):
+            while _get_shutdown_state().watcher_started:
+                await asyncio.sleep(0.05)
         AppStatus.should_exit = False
 
 

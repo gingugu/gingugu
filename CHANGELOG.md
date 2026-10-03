@@ -70,6 +70,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `gingugu.env` is no longer blocked and `.ENV` is.
 - A hostile repo directory name is dropped from the SessionStart contract rather
   than pasted into an instruction to the model.
+- The minion fence closes a Glob whose pattern starts with a single separator
+  (`\Users\...`) on Windows under Python 3.13, where `os.path.isabs` no longer
+  counts it as absolute although it still resolves against the current drive.
 
 ---
 

@@ -77,6 +77,17 @@ _SEARCH_TOOLS = frozenset({"Grep", "Glob"})
 _WILDCARDS = re.compile(r"[*?\[{]")
 
 
+def _rooted(pattern: str) -> bool:
+    """Whether ``pattern`` names a place on disk rather than one under cwd.
+
+    Since 3.13, ``os.path.isabs`` on Windows is False for ``\\Users\\...``, a
+    path that still resolves against the current drive and so reaches the
+    data dir; a leading separator counts as rooted on every version.
+    """
+    expanded = os.path.expanduser(pattern)
+    return os.path.isabs(expanded) or expanded.startswith(("/", os.sep))
+
+
 def _search_root(tool_input: dict, cwd: str) -> str:
     """Where a Grep/Glob starts: its ``path``, the fixed prefix of an absolute
     glob pattern, else the working directory."""
@@ -84,7 +95,7 @@ def _search_root(tool_input: dict, cwd: str) -> str:
     if isinstance(path, str) and path:
         return path
     pattern = tool_input.get("pattern")
-    if isinstance(pattern, str) and os.path.isabs(os.path.expanduser(pattern)):
+    if isinstance(pattern, str) and _rooted(pattern):
         head = _WILDCARDS.split(os.path.expanduser(pattern), 1)[0]
         return head if head.endswith(os.sep) or not head else os.path.dirname(head)
     return cwd
@@ -104,7 +115,7 @@ def _file_reason(tool_input: dict, cwd: str, data_dir: Path, *, search: bool) ->
     pattern = tool_input.get("pattern")
     # Glob takes an absolute pattern as well as a path; Grep's pattern is a
     # regex, never a path, but an absolute one cannot be a regex we care about.
-    if isinstance(pattern, str) and os.path.isabs(os.path.expanduser(pattern)):
+    if isinstance(pattern, str) and _rooted(pattern):
         paths.append(pattern)
     for value in paths:
         if isinstance(value, str) and value and _inside(value, cwd, data_dir):
