@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-10-02_
+_Last updated: 2026-10-03_
 
 ## In Flight
 
@@ -33,7 +33,11 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
   from a second process over the LAN against the Pi: a persona store lands in
   its home, a write to `crow` is refused, a read of `crow` is allowed, an
   ungranted namespace reads as not found. The security review's five findings
-  are fixed.
+  are fixed. Full CI matrix green: the restart rig now waits out sse-starlette's
+  loop-level exit watcher before clearing its global flag (it could re-set the
+  flag under the next server, seen on 3.11), and the minion fence treats a
+  rooted Glob pattern (`\Users\...`) as absolute, since Python 3.13 on Windows
+  no longer does.
 - **Remaining, in order:** B2 - the three local-DB hook paths go remote (recall
   and warm-up as server routes, tripwires as a cached rule list matched
   locally). D - cutover: re-copy the live brain to the Pi, switch this machine,
