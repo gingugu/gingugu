@@ -20,6 +20,10 @@ so every client config stays `command: gingugu`. The machine's owner token is
 sent only to `POST /token/derive`, which trades it for a short-lived **derived
 token** carrying the client's `MEMORY_GRANT` and home namespace; the proxy uses
 that on `/mcp` and refreshes it, and never falls back to the local DB.
+The Claude Code hooks follow the same switch: with a remote brain on, prompt
+recall, tripwires and minion warm-up stop reading the local DB and ask the brain
+over owner-token-only `POST /hook/*` routes, keeping per-session suppression on
+the machine (see **Hooks in remote mode** in `.ai/specs/dataflow.md`).
 
 ---
 
@@ -38,6 +42,7 @@ graph LR
     subgraph MCP Server Process
         B[Server Layer<br/>stdio · streamable HTTP]
         V[POST /token/derive<br/>derived tokens]
+        U[POST /hook/*<br/>recall · tripwires · trip · warmup]
         C[Tool Handlers]
         D[Search Engine]
         E[Decay Engine]
@@ -108,6 +113,10 @@ graph LR
     M <-->|MCP| N
     N -->|grant-scoped| H
     M -->|each tool call: fence first| Y
+    Y -->|remote brain: rules, trips| U
+    Z -->|remote brain: warm-up| U
+    U -->|own read-only connection| H
+    U -->|logs hook prompts and trips| T
     S -->|run only if idle| Q
     S -->|one runner at a time| R
     S --> L
@@ -1716,6 +1725,7 @@ src/gingugu/
 ├── serve.py                # gingugu serve: streamable HTTP + Bearer auth + /healthz + POST /token/derive; build_app
 ├── serve_tokens.py         # Serve tokens: hashed store, scoped + per-machine owner tokens
 ├── serve_derive.py         # POST /token/derive: owner token -> short-lived derived token
+├── serve_hooks.py          # POST /hook/recall|tripwires|trip|warmup: the brain's side of remote-mode hooks
 ├── derived_tokens.py       # Derived tokens: in-memory, hashed, TTL-bound; never on disk
 ├── proxy.py                # Remote mode: stdio <-> streamable-HTTP relay, preflight, refresh
 ├── proxy_session.py        # Proxy building blocks: derivation, messages, one live link
@@ -1794,10 +1804,14 @@ src/gingugu/
 ├── recall_gate.py          # Decision half: pure arithmetic, built around refusing
 ├── recall_sweep.py         # I/O half: read-only cosine sweep + BM25 lexical matches; sqlite_uri()
 ├── prompt_hook.py          # gingugu hook prompt: the entry point; log_prompt() is its one write
+├── recall_pick.py          # pick(): the recall pipeline shared by the local hook and /hook/recall
+├── hook_remote.py          # hooks' transport to a remote brain: owner token, None on any failure
+├── hook_remote_flows.py    # remote recall / warm-up / tripwire rules (60s cache) / trip report
 ├── tripwire.py             # Tripwire matching (pure regex) + load_tripwires, the remote-brain seam
 ├── tool_hook.py            # gingugu hook tool: PreToolUse entry point; deny once, re-issue passes
 ├── minion_fence.py         # Inside a subagent: deny data-dir access, CLI, inherited-server writes
 ├── subagent_hook.py        # gingugu hook subagent: SubagentStart warm-up; stash/take of the spawn prompt
+├── subagent_warmup.py      # warmup(): the grant-bound ranking, shared with /hook/warmup
 ├── capability.py           # Capability pointers: block validation, exists check, the recall lane
 │
 │   # ── Claims (checkable state assertions) ───────────────────────

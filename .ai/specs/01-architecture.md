@@ -379,7 +379,8 @@ signature changed.
 
 ## Remote mode (stdio proxy and derived tokens)
 
-Unreleased, on `feature/stdio-proxy`. When `gingugu remote on` or
+Unreleased (merged in #100; hooks on `feature/remote-hooks`). When
+`gingugu remote on` or
 `MEMORY_REMOTE_URL` selects a brain, a bare `gingugu` (`server.main`) does not
 open the local DB: `proxy.py` relays MCP JSON-RPC between its stdio and
 `gingugu serve`, so client configs stay `command: gingugu`.
@@ -418,8 +419,20 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   replayed (a `memory_store` would write twice); requests while down get an
   immediate error. A 429 or 5xx from derive is transient; a 401/403 on derive
   ends the proxy (`ProxyLost`).
-- **Not yet remote:** the three local-DB hook paths (prompt recall, tripwires,
-  subagent warm-up) still read the local DB (board #1, B2).
+- **Hooks in remote mode** (board #1 B2, `hook_remote.py` client,
+  `serve_hooks.py` server): with a remote brain on, the three hooks never open
+  the local DB or load a local encoder. They POST to owner-token-only routes on
+  `gingugu serve` (`build_app(..., ctx=ctx)`; `server.build` returns the MCP app
+  and its `ServerContext`): `/hook/recall` (the brain embeds, sweeps, selects and
+  logs the prompt), `/hook/tripwires` (rules only; matching stays local, cached
+  60s per URL + namespace set in a 0600 `hook-sessions/tripwire-rules-*.json`,
+  the last copy used while the brain is away), `/hook/trip` (the trip's
+  `query_log` row) and `/hook/warmup` (the agent file's grant, scoped to the
+  client's namespaces). Per-session suppression stays in this machine's
+  `hook-sessions` files and is sent with each request, so the brain holds no
+  session state. Route work runs in a worker thread on its own read-only
+  connection, never the MCP handlers' `ctx.conn`. No answer means a quiet hook,
+  never a local fallback.
 
 ## Warm minions (stdio grant, warm-up, minion fence)
 
@@ -800,8 +813,9 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   (inside a subagent the separate minion fence still denies their writes).
   Pinned memories still trip - a pin loaded at session start is not in front
   of the agent at the moment it acts - while deprecated and superseded ones do
-  not. `tripwire.load_tripwires` is the single seam where a remote brain (via
-  `gingugu serve`) would plug in; today it reads SQLite read-only. Every
+  not. `tripwire.load_tripwires` is the seam a remote brain plugs into: locally it
+  reads SQLite read-only, remotely `/hook/tripwires` serves its rows (see
+  **Remote mode**). Every
   failure exits 0 silently, which is the normal permission flow, and each trip
   is logged to `query_log` as `tool='tripwire'`. Accepted v1 limitation: after
   context compaction the memory may drop out of context while suppression still

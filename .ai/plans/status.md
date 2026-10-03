@@ -26,8 +26,8 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
   straight into the OS keychain - nobody handles a token. Verified on the Pi:
   the restricted key gets no shell, PTY or port forward; the minted token
   authenticates (200), a wrong one does not (401).
-- **B1 (proxy) and C (derived persona tokens + `MEMORY_PERSONA`): built on
-  `feature/stdio-proxy` (this PR).** A bare `gingugu` relays to the remote brain
+- **B1 (proxy) and C (derived persona tokens + `MEMORY_PERSONA`): merged
+  (#100, `374dab6`), unreleased.** A bare `gingugu` relays to the remote brain
   when one is selected; the proxy trades the machine token for a short-lived
   derived token carrying the client's grant and home namespace. Verified live
   from a second process over the LAN against the Pi: a persona store lands in
@@ -38,16 +38,22 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
   flag under the next server, seen on 3.11), and the minion fence treats a
   rooted Glob pattern (`\Users\...`) as absolute, since Python 3.13 on Windows
   no longer does.
-- **Remaining, in order:** B2 - the three local-DB hook paths go remote (recall
-  and warm-up as server routes, tripwires as a cached rule list matched
-  locally). D - cutover: re-copy the live brain to the Pi, switch this machine,
-  then a second machine. C's minion-side half (warm minions on derived tokens)
-  is folded into B2.
+- **B2 (the hooks follow the brain): built on `feature/remote-hooks` (this
+  PR).** In remote mode prompt recall, tripwires and minion warm-up never open
+  the local DB: four owner-only routes on `gingugu serve` (`/hook/recall`,
+  `/hook/tripwires`, `/hook/trip`, `/hook/warmup`). Tripwire rules are matched
+  locally from a 60s cache; suppression stays on the machine and is sent per
+  request, so the brain keeps no session state. C's minion-side half needed no
+  code: agent files already set `MEMORY_GRANT` and
+  `MEMORY_CREDENTIALS_ENABLED=false`, so a minion's own `gingugu` becomes a
+  proxy on a derived token.
+- **Remaining:** D - cutover: re-copy the live brain to the Pi, switch this
+  machine, then a second machine.
 
 ## Recently Completed
 
-**Board #1 B1 + C: remote-mode proxy, persona tokens, `MEMORY_PERSONA` (built on
-`feature/stdio-proxy`, unreleased).** A bare `gingugu` relays stdio to
+**Board #1 B1 + C: remote-mode proxy, persona tokens, `MEMORY_PERSONA` (merged
+as `374dab6` (#100), unreleased).** A bare `gingugu` relays stdio to
 `gingugu serve` when a remote brain is on, and never opens the local DB.
 
 - `proxy.py` / `proxy_session.py`: preflight refuses to start (malformed, blank or
@@ -915,6 +921,7 @@ below it moved up one, and the row-position cross-references moved with them.
 | 8 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
 | 9 | Session flight recorder (low priority) | 18 | Check prior art first |
 | 10 | **MCP SDK 2.x migration** | - | We pin `mcp<2` (lock 1.28.1); 2.x is a major (2.3.0 out 2026-10-02). The proxy sits on two transport APIs, and `tests/test_proxy*.py` is the safety net |
+| 11 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
 | - | **Template/sibling noise in retrieval - PARKED** | 1 | Ten dead fixes and no live hypothesis; see below |
 
 ### Previous board (2026-09-28), kept for its numbering
