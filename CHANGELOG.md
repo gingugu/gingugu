@@ -53,6 +53,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fenced minions - including global ones in `~/.claude/agents/` - can call their
   own server in any repo.
 
+### Fixed
+
+- **`gingugu serve` answers clients on other machines.** With
+  `MEMORY_SERVE_HOST=0.0.0.0`, a client that reached the server by a LAN host
+  name or IP got `421 Misdirected Request`: the MCP SDK's DNS-rebinding
+  protection, enabled for its `127.0.0.1` default host, only accepted
+  `localhost` Host headers. The server now tells the SDK its real bind host. A
+  loopback bind keeps the Host check; a LAN bind relies on the Bearer token.
+
 ---
 
 ## [0.19.0] - 2026-10-01
