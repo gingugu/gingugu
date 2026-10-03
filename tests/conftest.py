@@ -81,6 +81,17 @@ def sandboxed_user_settings(monkeypatch: pytest.MonkeyPatch, tmp_path_factory):
 
 
 @pytest.fixture(autouse=True)
+def no_persona(monkeypatch: pytest.MonkeyPatch):
+    """Keep the developer's own MEMORY_PERSONA out of the suite.
+
+    A persona set in the user's Claude Code settings reaches every child
+    process, so without this the namespace-derivation tests pass or fail
+    depending on who runs them. A test that needs one sets it.
+    """
+    monkeypatch.delenv("MEMORY_PERSONA", raising=False)
+
+
+@pytest.fixture(autouse=True)
 def offline_embeddings(monkeypatch: pytest.MonkeyPatch):
     """Keep the suite off the network — the sibling of ``fake_keyring``.
 
@@ -166,3 +177,14 @@ def vault(db: Database) -> CredentialVault:
 @pytest.fixture
 def relations(db: Database) -> RelationManager:
     return RelationManager(db.conn)
+
+
+@pytest.fixture(autouse=True)
+def _reset_sse_exit_flag():
+    """sse-starlette keeps a process-global "server is shutting down" flag that a
+    stopped in-process uvicorn leaves set, which ends every later SSE response
+    at once. Reset it so tests that serve over real sockets stay independent."""
+    from sse_starlette.sse import AppStatus
+
+    AppStatus.should_exit = False
+    yield

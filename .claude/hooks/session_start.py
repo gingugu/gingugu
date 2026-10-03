@@ -144,6 +144,29 @@ def get_logs_size(cwd):
         return None
 
 
+def _beyond_crow(cwd):
+    """What the contract loads after crow: MEMORY_PERSONA if set, then the repo.
+
+    crow is shared by every persona; a persona's self lives in its own
+    namespace. A malformed MEMORY_PERSONA is ignored, never pasted in.
+    """
+    import re
+
+    def valid(name):
+        return bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", name)) and name != "crow"
+
+    names = []
+    persona = os.environ.get("MEMORY_PERSONA", "").strip()
+    if valid(persona):
+        names.append(persona)
+    # The directory name is pasted into an instruction to the model: a hostile
+    # clone name (quotes, newlines) is dropped, never pasted.
+    project = Path(cwd).name
+    if valid(project) and project not in names:
+        names.append(project)
+    return ",".join(names) or "crow"
+
+
 def build_startup_contract(cwd):
     """Imperative Gingugu startup contract, injected fresh every session.
 
@@ -152,20 +175,22 @@ def build_startup_contract(cwd):
     This block is — it rides in via SessionStart additionalContext every time.
     """
     project = Path(cwd).name
+    rest = _beyond_crow(cwd)
     return (
         "=== SESSION STARTUP CONTRACT (Gingugu memory protocol - do this FIRST) ===\n"
         "Before responding to the first user message, run these in parallel as your\n"
         "opening action. Non-negotiable:\n"
-        f'  - mcp__gingugu__memory_context(namespace="crow,{project}", task_hint=...)\n'
-        "    # ONE call: identity + this repo, deduped. Use compact=true for a\n"
+        f'  - mcp__gingugu__memory_context(namespace="crow,{rest}", task_hint=...)\n'
+        "    # ONE call: shared crow + your persona + this repo, deduped. Use compact=true for a\n"
         "    # lighter payload; pull full bodies via memory_recall.\n"
-        f'  - mcp__gingugu__memory_stats(namespace="crow,{project}")\n'
+        f'  - mcp__gingugu__memory_stats(namespace="crow,{rest}")\n'
         "    # Same namespace list as memory_context, in one call: global\n"
         "    # health once plus each namespace's own breakdown.\n"
         "Before asking for ANY secret/token/credential: mcp__gingugu__credential_list()\n"
-        f'NAMESPACES: crow + "{project}" is the floor, always - it is derived from\n'
-        "cwd, so it is never a guess. Load any OTHER namespace only when the work\n"
-        "actually reaches that repo, or when the user says the task spans it. Never\n"
+        f'NAMESPACES: "crow,{rest}" is the floor, always - it is derived from\n'
+        "cwd and MEMORY_PERSONA, so it is never a guess. Load any OTHER namespace\n"
+        "only when the work actually reaches that repo, or when the user says the\n"
+        "task spans it. Never "
         'because a directory is mounted: "Additional working directories" is a\n'
         "permission allowlist, not the workspace, and at startup nothing has\n"
         "happened yet to justify a wider load. A later memory_context call costs\n"

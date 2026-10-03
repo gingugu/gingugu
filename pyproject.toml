@@ -18,6 +18,10 @@ dependencies = [
     # today, but serve.py imports them directly, so declare them explicitly.
     "starlette>=0.37",
     "uvicorn>=0.30",
+    # The remote-mode proxy (proxy.py, proxy_session.py) imports these directly;
+    # floors match what mcp itself requires.
+    "httpx>=0.27.1,<1",
+    "anyio>=4.5",
 ]
 
 [project.scripts]

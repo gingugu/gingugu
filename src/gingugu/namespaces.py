@@ -37,7 +37,7 @@ class NamespaceManager:
         """
         if explicit:
             return explicit
-        resolved = self._config.resolved_namespace
+        resolved = grants.home() or self._config.resolved_namespace
         if not resolved:
             logger.warning("No namespace configured; falling back to %r", DEFAULT_NAMESPACE)
             resolved = DEFAULT_NAMESPACE
