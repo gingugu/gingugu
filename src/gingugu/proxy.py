@@ -63,7 +63,7 @@ class ProxyRefused(Exception):
 def preflight(target: RemoteTarget, *, grant: str | None, credentials_enabled: bool) -> str:
     """Return the owner token, or raise ProxyRefused. Config refusals come first
     so they never touch the keychain or the network."""
-    if grant:
+    if grant is not None:  # set-but-blank is refused too, never widened to full
         try:
             stdio_grant(grant)  # same rules as stdio; the brain enforces it for real
         except ValueError as exc:

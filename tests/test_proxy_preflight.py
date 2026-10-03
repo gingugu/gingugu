@@ -48,7 +48,7 @@ def test_a_well_formed_grant_is_allowed(vault):
     assert proxy.preflight(TARGET, grant="tyrone=write,crow=read", credentials_enabled=False)
 
 
-@pytest.mark.parametrize("bad", ["tyrone", "tyrone=admin", "*=write"])
+@pytest.mark.parametrize("bad", ["tyrone", "tyrone=admin", "*=write", "", "   "])
 def test_a_malformed_or_full_grant_is_refused(vault, bad):
     # "*=write" is no fence at all; unset MEMORY_GRANT for full access, as on stdio.
     assert "MEMORY_GRANT" in _refusal(grant=bad)
@@ -123,6 +123,16 @@ def test_remote_refusal_exits_2_without_touching_the_local_db(
     assert "MEMORY_CREDENTIALS_ENABLED=false" in err
     assert TOKEN not in err
     assert not (no_local_server / "local.db").exists()
+
+
+def test_a_blank_grant_is_refused_not_widened_to_full(no_local_server, vault, monkeypatch, capsys):
+    # Set-but-empty must never fall back to the whole brain - the stdio rule.
+    monkeypatch.setenv("MEMORY_REMOTE_URL", URL)
+    monkeypatch.setenv("MEMORY_CREDENTIALS_ENABLED", "false")
+    monkeypatch.setenv("MEMORY_GRANT", "")
+    monkeypatch.setattr(proxy, "serve_stdio", lambda *a, **k: pytest.fail("proxy started"))
+    code, err = _main_exit(capsys)
+    assert code == 2 and "MEMORY_GRANT" in err
 
 
 @pytest.mark.parametrize(

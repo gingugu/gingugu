@@ -391,7 +391,9 @@ name = "gingugu"
 version = "0.20.0"
 source = { editable = "." }
 dependencies = [
+    { name = "anyio" },
     { name = "fastembed" },
+    { name = "httpx" },
     { name = "keyring" },
     { name = "mcp" },
     { name = "platformdirs" },
@@ -411,8 +413,10 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anyio", specifier = ">=4.5" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=24.0" },
     { name = "fastembed", specifier = ">=0.4,<1" },
+    { name = "httpx", specifier = ">=0.27.1,<1" },
     { name = "keyring", specifier = ">=24.0,<26" },
     { name = "mcp", specifier = ">=1.25,<2" },
     { name = "platformdirs", specifier = ">=4.0,<5" },
