@@ -423,8 +423,8 @@ back to the local DB: it refuses to start (exit 2) when
 - the keychain holds no token (run `gingugu remote login`);
 - the brain is unreachable.
 
-Plain `http` to a non-loopback host starts with a warning. The machine token is
-only ever sent to `POST /token/derive` (owner tokens only; scoped tokens get
+Plain `http` to a non-loopback host starts with a warning. The proxy sends the
+machine token only to `POST /token/derive` (owner tokens only; scoped tokens get
 403), which trades it for a session token held in memory on the server: valid
 at most an hour, SHA-256 only, at most 256 live, gone when the server restarts.
 The session token carries the client's `MEMORY_GRANT` (full if unset) and its
@@ -445,6 +445,16 @@ at a loss fail and are never replayed; requests while it is down fail at once.
     }
 } } }
 ```
+
+The Claude Code hooks follow the same switch. With a remote brain on,
+involuntary prompt recall, tripwires and minion warm-up ask the brain over
+`POST /hook/recall`, `/hook/tripwires`, `/hook/trip` and `/hook/warmup` with the
+machine token (these routes refuse every other token). The brain embeds and
+ranks the prompt; tripwire rules come back to be matched on this machine, cached
+for a minute, with the last copy kept while the brain is unreachable. Which
+memories a session has already been shown stays on this machine and travels
+with each request. If the brain cannot answer, the hook stays quiet rather than
+reading a stale local copy.
 
 #### Personas
 

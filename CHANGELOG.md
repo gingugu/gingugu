@@ -48,6 +48,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   client never re-handshakes. Requests in flight at a loss are failed, never
   replayed; requests while the brain is down get an immediate error. A 429 from
   `/token/derive` is treated as transient. A rejected owner token ends the proxy.
+- **The hooks follow the brain.** With a remote brain on, involuntary prompt
+  recall, tripwires and minion warm-up stop reading the local DB and ask the
+  brain instead, over four owner-token-only routes on `gingugu serve`:
+  `POST /hook/recall` (the brain embeds, ranks and logs the prompt),
+  `/hook/tripwires` (rules, matched locally and cached for 60 seconds, the last
+  copy kept while the brain is unreachable), `/hook/trip` and `/hook/warmup`.
+  Per-session suppression stays on the machine and is sent with each request,
+  so the brain keeps no session state. A brain that cannot answer leaves the
+  hook quiet; it never falls back to a local copy.
 - **`MEMORY_PERSONA`**, an agent's own namespace. Involuntary prompt recall,
   tripwires and the SessionStart contract load `crow`, then the persona, then the
   repo. `crow` is the layer every persona shares (the user's rules, preferences,
