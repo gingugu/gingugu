@@ -14,6 +14,7 @@ trip is reported upstream.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import os
@@ -24,6 +25,8 @@ from . import hook_remote
 from .hook_remote import RemoteTarget
 
 RULES_TTL_S = 60.0
+# What query_log keeps of a trip's text anyway; the rest never leaves the machine.
+TRIP_TEXT_CHARS = 2000
 
 
 def remote_recall(
@@ -98,9 +101,13 @@ def _parse(raw: object) -> list | None:
     if not isinstance(raw, list):
         return None
     try:
-        return [Tripwire(**d) for d in raw]
+        wires = [Tripwire(**d) for d in raw]
     except TypeError:  # a missing or unknown key, or an entry that is no dict
         return None
+    # Every field is text; a number in a pattern would only fail later, mid-match.
+    if not all(isinstance(v, str) for w in wires for v in dataclasses.astuple(w)):
+        return None
+    return wires
 
 
 def _read_cache(path: Path) -> tuple[float, list] | None:
@@ -115,7 +122,9 @@ def _write_cache(path: Path, wires: list) -> None:
     """Owner-only, like the spawn stash: rule text is the user's own memory."""
     try:
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        # No following a link planted at this path onto some other file.
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(path, flags, 0o600)
         with os.fdopen(fd, "w") as handle:
             handle.write(json.dumps({"fetched": time.time(), "tripwires": wires}))
         os.chmod(path, 0o600)  # an older, looser file keeps its mode on O_CREAT
@@ -150,6 +159,11 @@ def report_trip(
     hook_remote.post(
         target,
         "/hook/trip",
-        {"session_id": session_id, "text": text, "ids": ids, "namespaces": namespaces},
+        {
+            "session_id": session_id,
+            "text": text[:TRIP_TEXT_CHARS],
+            "ids": ids,
+            "namespaces": namespaces,
+        },
         timeout=hook_remote.TRIP_TIMEOUT_S,
     )

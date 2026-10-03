@@ -911,7 +911,7 @@ below it moved up one, and the row-position cross-references moved with them.
 
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **One central brain, several clients** - IN FLIGHT | 11 | Hardware up, design approved and measured (see In Flight). The hooks read the local DB directly, so they need server routes before cutover |
+| 1 | **One central brain, several clients** - IN FLIGHT | 11 | Hardware up, design approved and measured (see In Flight). B1, C and B2 built; D (cutover) remains |
 | 2 | **A shared board between agents** | 15 | Needs 1 |
 | 3 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
 | 4 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |

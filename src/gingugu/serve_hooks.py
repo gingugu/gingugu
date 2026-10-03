@@ -39,12 +39,25 @@ class _BadRequest(ValueError):
     pass
 
 
+# Generous for any real hook, small enough that a body cannot tie up a worker.
+_MAX_CHARS = {
+    "prompt": 8000,
+    "text": 4000,
+    "session_id": 256,
+    "spec": 2000,
+    "agent_type": 128,
+    "task_hint": 4000,
+}
+
+
 def _text(body: dict, key: str, *, optional: bool = False, nonempty: bool = False) -> str | None:
     value = body.get(key)
     if value is None and optional:
         return None
     if not isinstance(value, str) or (nonempty and not value):
         raise _BadRequest(f"{key} must be a string")
+    if len(value) > _MAX_CHARS[key]:
+        raise _BadRequest(f"{key} is longer than {_MAX_CHARS[key]} characters")
     return value
 
 

@@ -26,7 +26,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
    It is the crash boundary: no exception escapes to the client. Two transports
    share this path: **stdio** (default) and **streamable HTTP** via `serve.py`
    (`gingugu serve`), which wraps the same server in a Starlette app with
-   Bearer-token auth middleware, a `/healthz` probe and `POST /token/derive`; the
+   Bearer-token auth middleware, a `/healthz` probe, `POST /token/derive` and,
+   given the server's context, the owner-only `POST /hook/*` routes; the
    middleware resolves each token to a grant and a kind (see **Scoped tokens**
    and **Remote mode** below). The `credential_*` tools
    are gated by `MEMORY_CREDENTIALS_ENABLED` so a shared instance can omit the
@@ -49,7 +50,9 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `context`, `relations`, `consolidation`, `decay`, `stats`, `namespaces`,
    `portability`, `capability`, `grants` (the per-call grant every chokepoint
    consults), `serve_tokens`, `tripwire` (the decision half of the `PreToolUse` hook; see
-   Key Decisions), `minion_fence` and `subagent_hook` (see Warm minions). `storage` owns the `memories` row only; the satellite tables
+   Key Decisions), `minion_fence`, `subagent_hook` and `subagent_warmup` (see Warm minions),
+   `recall_pick` (the recall pipeline the local hook and `/hook/recall` share),
+   `hook_remote` + `hook_remote_flows` and `serve_hooks` (see Remote mode). `storage` owns the `memories` row only; the satellite tables
    it drags along have their own owners (`tags`, `access`, `embedding_sync`,
    `claim_sync`), reached through the `storage_derived.DerivedTables`
    delegation surface, which also carries `log_query` for `query_log` (owned by
@@ -430,9 +433,10 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   `query_log` row) and `/hook/warmup` (the agent file's grant, scoped to the
   client's namespaces). Per-session suppression stays in this machine's
   `hook-sessions` files and is sent with each request, so the brain holds no
-  session state. Route work runs in a worker thread on its own read-only
-  connection, never the MCP handlers' `ctx.conn`. No answer means a quiet hook,
-  never a local fallback.
+  session state. Route work runs in a worker thread: reads on its own read-only
+  connection, the only writes the `query_log` rows, never the MCP handlers'
+  `ctx.conn`. No answer means a quiet hook, never the local DB; tripwires alone
+  keep using their last fetched rules.
 
 ## Warm minions (stdio grant, warm-up, minion fence)
 
@@ -813,9 +817,9 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   (inside a subagent the separate minion fence still denies their writes).
   Pinned memories still trip - a pin loaded at session start is not in front
   of the agent at the moment it acts - while deprecated and superseded ones do
-  not. `tripwire.load_tripwires` is the seam a remote brain plugs into: locally it
-  reads SQLite read-only, remotely `/hook/tripwires` serves its rows (see
-  **Remote mode**). Every
+  not. `tripwire.load_tripwires` reads SQLite read-only: the local hook calls it,
+  and in remote mode the brain calls it inside `/hook/tripwires` while the
+  client matches the returned rules (see **Remote mode**). Every
   failure exits 0 silently, which is the normal permission flow, and each trip
   is logged to `query_log` as `tool='tripwire'`. Accepted v1 limitation: after
   context compaction the memory may drop out of context while suppression still

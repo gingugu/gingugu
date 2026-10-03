@@ -16,8 +16,8 @@ tools, storage and ranking are identical on both.
 A third path is the **stdio proxy**: when a remote brain is selected
 (`gingugu remote on`, or `MEMORY_REMOTE_URL`), a bare `gingugu` does not open the
 local DB. It relays the client's stdio to `gingugu serve` over streamable HTTP,
-so every client config stays `command: gingugu`. The machine's owner token is
-sent only to `POST /token/derive`, which trades it for a short-lived **derived
+so every client config stays `command: gingugu`. The proxy sends the machine's
+owner token only to `POST /token/derive`, which trades it for a short-lived **derived
 token** carrying the client's `MEMORY_GRANT` and home namespace; the proxy uses
 that on `/mcp` and refreshes it, and never falls back to the local DB.
 The Claude Code hooks follow the same switch: with a remote brain on, prompt
@@ -53,6 +53,7 @@ graph LR
     end
 
     subgraph Claude Code Hooks
+        PH[UserPromptSubmit<br/>gingugu hook prompt]
         Y[PreToolUse<br/>gingugu hook tool<br/>tripwires · minion fence]
         Z[SubagentStart<br/>gingugu hook subagent]
     end
@@ -113,9 +114,12 @@ graph LR
     M <-->|MCP| N
     N -->|grant-scoped| H
     M -->|each tool call: fence first| Y
+    A -->|each prompt| PH
+    PH -->|local: read-only sweep| H
+    PH -->|remote brain: recall| U
     Y -->|remote brain: rules, trips| U
     Z -->|remote brain: warm-up| U
-    U -->|own read-only connection| H
+    U -->|reads read-only| H
     U -->|logs hook prompts and trips| T
     S -->|run only if idle| Q
     S -->|one runner at a time| R
