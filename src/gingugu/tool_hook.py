@@ -150,22 +150,29 @@ def run(payload: dict) -> int:
     session_id = payload.get("session_id") or "unknown"
     cwd = payload.get("cwd") or os.getcwd()
 
+    from . import hook_remote
     from .config import load_config
     from .recall_sweep import connect_readonly
     from .tripwire import load_tripwires, match_text, matching, render_reason
 
     app = load_config()
-    if not app.db_path.exists():
-        return 0
-
     namespaces = namespaces_for(cwd)
-    conn = connect_readonly(app.db_path)
-    try:
-        wires = load_tripwires(conn, namespaces)
-    except Exception:  # noqa: BLE001 - an unmigrated store has no table yet
-        return 0
-    finally:
-        conn.close()
+    target = hook_remote.target()
+    if target is not None:
+        # Rules come from the brain (cached); matching and trip state stay here.
+        from .hook_remote_flows import remote_rules
+
+        wires = remote_rules(target, namespaces, app.db_path.parent / "hook-sessions")
+    else:
+        if not app.db_path.exists():
+            return 0
+        conn = connect_readonly(app.db_path)
+        try:
+            wires = load_tripwires(conn, namespaces)
+        except Exception:  # noqa: BLE001 - an unmigrated store has no table yet
+            return 0
+        finally:
+            conn.close()
 
     tripped = load_tripped(app.db_path, session_id)
     # Filtered before matching, not after: the cap must count fresh trips only.
@@ -175,9 +182,19 @@ def run(payload: dict) -> int:
         return 0
 
     ids = [h.memory_id for h in hits]
-    _log_trip(app.db_path, session_id, match_text(tool_name, tool_input), ids, namespaces)
+    text = match_text(tool_name, tool_input)
     save_tripped(app.db_path, session_id, tripped | set(ids))
+    if target is None:
+        _log_trip(app.db_path, session_id, text, ids, namespaces)
+        _emit(render_reason(hits), len(hits))
+        return 0
+    # The deny first, flushed: the trip report is a network round trip and must
+    # never be what the user waits on.
     _emit(render_reason(hits), len(hits))
+    sys.stdout.flush()
+    from .hook_remote_flows import report_trip
+
+    report_trip(target, session_id, text, ids, namespaces)
     return 0
 
 

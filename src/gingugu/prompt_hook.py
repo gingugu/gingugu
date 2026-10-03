@@ -19,7 +19,7 @@ import sys
 import time
 from pathlib import Path
 
-from .recall_gate import GateConfig, is_worth_embedding, render, select, strip_affect
+from .recall_gate import GateConfig, is_worth_embedding, render, strip_affect
 
 GLOBAL_NAMESPACE = "crow"
 _PERSONA_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
@@ -205,10 +205,29 @@ def run(payload: dict) -> int:
         return 0
 
     from .config import load_config
-    from .embeddings import build_provider
-    from .recall_sweep import connect_readonly, lexical_matches, sweep
 
     app = load_config()
+    namespaces = namespaces_for(cwd)
+
+    from . import hook_remote
+
+    target = hook_remote.target()
+    if target is not None:
+        # The brain embeds and ranks; this machine keeps only suppression, so a
+        # memory already shown this session is not asked for again. Never local.
+        from .hook_remote_flows import remote_recall
+
+        suppressed = load_suppressed(app.db_path, session_id)
+        found = remote_recall(target, prompt, session_id, namespaces, suppressed, cfg)
+        if found is not None:
+            context, ids = found
+            _emit(context, len(ids))
+            save_suppressed(app.db_path, session_id, suppressed | set(ids))
+        return 0
+
+    from .embeddings import build_provider
+    from .recall_pick import pick
+
     if not app.embeddings_enabled or not app.db_path.exists():
         return 0
 
@@ -220,21 +239,8 @@ def run(payload: dict) -> int:
         ollama_model=app.embeddings_ollama_model,
     )
     cleaned = strip_affect(prompt)[:2000]
-    query_vec = provider.encode(cleaned)
-    if not query_vec:
-        return 0
-
-    namespaces = namespaces_for(cwd)
-    conn = connect_readonly(app.db_path)
-    try:
-        candidates = sweep(conn, list(query_vec), namespaces, config=cfg)
-        lexical = lexical_matches(conn, cleaned, namespaces) if cfg.require_lexical else None
-    finally:
-        conn.close()
-
     suppressed = load_suppressed(app.db_path, session_id)
-    picked = select(candidates, lexical_ids=lexical, config=cfg, suppressed=suppressed)
-    log_prompt(app.db_path, session_id, cleaned, [c.id for c in picked], namespaces)
+    picked = pick(app.db_path, provider, cleaned, namespaces, cfg, suppressed, session_id)
     if not picked:
         return 0
 
