@@ -86,6 +86,8 @@ gingugu — persistent long-term memory for AI coding assistants (MCP server)
 Usage:
   gingugu                      Run the MCP server over stdio (default transport
                                for local clients like Claude Code / Cursor).
+                               With `gingugu remote on` or MEMORY_REMOTE_URL set,
+                               it relays to that remote brain instead.
   gingugu serve                Run over streamable HTTP for a remote/central brain.
   gingugu token add|list|revoke  Manage scoped tokens for `gingugu serve`.
   gingugu remote status|on|off|login  Choose which brain this machine talks to.
@@ -208,6 +210,30 @@ def main() -> None:
         print(f"gingugu: unknown command '{cmd[0]}'\n", file=sys.stderr)
         print(USAGE, file=sys.stderr)
         raise SystemExit(2)
+    from . import remote
+
+    try:
+        target = remote.active()
+    except ValueError as exc:
+        print(f"gingugu: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+    if target is not None:
+        from . import proxy
+        from .config import load_config
+
+        config = load_config()
+        try:
+            token = proxy.preflight(
+                target, grant=config.grant, credentials_enabled=config.credentials_enabled
+            )
+        except proxy.ProxyRefused as exc:
+            print(f"gingugu: remote brain {target.url}: {exc}", file=sys.stderr)
+            raise SystemExit(2) from exc
+        try:
+            raise SystemExit(proxy.serve_stdio(target.url, token))
+        except proxy.ProxyLost as exc:
+            print(f"gingugu: {exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
     try:
         server = build_server()
     except ValueError as exc:
