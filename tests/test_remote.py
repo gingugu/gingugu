@@ -146,11 +146,11 @@ def test_login_does_not_switch_the_machine(env, monkeypatch):
 def test_login_defaults_name_to_short_hostname_and_key_to_gingugu_pi(env, monkeypatch):
     calls: list = []
     monkeypatch.setattr(remote, "_run", _ok_runner(calls))
-    monkeypatch.setattr(remote.socket, "gethostname", lambda: "Bens-MBP.local")
+    monkeypatch.setattr(remote.socket, "gethostname", lambda: "Work-Laptop.local")
     remote.main(["login", URL, "--ssh", "pi@brain.local"])
     argv = calls[0]
-    assert argv[-1] == "bens-mbp"
-    assert argv[argv.index("-i") + 1].endswith("gingugu_pi")
+    assert argv[-1] == "work-laptop"
+    assert argv[argv.index("-i") + 1].endswith("gingugu_mint")
 
 
 @pytest.mark.parametrize(
@@ -163,6 +163,54 @@ def test_login_failure_stores_nothing(env, monkeypatch, capsys, stdout, code):
     assert env[1] == {}
     out = capsys.readouterr()
     assert TOKEN not in out.out and TOKEN not in out.err
+
+
+@pytest.mark.parametrize("target", ["-oProxyCommand=x", "-F/tmp/c", "--"])
+def test_login_rejects_an_ssh_target_that_is_an_option(env, monkeypatch, target):
+    calls: list = []
+    monkeypatch.setattr(remote, "_run", _ok_runner(calls))
+    assert remote.main(["login", URL, f"--ssh={target}", "--name", "mbp-2"]) == 2
+    assert calls == []
+
+
+def test_login_reports_a_keychain_failure_clearly(env, monkeypatch, capsys):
+    monkeypatch.setattr(remote, "_run", _ok_runner([]))
+
+    def broken(url, tok):
+        raise RuntimeError("no keyring backend")
+
+    monkeypatch.setattr(remote, "_kr_set", broken)
+    assert remote.main(["login", URL, "--ssh", "pi@brain.local", "--name", "mbp-2"]) == 1
+    err = capsys.readouterr().err
+    assert "keychain" in err and "no keyring backend" in err and TOKEN not in err
+
+
+def test_status_says_keychain_error_not_missing(env, monkeypatch, capsys):
+    env[1][URL] = TOKEN
+    remote.main(["on", URL])
+
+    def broken(url):
+        raise RuntimeError("locked")
+
+    monkeypatch.setattr(remote, "_kr_get", broken)
+    monkeypatch.setattr(remote, "_reachable", lambda url, token: True)
+    capsys.readouterr()
+    assert remote.main(["status"]) == 0
+    out = capsys.readouterr().out
+    assert "keychain error" in out and "missing" not in out
+
+
+def test_on_warns_about_plain_http_to_another_host(env, capsys):
+    env[1][URL] = TOKEN
+    remote.main(["on", URL])
+    assert "unencrypted" in capsys.readouterr().err
+
+
+def test_on_does_not_warn_for_https_or_loopback(env, capsys):
+    for url in ("https://brain.example:8765", "http://127.0.0.1:8765", "http://localhost:8765"):
+        env[1][url] = TOKEN
+        remote.main(["on", url])
+        assert "unencrypted" not in capsys.readouterr().err
 
 
 def test_login_rejects_a_bad_name_before_running_ssh(env, monkeypatch):

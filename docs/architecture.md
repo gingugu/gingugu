@@ -1696,6 +1696,7 @@ src/gingugu/
 ├── serve_tokens.py         # Serve tokens: hashed store, scoped + per-machine owner tokens
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine
+├── remote_args.py          # usage text + argparse for `gingugu remote`
 ├── grants.py               # Per-namespace read/write grants, bound per tool call
 ├── webui.py                # gingugu ui: serves the built Memory Explorer bundle
 ├── promote.py              # gingugu promote: local "gold" -> a central brain

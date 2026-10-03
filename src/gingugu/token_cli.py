@@ -27,9 +27,11 @@ Usage:
                                      revocable on its own. Printed once.
   gingugu token list                 Show token names and grants (never secrets).
   gingugu token revoke NAME          Delete a token; takes effect immediately.
-  gingugu token ssh-mint             Forced command for authorized_keys: reads
+  gingugu token ssh-mint [--name N]  Forced command for authorized_keys: reads
                                      SSH_ORIGINAL_COMMAND "mint NAME", rotates
                                      that machine's owner token, prints only it.
+                                     --name pins the key to one machine (use
+                                     one key per machine so revoking sticks).
 
 SPEC is comma-separated name=level pairs, level read or write, name may be *:
   gingugu token add laptop-2 --ns gingugu=write,crow=read
@@ -58,7 +60,8 @@ def _build_parser() -> argparse.ArgumentParser:
     sub.add_parser("list", add_help=False)
     revoke = sub.add_parser("revoke", add_help=False)
     revoke.add_argument("name")
-    sub.add_parser("ssh-mint", add_help=False)
+    mint = sub.add_parser("ssh-mint", add_help=False)
+    mint.add_argument("--name")
     return parser
 
 
@@ -68,17 +71,37 @@ def _usage_error(message: str) -> int:
     return 2
 
 
-def _ssh_mint(store: TokenStore) -> int:
-    """Forced-command mint. Anything but ``mint NAME`` is refused, token-free."""
+def _refuse(reason: str) -> int:
+    print(f"gingugu token ssh-mint: {reason}", file=sys.stderr)
+    return 2
+
+
+def _ssh_mint(store: TokenStore, bound: str | None) -> int:
+    """Forced-command mint. Anything but ``mint [NAME]`` is refused, token-free.
+
+    ``bound`` (``--name`` in the authorized_keys line) pins the key to one
+    machine: it can rotate that machine's token and nothing else, so deleting
+    the key's line really does cut the machine off. Unbound, the client names
+    the machine itself.
+    """
     words = (os.environ.get("SSH_ORIGINAL_COMMAND") or "").split()
-    if len(words) != 2 or words[0] != "mint":
-        print("gingugu token ssh-mint: expected exactly 'mint NAME'", file=sys.stderr)
-        return 2
-    name = words[1]
-    if not NAME_RE.fullmatch(name):
-        print("gingugu token ssh-mint: invalid machine name", file=sys.stderr)
-        return 2
-    token = store.add_owner(name, replace=True)
+    if bound is not None:
+        if not NAME_RE.fullmatch(bound):
+            return _refuse("invalid --name")
+        if words not in ([], ["mint"], ["mint", bound]):
+            return _refuse(f"this key may only mint {bound!r}")
+        name = bound
+    else:
+        if len(words) != 2 or words[0] != "mint":
+            return _refuse("expected exactly 'mint NAME'")
+        name = words[1]
+        if not NAME_RE.fullmatch(name):
+            return _refuse("invalid machine name")
+    try:
+        token = store.add_owner(name, replace=True)
+    except ValueError as exc:
+        print(f"gingugu token ssh-mint: {exc}", file=sys.stderr)
+        return 1
     print(token)
     return 0
 
@@ -122,7 +145,7 @@ def main(argv: list[str]) -> int:
                 )
                 print(f"{e['name']}  {spec}  {e['created_at']}")
         elif args.cmd == "ssh-mint":
-            return _ssh_mint(store)
+            return _ssh_mint(store, args.name)
         else:
             if not store.revoke(args.name):
                 print(f"gingugu token: no token named {args.name!r}", file=sys.stderr)
