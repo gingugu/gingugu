@@ -378,6 +378,37 @@ SHA-256 of each token is stored, in `<db-dir>/serve_tokens.json` (`0600`).
 This is one owner sharing a brain with their own clients, not a multi-tenant
 service.
 
+**Your own machines** each get a full-access token of their own, named and
+revocable on its own: `gingugu token add my-laptop --owner`. To skip handling
+it at all, let the machine mint it over SSH with a key that can do nothing else.
+Give **each machine its own key**, and on the server authorize it with a forced
+command pinned to that machine's name (one line per machine, in the
+`authorized_keys` of the account the server runs as):
+
+```text
+restrict,from="192.168.1.0/24",command="env MEMORY_DB_PATH=/srv/gingugu/memories.db /srv/gingugu/bin/gingugu token ssh-mint --name my-laptop" ssh-ed25519 AAAA... my-laptop
+```
+
+Use full paths (a forced command gets no login `PATH`) and the server's own
+`MEMORY_DB_PATH`, or the token lands in a file the server never reads. `--name`
+means the key can only ever rotate its own machine's token. To cut a machine
+off, delete its line and `gingugu token revoke my-laptop`. Without `--name`, any
+holder of the key could mint itself a new token after a revoke. Then, on the
+machine:
+
+```bash
+gingugu remote login http://brain.local:8765 --ssh me@brain.local   # token -> OS keychain
+gingugu remote on http://brain.local:8765    # this machine now uses that brain
+gingugu remote status
+gingugu remote off                           # back to the local brain
+```
+
+`login` uses `~/.ssh/gingugu_mint` by default (`--key` to change it) and ignores
+`~/.ssh/config`, so a default identity can never stand in for the restricted
+key. Local is the default: with no setting, nothing is remote. A single client
+can choose for itself with `MEMORY_REMOTE_URL` in its own environment (`off`
+forces local).
+
 ### Promote memories to a central brain (optional)
 
 Once a central instance exists, `gingugu promote` harvests a local brain's
