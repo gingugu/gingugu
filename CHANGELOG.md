@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.20.0] - 2026-10-02
+
 ### Added
 
 - **Warm minions: a subagent gets a fenced, pre-loaded brain of its own.**

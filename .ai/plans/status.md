@@ -29,6 +29,9 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
 
 ## Recently Completed
 
+**Released 0.20.0 to PyPI (2026-10-02).** Warm minions (#96) and `gingugu serve`
+answering LAN clients (#98). Cut so the central-brain Pi runs a published build.
+
 **AI Fridays talk on the Claude Code harness (2026-10-02).** A 12-slide deck
 at `docs/talks/ai-fridays/`, served by GitHub Pages at `/gingugu/talks/ai-fridays/`.
 Covers CLAUDE.md, hooks, permissions, subagent tiers, the model resolution order
