@@ -11,26 +11,31 @@ Read this before making any changes.
 
 ## Memory Protocol
 
-Gingugu is your long-term brain. Memory is split into **two layers**:
+Gingugu is your long-term brain. Memory is split into **three layers**:
 
-1. **`crow`** — your global namespace. Identity, preferences, cross-project
-   wisdom, opinions, meta-learnings. Loaded FIRST every session.
-2. **Project namespace** (named for this repo) — schema decisions, bug history,
-   deploy quirks, specific commits. Loaded AFTER crow.
+1. **`crow`** — the shared namespace every agent serving this user loads:
+   the user's rules, preferences and feedback, plus cross-project lessons,
+   patterns and techniques. Loaded FIRST every session.
+2. **Persona namespace** (named by `MEMORY_PERSONA`, when set) — this agent's
+   own self: reflections, its own failure modes, opinions, persona. Loaded
+   after crow, and only by that persona.
+3. **Project namespace** (named for this repo) — schema decisions, bug history,
+   deploy quirks, specific commits. Loaded last.
 
 **What goes where:**
 - References a specific repo, file, commit, or project decision → project
-- About HOW you think, work, or collaborate → `crow`
-- Patterns/opinions that transcend any one codebase → `crow`
+- A rule or preference from the user, or a lesson another agent serving them
+  would want → `crow`
+- About this agent itself (a reflection, its own slip, its opinion) → persona
 - When in doubt, project-scope it.
 
 ### Session start
-1. `memory_context(namespace="crow,<project>[,<project2>…]", task_hint=…)` — one
-   call loads the identity foundation plus every repo in the workspace,
+1. `memory_context(namespace="crow[,<persona>],<project>[,<project2>…]", task_hint=…)`
+   — one call loads the shared layer, your persona, and every repo in the workspace,
    de-duplicated across namespaces. Load them all speculatively rather than
    asking which one to focus on. Add `compact=true` for a lighter payload and
    pull full bodies with `memory_recall` as needed.
-2. `memory_stats(namespace="crow,<project>[,<project2>…]")` - the same
+2. `memory_stats(namespace="crow[,<persona>],<project>[,<project2>…]")` - the same
    namespace list as step 1, in one call: global health once plus each
    namespace's own breakdown.
 
@@ -54,7 +59,8 @@ detail still exists. Save whenever you:
   session runs it instead of rebuilding it from notes
 
 Project namespace for anything naming a repo, file, commit, or decision; `crow`
-for opinions, working style, and conclusions that outlive this one project.
+for the user's rules and conclusions that outlive this one project; your persona
+namespace for reflections and opinions that are yours alone.
 
 **Before asking the user any question** — run `memory_recall` or `memory_search`
 first. If the answer is in memory, use it. Don't ask the same thing twice.
