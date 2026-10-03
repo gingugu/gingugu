@@ -922,6 +922,7 @@ below it moved up one, and the row-position cross-references moved with them.
 | 9 | Session flight recorder (low priority) | 18 | Check prior art first |
 | 10 | **MCP SDK 2.x migration** | - | We pin `mcp<2` (lock 1.28.1); 2.x is a major (2.3.0 out 2026-10-02). The proxy sits on two transport APIs, and `tests/test_proxy*.py` is the safety net |
 | 11 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
+| 12 | **TLS on the brain** | - | Entered 2026-10-03. Every remote-mode hook call carries the machine's owner token, so on plain `http` it crosses the LAN unencrypted on every prompt (the B2 security review's accepted finding). `gingugu serve` behind TLS (uvicorn certs or a reverse proxy) plus a trust story for a home-LAN cert; `gingugu remote` should then prefer `https` |
 | - | **Template/sibling noise in retrieval - PARKED** | 1 | Ten dead fixes and no live hypothesis; see below |
 
 ### Previous board (2026-09-28), kept for its numbering
