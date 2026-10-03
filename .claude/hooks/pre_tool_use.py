@@ -94,7 +94,10 @@ def is_sensitive_file_access(tool_name, tool_input):
     Blocks: .env, credentials, secrets, .pem, .key files.
     """
     sensitive_patterns = [
-        r"\.env\b(?!\.sample|\.example|\.template)",
+        # A dotenv file is one whose NAME starts with .env (.env, .env.local).
+        # `gingugu.env` is a systemd EnvironmentFile, not a dotenv file, and an
+        # unanchored match blocked it.
+        r"(?:^|[\s/'\"=:<>])\.env\b(?!\.sample|\.example|\.template)",
         r"credentials\.(json|yaml|yml|xml|toml)",
         r"secrets?\.(json|yaml|yml|xml|toml)",
         r"\.pem$",
