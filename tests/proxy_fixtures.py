@@ -44,15 +44,17 @@ class Brain:
     def app(self, *, fresh_derived: bool = False):
         """A new app over the same DB; ``fresh_derived`` simulates a restart."""
         from gingugu.serve import build_app
-        from gingugu.server import build_server
+        from gingugu.server import build
 
         if fresh_derived:
             self.derived = DerivedTokens()
+        mcp, ctx = build(transport="http")
         inner = build_app(
-            build_server(transport="http"),
+            mcp,
             SERVE_TOKEN,
             TokenStore(self.tmp_path / "serve_tokens.json"),
             self.derived,
+            ctx=ctx,
         )
         seen = self.seen
 

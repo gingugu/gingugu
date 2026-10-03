@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import struct
+import threading
 import urllib.request
 from typing import Protocol
 
@@ -125,14 +126,22 @@ class FastEmbedProvider:
         self.model_name = model_name
         self.dim = 0
         self._model = None
+        # `gingugu serve` encodes on the event loop (MCP tools) and in worker
+        # threads (hook routes). One lock makes the lazy load happen once and
+        # never be seen half-built, and keeps encodes from overlapping on a
+        # model whose thread-safety fastembed does not document.
+        self._lock = threading.RLock()
 
     @property
     def enabled(self) -> bool:
         return True
 
     def _ensure_model(self) -> None:
-        if self._model is not None:
-            return
+        with self._lock:
+            if self._model is None:
+                self._load_model()
+
+    def _load_model(self) -> None:
         try:
             from fastembed import TextEmbedding
         except ImportError as exc:
@@ -144,9 +153,10 @@ class FastEmbedProvider:
             "Loading embedding model %s (first time may download ~80MB)",
             self.model_name,
         )
-        self._model = TextEmbedding(model_name=self.model_name)
-        sample = next(iter(self._model.embed(["probe"])))
+        model = TextEmbedding(model_name=self.model_name)
+        sample = next(iter(model.embed(["probe"])))
         self.dim = len(sample)
+        self._model = model
         self._load_tokenizer()
         logger.info("Embedding model ready: dim=%d", self.dim)
 
@@ -170,14 +180,16 @@ class FastEmbedProvider:
     def token_offsets(self, text: str) -> list[tuple[int, int]] | None:
         """Character offsets of each token, untruncated. None if unavailable."""
         self._ensure_model()
-        if self._tokenizer is None:
-            return None
-        return self._tokenizer.encode(text, add_special_tokens=False).offsets
+        with self._lock:
+            if self._tokenizer is None:
+                return None
+            return self._tokenizer.encode(text, add_special_tokens=False).offsets
 
     def encode(self, text: str) -> list[float] | None:
         try:
-            self._ensure_model()
-            vec = next(iter(self._model.embed([text])))
+            with self._lock:
+                self._ensure_model()
+                vec = next(iter(self._model.embed([text])))
             return list(vec)
         except Exception:
             logger.exception("encode failed; returning None")
@@ -187,8 +199,9 @@ class FastEmbedProvider:
         if not texts:
             return []
         try:
-            self._ensure_model()
-            return [list(v) for v in self._model.embed(texts)]
+            with self._lock:
+                self._ensure_model()
+                return [list(v) for v in self._model.embed(texts)]
         except Exception:
             logger.exception("encode_many failed; returning Nones")
             return [None] * len(texts)
