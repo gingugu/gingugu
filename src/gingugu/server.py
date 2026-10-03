@@ -230,7 +230,14 @@ def main() -> None:
             print(f"gingugu: remote brain {target.url}: {exc}", file=sys.stderr)
             raise SystemExit(2) from exc
         try:
-            raise SystemExit(proxy.serve_stdio(target.url, token))
+            raise SystemExit(
+                proxy.serve_stdio(
+                    target.url,
+                    token,
+                    grant=config.grant or None,
+                    home=config.resolved_namespace,
+                )
+            )
         except proxy.ProxyLost as exc:
             print(f"gingugu: {exc}", file=sys.stderr)
             raise SystemExit(1) from exc

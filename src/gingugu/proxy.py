@@ -7,11 +7,20 @@ and nothing about the client changes. It never falls back to the local DB: if
 the brain cannot be used, it refuses to start (`preflight`) or reports the loss
 (`ProxyLost`).
 
+The keychain holds the machine's owner token, which is only ever sent to
+``/token/derive``. The proxy trades it for a short-lived session token carrying
+the client's MEMORY_GRANT and home namespace, uses that on ``/mcp``, and
+refreshes it at half its TTL.
+
+A client such as ChatGPT desktop keeps one process for days, so a lost
+connection is not the end: in-flight requests are failed (never replayed),
+new ones are refused fast, and a background loop re-derives, reconnects and
+replays the client's ``initialize`` itself. The client never re-handshakes.
+Only a rejected owner token ends the proxy.
+
 Two things are handled here rather than relayed. The credential vault is this
 machine's keychain and a remote brain cannot serve it, so `credential_*` tools
-are hidden from ``tools/list`` and refused on ``tools/call``. And the transport
-answers nothing for a request whose POST failed, so every in-flight request is
-failed explicitly before the proxy exits. The token is never put in a message.
+are hidden from ``tools/list`` and refused on ``tools/call``.
 """
 
 from __future__ import annotations
@@ -20,39 +29,41 @@ import anyio
 import httpx
 from anyio.abc import ObjectReceiveStream, ObjectSendStream
 from mcp.client.streamable_http import streamable_http_client
-from mcp.shared.message import SessionMessage
-from mcp.types import (
-    INVALID_REQUEST,
-    ErrorData,
-    JSONRPCError,
-    JSONRPCMessage,
-    JSONRPCRequest,
-    JSONRPCResponse,
-)
+from mcp.types import JSONRPCRequest
 
 from . import remote
+from .handlers.fence import stdio_grant
+from .proxy_session import (
+    CRED_PREFIX,
+    DeriveTransient,
+    Link,
+    ProxyLost,
+    derive,
+    error,
+    fatal_in,
+    leaf_name,
+    replay_handshake,
+)
 from .remote import RemoteTarget
 
-_CRED_PREFIX = "credential_"
-_CLIENT_GONE = (anyio.BrokenResourceError, anyio.ClosedResourceError)
+__all__ = ["ProxyLost", "ProxyRefused", "preflight", "run", "serve_stdio"]
+
+_BACKOFF_START = 0.25
+_BACKOFF_CAP = 5.0
 
 
 class ProxyRefused(Exception):
     """Remote mode cannot start. The message is user-facing."""
 
 
-class ProxyLost(Exception):
-    """The remote brain connection failed or ended abnormally."""
-
-
 def preflight(target: RemoteTarget, *, grant: str | None, credentials_enabled: bool) -> str:
-    """Return the bearer token, or raise ProxyRefused. Config refusals come first
+    """Return the owner token, or raise ProxyRefused. Config refusals come first
     so they never touch the keychain or the network."""
     if grant:
-        raise ProxyRefused(
-            "MEMORY_GRANT is not supported over a remote brain yet "
-            "(scoped grants need derived tokens). Unset MEMORY_GRANT."
-        )
+        try:
+            stdio_grant(grant)  # same rules as stdio; the brain enforces it for real
+        except ValueError as exc:
+            raise ProxyRefused(f"MEMORY_GRANT: {exc}") from None
     if credentials_enabled:
         raise ProxyRefused(
             "the credential vault is this machine's keychain and a remote brain "
@@ -69,115 +80,155 @@ def preflight(target: RemoteTarget, *, grant: str | None, credentials_enabled: b
     return token
 
 
-def _wrap(message: JSONRPCRequest | JSONRPCResponse | JSONRPCError) -> SessionMessage:
-    return SessionMessage(JSONRPCMessage(message))
+class _Lost(Exception):
+    """A connection ended; ``established`` says whether it ever came up."""
+
+    def __init__(self, established: bool) -> None:
+        self.established = established
 
 
-def _error(req_id: str | int, text: str, code: int = INVALID_REQUEST) -> SessionMessage:
-    return _wrap(JSONRPCError(jsonrpc="2.0", id=req_id, error=ErrorData(code=code, message=text)))
+class _Session:
+    """State shared by the client reader and the connection loop."""
 
-
-def _leaf_name(exc: BaseException) -> str:
-    while isinstance(exc, BaseExceptionGroup) and exc.exceptions:
-        exc = exc.exceptions[0]
-    return type(exc).__name__
-
-
-class _Relay:
-    def __init__(self, client_read, client_write, srv_read, srv_write) -> None:
-        self.client_read: ObjectReceiveStream = client_read
+    def __init__(self, url, owner_token, client_write, derive_args, scope) -> None:
+        self.url = url
+        self.owner_token = owner_token
         self.client_write: ObjectSendStream = client_write
-        self.srv_read: ObjectReceiveStream = srv_read
-        self.srv_write: ObjectSendStream = srv_write
-        self.pending: set[str | int] = set()
-        self.list_ids: set[str | int] = set()
+        self.derive_args: dict = derive_args
+        self.scope: anyio.CancelScope = scope
+        self.link: Link | None = None
+        self.init_params: dict | None = None
+        self.initialized = False
+        self.attempted = anyio.Event()  # first connection attempt has resolved
+        self.reinits = 0
 
-    async def client_to_server(self, scope: anyio.CancelScope) -> None:
-        async for item in self.client_read:
+    async def derive(self) -> tuple[str, int]:
+        return await derive(self.url, self.owner_token, **self.derive_args)
+
+    async def read_client(self, client_read: ObjectReceiveStream) -> None:
+        """The one reader of the client for the whole run; routes to the live link."""
+        await self.attempted.wait()
+        async for item in client_read:
             if isinstance(item, Exception):
                 continue  # a malformed line from the client; the SDK already logged it
             msg = item.message.root
             if isinstance(msg, JSONRPCRequest):
                 called = str((msg.params or {}).get("name", ""))
-                if msg.method == "tools/call" and called.startswith(_CRED_PREFIX):
+                if msg.method == "tools/call" and called.startswith(CRED_PREFIX):
                     await self.client_write.send(
-                        _error(
+                        error(
                             msg.id,
                             "credential tools are not available through a remote brain; "
                             "the vault stays on this machine",
                         )
                     )
                     continue
-                self.pending.add(msg.id)
-                if msg.method == "tools/list":
-                    self.list_ids.add(msg.id)
-            await self.srv_write.send(item)
-        scope.cancel()  # client closed: end the relay, let the transport hang up
+            link = self.link
+            if link is None:
+                if isinstance(msg, JSONRPCRequest):
+                    await self.client_write.send(
+                        error(msg.id, "remote brain unavailable, reconnecting")
+                    )
+                continue  # a notification has nobody to tell
+            if isinstance(msg, JSONRPCRequest) and msg.method == "initialize":
+                self.init_params = msg.params
+            elif getattr(msg, "method", None) == "notifications/initialized":
+                self.initialized = True
+            await link.forward(item)
+        self.scope.cancel()  # client closed: end the run, from connected or reconnecting
 
-    async def server_to_client(self, scope: anyio.CancelScope) -> None:
-        async for item in self.srv_read:
-            if isinstance(item, Exception):
-                raise item
-            msg = item.message.root
-            if isinstance(msg, JSONRPCResponse | JSONRPCError):
-                self.pending.discard(msg.id)
-                if isinstance(msg, JSONRPCResponse) and msg.id in self.list_ids:
-                    self.list_ids.discard(msg.id)
-                    tools = msg.result.get("tools")
-                    if isinstance(tools, list):
-                        msg.result["tools"] = [
-                            t for t in tools if not str(t.get("name", "")).startswith(_CRED_PREFIX)
-                        ]
-            try:
-                await self.client_write.send(item)
-            except _CLIENT_GONE:
-                scope.cancel()
-                return
-        raise ConnectionError("brain closed the stream")
+    async def connect_once(self) -> None:
+        """One connection's lifetime. Returns only via cancellation; raises ``_Lost``."""
+        token, expires_in = await self.derive()
+        http = httpx.AsyncClient(
+            headers={"Authorization": f"Bearer {token}"}, timeout=httpx.Timeout(30, read=300)
+        )
+        link: Link | None = None
+        reason = "ConnectionLost"
+        try:
+            transport = streamable_http_client(f"{self.url}/mcp", http_client=http)
+            async with http, transport as (r, w, _):
+                if self.initialized:
+                    self.reinits += 1
+                    await replay_handshake(r, w, self.init_params, self.reinits)
+                link = Link(self.client_write, r, w)
+                self.link = link
+                self.attempted.set()
+                async with anyio.create_task_group() as tg:
+                    tg.start_soon(link.pump, self.scope)
+                    tg.start_soon(self._refresh, http, expires_in)
+        except (Exception, BaseExceptionGroup) as exc:
+            if isinstance(exc, BaseExceptionGroup) and exc.split(Exception)[0] is None:
+                raise  # only cancellation: not ours to swallow
+            fatal = fatal_in(exc)
+            if fatal is not None:
+                raise fatal from None
+            reason = leaf_name(exc)
+        finally:
+            self.link = None
+        # The transport's task group is gone, so these sends are safe.
+        if link is not None:
+            await link.fail_pending(reason)
+        raise _Lost(link is not None)
 
-    async def fail_pending(self, reason: str) -> None:
-        text = f"remote brain connection lost: {reason}"
-        for req_id in sorted(self.pending, key=str):
+    async def _refresh(self, http: httpx.AsyncClient, expires_in: int) -> None:
+        wait = expires_in / 2
+        while True:
+            await anyio.sleep(wait)
             try:
-                await self.client_write.send(_error(req_id, text))
-            except _CLIENT_GONE:
-                break
-        self.pending.clear()
+                token, expires_in = await self.derive()
+            except DeriveTransient:
+                wait = 1.0  # the token is still good for a while; try again soon
+                continue
+            http.headers["Authorization"] = f"Bearer {token}"
+            wait = expires_in / 2
+
+    async def connect_loop(self) -> None:
+        delay = _BACKOFF_START
+        while True:
+            try:
+                await self.connect_once()
+            except DeriveTransient:
+                pass
+            except _Lost as lost:
+                if lost.established:
+                    delay = _BACKOFF_START
+            self.attempted.set()
+            await anyio.sleep(delay)
+            delay = min(delay * 2, _BACKOFF_CAP)
 
 
 async def run(
     url: str,
-    token: str,
+    owner_token: str,
     client_read: ObjectReceiveStream,
     client_write: ObjectSendStream,
+    *,
+    grant: str | None = None,
+    home: str | None = None,
+    ttl: int = 3600,
+    name: str | None = None,
 ) -> None:
-    """Relay until the client closes (returns) or the brain is lost (ProxyLost)."""
-    http = httpx.AsyncClient(
-        headers={"Authorization": f"Bearer {token}"}, timeout=httpx.Timeout(30, read=300)
-    )
-    relay: _Relay | None = None
+    """Relay until the client closes (returns) or the owner token is refused (ProxyLost)."""
+    derive_args = {"grant": grant, "home": home, "ttl": ttl, "name": name}
     try:
-        async with http, streamable_http_client(f"{url}/mcp", http_client=http) as (r, w, _):
-            relay = _Relay(client_read, client_write, r, w)
-            async with anyio.create_task_group() as tg:
-                tg.start_soon(relay.client_to_server, tg.cancel_scope)
-                tg.start_soon(relay.server_to_client, tg.cancel_scope)
-    except (Exception, BaseExceptionGroup) as exc:
-        if isinstance(exc, BaseExceptionGroup) and exc.split(Exception)[0] is None:
-            raise  # only cancellation: not ours to swallow
-        reason = _leaf_name(exc)
-        # The transport's task group is already gone, so these sends are safe.
-        if relay is not None:
-            await relay.fail_pending(reason)
-        raise ProxyLost(f"remote brain connection lost: {reason}") from None
+        async with anyio.create_task_group() as tg:
+            session = _Session(url, owner_token, client_write, derive_args, tg.cancel_scope)
+            tg.start_soon(session.read_client, client_read)
+            tg.start_soon(session.connect_loop)
+    except BaseExceptionGroup as group:
+        fatal = fatal_in(group)
+        if fatal is None:
+            raise
+        raise fatal from None
 
 
-def serve_stdio(url: str, token: str) -> int:
+def serve_stdio(url: str, token: str, *, grant: str | None, home: str | None) -> int:
     from mcp.server.stdio import stdio_server
 
     async def _main() -> None:
         async with stdio_server() as (read, write):
-            await run(url, token, read, write)
+            await run(url, token, read, write, grant=grant, home=home, name=home)
 
     anyio.run(_main)
     return 0
