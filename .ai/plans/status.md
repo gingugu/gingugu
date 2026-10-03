@@ -4,7 +4,28 @@ _Last updated: 2026-10-02_
 
 ## In Flight
 
-Nothing in flight. Next up is board #1, the central brain.
+**Board #1, one central brain (design approved 2026-10-02).** A Raspberry Pi 4
+on the home network holds the only brain; laptops, minions and non-Claude agents
+connect to `gingugu serve` over HTTP. Hardware is provisioned (64-bit OS, brain
+on a USB SSD, systemd service) and a copy of the real brain is serving there.
+
+- **Measured on the Pi 4, real brain (~3,000 memories), model held warm:**
+  prompt recall 438 ms median (cosine sweep 343, embed 46, lexical 48); a cold
+  `gingugu hook prompt` process is 4.3 s. Same code on an M-series Mac: 103 ms.
+  So recall runs server-side with the model loaded, and **the Pi embeds** -
+  clients send prompt text. The sweep is the lever (numpy-vectorised scan,
+  separate PR with its own bench).
+- **Proven end to end:** a Claude Code minion whose agent file declares a
+  `type: http` brain server with `headersHelper` (token from a helper command,
+  never in the file) reached the Pi, read its granted namespace, and had a write
+  outside its grant refused.
+- **Fixed on the way:** remote clients got `421` from `gingugu serve` (see
+  CHANGELOG, Unreleased).
+- **Remaining:** the three local-DB hook paths (prompt recall, tripwires,
+  minion warm-up) go remote - recall and warm-up as server routes, tripwires as
+  a cached rule list matched locally; one owner-equivalent token per laptop,
+  individually revocable (minions and non-Claude agents stay scoped); fenced
+  agent files switch `brain` to `type: http`; cutover.
 
 ## Recently Completed
 
@@ -843,7 +864,7 @@ below it moved up one, and the row-position cross-references moved with them.
 
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **One central brain, several clients** | 11 | Mostly built; the rest is physical setup. Scoped tokens are in, so each client gets its own |
+| 1 | **One central brain, several clients** - IN FLIGHT | 11 | Hardware up, design approved and measured (see In Flight). The hooks read the local DB directly, so they need server routes before cutover |
 | 2 | **A shared board between agents** | 15 | Needs 1 |
 | 3 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
 | 4 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
@@ -1413,6 +1434,10 @@ into a network endpoint. The goal is one brain shared by the user's two
 laptops and a non-Claude desktop client (ChatGPT desktop), which today runs
 against its own local copy. Separate copies diverge, which defeats the point of
 long-term memory. Open: which transport each existing client uses today.
+
+**2026-10-02: in flight, see In Flight at the top.** Not mostly physical
+setup after all: prompt recall, tripwires and minion warm-up all open the local
+SQLite file, so they would read a stale copy once the brain moves.
 
 ### 12. Scoped serve tokens - SHIPPED 2026-10-01 as #92, off the board
 

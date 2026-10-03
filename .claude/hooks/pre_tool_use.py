@@ -48,12 +48,6 @@ def is_dangerous_rm_command(command):
     ``rm -rf dist`` / ``rm -rf build node_modules`` are ordinary cleanup and
     pass through. Non-recursive ``rm`` is never blocked here.
     """
-    normalized = " ".join(command.split())
-
-    # Only recursive rm is in scope (matches -r, -rf, -fr, -R, --recursive).
-    if not re.search(r"\brm\s+(-\S*[rR]\S*|--recursive)\b", normalized):
-        return False
-
     # Exact operands that must never be recursively deleted.
     catastrophic = {
         "/", "/*",
@@ -64,12 +58,33 @@ def is_dangerous_rm_command(command):
         "*",
     }
 
-    for tok in normalized.split():
-        if tok.startswith("-") or tok == "rm" or tok.endswith("/rm"):
+    # Judge each command segment on its own: a `cd ~` elsewhere in the line
+    # is not an operand of the rm.
+    for segment in re.split(r"&&|\|\||[;|\n]", command):
+        tokens = segment.split()
+        while tokens and tokens[0] in ("sudo", "command", "exec", "nohup"):
+            tokens = tokens[1:]
+        if not tokens or not (tokens[0] == "rm" or tokens[0].endswith("/rm")):
             continue
-        if tok in catastrophic:
+        flags = [t for t in tokens[1:] if t.startswith("-")]
+        recursive = any(f == "--recursive" or (not f.startswith("--") and re.search(r"[rR]", f)) for f in flags)
+        if not recursive:
+            continue
+        if any(t in catastrophic for t in tokens[1:] if not t.startswith("-")):
             return True
 
+    return False
+
+
+def names_private_ssh_key(text):
+    """True if ``text`` names an SSH private key (``id_rsa``, ``id_ed25519_work``...).
+
+    The ``.pub`` half of the pair is public by design - ``ssh-copy-id -i
+    ~/.ssh/id_ed25519.pub`` must pass - so only names without it count.
+    """
+    for name in re.findall(r"id_(?:rsa|ed25519|ecdsa|dsa)[\w.-]*", text):
+        if not name.endswith(".pub"):
+            return True
     return False
 
 
@@ -84,18 +99,20 @@ def is_sensitive_file_access(tool_name, tool_input):
         r"secrets?\.(json|yaml|yml|xml|toml)",
         r"\.pem$",
         r"\.key$",
-        r"id_rsa",
-        r"id_ed25519",
     ]
 
     if tool_name in ["Read", "Edit", "MultiEdit", "Write"]:
         file_path = tool_input.get("file_path", "")
+        if names_private_ssh_key(file_path):
+            return True
         for pattern in sensitive_patterns:
             if re.search(pattern, file_path):
                 return True
 
     elif tool_name == "Bash":
         command = tool_input.get("command", "")
+        if names_private_ssh_key(command) and not re.match(r"^(ls|find|git)\s", command.strip()):
+            return True
         for pattern in sensitive_patterns:
             if re.search(pattern, command):
                 if re.match(r"^(ls|find|git)\s", command.strip()):

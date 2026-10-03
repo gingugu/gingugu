@@ -347,7 +347,9 @@ Every request needs a Bearer token. Set `MEMORY_SERVE_TOKEN` to pin one, or let
 the server generate and persist it to `<db-dir>/serve_token` (`0600`, reused
 after; the log shows the path, never the token). Set `MEMORY_SERVE_HOST=0.0.0.0` to accept remote
 connections, and put it behind HTTPS in production — a Bearer token over plain
-HTTP is sniffable. Point a client at it with:
+HTTP is sniffable. On a loopback bind the server also rejects any `Host` header
+other than localhost (DNS-rebinding protection); on a LAN bind the Bearer token
+is the gate. Point a client at it with:
 
 ```json
 { "mcpServers": { "gingugu": {
