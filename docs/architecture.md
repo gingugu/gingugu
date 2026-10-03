@@ -13,6 +13,14 @@ client can hold a scoped token limited to named namespaces (see
 [Scoped Tokens](#scoped-tokens)). The transport is the only thing that differs;
 tools, storage and ranking are identical on both.
 
+A third path is the **stdio proxy**: when a remote brain is selected
+(`gingugu remote on`, or `MEMORY_REMOTE_URL`), a bare `gingugu` does not open the
+local DB. It relays the client's stdio to `gingugu serve` over streamable HTTP,
+so every client config stays `command: gingugu`. The machine's owner token is
+sent only to `POST /token/derive`, which trades it for a short-lived **derived
+token** carrying the client's `MEMORY_GRANT` and home namespace; the proxy uses
+that on `/mcp` and refreshes it, and never falls back to the local DB.
+
 ---
 
 ## System Design
@@ -23,8 +31,13 @@ graph LR
         A[AI Assistant<br/>Windsurf · Claude Code · Cursor · …]
     end
 
+    subgraph Proxy Mode
+        X[Stdio Proxy<br/>gingugu with a remote brain]
+    end
+
     subgraph MCP Server Process
         B[Server Layer<br/>stdio · streamable HTTP]
+        V[POST /token/derive<br/>derived tokens]
         C[Tool Handlers]
         D[Search Engine]
         E[Decay Engine]
@@ -63,6 +76,9 @@ graph LR
     end
 
     A <-->|MCP Protocol| B
+    A <-->|stdio, remote brain selected| X
+    X -->|owner token, once| V
+    X <-->|MCP over HTTP, derived token| B
     B --> C
     C --> D
     C --> E
@@ -1593,11 +1609,13 @@ MCP stdio doesn't expose the client's workspace path through the protocol.
 Resolution order (first hit wins):
 
 1. **Explicit `namespace` parameter** on the tool call
-2. **`MEMORY_NAMESPACE` env var** set in the MCP server's `env` block (per-workspace `mcp_config.json`)
-3. **`MEMORY_NAMESPACE_PATH` env var** — filesystem path; namespace name derived from `basename`
-4. **Fallback to `default`** namespace, with a warning logged
+2. **A derived token's home** (`grants.home()`), when the call arrives over HTTP
+   on a token from `POST /token/derive`; the proxy sets it from its own resolved namespace
+3. **`MEMORY_NAMESPACE` env var** set in the MCP server's `env` block (per-workspace `mcp_config.json`)
+4. **`MEMORY_NAMESPACE_PATH` env var** — filesystem path; namespace name derived from `basename`
+5. **Fallback to `default`** namespace, with a warning logged
 
-Step 4 applies to **writes** only. The lookup reads resolve differently, since
+Step 5 applies to **writes** only. The lookup reads resolve differently, since
 an unconfigured server has no current project to scope a read to:
 
 - `memory_recall` with no `namespace` on an unconfigured server searches
@@ -1617,9 +1635,12 @@ it). See README for an example.
 
 ## Scoped Tokens
 
-`gingugu serve` accepts two kinds of Bearer token. The **owner token**
-(`MEMORY_SERVE_TOKEN`, or the persisted `<db-dir>/serve_token`) has full access.
-**Scoped tokens** give one client a slice of the brain:
+`gingugu serve` accepts three kinds of Bearer token. The **owner token**
+(`MEMORY_SERVE_TOKEN`, the persisted `<db-dir>/serve_token`, or a per-machine
+owner entry in the token store) has full access. **Derived tokens** are
+short-lived, memory-only tokens minted at `POST /token/derive` (owner only) for
+the stdio proxy, carrying a grant and a home namespace. **Scoped tokens** give
+one client a slice of the brain:
 
 ```bash
 gingugu token add laptop-2 --ns gingugu=write,crow=read   # printed once
@@ -1691,13 +1712,17 @@ src/gingugu/
 ├── __init__.py             # Package init + version
 │
 │   # ── Entry points ──────────────────────────────────────────────
-├── server.py               # MCP server; stdio / serve / token / promote / init / ui / dream / embed / hook dispatch
-├── serve.py                # gingugu serve: streamable HTTP + Bearer auth + /healthz
+├── server.py               # MCP server; stdio / serve / token / remote / promote / init / ui / dream / embed / hook dispatch, plus the remote-proxy branch of bare `gingugu`
+├── serve.py                # gingugu serve: streamable HTTP + Bearer auth + /healthz + POST /token/derive; build_app
 ├── serve_tokens.py         # Serve tokens: hashed store, scoped + per-machine owner tokens
+├── serve_derive.py         # POST /token/derive: owner token -> short-lived derived token
+├── derived_tokens.py       # Derived tokens: in-memory, hashed, TTL-bound; never on disk
+├── proxy.py                # Remote mode: stdio <-> streamable-HTTP relay, preflight, refresh
+├── proxy_session.py        # Proxy building blocks: derivation, messages, one live link
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine
 ├── remote_args.py          # usage text + argparse for `gingugu remote`
-├── grants.py               # Per-namespace read/write grants, bound per tool call
+├── grants.py               # Per-namespace read/write grants plus a home namespace (derived tokens), bound per tool call
 ├── webui.py                # gingugu ui: serves the built Memory Explorer bundle
 ├── promote.py              # gingugu promote: local "gold" -> a central brain
 ├── config.py               # Config + cross-platform DB path (platformdirs)

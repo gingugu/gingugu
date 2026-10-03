@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or `MEMORY_REMOTE_URL` selects a remote brain, `gingugu` relays MCP JSON-RPC
   over stdio to `gingugu serve` (streamable HTTP) and never opens the local DB,
   so every client config stays `command: gingugu`. It refuses to start (exit 2)
-  on a malformed `MEMORY_GRANT` or `*=write`, on `MEMORY_CREDENTIALS_ENABLED`
+  on a malformed, blank or `*=write` `MEMORY_GRANT`, on `MEMORY_CREDENTIALS_ENABLED`
   not `false` (the vault is the machine's keychain, which a remote brain cannot
   serve), on no keychain token (it points at `gingugu remote login`), and on an
   unreachable brain. Plain `http` to a non-loopback host warns. `credential_*`
@@ -64,9 +64,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - A remote URL carrying a username or password is refused, and never echoed.
-- The pre-tool-use hook treats only names that start with `.env` as dotenv files
-  (not glued to a letter, digit, underscore or dot) and matches
-  case-insensitively, so `gingugu.env` is no longer blocked and `.ENV` is.
+- The pre-tool-use hook matches dotenv files case-insensitively: `.env`,
+  `.env.local` and `.env-x` are blocked, `.envrc` and `.env_local` are not, and
+  neither is a name glued to a letter, digit, underscore or dot, so
+  `gingugu.env` is no longer blocked and `.ENV` is.
 - A hostile repo directory name is dropped from the SessionStart contract rather
   than pasted into an instruction to the model.
 

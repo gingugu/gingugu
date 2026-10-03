@@ -140,7 +140,7 @@ fall back to BM25-only.
 <details>
 <summary><strong>Is this ready to use?</strong></summary>
 
-Usable today for local personal workflows. 1370 tests passing covering
+Usable today for local personal workflows. 1560+ tests passing covering
 storage, search, migrations, concurrency, credentials, and edges.
 Hardened against adversarial input and write contention. WAL mode for
 concurrency. CI matrix across Python 3.11–3.13 on Linux/macOS/Windows.
@@ -255,7 +255,7 @@ uv run gingugu  # or pip install -e .
 
 </details>
 
-> **Usable today.** 21 MCP tools live. 1370 tests passing. Dogfooded daily in
+> **Usable today.** 21 MCP tools live. 1560+ tests passing. Dogfooded daily in
 > Claude Code and Windsurf — this repo's own memories live in a Gingugu
 > database. Early and seeking broader real-world validation.
 
@@ -416,7 +416,7 @@ With a remote brain on (`gingugu remote on`, or `MEMORY_REMOTE_URL`), a bare
 `gingugu serve`, so every client config stays `command: gingugu`. It never falls
 back to the local DB: it refuses to start (exit 2) when
 
-- `MEMORY_GRANT` is malformed or `*=write`;
+- `MEMORY_GRANT` is malformed, blank or `*=write`;
 - `MEMORY_CREDENTIALS_ENABLED` is not `false` - the vault is this machine's
   keychain, which a remote brain cannot serve, so set it in the client's `env`
   (the `credential_*` tools are then hidden and refused);
@@ -626,6 +626,9 @@ It installs:
   advantage: unlike a rules file (which is **not** guaranteed to be loaded into
   context), a hook fires every time, so the protocol is always present. The
   project namespace is derived from the repo's folder name automatically.
+  A folder name that is not a plain name (letters, digits, `.`, `_`, `-`,
+  starting with a letter or digit, up to 64 chars) is left out of the
+  session-start contract, which then loads `crow` (and the persona) only.
 - **`.claude/hooks/stop.py`** — a `Stop` hook that blocks once if a working
   session never saved anything, guarding the "unsaved session vanishes" trap.
 - **`.claude/hooks/user_prompt_recall.py`** — a `UserPromptSubmit` hook for
@@ -775,11 +778,14 @@ Save with `memory_store` (project namespace) whenever you:
 - Complete a task (what you did, why, and the outcome)
 
 Save with `memory_store` (`crow` namespace) whenever you:
-- Form an opinion about a tool, language, or approach
-- Notice something about how the user works or makes decisions
+- Learn a rule or preference of the user's, or how they work or make decisions
 - Reach a conclusion that applies beyond this one project
-- Have a reflection on a milestone, win, or hard-won lesson
 - Develop a debugging instinct or workflow you'd reuse anywhere
+
+Save with `memory_store` (your persona namespace, when `MEMORY_PERSONA` is set;
+without one these stay in `crow`) whenever you:
+- Form an opinion about a tool, language, or approach
+- Have a reflection on a milestone, win, or hard-won lesson
 
 **This memory is yours. Use it like one.** Don't censor opinions or
 instincts — they're what make the brain *yours* across sessions.

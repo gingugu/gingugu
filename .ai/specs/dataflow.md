@@ -187,7 +187,8 @@ memory_recall(query, namespace | "ns1,ns2,…", filters)
     (see `chunking.py`)
   → multi-namespace: one ranked SQL pass over all listed namespaces
     (IN clause); limit caps the TOTAL list (unlike context's per-namespace limit)
-  → namespace omitted: the configured namespace, or EVERY namespace when the
+  → namespace omitted: under a derived token with a home, that home first;
+    else the configured namespace, or EVERY namespace when the
     server has none configured (scope: "all") - never the `default` fallback,
     which is for writes (handlers/scope.py)
   → scoped and empty: rerun once with no namespace filter, every other filter
