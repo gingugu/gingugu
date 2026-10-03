@@ -24,10 +24,11 @@ from __future__ import annotations
 import json
 import os
 import re
-import sqlite3
 import sys
 import time
 from pathlib import Path
+
+from .subagent_warmup import warmup  # noqa: F401 - re-exported: callers import it from here
 
 SPAWN_TOOLS = frozenset({"Agent", "Task"})
 STASH_TTL_SECONDS = 300
@@ -163,92 +164,6 @@ def agent_grant(agent_type: str, roots: list[Path]) -> str | None:
     return None
 
 
-def _render(agent_type: str, grant, rows: list[tuple[str, dict]]) -> str:
-    reads = sorted(n for n, lvl in grant.namespaces.items() if lvl)
-    writes = sorted(n for n, lvl in grant.namespaces.items() if lvl == "write")
-    lines = [
-        f"gingugu warm-up for minion `{agent_type}` - read: {', '.join(reads)}; "
-        f"write: {', '.join(writes) or 'nothing'}.",
-        "These memories ranked most relevant to your task. Your gingugu server is "
-        "fenced to the same grant: pull a full body with memory_recall, and store "
-        "findings only in a namespace you can write"
-        + (f" ({', '.join(writes)})." if writes else "."),
-        "",
-    ]
-    for ns, summary in rows:
-        body = summary.get("summary") or ""
-        lines.append(f"- [{summary.get('type')}] {summary.get('title')} ({ns}) - {body}")
-    return "\n".join(lines)
-
-
-def _in_scope(grant, name: str, cwd: str | None) -> bool:
-    """Whether the warm-up loads ``name``. A wildcard read belongs to a global
-    agent that works in whatever repo it is spawned in: it warms from crow and
-    that repo's namespace, never the whole brain. Explicit names load as is."""
-    if not grant.can_read(name):
-        return False
-    if grant.namespaces.get(name) is not None or cwd is None:
-        return True
-    from .prompt_hook import namespaces_for
-
-    return name in namespaces_for(cwd)
-
-
-def warmup(
-    db_path: Path,
-    spec: str,
-    task_hint: str | None,
-    *,
-    agent_type: str,
-    embedder=None,
-    cwd: str | None = None,
-):
-    """The context to inject for a minion fenced by ``spec``, or None."""
-    from . import grants
-    from .config import load_config
-    from .context import build_context
-    from .handlers.fence import stdio_grant
-    from .handlers.summaries import _compact_summary
-    from .recall_sweep import connect_readonly
-
-    try:
-        grant = stdio_grant(spec)
-    except ValueError:
-        return None
-    if grant.is_full:
-        return None
-    app = load_config()
-    conn = connect_readonly(db_path)
-    # The store's readers index rows by column name, as the server's own
-    # connection does.
-    conn.row_factory = sqlite3.Row
-    try:
-        with grants.bind(grant, conn):
-            names = conn.execute("SELECT id, name FROM namespaces ORDER BY name").fetchall()
-            name_of = {ns_id: name for ns_id, name in names}
-            seen: set[str] = set()
-            rows: list[tuple[str, dict]] = []
-            for ns_id, name in names:
-                if not _in_scope(grant, name, cwd):
-                    continue
-                for mem in build_context(
-                    conn,
-                    namespace_id=ns_id,
-                    task_hint=task_hint,
-                    limit=app.auto_context_limit,
-                    weights=app.weights,
-                    decay_lambda=app.decay_lambda,
-                    embedder=embedder,
-                ):
-                    if mem.id in seen or not grants.can_read_id(mem.namespace_id):
-                        continue
-                    seen.add(mem.id)
-                    rows.append((name_of.get(mem.namespace_id, name), _compact_summary(mem)))
-    finally:
-        conn.close()
-    return _render(agent_type, grant, rows) if rows else None
-
-
 def _emit(context: str) -> None:
     print(
         json.dumps(
@@ -268,7 +183,22 @@ def run(payload: dict) -> int:
     session_id = str(payload.get("session_id") or "unknown")
     hint = take(app.db_path, session_id, agent_type)
     spec = agent_grant(agent_type, _roots(payload))
-    if not spec or not app.db_path.exists():
+    if not spec:
+        return 0
+    cwd = os.environ.get("CLAUDE_PROJECT_DIR") or payload.get("cwd") or os.getcwd()
+
+    from . import hook_remote
+
+    target = hook_remote.target()
+    if target is not None:
+        # The brain ranks, with its warm model; nothing local is opened.
+        from .hook_remote_flows import remote_warmup
+
+        context = remote_warmup(target, spec, hint, agent_type, cwd)
+        if context:
+            _emit(context)
+        return 0
+    if not app.db_path.exists():
         return 0
 
     embedder = None
@@ -282,7 +212,6 @@ def run(payload: dict) -> int:
             ollama_host=app.embeddings_ollama_host,
             ollama_model=app.embeddings_ollama_model,
         )
-    cwd = os.environ.get("CLAUDE_PROJECT_DIR") or payload.get("cwd") or os.getcwd()
     context = warmup(app.db_path, spec, hint, agent_type=agent_type, embedder=embedder, cwd=cwd)
     if context:
         _emit(context)

@@ -48,6 +48,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   client never re-handshakes. Requests in flight at a loss are failed, never
   replayed; requests while the brain is down get an immediate error. A 429 from
   `/token/derive` is treated as transient. A rejected owner token ends the proxy.
+- **The hooks follow the brain.** With a remote brain on, involuntary prompt
+  recall, tripwires and minion warm-up stop reading the local DB and ask the
+  brain instead, over four owner-token-only routes on `gingugu serve`:
+  `POST /hook/recall` (the brain embeds, ranks and logs the prompt),
+  `/hook/tripwires` (rules, matched locally and cached for 60 seconds, the last
+  copy kept while the brain is unreachable), `/hook/trip` and `/hook/warmup`.
+  Per-session suppression stays on the machine and is sent with each request,
+  so the brain keeps no session state. A brain that cannot answer leaves recall
+  and warm-up quiet and tripwires on their last rules; no hook falls back to
+  the local database. A trip's text is cut to 2000 characters before it is sent.
 - **`MEMORY_PERSONA`**, an agent's own namespace. Involuntary prompt recall,
   tripwires and the SessionStart contract load `crow`, then the persona, then the
   repo. `crow` is the layer every persona shares (the user's rules, preferences,
@@ -58,6 +68,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The `gingugu token` CLI moved from `serve_tokens.py` to `token_cli.py`.
+- `server.build()` returns the MCP app and its `ServerContext`
+  (`build_server()` wraps it); `serve.build_app(..., ctx=)` mounts the hook
+  routes when given the context.
+- `FastEmbedProvider` serialises model loading and encodes behind one lock:
+  `gingugu serve` now encodes from worker threads as well as the event loop.
+- The prompt hook's per-session state file name is sanitised like the other
+  hook state files.
 - `BearerAuthMiddleware` resolves a header to a grant and a kind (owner, derived,
   scoped), and `gingugu serve` builds its app in `serve.build_app`.
 

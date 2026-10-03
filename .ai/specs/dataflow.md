@@ -512,7 +512,8 @@ the tool *result*, after the call ran, so it cannot warn in time. Denying is the
 only way to speak first; the retry passing keeps the block to one interruption
 per memory per session. Misses are not logged (the hook runs on every tool
 call), and every failure exits 0 silently, which is the normal permission flow.
-`load_tripwires` is the single seam a remote brain would replace.
+In remote mode the brain runs `load_tripwires` and the client matches the
+rules it returns (see **Hooks in remote mode**).
 
 Matching is pure regex: no encoder, no model judgment, since a risky command
 and a harmless one can read alike to an embedding. `memory_tripwire` manages
@@ -558,6 +559,45 @@ ranking, never the fence (both share one grant). The shell check matches
 command text, so prose containing those words (a heredoc, an echo) can be
 denied too - a known speed-bump edge. Threat model: accidents, not a hostile
 same-user process.
+
+## Hooks in remote mode
+
+With a remote brain on (`hook_remote.target()`, i.e. `remote.active()`), each
+hook keeps its local half and asks the brain for the rest. Every request is a
+POST with the machine's owner token from the keychain. An unknown token is a
+401 (the middleware), any other token kind a 403, a malformed or oversized body
+a 400, and an unexpected failure a 500.
+
+```
+UserPromptSubmit → `gingugu hook prompt`
+  → length gate (local, no network for a one-liner)
+  → POST /hook/recall {prompt, session_id, namespaces, suppressed, config}
+      brain: strip_affect → embed (model held warm) → sweep + lexical → select
+             → query_log row (tool='hook') → {context, ids}
+  → emit context; add ids to local hook-sessions/<session>.json
+
+PreToolUse → `gingugu hook tool`
+  → minion fence + spawn stash (local, unchanged)
+  → rules: hook-sessions/tripwire-rules-<sha(url, namespaces)>.json if < 60s old,
+           else POST /hook/tripwires {namespaces}; on failure the stale copy
+  → match locally; suppression in local tripwires-<session>.json
+  → on a trip: POST /hook/trip {session_id, text, ids, namespaces}
+      brain: query_log row (tool='tripwire')
+
+SubagentStart → `gingugu hook subagent`
+  → take the stashed task + read the agent file's grant (local)
+  → POST /hook/warmup {spec, task_hint, agent_type, namespaces}
+      brain: same warm-up, wildcard grants scoped to the sent namespaces
+```
+
+The brain keeps no session state: suppression travels with the request, so a
+brain restart costs nothing and session ids never leave the machine except as
+`query_log` labels. Route work runs in a worker thread: reads on its own
+read-only connection, the only writes the `query_log` rows. Any failure -
+unreachable brain, no keychain token, a non-200, a reply of the wrong shape -
+is a quiet hook and never opens the local DB. Tripwires are the one exception
+to quiet: they keep matching the last rules they fetched, however old, until a
+fetch succeeds. A trip's text is cut to 2000 characters before it is sent.
 
 ## Relations + spreading activation
 
