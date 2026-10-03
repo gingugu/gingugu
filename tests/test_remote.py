@@ -131,6 +131,7 @@ def test_login_mints_over_ssh_and_stores_in_keychain(env, monkeypatch, capsys):
     assert argv[0] == "ssh"
     assert "BatchMode=yes" in argv and "IdentitiesOnly=yes" in argv
     assert argv[argv.index("-i") + 1] == "/k"
+    assert argv[argv.index("-F") + 1] == "/dev/null"
     assert argv[-3:] == ["pi@brain.local", "mint", "mbp-2"]
     out = capsys.readouterr()
     assert TOKEN not in out.out and TOKEN not in out.err
