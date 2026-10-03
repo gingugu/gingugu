@@ -79,7 +79,9 @@ def load_suppressed(db_path: Path, session_id: str) -> set[str]:
     that topic, which is how an unrequested signal turns into a stutter and
     trains the reader to skip the block entirely.
     """
-    path = _state_dir(db_path) / f"{session_id}.json"
+    from .subagent_hook import safe_session
+
+    path = _state_dir(db_path) / f"{safe_session(session_id)}.json"
     try:
         return set(json.loads(path.read_text()).get("injected", []))
     except (OSError, ValueError):
@@ -87,10 +89,12 @@ def load_suppressed(db_path: Path, session_id: str) -> set[str]:
 
 
 def save_suppressed(db_path: Path, session_id: str, ids: set[str]) -> None:
+    from .subagent_hook import safe_session
+
     directory = _state_dir(db_path)
     try:
         directory.mkdir(parents=True, exist_ok=True)
-        (directory / f"{session_id}.json").write_text(
+        (directory / f"{safe_session(session_id)}.json").write_text(
             json.dumps({"injected": sorted(ids), "updated": time.time()})
         )
         _prune(directory)

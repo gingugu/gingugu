@@ -453,8 +453,11 @@ machine token (these routes refuse every other token). The brain embeds and
 ranks the prompt; tripwire rules come back to be matched on this machine, cached
 for a minute, with the last copy kept while the brain is unreachable. Which
 memories a session has already been shown stays on this machine and travels
-with each request. If the brain cannot answer, the hook stays quiet rather than
-reading a stale local copy.
+with each request. If the brain cannot answer, recall and warm-up stay quiet
+and tripwires keep their last rules; no hook ever reads a local database
+instead. Every hook call carries the machine token, so on plain `http` it
+crosses the network unencrypted on every prompt - keep a plain-http brain on a
+network you trust.
 
 #### Personas
 
@@ -651,9 +654,10 @@ It installs:
   prompt, and not have been surfaced already this session. Pinned memories are
   skipped (they already load every session) and so are superseded ones. On a
   548-prompt sample it fires on about 5% of turns. Every prompt long enough to
-  search on is recorded, with what it surfaced, in the local `query_log` table
-  of your memory database - the same file as the memories, never sent
-  anywhere. Set `MEMORY_RECALL_HOOK=off` to disable it.
+  search on is recorded, with what it surfaced, in the `query_log` table of
+  your memory database - the same file as the memories. With a remote brain
+  on, that database is the brain's, so the prompt text goes there. Set
+  `MEMORY_RECALL_HOOK=off` to disable it.
 - **`.claude/hooks/pre_tool_tripwire.py`** — a `PreToolUse` hook for
   **tripwires**: memories bound, with `memory_tripwire`, to a tool call that
   should not go unchallenged (a tag written into a commit, a merge of a stacked
