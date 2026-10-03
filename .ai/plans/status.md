@@ -46,8 +46,8 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
 `feature/stdio-proxy`, unreleased).** A bare `gingugu` relays stdio to
 `gingugu serve` when a remote brain is on, and never opens the local DB.
 
-- `proxy.py` / `proxy_session.py`: preflight refuses to start (bad or `*=write`
-  `MEMORY_GRANT`, `MEMORY_CREDENTIALS_ENABLED` not false, no keychain token,
+- `proxy.py` / `proxy_session.py`: preflight refuses to start (malformed, blank or
+  `*=write` `MEMORY_GRANT`, `MEMORY_CREDENTIALS_ENABLED` not false, no keychain token,
   unreachable brain), warns on plain http to a non-loopback host, strips and
   refuses `credential_*`. Reconnects with backoff (0.25s to 5s), replays the
   client's `initialize`, fails in-flight requests and never replays them.
@@ -58,8 +58,8 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
 - `MEMORY_PERSONA`: recall, tripwires and the SessionStart contract load `crow`,
   then the persona, then the repo. The memory protocol is three layers.
 - Security review: five findings fixed, including a remote URL with userinfo
-  refused, the `.env` hook match tightened to names starting `.env`
-  (case-insensitive), and a hostile repo directory name dropped from the contract.
+  refused, the `.env` hook match tightened: case-insensitive, blocks `.env`,
+  `.env.local` and `.env-x` but not `.envrc`, `.env_local` or `app.env`, and a hostile repo directory name dropped from the contract.
 - Verified live over the LAN against the Pi (see In Flight).
 - Docs: `README.md`, `CHANGELOG.md`, `.ai/` updated for all of the above.
 
@@ -878,7 +878,7 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-## The Board (current: 2026-10-02, after #96)
+## The Board (current: 2026-10-02, after #99)
 
 **Resequenced 2026-09-29 into build order.** The table below is the order the
 work gets done in, top first; `#` is that position. Item numbers used to be

@@ -342,8 +342,9 @@ tokens from `gingugu token add NAME --ns gingugu=write,crow=read`. A **grant**
 
 ```
 Authorization: Bearer <token>
-  → BearerAuthMiddleware (serve.py): owner token → FULL; scoped → TokenStore
-    (SHA-256 lookup in serve_tokens.json); none → 401; sets request.state.grant
+  → BearerAuthMiddleware (serve.py): owner token → FULL; derived → DerivedTokens
+    (in memory); scoped → TokenStore (SHA-256 lookup in serve_tokens.json);
+    none → 401; sets request.state.grant and request.state.token_kind
   → tool wrapper (handlers/__init__.py, the _HeartbeatMCP proxy):
     fence.request_grant reads the grant off this call's own HTTP request
     (the SDK's request_ctx), fence.refusal closes whole-brain tools, then
@@ -389,7 +390,7 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
 ```
 
 - **Preflight** (`proxy.preflight`, config refusals first so they never touch the
-  keychain or network): malformed `MEMORY_GRANT` or `*=write`;
+  keychain or network): malformed, blank or `*=write` `MEMORY_GRANT`;
   `MEMORY_CREDENTIALS_ENABLED` not false (the vault is the machine's keychain, a
   remote brain cannot serve it); no keychain token (points at
   `gingugu remote login`); brain unreachable (`/healthz`). Plain http to a
@@ -406,8 +407,9 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   (`grants.home()`, read by `NamespaceManager.resolve_name` and
   `handlers/scope.read_scope`); `Grant.derived` marks a minted token, and
   `fence.refusal` closes every `credential_*` to it even when full. The proxy
-  asks for the client's `MEMORY_GRANT` (full if unset) and home = its
-  `MEMORY_NAMESPACE`.
+  asks for the client's `MEMORY_GRANT` (full if unset) and home = the
+  client's resolved namespace (`MEMORY_NAMESPACE`, else the `MEMORY_NAMESPACE_PATH`
+  basename; may be unset).
 - **Resilience** (`proxy.py`, `proxy_session.py`): one reader of the client for
   the whole run, routed to the live `Link`. Refresh at half the TTL; the token is
   reused across reconnects (deriving per attempt would fill the live cap);

@@ -31,7 +31,8 @@
 
 - **Python** `>=3.11`; CI matrix ubuntu/macos/windows × 3.11–3.13
 - **MCP** Python SDK (`mcp>=1.25,<2`); **stdio** (default) + **streamable HTTP**
-  (`gingugu serve`, via `starlette` + `uvicorn`)
+  (`gingugu serve`, via `starlette` + `uvicorn`); **httpx** + **anyio** for the
+  remote-mode proxy
 - **SQLite + FTS5** (WAL mode); semantic embeddings for hybrid retrieval
 - **platformdirs** for the cross-platform DB path
 - **uv**-managed; `ruff` + `black`; `pytest` + `pytest-asyncio` + `pytest-timeout`
@@ -45,11 +46,11 @@
 
 | Module | Responsibility |
 |---|---|
-| `server.py` | MCP server entrypoint; `gingugu` (stdio) / `serve` / `token` / `promote` / `init` / `ui` / `dream` / `embed` / `hook` (`prompt` | `tool` | `subagent`) dispatch; tool registration; must never crash |
+| `server.py` | MCP server entrypoint; `gingugu` (stdio, or the remote-proxy path when a remote brain is on) / `serve` / `token` / `remote` / `promote` / `init` / `ui` / `dream` / `embed` / `hook` (`prompt` | `tool` | `subagent`) dispatch; tool registration; must never crash |
 | `serve.py` | `gingugu serve`: streamable-HTTP transport + `/healthz`. `BearerAuthMiddleware` resolves the `Authorization` header to a grant - the owner token (`MEMORY_SERVE_TOKEN` or the persisted `serve_token`) is `FULL`, a scoped token resolves through `TokenStore` - and attaches it as `request.state.grant`; no match is a 401. `_identify` also returns the token kind (`request.state.token_kind`: owner, derived, scoped); derived tokens resolve through `DerivedTokens`. `build_app` assembles the app: MCP at `/mcp`, `POST /token/derive`, the middleware |
 | `serve_derive.py` | `POST /token/derive`: trades an owner token for a derived persona token. Body (all optional): `grant` spec, `home`, `ttl` (default and max 3600), `name`. Only `request.state.token_kind == OWNER` may call it (scoped and derived get 403); names are `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`; a scoped grant must be able to read its `home`; 400 on bad input, 429 at the live-token cap. Reply `{token, expires_in}`, `Cache-Control: no-store` |
 | `derived_tokens.py` | `DerivedTokens`: in-memory map of SHA-256 -> (`Grant`, expiry). `MAX_TTL`/`DEFAULT_TTL` 3600, `MAX_LIVE` 256 (`OverflowError` past it). Lookup compares every entry in constant time. Never on disk, so a server restart drops them all and there is nothing to revoke |
-| `proxy.py` | Remote mode: a bare `gingugu` relays stdio <-> streamable HTTP to the brain and never opens the local DB. `preflight` refuses to start (bad/`*=write` `MEMORY_GRANT`, credentials not disabled, no keychain token, unreachable; warns on plain http to a non-loopback host). `_Session` runs one reader of the client plus a connect loop: reuses the live session token across reconnects, refreshes at half the TTL, re-derives after a 401, backs off 0.25s -> 5s, replays the client's `initialize` itself. `credential_*` refused on `tools/call` |
+| `proxy.py` | Remote mode: a bare `gingugu` relays stdio <-> streamable HTTP to the brain and never opens the local DB. `preflight` refuses to start (malformed, blank or `*=write` `MEMORY_GRANT`, credentials not disabled, no keychain token, unreachable; warns on plain http to a non-loopback host). `_Session` runs one reader of the client plus a connect loop: reuses the live session token across reconnects, refreshes at half the TTL, re-derives after a 401, backs off 0.25s -> 5s, replays the client's `initialize` itself. `credential_*` refused on `tools/call` |
 | `proxy_session.py` | Building blocks for `proxy.py`: `derive()` (the only place the owner token is sent; 401/403 -> `ProxyLost`, 5xx/429/network -> `DeriveTransient`), `Link` (one live connection: tracks in-flight requests, strips `credential_*` from `tools/list`, `fail_pending` errors in-flight requests and never replays them), `replay_handshake`, `fatal_in` |
 | `serve_tokens.py` | Serve token store. Scoped tokens (per-namespace grant) and named owner tokens (`add_owner`, one full-access token per machine, `replace=True` rotates). `TokenStore` keeps only SHA-256 hashes in `<db-dir>/serve_tokens.json` (0600, atomic replace); the plaintext is printed once. Re-reads the file when it changes on disk, so a revoke lands on the next request with no restart; an unreadable file resolves to no grant (fails closed); `owner` counts only when literally `true` |
 | `token_cli.py` | The `gingugu token add NAME --ns a=write,b=read \| --owner` / `list` / `revoke NAME` / `ssh-mint` CLI. `ssh-mint` is an `authorized_keys` forced command: it accepts only `mint NAME` in `SSH_ORIGINAL_COMMAND` and prints only the rotated machine token |
