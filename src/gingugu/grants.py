@@ -37,15 +37,23 @@ class AccessDenied(Exception):
 
 @dataclass(frozen=True)
 class Grant:
-    """What one token may touch: ``{namespace name: "read" | "write"}``."""
+    """What one token may touch: ``{namespace name: "read" | "write"}``.
+
+    ``home`` is the namespace a call that names none falls back to, in place
+    of the server's configured one. Only a derived token carries it: each
+    remote client gets its own default rather than the server's.
+    """
 
     name: str
     namespaces: Mapping[str, str] = field(default_factory=dict)
+    home: str | None = None
 
     def __post_init__(self) -> None:
         for ns, level in self.namespaces.items():
             if not ns or level not in LEVELS:
                 raise ValueError(f"invalid grant entry {ns!r}: {level!r}")
+        if self.home is not None and not self.home:
+            raise ValueError("a grant's home namespace must not be empty")
 
     @property
     def is_full(self) -> bool:
@@ -75,23 +83,32 @@ class _Bound:
 
 
 _current: ContextVar[_Bound | None] = ContextVar("gingugu_grant", default=None)
+# Separate from _current: a full grant binds no fence, but its home must still
+# reach the default-namespace lookups.
+_home: ContextVar[str | None] = ContextVar("gingugu_home", default=None)
 
 
 @contextmanager
 def bind(grant: Grant, conn: sqlite3.Connection) -> Iterator[None]:
     """Fence everything inside the block to ``grant``.
 
-    A full grant binds nothing: it is indistinguishable from no fence, and
-    binding it would only cost the chokepoints a lookup per call.
+    A full grant binds no fence: it is indistinguishable from no fence, and
+    binding it would only cost the chokepoints a lookup per call. Its home,
+    if any, is bound either way.
     """
-    if grant.is_full:
-        yield
-        return
-    token = _current.set(_Bound(grant, conn))
+    home_token = _home.set(grant.home)
+    fence_token = None if grant.is_full else _current.set(_Bound(grant, conn))
     try:
         yield
     finally:
-        _current.reset(token)
+        if fence_token is not None:
+            _current.reset(fence_token)
+        _home.reset(home_token)
+
+
+def home() -> str | None:
+    """The calling token's home namespace, or None to use the server's."""
+    return _home.get()
 
 
 def current() -> Grant | None:

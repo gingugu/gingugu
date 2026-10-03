@@ -9,9 +9,9 @@ plaintext) and die on expiry or restart.
 from __future__ import annotations
 
 import pytest
-from gingugu.derived_tokens import MAX_LIVE, MAX_TTL, DerivedTokens
 
 from gingugu import grants
+from gingugu.derived_tokens import MAX_LIVE, MAX_TTL, DerivedTokens
 from gingugu.grants import FULL, READ, WRITE, Grant
 
 

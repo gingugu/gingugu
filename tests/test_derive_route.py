@@ -15,9 +15,9 @@ import socket
 
 import httpx
 import pytest
-from gingugu.derived_tokens import DerivedTokens
 from starlette.testclient import TestClient
 
+from gingugu.derived_tokens import DerivedTokens
 from gingugu.serve_tokens import TokenStore
 from tests.test_embeddings import FakeEmbedder
 
@@ -213,7 +213,16 @@ async def test_persona_writes_home_by_default_and_cannot_write_crow(rig):
 async def test_full_derived_token_defaults_to_its_home_not_the_servers(rig):
     async with _serving(rig.app) as base:
         token = await _derive_async(base, SERVE_TOKEN, {"home": "gingugu"})
-        (stored,) = await _session_calls(
-            base, token, [("memory_store", {"title": "t", "content": "anchor", "type": "fact"})]
+        stored, recalled = await _session_calls(
+            base,
+            token,
+            [
+                ("memory_store", {"title": "t", "content": "anchor", "type": "fact"}),
+                ("memory_recall", {"query": "anchor"}),
+            ],
         )
     assert stored["ok"] and stored["namespace"] == "gingugu"
+    # Found in the home scope itself: a read scoped to the server's namespace
+    # would come up empty and widen, which the reply would report.
+    assert recalled["ok"] and recalled["count"] >= 1
+    assert "widened_from" not in recalled

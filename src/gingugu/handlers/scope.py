@@ -51,7 +51,8 @@ def read_scope(
         if error is not None:
             return None, error
         return ReadScope(requested, [ns.id for ns in resolved.values()]), None
-    configured = ctx.config.resolved_namespace if use_config else None
+    # A derived token's home stands in for the server's configured namespace.
+    configured = (grants.home() or ctx.config.resolved_namespace) if use_config else None
     # A scoped token that cannot read the server's configured namespace has
     # no current project here: an omitted namespace means its whole grant.
     if not configured or not grants.can_read_name(configured):
