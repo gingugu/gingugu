@@ -94,10 +94,11 @@ def is_sensitive_file_access(tool_name, tool_input):
     Blocks: .env, credentials, secrets, .pem, .key files.
     """
     sensitive_patterns = [
-        # A dotenv file is one whose NAME starts with .env (.env, .env.local).
-        # `gingugu.env` is a systemd EnvironmentFile, not a dotenv file, and an
-        # unanchored match blocked it.
-        r"(?:^|[\s/'\"=:<>])\.env\b(?!\.sample|\.example|\.template)",
+        # A dotenv file is one whose NAME starts with .env (.env, .env.local):
+        # .env not glued to a letter, digit or dot. `gingugu.env` is a systemd
+        # EnvironmentFile, not a dotenv file; `\.env`, `{.env,}` and `C:\x\.env`
+        # are still dotenv files.
+        r"(?<![\w.])\.env\b(?!\.sample|\.example|\.template)",
         r"credentials\.(json|yaml|yml|xml|toml)",
         r"secrets?\.(json|yaml|yml|xml|toml)",
         r"\.pem$",
@@ -109,7 +110,7 @@ def is_sensitive_file_access(tool_name, tool_input):
         if names_private_ssh_key(file_path):
             return True
         for pattern in sensitive_patterns:
-            if re.search(pattern, file_path):
+            if re.search(pattern, file_path, re.IGNORECASE):
                 return True
 
     elif tool_name == "Bash":
@@ -117,7 +118,7 @@ def is_sensitive_file_access(tool_name, tool_input):
         if names_private_ssh_key(command) and not re.match(r"^(ls|find|git)\s", command.strip()):
             return True
         for pattern in sensitive_patterns:
-            if re.search(pattern, command):
+            if re.search(pattern, command, re.IGNORECASE):
                 if re.match(r"^(ls|find|git)\s", command.strip()):
                     return False
                 return True

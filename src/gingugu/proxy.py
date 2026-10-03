@@ -25,6 +25,9 @@ are hidden from ``tools/list`` and refused on ``tools/call``.
 
 from __future__ import annotations
 
+import sys
+from urllib.parse import urlparse
+
 import anyio
 import httpx
 from anyio.abc import ObjectReceiveStream, ObjectSendStream
@@ -41,6 +44,7 @@ from .proxy_session import (
     derive,
     error,
     fatal_in,
+    http_status_in,
     leaf_name,
     replay_handshake,
 )
@@ -77,6 +81,14 @@ def preflight(target: RemoteTarget, *, grant: str | None, credentials_enabled: b
         raise ProxyRefused(f"no token in the keychain. Run: gingugu remote login {target.url}")
     if not remote._reachable(target.url, token):
         raise ProxyRefused(f"unreachable: {target.url}")
+    parsed = urlparse(target.url)
+    if parsed.scheme == "http" and parsed.hostname not in remote._LOOPBACK:
+        # stderr, never stdout: stdout is the MCP transport.
+        print(
+            "gingugu: warning - plain http to the remote brain: tokens cross the network "
+            "unencrypted",
+            file=sys.stderr,
+        )
     return token
 
 
@@ -101,9 +113,26 @@ class _Session:
         self.initialized = False
         self.attempted = anyio.Event()  # first connection attempt has resolved
         self.reinits = 0
+        # The live session token, reused across reconnects. Deriving per attempt
+        # would fill the brain's live-token cap and lock every machine out.
+        self.token: str | None = None
+        self.token_expiry = 0.0
+        self.token_ttl = 0
+        self.reauth = False  # the brain refused the token: derive afresh
 
     async def derive(self) -> tuple[str, int]:
-        return await derive(self.url, self.owner_token, **self.derive_args)
+        token, expires_in = await derive(self.url, self.owner_token, **self.derive_args)
+        self.token, self.token_expiry = token, anyio.current_time() + expires_in
+        self.token_ttl = expires_in
+        self.reauth = False
+        return token, expires_in
+
+    async def session_token(self) -> tuple[str, int]:
+        """The current token if it still has over half its life, else a fresh one."""
+        left = self.token_expiry - anyio.current_time()
+        if self.token and not self.reauth and left > self.token_ttl / 2:
+            return self.token, int(left)
+        return await self.derive()
 
     async def read_client(self, client_read: ObjectReceiveStream) -> None:
         """The one reader of the client for the whole run; routes to the live link."""
@@ -139,7 +168,7 @@ class _Session:
 
     async def connect_once(self) -> None:
         """One connection's lifetime. Returns only via cancellation; raises ``_Lost``."""
-        token, expires_in = await self.derive()
+        token, expires_in = await self.session_token()
         http = httpx.AsyncClient(
             headers={"Authorization": f"Bearer {token}"}, timeout=httpx.Timeout(30, read=300)
         )
@@ -163,13 +192,16 @@ class _Session:
             fatal = fatal_in(exc)
             if fatal is not None:
                 raise fatal from None
+            if http_status_in(exc) == 401:
+                self.reauth = True  # e.g. the brain restarted and forgot every derived token
             reason = leaf_name(exc)
         finally:
             self.link = None
         # The transport's task group is gone, so these sends are safe.
         if link is not None:
             await link.fail_pending(reason)
-        raise _Lost(link is not None)
+        # Only a link the brain actually answered on resets the backoff.
+        raise _Lost(link is not None and link.answered)
 
     async def _refresh(self, http: httpx.AsyncClient, expires_in: int) -> None:
         wait = expires_in / 2

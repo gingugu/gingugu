@@ -31,14 +31,19 @@ def _beyond_crow(cwd):
     """
     import re
 
+    def valid(name):
+        return bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", name)) and name != "crow"
+
     names = []
     persona = os.environ.get("MEMORY_PERSONA", "").strip()
-    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", persona) and persona != "crow":
+    if valid(persona):
         names.append(persona)
+    # The directory name is pasted into an instruction to the model: a hostile
+    # clone name (quotes, newlines) is dropped, never pasted.
     project = Path(cwd).name
-    if project and project not in names:
+    if valid(project) and project not in names:
         names.append(project)
-    return ",".join(names) or project
+    return ",".join(names) or "crow"
 
 
 def build_startup_contract(cwd: str) -> str:

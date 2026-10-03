@@ -47,6 +47,9 @@ class Grant:
     name: str
     namespaces: Mapping[str, str] = field(default_factory=dict)
     home: str | None = None
+    # Minted at /token/derive. Never reaches the credential vault, even when
+    # full: the vault belongs to a machine's keychain, not a remote session.
+    derived: bool = False
 
     def __post_init__(self) -> None:
         for ns, level in self.namespaces.items():

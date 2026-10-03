@@ -153,12 +153,12 @@ def test_the_derive_route_marks_its_grants_derived(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "url", ["http://user:pass@brain.local:8765", "https://tok@brain.local", "http://:x@h"]
+    "url", ["http://user:s3cr3t@brain.local:8765", "https://t0k3n@brain.local", "http://:s3cr3t@h"]
 )
 def test_userinfo_in_a_remote_url_is_refused(url):
     with pytest.raises(ValueError) as err:
         remote.normalize_url(url)
-    assert "pass" not in str(err.value) and "tok" not in str(err.value)
+    assert "s3cr3t" not in str(err.value) and "t0k3n" not in str(err.value)
 
 
 def test_preflight_warns_on_plain_http_to_another_host(monkeypatch, capsys):

@@ -50,6 +50,9 @@ def normalize_url(raw: str) -> str:
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         raise ValueError(f"not an http(s) URL: {raw!r}")
+    if parsed.username is not None or parsed.password is not None:
+        # Not echoed: whatever sits before the @ is a credential.
+        raise ValueError("a remote URL must not carry a username or password")
     return url
 
 
