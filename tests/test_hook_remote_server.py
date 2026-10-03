@@ -243,3 +243,20 @@ async def test_the_prompt_hook_end_to_end_against_a_live_brain(
     assert "Proxy replays initialize" in out["hookSpecificOutput"]["additionalContext"]
     assert await anyio.to_thread.run_sync(prompt_hook.run, payload) == 0
     assert capsys.readouterr().out == ""  # suppressed by this machine's own state
+
+
+@pytest.mark.parametrize(
+    "path,body",
+    [
+        ("/hook/recall", _recall_body(prompt="p" * 8001)),
+        ("/hook/recall", _recall_body(session_id="s" * 257)),
+        ("/hook/trip", {"session_id": "s", "text": "t" * 4001, "ids": [], "namespaces": []}),
+        ("/hook/warmup", _warm(spec="crow=read," * 300)),
+        ("/hook/warmup", _warm(agent_type="a" * 129)),
+        ("/hook/warmup", _warm(task_hint="h" * 4001)),
+    ],
+)
+async def test_oversized_strings_are_refused(brain, served, path, body):
+    r = await _post(served, path, body, brain.machine)
+    assert r.status_code == 400
+    assert _log(brain) == []

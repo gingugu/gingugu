@@ -52,10 +52,10 @@ def test_recall_suppression_is_kept_here_and_sent_up(remote, capsys):
 
 def test_recall_persona_rides_along(remote, monkeypatch):
     _, install = remote
-    monkeypatch.setenv("MEMORY_PERSONA", "beepboop")
+    monkeypatch.setenv("MEMORY_PERSONA", "research")
     brain = install({"/hook/recall": {"context": None, "ids": []}})
     prompt_hook.run(_prompt())
-    assert brain.calls[0][1]["namespaces"] == ["crow", "beepboop", "gingugu"]
+    assert brain.calls[0][1]["namespaces"] == ["crow", "research", "gingugu"]
 
 
 def test_a_short_prompt_never_reaches_the_network(remote):
