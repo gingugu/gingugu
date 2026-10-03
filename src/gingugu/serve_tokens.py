@@ -1,4 +1,4 @@
-"""Scoped bearer tokens for `gingugu serve`, and the `gingugu token` CLI.
+"""Scoped bearer tokens for `gingugu serve`, (the CLI lives in ``token_cli.py``).
 
 Each token is bound to a name and a grant (``{namespace: read|write}``, see
 ``grants.py``). The store is one JSON file next to the memory DB. Only the
@@ -13,21 +13,19 @@ the file resolves to "no grant" - the store fails closed.
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import hmac
 import json
 import logging
 import os
 import secrets
-import sys
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from .config import load_config
-from .grants import LEVELS, Grant
+from .grants import LEVELS, WRITE, Grant
 
 logger = logging.getLogger(__name__)
 
@@ -143,8 +141,8 @@ class TokenStore:
             raise ValueError("a token needs at least one namespace grant")
         if Grant(name, namespaces).is_full:  # also validates levels and names
             raise ValueError(
-                "'*=write' is full access - that is the owner token "
-                "(MEMORY_SERVE_TOKEN), not a scoped one"
+                "'*=write' is full access - mint it explicitly with "
+                "'token add NAME --owner', not as a scoped grant"
             )
         entries = self._load()  # raises on a corrupt file; never overwrite it
         if any(e.get("name") == name for e in entries):
@@ -161,11 +159,38 @@ class TokenStore:
         self._write(entries)
         return token
 
+    def add_owner(self, name: str, replace: bool = False) -> str:
+        """Create a named full-access (owner) token; returns the plaintext once.
+
+        One per machine, revocable on its own. ``replace`` rotates: an existing
+        entry of that name is dropped in the same atomic write.
+        """
+        if not name or not name.strip():
+            raise ValueError("token name must not be empty")
+        entries = self._load()  # raises on a corrupt file; never overwrite it
+        if any(e.get("name") == name for e in entries):
+            if not replace:
+                raise ValueError(f"a token named {name!r} already exists")
+            entries = [e for e in entries if e.get("name") != name]
+        token = secrets.token_urlsafe(32)
+        entries.append(
+            {
+                "name": name,
+                "sha256": _hash(token),
+                "owner": True,
+                "namespaces": {},
+                "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
+            }
+        )
+        self._write(entries)
+        return token
+
     def list(self) -> list[dict[str, Any]]:
         """Name, grant, and creation time of every token. Never hashes."""
         return [
             {
                 "name": e.get("name"),
+                "owner": bool(e.get("owner") is True),
                 "namespaces": e.get("namespaces", {}),
                 "created_at": e.get("created_at"),
             }
@@ -198,92 +223,11 @@ class TokenStore:
                 match = entry
         if match is None:
             return None
+        if match.get("owner") is True:  # literal True only: "true", 1, "yes" do not count
+            return Grant(str(match.get("name", "")), {"*": WRITE})
         try:
             grant = Grant(str(match.get("name", "")), dict(match.get("namespaces") or {}))
         except (ValueError, TypeError):
             return None
         # A scoped token never carries owner access, even if the file says so.
         return None if grant.is_full else grant
-
-
-# --- CLI ---------------------------------------------------------------------
-
-USAGE = """\
-gingugu token - manage scoped bearer tokens for `gingugu serve`
-
-Usage:
-  gingugu token add NAME --ns SPEC   Create a token; it is printed once.
-  gingugu token list                 Show token names and grants (never secrets).
-  gingugu token revoke NAME          Delete a token; takes effect immediately.
-
-SPEC is comma-separated name=level pairs, level read or write, name may be *:
-  gingugu token add laptop-2 --ns gingugu=write,crow=read
-"""
-
-
-class _UsageError(Exception):
-    """argparse rejected the arguments."""
-
-
-class _Parser(argparse.ArgumentParser):
-    def error(self, message: str) -> Any:  # type: ignore[override]
-        raise _UsageError(message)
-
-
-def _build_parser() -> argparse.ArgumentParser:
-    parser = _Parser(prog="gingugu token", usage=USAGE, add_help=False)
-    parser.add_argument("-h", "--help", action="store_true")
-    sub = parser.add_subparsers(dest="cmd")
-    add = sub.add_parser("add", add_help=False)
-    add.add_argument("name")
-    add.add_argument("--ns", required=True)
-    sub.add_parser("list", add_help=False)
-    revoke = sub.add_parser("revoke", add_help=False)
-    revoke.add_argument("name")
-    return parser
-
-
-def _usage_error(message: str) -> int:
-    print(f"gingugu token: {message}\n", file=sys.stderr)
-    print(USAGE, file=sys.stderr)
-    return 2
-
-
-def main(argv: list[str]) -> int:
-    """Entry point for ``gingugu token``; returns the process exit code."""
-    try:
-        args = _build_parser().parse_args(argv)
-    except _UsageError as exc:
-        return _usage_error(str(exc))
-    if args.help:
-        print(USAGE)
-        return 0
-    if not args.cmd:
-        return _usage_error("expected add, list, or revoke")
-
-    store = TokenStore(default_path())
-    try:
-        if args.cmd == "add":
-            try:
-                grants = parse_grant_spec(args.ns)
-            except ValueError as exc:
-                return _usage_error(f"--ns: {exc}")
-            token = store.add(args.name, grants)
-            print(f"Token {args.name!r} created. It is shown once; store it now.", file=sys.stderr)
-            print(token)
-        elif args.cmd == "list":
-            entries = store.list()
-            if not entries:
-                print("no tokens")
-            for e in entries:
-                spec = ",".join(f"{ns}={lvl}" for ns, lvl in e["namespaces"].items())
-                print(f"{e['name']}  {spec}  {e['created_at']}")
-        else:
-            if not store.revoke(args.name):
-                print(f"gingugu token: no token named {args.name!r}", file=sys.stderr)
-                return 1
-            print(f"Revoked {args.name!r}.")
-    except (ValueError, OSError) as exc:
-        print(f"gingugu token: {exc}", file=sys.stderr)
-        return 1
-    return 0

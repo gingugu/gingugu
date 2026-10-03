@@ -10,7 +10,8 @@ import sys
 import pytest
 
 from gingugu.grants import READ, WRITE, Grant
-from gingugu.serve_tokens import TokenStore, main, parse_grant_spec
+from gingugu.serve_tokens import TokenStore, parse_grant_spec
+from gingugu.token_cli import main
 
 # --- grant spec parsing ------------------------------------------------------
 
