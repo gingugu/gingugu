@@ -19,13 +19,20 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
   `type: http` brain server with `headersHelper` (token from a helper command,
   never in the file) reached the Pi, read its granted namespace, and had a write
   outside its grant refused.
-- **Fixed on the way:** remote clients got `421` from `gingugu serve` (see
-  CHANGELOG, Unreleased).
-- **Remaining:** the three local-DB hook paths (prompt recall, tripwires,
-  minion warm-up) go remote - recall and warm-up as server routes, tripwires as
-  a cached rule list matched locally; one owner-equivalent token per laptop,
-  individually revocable (minions and non-Claude agents stay scoped); fenced
-  agent files switch `brain` to `type: http`; cutover.
+- **Fixed on the way:** remote clients got `421` from `gingugu serve`
+  (shipped in 0.20.0).
+- **PR A (this branch): machine tokens + `gingugu remote`.** One owner token
+  per machine, minted over SSH by a key restricted to `gingugu token ssh-mint`,
+  straight into the OS keychain - nobody handles a token. Verified on the Pi:
+  the restricted key gets no shell, PTY or port forward; the minted token
+  authenticates (200), a wrong one does not (401).
+- **Remaining, in order:** B1 - `gingugu` (stdio) proxies to the remote brain
+  when one is selected, so every client config stays `command: gingugu`; first
+  client is the ChatGPT desktop persona via `MEMORY_REMOTE_URL`. B2 - the three
+  local-DB hook paths go remote (recall and warm-up as server routes, tripwires
+  as a cached rule list matched locally). C - short-lived derived tokens for
+  minions and scoped clients, minted automatically. D - cutover, then a second
+  machine.
 
 ## Recently Completed
 
