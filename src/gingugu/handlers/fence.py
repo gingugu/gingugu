@@ -76,6 +76,8 @@ def request_grant(transport: str, stdio: Grant = FULL) -> Grant | None:
 
 def refusal(tool: str, grant: Grant, kwargs: dict) -> str | None:
     """Why a scoped token may not call ``tool`` at all, or None."""
+    if grant.derived and tool.startswith("credential_"):
+        return f"{tool} is not available to a derived token; the vault stays on its machine"
     if grant.is_full:
         return None
     if tool in _CLOSED_TO_SCOPED:

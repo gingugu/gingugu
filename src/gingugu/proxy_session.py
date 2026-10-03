@@ -58,7 +58,7 @@ async def derive(
             f"remote brain {url} refused the machine token (HTTP {status}). "
             f"Run: gingugu remote login {url}"
         )
-    if status >= 500:
+    if status >= 500 or status == 429:  # 429: the brain's live-token cap; it drains
         raise DeriveTransient(f"HTTP {status}")
     if status != 200:
         try:
@@ -87,6 +87,18 @@ def leaf_name(exc: BaseException) -> str:
     while isinstance(exc, BaseExceptionGroup) and exc.exceptions:
         exc = exc.exceptions[0]
     return type(exc).__name__
+
+
+def http_status_in(exc: BaseException) -> int | None:
+    """The HTTP status of the first failed response buried in ``exc``, if any."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code
+    if isinstance(exc, BaseExceptionGroup):
+        for inner in exc.exceptions:
+            found = http_status_in(inner)
+            if found is not None:
+                return found
+    return None
 
 
 def fatal_in(exc: BaseException) -> ProxyLost | None:
@@ -132,6 +144,7 @@ class Link:
         self.srv_write: ObjectSendStream = srv_write
         self.pending: set[str | int] = set()
         self.list_ids: set[str | int] = set()
+        self.answered = False  # the brain has sent at least one message on this link
 
     async def forward(self, item: SessionMessage) -> None:
         """Send a client message to the brain; a request is tracked until answered."""
@@ -154,6 +167,7 @@ class Link:
         async for item in self.srv_read:
             if isinstance(item, Exception):
                 raise item
+            self.answered = True
             msg = item.message.root
             if isinstance(msg, JSONRPCError) and msg.error.code == _SESSION_TERMINATED:
                 raise SessionTerminated

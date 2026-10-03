@@ -51,7 +51,7 @@ def _grant_from(body: dict) -> Grant:
     home = _optional_name(body, "home")
     label = f"derived:{_optional_name(body, 'name') or home or 'client'}"
     if spec is None:
-        return Grant(label, dict(FULL.namespaces), home=home)
+        return Grant(label, dict(FULL.namespaces), home=home, derived=True)
     if not isinstance(spec, str):
         raise _BadRequest("grant must be a string like 'ns=write,other=read'")
     try:
@@ -61,7 +61,7 @@ def _grant_from(body: dict) -> Grant:
     for ns in namespaces:
         if ns != WILDCARD and not _NAME_RE.fullmatch(ns):
             raise _BadRequest(f"invalid namespace name {ns!r}")
-    grant = Grant(label, namespaces, home=home)
+    grant = Grant(label, namespaces, home=home, derived=True)
     if home is not None and not grant.can_read(home):
         raise _BadRequest("home must be a namespace the grant can read")
     return grant
