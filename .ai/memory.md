@@ -334,7 +334,13 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.19.0** (PyPI). The largest release to date: twenty-nine
+- Current version: **0.20.0** (PyPI). Warm minions: a subagent gets its own
+  fenced, pre-loaded brain - `MEMORY_GRANT` fences a stdio server like a scoped
+  serve token, agent files declare an inline `brain` server, and the
+  `SubagentStart` hook warms it with the memories its task woke (`gingugu init`
+  wires five hooks). Fixes `gingugu serve` answering LAN clients with `421`
+  (the server now passes its real bind host to the MCP SDK).
+- Previous: **0.19.0**. The largest release to date: twenty-nine
   PRs (#65-#93). Adds per-client scoped tokens for `gingugu serve` (`gingugu
   token add|list|revoke`, per-namespace read/write grants enforced at the store),
   tripwires (`memory_tripwire` + the `PreToolUse` hook), capability pointers,
