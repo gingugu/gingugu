@@ -15,11 +15,13 @@ import logging
 import secrets
 from pathlib import Path
 
+from starlette.applications import Starlette
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, Response
 
 from .config import load_config
+from .derived_tokens import DerivedTokens
 from .grants import FULL, Grant
 from .secret_file import write_private
 from .serve_tokens import TokenStore, default_path
@@ -28,6 +30,8 @@ from .server import build_server
 logger = logging.getLogger(__name__)
 
 _HEALTH_PATH = "/healthz"
+# request.state.token_kind: only an OWNER token may derive (see serve_derive).
+OWNER, DERIVED, SCOPED = "owner", "derived", "scoped"
 
 SERVE_USAGE = """\
 gingugu serve - run the MCP server over streamable HTTP
@@ -67,29 +71,51 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
     token. Comparison is constant-time to avoid leaking a token by timing.
     """
 
-    def __init__(self, app, token: str, tokens: TokenStore | None = None) -> None:
+    def __init__(
+        self,
+        app,
+        token: str,
+        tokens: TokenStore | None = None,
+        derived: DerivedTokens | None = None,
+    ) -> None:
         super().__init__(app)
         self._expected = f"Bearer {token}"
         self._tokens = tokens
+        self._derived = derived
 
-    def _grant_for(self, header: str) -> Grant | None:
+    def _identify(self, header: str) -> tuple[Grant, str] | None:
+        """The grant a header carries and its kind: owner, derived or scoped."""
         # Bytes, not str: compare_digest raises on a non-ASCII str, and a
         # header is attacker-chosen.
         raw = header.encode("utf-8", "surrogateescape")
         if secrets.compare_digest(raw, self._expected.encode("utf-8")):
-            return FULL
+            return FULL, OWNER
         scheme, _, presented = header.partition(" ")
-        if self._tokens is None or scheme != "Bearer" or not presented:
+        if scheme != "Bearer" or not presented:
             return None
-        return self._tokens.resolve(presented)
+        if self._derived is not None:
+            grant = self._derived.resolve(presented)
+            if grant is not None:
+                return grant, DERIVED
+        if self._tokens is None:
+            return None
+        grant = self._tokens.resolve(presented)
+        if grant is None:
+            return None
+        # TokenStore hands out a full grant only for an owner entry.
+        return grant, (OWNER if grant.is_full else SCOPED)
+
+    def _grant_for(self, header: str) -> Grant | None:
+        found = self._identify(header)
+        return found[0] if found else None
 
     async def dispatch(self, request: Request, call_next) -> Response:
         if request.url.path == _HEALTH_PATH:
             return PlainTextResponse("ok")
-        grant = self._grant_for(request.headers.get("authorization", ""))
-        if grant is None:
+        found = self._identify(request.headers.get("authorization", ""))
+        if found is None:
             return JSONResponse({"error": "unauthorized"}, status_code=401)
-        request.state.grant = grant
+        request.state.grant, request.state.token_kind = found
         return await call_next(request)
 
 
@@ -127,6 +153,16 @@ def _resolve_token(configured: str | None, token_path: Path) -> str:
     return token
 
 
+def build_app(mcp, token: str, tokens: TokenStore | None, derived: DerivedTokens) -> Starlette:
+    """The HTTP app `gingugu serve` runs: MCP at /mcp, token derivation, auth."""
+    from .serve_derive import DERIVE_PATH, derive_endpoint
+
+    app = mcp.streamable_http_app()
+    app.add_route(DERIVE_PATH, derive_endpoint(derived), methods=["POST"])
+    app.add_middleware(BearerAuthMiddleware, token=token, tokens=tokens, derived=derived)
+    return app
+
+
 def serve() -> None:
     """Console entry point for ``gingugu serve``."""
     import uvicorn
@@ -136,8 +172,7 @@ def serve() -> None:
     token_path = config.db_path.parent / "serve_token"
     token = _resolve_token(config.serve_token, token_path)
 
-    app = mcp.streamable_http_app()
-    app.add_middleware(BearerAuthMiddleware, token=token, tokens=TokenStore(default_path()))
+    app = build_app(mcp, token, TokenStore(default_path()), DerivedTokens())
 
     logger.info(
         "gingugu serve -> http://%s:%d/mcp (credentials_enabled=%s)",

@@ -140,7 +140,7 @@ fall back to BM25-only.
 <details>
 <summary><strong>Is this ready to use?</strong></summary>
 
-Usable today for local personal workflows. 1370 tests passing covering
+Usable today for local personal workflows. 1560+ tests passing covering
 storage, search, migrations, concurrency, credentials, and edges.
 Hardened against adversarial input and write contention. WAL mode for
 concurrency. CI matrix across Python 3.11–3.13 on Linux/macOS/Windows.
@@ -255,7 +255,7 @@ uv run gingugu  # or pip install -e .
 
 </details>
 
-> **Usable today.** 21 MCP tools live. 1370 tests passing. Dogfooded daily in
+> **Usable today.** 21 MCP tools live. 1560+ tests passing. Dogfooded daily in
 > Claude Code and Windsurf — this repo's own memories live in a Gingugu
 > database. Early and seeking broader real-world validation.
 
@@ -407,7 +407,53 @@ gingugu remote off                           # back to the local brain
 `~/.ssh/config`, so a default identity can never stand in for the restricted
 key. Local is the default: with no setting, nothing is remote. A single client
 can choose for itself with `MEMORY_REMOTE_URL` in its own environment (`off`
-forces local).
+forces local). A URL carrying a username or password is refused.
+
+#### Remote mode: a bare `gingugu` relays
+
+With a remote brain on (`gingugu remote on`, or `MEMORY_REMOTE_URL`), a bare
+`gingugu` never opens the local database. It relays MCP over stdio to
+`gingugu serve`, so every client config stays `command: gingugu`. It never falls
+back to the local DB: it refuses to start (exit 2) when
+
+- `MEMORY_GRANT` is malformed, blank or `*=write`;
+- `MEMORY_CREDENTIALS_ENABLED` is not `false` - the vault is this machine's
+  keychain, which a remote brain cannot serve, so set it in the client's `env`
+  (the `credential_*` tools are then hidden and refused);
+- the keychain holds no token (run `gingugu remote login`);
+- the brain is unreachable.
+
+Plain `http` to a non-loopback host starts with a warning. The machine token is
+only ever sent to `POST /token/derive` (owner tokens only; scoped tokens get
+403), which trades it for a session token held in memory on the server: valid
+at most an hour, SHA-256 only, at most 256 live, gone when the server restarts.
+The session token carries the client's `MEMORY_GRANT` (full if unset) and its
+`MEMORY_NAMESPACE` as its **home**, so a call that names no namespace lands in
+the client's own namespace rather than the server's. The proxy refreshes the
+token at half its life and, when the connection drops, reconnects with backoff
+(0.25s doubling to 5s) and re-initializes the session itself. Requests in flight
+at a loss fail and are never replayed; requests while it is down fail at once.
+
+```json
+{ "mcpServers": { "gingugu": {
+    "command": "gingugu",
+    "env": {
+      "MEMORY_CREDENTIALS_ENABLED": "false",
+      "MEMORY_PERSONA": "research",
+      "MEMORY_NAMESPACE": "research",
+      "MEMORY_GRANT": "research=write,crow=read"
+    }
+} } }
+```
+
+#### Personas
+
+`MEMORY_PERSONA` names an agent's own namespace. Involuntary prompt recall,
+tripwires and the SessionStart contract load `crow` (shared by every persona),
+then the persona, then the repo. A malformed value is ignored. To fence a
+persona to its own namespace, pair it with `MEMORY_GRANT` and `MEMORY_NAMESPACE`
+as above: it writes to `research`, reads `crow`, and anything else reads as not
+found.
 
 ### Promote memories to a central brain (optional)
 
@@ -580,6 +626,9 @@ It installs:
   advantage: unlike a rules file (which is **not** guaranteed to be loaded into
   context), a hook fires every time, so the protocol is always present. The
   project namespace is derived from the repo's folder name automatically.
+  A folder name that is not a plain name (letters, digits, `.`, `_`, `-`,
+  starting with a letter or digit, up to 64 chars) is left out of the
+  session-start contract, which then loads `crow` (and the persona) only.
 - **`.claude/hooks/stop.py`** — a `Stop` hook that blocks once if a working
   session never saved anything, guarding the "unsaved session vanishes" trap.
 - **`.claude/hooks/user_prompt_recall.py`** — a `UserPromptSubmit` hook for
@@ -688,27 +737,32 @@ prefix to match your MCP config name):
 ````markdown
 ## Memory Protocol
 
-Gingugu is your long-term brain. Memory is split into **two layers**:
+Gingugu is your long-term brain. Memory is split into **three layers**:
 
-1. **`crow`** — your global namespace. Identity, preferences,
-   cross-project wisdom, opinions, meta-learnings. Loaded FIRST every
-   session. (Crow's nest — sees across all horizons.)
-2. **Project namespace** (e.g. `<your-project-name>`) — schema decisions,
-   bug history, deploy quirks, specific commits. Loaded AFTER crow.
+1. **`crow`** — the shared namespace every agent serving you loads: your
+   rules, preferences and feedback, plus cross-project lessons, patterns and
+   techniques. Loaded FIRST every session. (Crow's nest — sees across all
+   horizons.)
+2. **Persona namespace** (named by `MEMORY_PERSONA`, when set) — this agent's
+   own self: reflections, its own failure modes, opinions. Loaded after crow,
+   and only by that persona.
+3. **Project namespace** (e.g. `<your-project-name>`) — schema decisions,
+   bug history, deploy quirks, specific commits. Loaded last.
 
 **What goes where:**
 - References a specific repo, file, commit, or project decision → project
-- About HOW you think, work, or collaborate → `crow`
-- Patterns/opinions that transcend any one codebase → `crow`
+- A rule or preference from you, or a lesson another agent serving you
+  would want → `crow`
+- About this agent itself (a reflection, its own slip, its opinion) → persona
 - When in doubt, project-scope it.
 
 ### Session start
-1. `memory_context(namespace="crow,<project>[,<project2>…]", task_hint=…)` - one call loads
-   the identity foundation plus every repo in the workspace (multi-repo workspaces are common),
+1. `memory_context(namespace="crow[,<persona>],<project>[,<project2>…]", task_hint=…)` - one call loads
+   the shared layer, your persona, and every repo in the workspace (multi-repo workspaces are common),
    de-duplicated across namespaces; load all of them speculatively rather than asking the user
    which one to focus on. Add `compact=true` for a lighter payload and pull full bodies with
    `memory_recall` as needed.
-2. `memory_stats(namespace="crow,<project>[,<project2>…]")` - the same namespace list as
+2. `memory_stats(namespace="crow[,<persona>],<project>[,<project2>…]")` - the same namespace list as
    step 1, in one call: global health once (dormancy is a resting signal, never
    auto-forgotten) plus each namespace's own breakdown
 
@@ -724,11 +778,14 @@ Save with `memory_store` (project namespace) whenever you:
 - Complete a task (what you did, why, and the outcome)
 
 Save with `memory_store` (`crow` namespace) whenever you:
-- Form an opinion about a tool, language, or approach
-- Notice something about how the user works or makes decisions
+- Learn a rule or preference of the user's, or how they work or make decisions
 - Reach a conclusion that applies beyond this one project
-- Have a reflection on a milestone, win, or hard-won lesson
 - Develop a debugging instinct or workflow you'd reuse anywhere
+
+Save with `memory_store` (your persona namespace, when `MEMORY_PERSONA` is set;
+without one these stay in `crow`) whenever you:
+- Form an opinion about a tool, language, or approach
+- Have a reflection on a milestone, win, or hard-won lesson
 
 **This memory is yours. Use it like one.** Don't censor opinions or
 instincts — they're what make the brain *yours* across sessions.
@@ -817,6 +874,8 @@ Environment variables (all optional):
 | `MEMORY_W_CONFIDENCE` | `0.35` | Composite-score weight for confidence (trust — the dominant standalone signal) |
 | `MEMORY_CREDENTIALS_ENABLED` | `true` | Expose the `credential_*` vault tools. Set `false` to run an instance without a secret vault (e.g. a shared/central server) |
 | `MEMORY_GRANT` | *(unset)* | Fence a stdio server like a scoped token: `ns=read\|write,...` (e.g. `my-project=read,minions=write`). Unset is full access. A bad spec, an empty value, or `*=write` refuses to start. Used by a subagent's own `brain` server in its agent file |
+| `MEMORY_PERSONA` | *(unset)* | This agent's own namespace (e.g. `research`). Recall, tripwires and the SessionStart contract load `crow`, then the persona, then the repo. A malformed value is ignored |
+| `MEMORY_REMOTE_URL` | *(unset)* | Use this remote brain for this client only (`off` forces local). A bare `gingugu` then relays to it; set `MEMORY_CREDENTIALS_ENABLED=false` too |
 | `MEMORY_MINION_FENCE` | `on` | Set `off` to disable the subagent fence in `gingugu hook tool` (data-dir file/shell access and inherited-server writes) |
 | `MEMORY_SERVE_HOST` | `127.0.0.1` | Bind host for `gingugu serve` (set `0.0.0.0` to accept remote connections) |
 | `MEMORY_SERVE_PORT` | `8765` | Bind port for `gingugu serve` |

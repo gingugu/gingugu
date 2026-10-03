@@ -25,10 +25,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (never printed, `~/.ssh/config` ignored); `on URL` / `off` switch the machine;
   `status` shows the active brain. Local is the default with no setting at all,
   and `MEMORY_REMOTE_URL` overrides it for a single client (`off` forces local).
+- **Remote mode: a bare `gingugu` is a stdio proxy.** When `gingugu remote on`
+  or `MEMORY_REMOTE_URL` selects a remote brain, `gingugu` relays MCP JSON-RPC
+  over stdio to `gingugu serve` (streamable HTTP) and never opens the local DB,
+  so every client config stays `command: gingugu`. It refuses to start (exit 2)
+  on a malformed, blank or `*=write` `MEMORY_GRANT`, on `MEMORY_CREDENTIALS_ENABLED`
+  not `false` (the vault is the machine's keychain, which a remote brain cannot
+  serve), on no keychain token (it points at `gingugu remote login`), and on an
+  unreachable brain. Plain `http` to a non-loopback host warns. `credential_*`
+  tools are stripped from `tools/list` and refused on `tools/call`.
+- **Persona session tokens.** The proxy trades the machine's owner token at
+  `POST /token/derive` (owner tokens only; scoped and derived tokens get 403)
+  for a short-lived derived token: in memory, TTL up to 1 hour, SHA-256 only, at
+  most 256 live, dropped when the server restarts. It carries the client's
+  `MEMORY_GRANT` (full if unset) and a **home** namespace (the client's
+  `MEMORY_NAMESPACE`); the owner token never goes on `/mcp`. A call that names
+  no namespace defaults to the token's home instead of the server's configured
+  namespace. A derived token never reaches `credential_*`, even when full.
+- **Proxy resilience.** The proxy refreshes its token at half the TTL, reuses it
+  across reconnects, re-derives after a 401, reconnects with backoff (0.25s
+  doubling to 5s) and replays the client's `initialize` itself, so a long-lived
+  client never re-handshakes. Requests in flight at a loss are failed, never
+  replayed; requests while the brain is down get an immediate error. A 429 from
+  `/token/derive` is treated as transient. A rejected owner token ends the proxy.
+- **`MEMORY_PERSONA`**, an agent's own namespace. Involuntary prompt recall,
+  tripwires and the SessionStart contract load `crow`, then the persona, then the
+  repo. `crow` is the layer every persona shares (the user's rules, preferences,
+  cross-project lessons); a persona's self (reflections, its own failure modes,
+  opinions) lives in its persona namespace. The memory protocol is now three
+  layers. A malformed value is ignored.
 
 ### Changed
 
 - The `gingugu token` CLI moved from `serve_tokens.py` to `token_cli.py`.
+- `BearerAuthMiddleware` resolves a header to a grant and a kind (owner, derived,
+  scoped), and `gingugu serve` builds its app in `serve.build_app`.
+
+### Security
+
+- A remote URL carrying a username or password is refused, and never echoed.
+- The pre-tool-use hook matches dotenv files case-insensitively: `.env`,
+  `.env.local` and `.env-x` are blocked, `.envrc` and `.env_local` are not, and
+  neither is a name glued to a letter, digit, underscore or dot, so
+  `gingugu.env` is no longer blocked and `.ENV` is.
+- A hostile repo directory name is dropped from the SessionStart contract rather
+  than pasted into an instruction to the model.
+- The minion fence closes a Glob whose pattern starts with a single separator
+  (`\Users\...`) on Windows under Python 3.13, where `os.path.isabs` no longer
+  counts it as absolute although it still resolves against the current drive.
 
 ---
 

@@ -11,6 +11,7 @@ exact shape, so no existing caller loses a field.
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 
@@ -135,7 +136,8 @@ def test_startup_protocol_asks_for_one_stats_call() -> None:
     ):
         text = path.read_text(encoding="utf-8")
         assert 'memory_stats(namespace="crow")' not in text, path
-        assert 'memory_stats(namespace="crow,' in text, path
+        # "crow,<project>" or "crow[,<persona>],<project>": one call, a list.
+        assert re.search(r'memory_stats\(namespace="crow(,|\[,)', text), path
 
 
 @pytest.mark.asyncio
