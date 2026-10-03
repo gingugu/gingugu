@@ -22,9 +22,15 @@ logger = logging.getLogger(__name__)
 
 
 def build_server(transport: str = "stdio") -> FastMCP:
-    """Construct and fully wire the FastMCP server.
+    """Construct and fully wire the FastMCP server (see ``build``)."""
+    return build(transport)[0]
 
-    ``transport`` is "stdio" or "http"; `gingugu serve` passes "http".
+
+def build(transport: str = "stdio") -> tuple[FastMCP, ServerContext]:
+    """Construct and fully wire the FastMCP server, and hand back its context.
+
+    ``transport`` is "stdio" or "http"; `gingugu serve` passes "http" and keeps
+    the context so the hook routes can reach the store's embedder and the DB path.
     """
     config = load_config()
     from .config import setup_logging
@@ -77,7 +83,7 @@ def build_server(transport: str = "stdio") -> FastMCP:
     # relies on the Bearer token instead; a loopback bind keeps the check.
     mcp = FastMCP("gingugu", host=config.serve_host)
     register_all(mcp, ctx)
-    return mcp
+    return mcp, ctx
 
 
 USAGE = """\

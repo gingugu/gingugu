@@ -25,7 +25,7 @@ from .derived_tokens import DerivedTokens
 from .grants import FULL, Grant
 from .secret_file import write_private
 from .serve_tokens import TokenStore, default_path
-from .server import build_server
+from .server import build
 
 logger = logging.getLogger(__name__)
 
@@ -153,12 +153,22 @@ def _resolve_token(configured: str | None, token_path: Path) -> str:
     return token
 
 
-def build_app(mcp, token: str, tokens: TokenStore | None, derived: DerivedTokens) -> Starlette:
-    """The HTTP app `gingugu serve` runs: MCP at /mcp, token derivation, auth."""
+def build_app(
+    mcp, token: str, tokens: TokenStore | None, derived: DerivedTokens, *, ctx=None
+) -> Starlette:
+    """The HTTP app `gingugu serve` runs: MCP at /mcp, token derivation, auth.
+
+    With ``ctx`` it also serves the remote-mode hook routes (``serve_hooks``).
+    """
     from .serve_derive import DERIVE_PATH, derive_endpoint
 
     app = mcp.streamable_http_app()
     app.add_route(DERIVE_PATH, derive_endpoint(derived), methods=["POST"])
+    if ctx is not None:
+        from .serve_hooks import hook_routes
+
+        for path, handler in hook_routes(ctx).items():
+            app.add_route(path, handler, methods=["POST"])
     app.add_middleware(BearerAuthMiddleware, token=token, tokens=tokens, derived=derived)
     return app
 
@@ -168,11 +178,11 @@ def serve() -> None:
     import uvicorn
 
     config = load_config()
-    mcp = build_server(transport="http")
+    mcp, ctx = build(transport="http")
     token_path = config.db_path.parent / "serve_token"
     token = _resolve_token(config.serve_token, token_path)
 
-    app = build_app(mcp, token, TokenStore(default_path()), DerivedTokens())
+    app = build_app(mcp, token, TokenStore(default_path()), DerivedTokens(), ctx=ctx)
 
     logger.info(
         "gingugu serve -> http://%s:%d/mcp (credentials_enabled=%s)",

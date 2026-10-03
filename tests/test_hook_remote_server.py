@@ -26,7 +26,7 @@ from tests.proxy_fixtures import Served, free_port, make_brain
 from tests.test_embeddings import FakeEmbedder
 
 MARKER = "zq-hidden-7781"
-OPEN = {"bar": 0.0, "margin": 1.0, "cap": 3, "require_lexical": False}
+OPEN = {"bar": 0.0, "margin": 0.0, "cap": 3, "require_lexical": False}
 
 
 @pytest.fixture
@@ -231,6 +231,7 @@ async def test_the_prompt_hook_end_to_end_against_a_live_brain(
     monkeypatch.setenv("MEMORY_REMOTE_URL", served.url)
     monkeypatch.setattr("gingugu.remote._kr_get", lambda url: brain.machine)
     monkeypatch.setenv("MEMORY_RECALL_HOOK_BAR", "0")
+    monkeypatch.setenv("MEMORY_RECALL_HOOK_MARGIN", "0")
     monkeypatch.setenv("MEMORY_RECALL_HOOK_LEXICAL", "0")
     payload = {
         "prompt": "alpha: how does the proxy come back after the brain restarts",
