@@ -489,7 +489,11 @@ A subagent gets its own fenced brain and arrives already knowing the task.
 - **Local-first, single file.** No server to run, no cloud dependency; the DB is
   portable and inspectable. Trade-off: no built-in multi-user sync (out of scope).
 - **Optional network transport, still single-owner.** `gingugu serve` exposes
-  the brain over HTTP for a hosted/central instance. The owner token keeps full
+  the brain over HTTP for a hosted/central instance. FastMCP is built with the
+  real bind host (`MEMORY_SERVE_HOST`): a loopback bind keeps the MCP SDK's
+  localhost-only `Host` allowlist (DNS-rebinding protection), a LAN bind drops
+  it and relies on Bearer auth - left at the SDK default, every LAN client got
+  `421`. The owner token keeps full
   access; each additional client can hold a scoped token limited to named
   namespaces (see **Scoped tokens**). It stays a single SQLite file and a
   single owner - scoped tokens partition one owner's brain between clients, not

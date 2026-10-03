@@ -71,7 +71,11 @@ def build_server(transport: str = "stdio") -> FastMCP:
         if not grant.is_full:
             logger.info("stdio fenced by MEMORY_GRANT: %s", dict(grant.namespaces))
 
-    mcp = FastMCP("gingugu")
+    # The real bind host, not FastMCP's 127.0.0.1 default: on a loopback host
+    # the SDK allows only localhost Host headers (DNS-rebinding protection),
+    # which answered every LAN client of `gingugu serve` with 421. A LAN bind
+    # relies on the Bearer token instead; a loopback bind keeps the check.
+    mcp = FastMCP("gingugu", host=config.serve_host)
     register_all(mcp, ctx)
     return mcp
 
