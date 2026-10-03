@@ -26,8 +26,9 @@ AI client (Claude Code / Cursor / Windsurf / …)
    It is the crash boundary: no exception escapes to the client. Two transports
    share this path: **stdio** (default) and **streamable HTTP** via `serve.py`
    (`gingugu serve`), which wraps the same server in a Starlette app with
-   Bearer-token auth middleware and a `/healthz` probe; the middleware resolves
-   each token to a grant (see **Scoped tokens** below). The `credential_*` tools
+   Bearer-token auth middleware, a `/healthz` probe and `POST /token/derive`; the
+   middleware resolves each token to a grant and a kind (see **Scoped tokens**
+   and **Remote mode** below). The `credential_*` tools
    are gated by `MEMORY_CREDENTIALS_ENABLED` so a shared instance can omit the
    secret vault. `ServerContext.transport` records which transport built the
    server (`"stdio"` / `"http"`); `credential_get(into=…)` refuses under HTTP,
@@ -74,8 +75,11 @@ AI client (Claude Code / Cursor / Windsurf / …)
 
 ## Memory Model
 
-- **Two namespaces layers:** `crow` (global identity/cross-project) + one per
-  project. Every memory belongs to exactly one namespace.
+- **Three namespace layers:** `crow` (shared by every persona: the user's rules,
+  preferences, cross-project lessons) + an optional persona namespace named by
+  `MEMORY_PERSONA` (an agent's own self: reflections, its own failure modes,
+  opinions) + one per project. Loaded in that order. Every memory belongs to
+  exactly one namespace.
 - **Typed memories:** `type` ∈ {fact, decision, pattern, bug, architecture,
   preference, workflow, context, capability}; `confidence` ∈ {verified,
   inferred, stale, deprecated}. A `capability` carries `metadata.capability` =
@@ -371,6 +375,49 @@ inside the grant. A granted but not-yet-existing namespace is created on first
 write. stdio without `MEMORY_GRANT`, CLI commands, background passes (dream,
 hooks) and the owner token are unfenced. No schema change; no MCP tool
 signature changed.
+
+## Remote mode (stdio proxy and derived tokens)
+
+Unreleased, on `feature/stdio-proxy`. When `gingugu remote on` or
+`MEMORY_REMOTE_URL` selects a brain, a bare `gingugu` (`server.main`) does not
+open the local DB: `proxy.py` relays MCP JSON-RPC between its stdio and
+`gingugu serve`, so client configs stay `command: gingugu`.
+
+```
+client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh)──▶ serve
+                    └─────Bearer <derived token>  /mcp (streamable HTTP)────▶ serve
+```
+
+- **Preflight** (`proxy.preflight`, config refusals first so they never touch the
+  keychain or network): malformed `MEMORY_GRANT` or `*=write`;
+  `MEMORY_CREDENTIALS_ENABLED` not false (the vault is the machine's keychain, a
+  remote brain cannot serve it); no keychain token (points at
+  `gingugu remote login`); brain unreachable (`/healthz`). Plain http to a
+  non-loopback host warns on stderr. Exit 2 on refusal. `credential_*` tools are
+  stripped from `tools/list` and refused on `tools/call`.
+- **Derive route** (`serve_derive.py`, `POST /token/derive`): `BearerAuthMiddleware`
+  tags each request `token_kind` (owner, derived, scoped); only an owner token
+  may derive (others get 403). `DerivedTokens` (`derived_tokens.py`) keeps
+  SHA-256 -> (grant, expiry) in memory: TTL up to 1h, at most 256 live (429
+  past it), nothing on disk, so a server restart drops them all. The owner token
+  never goes on `/mcp`.
+- **Grant additions** (`grants.py`): `Grant.home` is the namespace a call that
+  names none defaults to, in place of the server's configured one
+  (`grants.home()`, read by `NamespaceManager.resolve_name` and
+  `handlers/scope.read_scope`); `Grant.derived` marks a minted token, and
+  `fence.refusal` closes every `credential_*` to it even when full. The proxy
+  asks for the client's `MEMORY_GRANT` (full if unset) and home = its
+  `MEMORY_NAMESPACE`.
+- **Resilience** (`proxy.py`, `proxy_session.py`): one reader of the client for
+  the whole run, routed to the live `Link`. Refresh at half the TTL; the token is
+  reused across reconnects (deriving per attempt would fill the live cap);
+  re-derive after a 401; backoff 0.25s doubling to 5s; the client's `initialize`
+  is replayed on the new session. In-flight requests at a loss are failed, never
+  replayed (a `memory_store` would write twice); requests while down get an
+  immediate error. A 429 or 5xx from derive is transient; a 401/403 on derive
+  ends the proxy (`ProxyLost`).
+- **Not yet remote:** the three local-DB hook paths (prompt recall, tripwires,
+  subagent warm-up) still read the local DB (board #1, B2).
 
 ## Warm minions (stdio grant, warm-up, minion fence)
 

@@ -21,20 +21,47 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
   outside its grant refused.
 - **Fixed on the way:** remote clients got `421` from `gingugu serve`
   (shipped in 0.20.0).
-- **PR A (this branch): machine tokens + `gingugu remote`.** One owner token
+- **Machine tokens + `gingugu remote`: shipped (#99).** One owner token
   per machine, minted over SSH by a key restricted to `gingugu token ssh-mint`,
   straight into the OS keychain - nobody handles a token. Verified on the Pi:
   the restricted key gets no shell, PTY or port forward; the minted token
   authenticates (200), a wrong one does not (401).
-- **Remaining, in order:** B1 - `gingugu` (stdio) proxies to the remote brain
-  when one is selected, so every client config stays `command: gingugu`; first
-  client is the ChatGPT desktop persona via `MEMORY_REMOTE_URL`. B2 - the three
-  local-DB hook paths go remote (recall and warm-up as server routes, tripwires
-  as a cached rule list matched locally). C - short-lived derived tokens for
-  minions and scoped clients, minted automatically. D - cutover, then a second
-  machine.
+- **B1 (proxy) and C (derived persona tokens + `MEMORY_PERSONA`): built on
+  `feature/stdio-proxy` (this PR).** A bare `gingugu` relays to the remote brain
+  when one is selected; the proxy trades the machine token for a short-lived
+  derived token carrying the client's grant and home namespace. Verified live
+  from a second process over the LAN against the Pi: a persona store lands in
+  its home, a write to `crow` is refused, a read of `crow` is allowed, an
+  ungranted namespace reads as not found. The security review's five findings
+  are fixed.
+- **Remaining, in order:** B2 - the three local-DB hook paths go remote (recall
+  and warm-up as server routes, tripwires as a cached rule list matched
+  locally). D - cutover: re-copy the live brain to the Pi, switch this machine,
+  then a second machine. C's minion-side half (warm minions on derived tokens)
+  is folded into B2.
 
 ## Recently Completed
+
+**Board #1 B1 + C: remote-mode proxy, persona tokens, `MEMORY_PERSONA` (built on
+`feature/stdio-proxy`, unreleased).** A bare `gingugu` relays stdio to
+`gingugu serve` when a remote brain is on, and never opens the local DB.
+
+- `proxy.py` / `proxy_session.py`: preflight refuses to start (bad or `*=write`
+  `MEMORY_GRANT`, `MEMORY_CREDENTIALS_ENABLED` not false, no keychain token,
+  unreachable brain), warns on plain http to a non-loopback host, strips and
+  refuses `credential_*`. Reconnects with backoff (0.25s to 5s), replays the
+  client's `initialize`, fails in-flight requests and never replays them.
+- `POST /token/derive` (`serve_derive.py`, owner tokens only) and `DerivedTokens`
+  (in memory, TTL <= 1h, SHA-256 only, max 256 live): a derived `Grant` carries
+  `home` (calls that name no namespace default to it) and `derived` (never
+  reaches `credential_*`). The owner token never goes on `/mcp`.
+- `MEMORY_PERSONA`: recall, tripwires and the SessionStart contract load `crow`,
+  then the persona, then the repo. The memory protocol is three layers.
+- Security review: five findings fixed, including a remote URL with userinfo
+  refused, the `.env` hook match tightened to names starting `.env`
+  (case-insensitive), and a hostile repo directory name dropped from the contract.
+- Verified live over the LAN against the Pi (see In Flight).
+- Docs: `README.md`, `CHANGELOG.md`, `.ai/` updated for all of the above.
 
 **Released 0.20.0 to PyPI (2026-10-02).** Warm minions (#96) and `gingugu serve`
 answering LAN clients (#98). Cut so the central-brain Pi runs a published build.
@@ -883,6 +910,7 @@ below it moved up one, and the row-position cross-references moved with them.
 | 7 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
 | 8 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
 | 9 | Session flight recorder (low priority) | 18 | Check prior art first |
+| 10 | **MCP SDK 2.x migration** | - | We pin `mcp<2` (lock 1.28.1); 2.x is a major (2.3.0 out 2026-10-02). The proxy sits on two transport APIs, and `tests/test_proxy*.py` is the safety net |
 | - | **Template/sibling noise in retrieval - PARKED** | 1 | Ten dead fixes and no live hypothesis; see below |
 
 ### Previous board (2026-09-28), kept for its numbering

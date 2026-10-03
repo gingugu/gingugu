@@ -110,6 +110,16 @@ with `MEMORY_GRANT` (a warm minion's own server) binds its grant the same way.
 stdio without it, CLI, background passes and the owner token carry no grant and
 flow exactly as described.
 
+A remote client authenticates differently. The stdio proxy (`proxy.py`) trades
+the machine's owner token at `POST /token/derive` for a short-lived derived
+token (in memory, SHA-256 only, TTL <= 1h) and sends only that on `/mcp`;
+`BearerAuthMiddleware` resolves it through `DerivedTokens` and tags the request
+`token_kind=derived`. The derived grant carries the client's `MEMORY_GRANT` and
+a `home` namespace (its `MEMORY_NAMESPACE`). A call that names no namespace
+defaults to that home rather than the server's configured namespace (read by
+`NamespaceManager.resolve_name` and `handlers/scope.read_scope`), and a derived
+grant never reaches `credential_*`.
+
 ## Reconcile
 
 ```
@@ -432,7 +442,9 @@ UserPromptSubmit event  →  .claude/hooks/user_prompt_recall.py (pure stdlib)
       → strip_affect(): greetings/interjections/emoji removed, because they
         carry REGISTER and the corpus is full of reflections written in the
         user's own voice. Matching voice is the dominant false positive.
-      → encode → cosine sweep over crow + <cwd-derived project>
+      → encode → cosine sweep over crow + <MEMORY_PERSONA, if set> + <cwd-derived project>
+          (namespaces_for: crow, then persona, then the repo, deduped; a
+          malformed MEMORY_PERSONA is ignored)
           EXCLUDED IN SQL: deprecated; pinned (already loaded unconditionally
           at session start, so injecting one pays twice); superseded (the
           store has already recorded it as replaced)
@@ -477,7 +489,7 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
       → minion fence / spawn stash first (see "Warm minions"; independent of
         MEMORY_TRIPWIRES)
       → MEMORY_TRIPWIRES=off: exit
-      → load_tripwires(crow + <cwd-derived project>)   read-only SQLite
+      → load_tripwires(crow + <persona> + <cwd-derived project>)   read-only SQLite
           skips deprecated and superseded memories; pinned ones DO trip
           (a pin loaded at session start is not in front of the agent now)
       → matching: tool_pattern FULL-matched against the tool name,
