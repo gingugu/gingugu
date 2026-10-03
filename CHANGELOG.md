@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Machine tokens.** `gingugu token add NAME --owner` mints a named
+  full-access token for one of your own machines, revocable on its own;
+  `gingugu token list` marks it `owner`. A `*=write` grant spec is still
+  refused, so full access is only ever minted explicitly.
+- **`gingugu token ssh-mint [--name NAME]`**, an `authorized_keys` forced
+  command: a key restricted to it can mint (and rotate) one machine token by
+  sending `mint NAME`, and nothing else. `--name` pins the key to one machine,
+  so with one key per machine a revoke sticks. Rotation never overwrites a
+  scoped token.
+- **`gingugu remote`** chooses which brain a machine talks to. `login URL --ssh
+  USER@HOST` mints the machine token over SSH straight into the OS keychain
+  (never printed, `~/.ssh/config` ignored); `on URL` / `off` switch the machine;
+  `status` shows the active brain. Local is the default with no setting at all,
+  and `MEMORY_REMOTE_URL` overrides it for a single client (`off` forces local).
+
+### Changed
+
+- The `gingugu token` CLI moved from `serve_tokens.py` to `token_cli.py`.
+
 ---
 
 ## [0.20.0] - 2026-10-02
