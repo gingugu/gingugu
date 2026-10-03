@@ -168,9 +168,14 @@ class TokenStore:
         if not name or not name.strip():
             raise ValueError("token name must not be empty")
         entries = self._load()  # raises on a corrupt file; never overwrite it
-        if any(e.get("name") == name for e in entries):
+        existing = [e for e in entries if e.get("name") == name]
+        if existing:
             if not replace:
                 raise ValueError(f"a token named {name!r} already exists")
+            # Rotation replaces an owner token only: a scoped client's token is
+            # never clobbered, nor its name turned into full access.
+            if any(e.get("owner") is not True for e in existing):
+                raise ValueError(f"{name!r} is a scoped token; revoke it before reusing the name")
             entries = [e for e in entries if e.get("name") != name]
         token = secrets.token_urlsafe(32)
         entries.append(

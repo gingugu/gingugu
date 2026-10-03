@@ -26,24 +26,12 @@ from urllib.parse import urlparse
 import keyring
 
 from .config import _default_db_path
+from .remote_args import USAGE, _UsageError, build_parser
 
 KEYRING_SERVICE = "gingugu-remote"
 _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{32,128}$")
-
-USAGE = """\
-gingugu remote - choose which brain this machine talks to
-
-Usage:
-  gingugu remote status                 Show the active brain (local by default).
-  gingugu remote on URL                 Use the brain at URL (needs a login first).
-  gingugu remote off                    Go back to the local brain.
-  gingugu remote login URL --ssh USER@HOST [--name NAME] [--key PATH]
-                                        Mint this machine's token over SSH into
-                                        the OS keychain. Does not switch brains.
-
-MEMORY_REMOTE_URL overrides the machine setting for one client; "off" forces local.
-"""
+_LOOPBACK = ("127.0.0.1", "localhost", "::1")
 
 
 @dataclass(frozen=True)
@@ -69,10 +57,9 @@ def normalize_url(raw: str) -> str:
 
 
 def _kr_get(url: str) -> str | None:
-    try:
-        return keyring.get_password(KEYRING_SERVICE, url)
-    except Exception:
-        return None
+    # None means "no token"; a broken keychain raises, so it is never reported
+    # as a missing token.
+    return keyring.get_password(KEYRING_SERVICE, url)
 
 
 def _kr_set(url: str, token: str) -> None:
@@ -153,31 +140,6 @@ def _reachable(url: str, token: str | None) -> bool:
 # --- CLI ---------------------------------------------------------------------
 
 
-class _UsageError(Exception):
-    """argparse rejected the arguments."""
-
-
-class _Parser(argparse.ArgumentParser):
-    def error(self, message: str) -> Any:  # type: ignore[override]
-        raise _UsageError(message)
-
-
-def _build_parser() -> argparse.ArgumentParser:
-    parser = _Parser(prog="gingugu remote", usage=USAGE, add_help=False)
-    parser.add_argument("-h", "--help", action="store_true")
-    sub = parser.add_subparsers(dest="cmd")
-    sub.add_parser("status", add_help=False)
-    on = sub.add_parser("on", add_help=False)
-    on.add_argument("url")
-    sub.add_parser("off", add_help=False)
-    login = sub.add_parser("login", add_help=False)
-    login.add_argument("url")
-    login.add_argument("--ssh", required=True)
-    login.add_argument("--name")
-    login.add_argument("--key")
-    return parser
-
-
 def _usage_error(message: str) -> int:
     print(f"gingugu remote: {message}\n", file=sys.stderr)
     print(USAGE, file=sys.stderr)
@@ -194,20 +156,34 @@ def _status() -> int:
     if target is None:
         print("local")
         return 0
-    token = token_for(target.url)
     print(f"remote: {target.url}")
     print(f"source: {target.source}")
-    print(f"token: {'present' if token else 'missing'}")
+    try:
+        token = token_for(target.url)
+        print(f"token: {'present' if token else 'missing'}")
+    except Exception as exc:  # noqa: BLE001 - any keyring backend failure
+        token = None
+        print(f"token: keychain error ({exc.__class__.__name__})")
     print(f"reachable: {'yes' if _reachable(target.url, token) else 'no'}")
     return 0
 
 
 def _on(raw: str) -> int:
     url = normalize_url(raw)
-    if not token_for(url):
+    try:
+        token = token_for(url)
+    except Exception as exc:  # noqa: BLE001 - any keyring backend failure
+        return _fail(f"cannot read the keychain: {exc.__class__.__name__}: {exc}")
+    if not token:
         return _fail(f"no token for {url}; run `gingugu remote login {url} --ssh USER@HOST`")
     _write_setting(url)
     print(f"remote: {url}")
+    parsed = urlparse(url)
+    if parsed.scheme == "http" and parsed.hostname not in _LOOPBACK:
+        print(
+            "gingugu remote: warning - plain http: the token crosses the network unencrypted",
+            file=sys.stderr,
+        )
     return 0
 
 
@@ -229,7 +205,9 @@ def _login(args: argparse.Namespace) -> int:
     name = args.name or _default_name()
     if not _NAME_RE.fullmatch(name):
         return _usage_error(f"invalid --name {name!r}")
-    key = args.key or str(Path.home() / ".ssh" / "gingugu_pi")
+    if args.ssh.startswith("-"):
+        return _usage_error(f"--ssh must be USER@HOST, not an option: {args.ssh!r}")
+    key = args.key or str(Path.home() / ".ssh" / "gingugu_mint")
     argv = [
         "ssh",
         "-F",
@@ -258,7 +236,14 @@ def _login(args: argparse.Namespace) -> int:
         return _fail(f"ssh exited {proc.returncode}: {(proc.stderr or '').strip()[:300]}")
     if len(lines) != 1 or not _TOKEN_RE.fullmatch(lines[0]):
         return _fail("ssh succeeded but did not return a token")
-    _kr_set(url, lines[0])
+    try:
+        _kr_set(url, lines[0])
+    except Exception as exc:  # noqa: BLE001 - any keyring backend failure
+        return _fail(
+            f"minted, but could not store the token in the keychain "
+            f"({exc.__class__.__name__}: {exc}). The server already rotated {name!r}; "
+            "rerun login once the keychain works"
+        )
     print(f"logged in to {url} as {name}")
     return 0
 
@@ -266,7 +251,7 @@ def _login(args: argparse.Namespace) -> int:
 def main(argv: list[str]) -> int:
     """Entry point for ``gingugu remote``; returns the process exit code."""
     try:
-        args = _build_parser().parse_args(argv)
+        args = build_parser().parse_args(argv)
     except _UsageError as exc:
         return _usage_error(str(exc))
     if args.help:

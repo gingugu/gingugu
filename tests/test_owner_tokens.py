@@ -42,10 +42,10 @@ def test_owner_token_resolves_to_full_access(store):
 
 def test_owner_token_is_listed_as_owner(store):
     store.add_owner("mbp-2")
-    store.add("tyrone", {"gingugu": READ})
+    store.add("reviewer", {"gingugu": READ})
     by_name = {e["name"]: e for e in store.list()}
     assert by_name["mbp-2"]["owner"] is True
-    assert by_name["tyrone"]["owner"] is False
+    assert by_name["reviewer"]["owner"] is False
 
 
 def test_owner_token_plaintext_is_never_written(store):
@@ -76,7 +76,7 @@ def test_owner_revoke_takes_effect(store):
 
 @pytest.mark.parametrize("value", ["true", 1, "yes", None])
 def test_owner_flag_must_be_literal_true(store, value):
-    token = store.add("tyrone", {"gingugu": READ})
+    token = store.add("reviewer", {"gingugu": READ})
     data = json.loads(store.path.read_text(encoding="utf-8"))
     data["tokens"][0]["owner"] = value
     data["tokens"][0]["namespaces"] = {}
@@ -168,6 +168,57 @@ def test_ssh_mint_refuses_anything_else(cli_env, monkeypatch, capsys, original):
     assert code == 2
     assert out == ""
     assert cli_env.list() == []
+
+
+def test_owner_replace_never_clobbers_a_scoped_token(store):
+    scoped = store.add("reviewer", {"gingugu": READ})
+    with pytest.raises(ValueError):
+        store.add_owner("reviewer", replace=True)
+    assert store.resolve(scoped) is not None
+    assert [e["owner"] for e in store.list()] == [False]
+
+
+def test_ssh_mint_cannot_turn_a_scoped_name_into_owner(cli_env, monkeypatch, capsys):
+    scoped = cli_env.add("reviewer", {"gingugu": READ})
+    code, out, _ = _mint(monkeypatch, capsys, "mint reviewer")
+    assert code == 1 and out == ""
+    assert cli_env.resolve(scoped) is not None
+
+
+# --- a key bound to one machine name (`ssh-mint --name NAME`) ---------------
+# Per-machine keys make revocation real: the key can only ever rotate its own
+# machine's token, so deleting that key's authorized_keys line cuts the machine
+# off without touching any other.
+
+
+def _bound(monkeypatch, capsys, original: str | None, name: str = "mbp-2"):
+    if original is None:
+        monkeypatch.delenv("SSH_ORIGINAL_COMMAND", raising=False)
+    else:
+        monkeypatch.setenv("SSH_ORIGINAL_COMMAND", original)
+    code = main(["ssh-mint", "--name", name])
+    captured = capsys.readouterr()
+    return code, captured.out
+
+
+@pytest.mark.parametrize("original", ["mint mbp-2", "mint", None, ""])
+def test_bound_mint_mints_only_its_own_name(cli_env, monkeypatch, capsys, original):
+    code, out = _bound(monkeypatch, capsys, original)
+    assert code == 0
+    grant = cli_env.resolve(out.strip())
+    assert grant.is_full and grant.name == "mbp-2"
+
+
+@pytest.mark.parametrize("original", ["mint other-box", "mint mbp-2 x", "bash", "revoke mbp-2"])
+def test_bound_mint_refuses_any_other_name_or_verb(cli_env, monkeypatch, capsys, original):
+    code, out = _bound(monkeypatch, capsys, original)
+    assert code == 2 and out == ""
+    assert cli_env.list() == []
+
+
+def test_bound_name_itself_is_validated(cli_env, monkeypatch, capsys):
+    code, out = _bound(monkeypatch, capsys, "mint", name="../x")
+    assert code == 2 and out == ""
 
 
 def test_top_level_dispatches_token_ssh_mint(cli_env, monkeypatch, capsys):
