@@ -43,8 +43,15 @@ def test_preflight_returns_the_keychain_token(vault):
     assert proxy.preflight(TARGET, grant=None, credentials_enabled=False) == TOKEN
 
 
-def test_grant_is_refused_until_derived_tokens_exist(vault):
-    assert "MEMORY_GRANT" in _refusal(grant="alpha=read")
+def test_a_well_formed_grant_is_allowed(vault):
+    # The brain enforces it through a derived token; preflight only checks form.
+    assert proxy.preflight(TARGET, grant="tyrone=write,crow=read", credentials_enabled=False)
+
+
+@pytest.mark.parametrize("bad", ["tyrone", "tyrone=admin", "*=write"])
+def test_a_malformed_or_full_grant_is_refused(vault, bad):
+    # "*=write" is no fence at all; unset MEMORY_GRANT for full access, as on stdio.
+    assert "MEMORY_GRANT" in _refusal(grant=bad)
 
 
 def test_credentials_enabled_is_refused(vault):
@@ -76,7 +83,7 @@ def test_grant_is_checked_before_the_network(vault, monkeypatch):
         raise AssertionError("preflight touched the network for a refusable config")
 
     monkeypatch.setattr(remote, "_reachable", boom)
-    _refusal(grant="alpha=read")
+    _refusal(grant="alpha")
     _refusal(credentials_enabled=True)
 
 
@@ -118,27 +125,44 @@ def test_remote_refusal_exits_2_without_touching_the_local_db(
     assert not (no_local_server / "local.db").exists()
 
 
-def test_remote_ok_hands_off_to_the_proxy(no_local_server, vault, monkeypatch, capsys):
+@pytest.mark.parametrize(
+    "env, grant, home",
+    [
+        ({}, None, None),
+        ({"MEMORY_NAMESPACE": "gingugu"}, None, "gingugu"),
+        (
+            {"MEMORY_NAMESPACE": "tyrone", "MEMORY_GRANT": "tyrone=write,crow=read"},
+            "tyrone=write,crow=read",
+            "tyrone",
+        ),
+    ],
+)
+def test_remote_ok_hands_off_to_the_proxy_with_grant_and_home(
+    no_local_server, vault, monkeypatch, capsys, env, grant, home
+):
     monkeypatch.setenv("MEMORY_REMOTE_URL", URL)
     monkeypatch.setenv("MEMORY_CREDENTIALS_ENABLED", "false")
-    monkeypatch.delenv("MEMORY_GRANT", raising=False)
+    for key in ("MEMORY_GRANT", "MEMORY_NAMESPACE", "MEMORY_NAMESPACE_PATH"):
+        monkeypatch.delenv(key, raising=False)
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
     seen = {}
 
-    def fake_serve(url, token):
-        seen["args"] = (url, token)
+    def fake_serve(url, token, *, grant, home):
+        seen["args"] = (url, token, grant, home)
         return 0
 
     monkeypatch.setattr(proxy, "serve_stdio", fake_serve)
     code, _ = _main_exit(capsys)
     assert code == 0
-    assert seen["args"] == (URL, TOKEN)
+    assert seen["args"] == (URL, TOKEN, grant, home)
 
 
 def test_lost_brain_exits_1(no_local_server, vault, monkeypatch, capsys):
     monkeypatch.setenv("MEMORY_REMOTE_URL", URL)
     monkeypatch.setenv("MEMORY_CREDENTIALS_ENABLED", "false")
 
-    def lost(url, token):
+    def lost(url, token, **_):
         raise proxy.ProxyLost("remote brain connection lost: ConnectError")
 
     monkeypatch.setattr(proxy, "serve_stdio", lost)
