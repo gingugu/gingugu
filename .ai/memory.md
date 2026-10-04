@@ -349,7 +349,10 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.21.0** (PyPI). The central brain: machine tokens minted
+- Current version: **0.21.1** (PyPI). Patch: the remote-mode proxy answers a
+  request sent before `initialize` (Claude Code 2.1.287's `server/discover`
+  probe) itself, so Claude Code connects in remote mode (#105).
+- 0.21.0: the central brain: machine tokens minted
   over SSH (`gingugu token add --owner`, `token ssh-mint`, `gingugu remote`),
   remote mode (a bare `gingugu` is a stdio proxy to `gingugu serve`), persona
   tokens (`POST /token/derive`) and `MEMORY_PERSONA` (three-layer memory), the

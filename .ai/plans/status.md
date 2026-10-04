@@ -64,16 +64,17 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
   `uv run --directory` on the repo, so a branch switch cannot break them.
 - **This machine is switched (2026-10-04).** `gingugu remote on` points it at
   the Pi; the Pi serves the same 3,053 memories the local DB last held.
-- **Proxy answers pre-initialize probes locally (`fix/proxy-pre-init-probe`).**
-  Claude Code 2.1.287 sends `server/discover` before `initialize`. The proxy
-  forwarded it, the brain 400'd it (no session yet), the link dropped, and the
-  `initialize` behind it got "remote brain unavailable" - every connect and
-  `/mcp` reconnect failed. Any request before `initialize` now gets `-32601`
-  from the proxy and never reaches the brain; Claude Code falls back to a plain
-  `initialize`. Verified live against the Pi with the installed build.
 - **Remaining:** D - switch a second machine.
 
 ## Recently Completed
+
+**Released 0.21.1 to PyPI (2026-10-04): proxy answers pre-initialize probes
+locally (#105).** Claude Code 2.1.287 sends `server/discover` before
+`initialize`. The proxy forwarded it, the brain 400'd it (no session yet), the
+link dropped, and the `initialize` behind it got "remote brain unavailable" -
+every connect and `/mcp` reconnect failed. Any request before `initialize` now
+gets `-32601` from the proxy and never reaches the brain; Claude Code falls back
+to a plain `initialize`. Verified live against the Pi.
 
 **Released 0.21.0 to PyPI (2026-10-04).** The central brain: machine tokens and
 `gingugu remote` (#99), the remote-mode proxy, persona tokens and

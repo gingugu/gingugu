@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.21.1] - 2026-10-04
+
 ### Fixed
 
 - **Remote mode connects from Claude Code 2.1.287+.** Its `server/discover`
