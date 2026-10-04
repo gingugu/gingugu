@@ -351,7 +351,11 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.21.1** (PyPI). Patch: the remote-mode proxy answers a
+- Current version: **0.21.2** (PyPI). Patch: the remote-mode proxy survives a
+  brain restart without losing calls - a 401 renews the token and retries in
+  place, a 404'd request is re-sent once on the next session (if under 10s
+  old), and new calls wait up to 5s for a reconnecting link (#106).
+- 0.21.1: patch: the remote-mode proxy answers a
   request sent before `initialize` (Claude Code 2.1.287's `server/discover`
   probe) itself, so Claude Code connects in remote mode (#105).
 - 0.21.0: the central brain: machine tokens minted

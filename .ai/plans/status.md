@@ -68,8 +68,8 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
 
 ## Recently Completed
 
-**Proxy survives a brain restart without losing calls (2026-10-04,
-`fix/proxy-replay-after-restart`, unreleased).** After the 0.21.1 Pi restart,
+**Released 0.21.2 to PyPI (2026-10-04): proxy survives a brain restart
+without losing calls (#106).** After the 0.21.1 Pi restart,
 Tyrone's live proxy lost a whole batch of `memory_store` calls: the brain had
 forgotten its derived token (401) and its MCP session (404), the first refusal
 tore the link down, and the rest got "remote brain unavailable". Now a 401
