@@ -190,7 +190,7 @@ class _Session:
                     self.reinits += 1
                     await replay_handshake(r, w, self.init_params, self.reinits)
                 extra = self.vault.tools if self.vault is not None else []
-                link = Link(self.client_write, r, w, extra_tools=extra)
+                link = Link(self.client_write, r, w, extra_tools=extra, vault=self.vault)
                 self.link = link
                 self.attempted.set()
                 async with anyio.create_task_group() as tg:

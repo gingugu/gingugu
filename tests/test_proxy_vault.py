@@ -159,6 +159,44 @@ async def test_a_vault_that_cannot_open_ends_the_proxy_with_a_message(brain, tmp
     assert "MEMORY_CREDENTIALS_ENABLED=false" in str(raised)
 
 
+async def _two_namespaces(session) -> None:
+    for ns in ("alpha", "beta"):
+        args = {"content": "x", "title": f"in {ns}", "type": "fact", "namespace": ns}
+        assert payload(await session.call_tool("memory_store", args))["ok"]
+
+
+async def test_memory_stats_reports_the_local_vault_not_the_brains(brain, local_db):
+    async with serving(brain.app()) as served:
+        async with through_proxy(served.url, brain.machine, vault_db=local_db) as (session, _):
+            await session.initialize()
+            await _store(session)
+            await _two_namespaces(session)
+            single = await session.call_tool("memory_stats", {})
+            multi = await session.call_tool("memory_stats", {"namespace": "alpha,beta"})
+    assert payload(single)["stats"]["credentials"]["total"] == 1
+    assert payload(multi)["global"]["credentials"]["total"] == 1
+    for result in (single, multi):
+        assert json.dumps(result.structuredContent or {}).count('"total": 0') == 0
+
+
+async def test_without_a_vault_memory_stats_passes_through(brain):
+    async with serving(brain.app()) as served:
+        async with through_proxy(served.url, brain.machine) as (session, _):
+            await session.initialize()
+            got = payload(await session.call_tool("memory_stats", {}))
+    assert got["ok"] and got["stats"]["credentials"]["total"] == 0  # the brain's own
+
+
+def test_a_stats_reply_that_is_not_json_passes_through_untouched():
+    from gingugu.proxy_vault import patch_stats
+
+    health = {"total": 3, "expired": 0, "expiring_soon": 0}
+    text = {"content": [{"type": "text", "text": "not json"}]}
+    assert patch_stats(json.loads(json.dumps(text)), health) == text
+    error = {"content": [{"type": "text", "text": '{"ok": false, "error": "nope"}'}]}
+    assert patch_stats(json.loads(json.dumps(error)), health) == error
+
+
 async def test_without_a_vault_credentials_stay_hidden_and_refused(brain):
     # MEMORY_CREDENTIALS_ENABLED=false (personas, minions): unchanged from B1.
     async with serving(brain.app()) as served:
