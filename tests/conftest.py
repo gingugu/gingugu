@@ -82,6 +82,19 @@ def sandboxed_user_settings(monkeypatch: pytest.MonkeyPatch, tmp_path_factory):
 
 
 @pytest.fixture(autouse=True)
+def sandboxed_remote_setting(monkeypatch: pytest.MonkeyPatch, tmp_path_factory):
+    """Keep the developer's own remote brain out of the suite.
+
+    ``remote.settings_path`` ignores MEMORY_DB_PATH on purpose, so on a machine
+    switched to a remote brain every server and hook under test would try to
+    reach it. The default is local; a test wanting a remote sets one itself.
+    """
+    sandbox = tmp_path_factory.mktemp("remote-setting") / "remote.json"
+    monkeypatch.setattr("gingugu.remote.settings_path", lambda: sandbox, raising=True)
+    monkeypatch.delenv("MEMORY_REMOTE_URL", raising=False)
+
+
+@pytest.fixture(autouse=True)
 def no_persona(monkeypatch: pytest.MonkeyPatch):
     """Keep the developer's own MEMORY_PERSONA out of the suite.
 

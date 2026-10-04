@@ -413,7 +413,11 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   so a steered model could otherwise put an inline secret into a brain-bound
   call; `into` cannot. A vault that fails to open ends the proxy with a
   `ProxyLost` message. With credentials off, `credential_*` is stripped and
-  refused.
+  refused. `memory_stats` is relayed, but its credential summary
+  (`global.credentials` or `stats.credentials`) describes the brain's vault, so
+  `Link` tracks each `memory_stats` call and `patch_stats` replaces that block
+  with `LocalVault.health()` (metadata only, no keychain); an unrecognised reply
+  passes through.
 - **Derive route** (`serve_derive.py`, `POST /token/derive`): `BearerAuthMiddleware`
   tags each request `token_kind` (owner, derived, scoped); only an owner token
   may derive (others get 403). `DerivedTokens` (`derived_tokens.py`) keeps
