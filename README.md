@@ -439,8 +439,10 @@ The session token carries the client's `MEMORY_GRANT` (full if unset) and its
 `MEMORY_NAMESPACE` as its **home**, so a call that names no namespace lands in
 the client's own namespace rather than the server's. The proxy refreshes the
 token at half its life and, when the connection drops, reconnects with backoff
-(0.25s doubling to 5s) and re-initializes the session itself. Requests in flight
-at a loss fail and are never replayed; requests while it is down fail at once.
+(0.25s doubling to 5s) and re-initializes the session itself. A call a restarted
+brain refused before running it is sent again, once; a call whose fate is
+unknown fails and is never replayed. New calls wait up to 5 seconds for the
+connection to come back, then fail.
 
 ```json
 { "mcpServers": { "gingugu": {
