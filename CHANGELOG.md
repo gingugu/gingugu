@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Remote mode connects from Claude Code 2.1.287+.** Its `server/discover`
+  probe, sent before `initialize`, was forwarded to the brain, which rejected
+  it with HTTP 400; the proxy took that as a lost link and failed the
+  `initialize` that followed. The proxy now answers any request before
+  `initialize` itself with `-32601 Method not found`, and the client falls
+  back to a plain handshake.
+
 ---
 
 ## [0.21.0] - 2026-10-04
