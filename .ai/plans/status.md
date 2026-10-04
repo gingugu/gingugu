@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-10-03_
+_Last updated: 2026-10-04_
 
 ## In Flight
 
@@ -38,8 +38,8 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
   flag under the next server, seen on 3.11), and the minion fence treats a
   rooted Glob pattern (`\Users\...`) as absolute, since Python 3.13 on Windows
   no longer does.
-- **B2 (the hooks follow the brain): built on `feature/remote-hooks` (this
-  PR).** In remote mode prompt recall, tripwires and minion warm-up never open
+- **B2 (the hooks follow the brain): merged (#101, `23a367e`), unreleased.**
+  In remote mode prompt recall, tripwires and minion warm-up never open
   the local DB: four owner-only routes on `gingugu serve` (`/hook/recall`,
   `/hook/tripwires`, `/hook/trip`, `/hook/warmup`). Tripwire rules are matched
   locally from a 60s cache; suppression stays on the machine and is sent per
@@ -47,8 +47,19 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
   code: agent files already set `MEMORY_GRANT` and
   `MEMORY_CREDENTIALS_ENABLED=false`, so a minion's own `gingugu` becomes a
   proxy on a derived token.
-- **Remaining:** D - cutover: re-copy the live brain to the Pi, switch this
-  machine, then a second machine.
+- **D0 (the vault stays local): built on `feature/hybrid-vault-proxy` (this
+  PR).** Remote mode used to refuse to start with credentials on, which would
+  have cost a cut-over machine its vault. The owner's proxy now serves
+  `credential_*` itself from the local DB's vault tables and keychain
+  (`proxy_vault.py`), swapped in for the brain's in `tools/list`; a credential
+  call never reaches the brain and answers while it is down. A client with
+  `MEMORY_GRANT` and credentials on is still refused.
+- **Clients off the working tree.** ChatGPT desktop (Tyrone) and this machine's
+  Claude Code now launch a pinned `uv tool` install of `gingugu`, not
+  `uv run --directory` on the repo, so a branch switch cannot break them.
+- **Remaining:** D - cutover: re-copy the live brain to the Pi (the Pi's
+  current brain is test data and is overwritten), switch this machine, then a
+  second machine.
 
 ## Recently Completed
 
@@ -911,7 +922,7 @@ below it moved up one, and the row-position cross-references moved with them.
 
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **One central brain, several clients** - IN FLIGHT | 11 | Hardware up, design approved and measured (see In Flight). B1, C and B2 built; D (cutover) remains |
+| 1 | **One central brain, several clients** - IN FLIGHT | 11 | Hardware up, design approved and measured (see In Flight). B1, C and B2 merged; D0 (local vault) in this PR; D (cutover) remains |
 | 2 | **A shared board between agents** | 15 | Needs 1 |
 | 3 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
 | 4 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
