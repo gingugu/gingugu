@@ -63,6 +63,12 @@
   needing a real external dependency must opt in explicitly. `timeout = 60`
   (pytest-timeout) makes a hung test fail as a test rather than as a stalled
   CI job, and CI carries `timeout-minutes: 15` as the outer guard.
+- **The suite never sees the developer's own machine state.** Autouse fixtures
+  sandbox `~/.claude/settings.json`, the global `CLAUDE.md`, `MEMORY_PERSONA`
+  and the remote-brain setting (`remote.settings_path` plus
+  `MEMORY_REMOTE_URL`). CI has none of that state, so a missing sandbox stays
+  green there and only fails on a configured laptop. A test wanting any of it
+  sets its own.
 - **Unit tests** for storage, search, relations, context, decay, consolidation.
 - **Integration tests** for end-to-end MCP flows (store → recall → context;
   store → relate → recall include_related).
