@@ -191,8 +191,13 @@ class Link:
                     self.list_ids.discard(msg.id)
                     tools = msg.result.get("tools")
                     if isinstance(tools, list):
+                        # A non-object entry is not a tool; raising here would read
+                        # as a lost connection and fail every request in flight.
                         msg.result["tools"] = [
-                            t for t in tools if not str(t.get("name", "")).startswith(CRED_PREFIX)
+                            t
+                            for t in tools
+                            if isinstance(t, dict)
+                            and not str(t.get("name", "")).startswith(CRED_PREFIX)
                         ] + [dict(t) for t in self.extra_tools]
                 elif msg.id in self.stats_ids:
                     self.stats_ids.discard(msg.id)
