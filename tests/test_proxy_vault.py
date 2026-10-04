@@ -197,6 +197,24 @@ def test_a_stats_reply_that_is_not_json_passes_through_untouched():
     assert patch_stats(json.loads(json.dumps(error)), health) == error
 
 
+def test_a_patch_that_fails_part_way_relays_the_brains_reply_whole(capsys):
+    from mcp.types import JSONRPCResponse
+
+    from gingugu.proxy_session import Link
+
+    class _Vault:
+        def health(self):
+            return {"total": 3, "expired": 0, "expiring_soon": 0}
+
+    stats = json.dumps({"ok": True, "stats": {"credentials": {"total": 0}}})
+    # A valid stats block, then an item patch_stats cannot read: it raises mid-way.
+    result = {"content": [{"type": "text", "text": stats}, "not-a-block"]}
+    msg = JSONRPCResponse(jsonrpc="2.0", id=1, result=json.loads(json.dumps(result)))
+    Link(None, None, None, vault=_Vault())._patch_stats(msg)
+    assert msg.result == result
+    assert "not patched" in capsys.readouterr().err
+
+
 async def test_without_a_vault_credentials_stay_hidden_and_refused(brain):
     # MEMORY_CREDENTIALS_ENABLED=false (personas, minions): unchanged from B1.
     async with serving(brain.app()) as served:
