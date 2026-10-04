@@ -1733,6 +1733,7 @@ src/gingugu/
 ├── derived_tokens.py       # Derived tokens: in-memory, hashed, TTL-bound; never on disk
 ├── proxy.py                # Remote mode: stdio <-> streamable-HTTP relay, preflight, refresh
 ├── proxy_session.py        # Proxy building blocks: derivation, messages, one live link
+├── proxy_vault.py          # Remote mode: the machine's credential vault, served locally
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine
 ├── remote_args.py          # usage text + argparse for `gingugu remote`
