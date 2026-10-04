@@ -2,10 +2,11 @@
 
 A client such as ChatGPT desktop keeps one `gingugu` process for days, so the
 proxy refreshes its derived token before expiry and, when the brain goes away,
-errors calls fast (never a hang) while it reconnects in the background. Once
-back, it replays the client's initialize itself: the client never re-handshakes.
-A call in flight at the moment of loss is failed, never replayed - a
-memory_store sent twice would write twice.
+errors calls within a bounded wait (never a hang) while it reconnects in the
+background. Once back, it replays the client's initialize itself: the client
+never re-handshakes. A call in flight at the moment of loss is failed, never
+replayed - a memory_store sent twice would write twice. (Calls the brain
+refused unrun are a different case: see test_proxy_replay.)
 """
 
 from __future__ import annotations

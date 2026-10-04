@@ -26,6 +26,8 @@ from mcp.types import (
 CRED_PREFIX = "credential_"
 CLIENT_GONE = (anyio.BrokenResourceError, anyio.ClosedResourceError)
 _SESSION_TERMINATED = 32600  # the SDK's synthetic reply when the brain 404s a session
+_SESSION_TERMINATED_TEXT = "Session terminated"
+_DRAIN_SECONDS = 2.0  # after a 404, how long the rest of the requests in flight get
 
 
 class ProxyLost(Exception):
@@ -150,17 +152,23 @@ class Link:
         self.stats_ids: set[str | int] = set()
         self.srv_read: ObjectReceiveStream = srv_read
         self.srv_write: ObjectSendStream = srv_write
-        self.pending: set[str | int] = set()
+        self.pending: dict[str | int, SessionMessage] = {}
         self.list_ids: set[str | int] = set()
         self.answered = False  # the brain has sent at least one message on this link
+        # Requests the brain refused for an unknown session (404): it never ran
+        # them, so they are safe to send again on the next link.
+        self.refused: list[SessionMessage] = []
+        self.replayed: set[str | int] = set()  # sent here as a replay: never again
 
-    async def forward(self, item: SessionMessage) -> None:
+    async def forward(self, item: SessionMessage, *, replay: bool = False) -> None:
         """Send a client message to the brain; a request is tracked until answered."""
         msg = item.message.root
         if not isinstance(msg, JSONRPCRequest):
             await self.srv_write.send(item)
             return
-        self.pending.add(msg.id)
+        self.pending[msg.id] = item
+        if replay:
+            self.replayed.add(msg.id)
         if msg.method == "tools/list":
             self.list_ids.add(msg.id)
         elif self.vault is not None and msg.method == "tools/call":
@@ -170,43 +178,71 @@ class Link:
             await self.srv_write.send(item)
         except CLIENT_GONE:
             self.stats_ids.discard(msg.id)
-            if msg.id in self.pending:  # else fail_pending already answered it
-                self.pending.discard(msg.id)
+            if self.pending.pop(msg.id, None) is not None:  # else fail_pending answered it
                 await self.client_write.send(error(msg.id, _lost("ConnectionLost")))
 
     async def pump(self, scope: anyio.CancelScope) -> None:
         """Relay brain -> client until the connection ends (raises) or the client is gone."""
         async for item in self.srv_read:
-            if isinstance(item, Exception):
-                raise item
-            self.answered = True
-            msg = item.message.root
-            if isinstance(msg, JSONRPCError) and msg.error.code == _SESSION_TERMINATED:
-                raise SessionTerminated
-            if isinstance(msg, JSONRPCResponse | JSONRPCError):
-                self.pending.discard(msg.id)
-                if isinstance(msg, JSONRPCResponse) and msg.id in self.list_ids:
-                    self.list_ids.discard(msg.id)
-                    tools = msg.result.get("tools")
-                    if isinstance(tools, list):
-                        # A non-object entry is not a tool; raising here would read
-                        # as a lost connection and fail every request in flight.
-                        msg.result["tools"] = [
-                            t
-                            for t in tools
-                            if isinstance(t, dict)
-                            and not str(t.get("name", "")).startswith(CRED_PREFIX)
-                        ] + [dict(t) for t in self.extra_tools]
-                elif msg.id in self.stats_ids:
-                    self.stats_ids.discard(msg.id)
-                    if isinstance(msg, JSONRPCResponse):
-                        self._patch_stats(msg)
-            try:
-                await self.client_write.send(item)
-            except CLIENT_GONE:
-                scope.cancel()
+            if not await self._relay(item, scope):
                 return
+            if self.refused:
+                await self._drain(scope)
+                raise SessionTerminated
         raise ConnectionError("brain closed the stream")
+
+    async def _drain(self, scope: anyio.CancelScope) -> None:
+        """The brain forgot this session. Every request still in flight is about to
+        be refused the same way, or answered: wait briefly for each to say which."""
+        with anyio.move_on_after(_DRAIN_SECONDS):
+            while self.pending:
+                try:
+                    item = await self.srv_read.receive()
+                except anyio.EndOfStream:
+                    return
+                if not await self._relay(item, scope):
+                    return
+
+    async def _relay(self, item, scope: anyio.CancelScope) -> bool:
+        """Handle one brain message; False once the client is gone."""
+        if isinstance(item, Exception):
+            raise item
+        self.answered = True
+        msg = item.message.root
+        if isinstance(msg, JSONRPCError) and msg.error.code == _SESSION_TERMINATED:
+            # The SDK's stand-in for a 404: the brain never ran this request.
+            unrun = msg.error.message == _SESSION_TERMINATED_TEXT  # the SDK's own words
+            refused = self.pending.pop(msg.id, None) if unrun else None
+            if refused is not None:
+                self.refused.append(refused)
+                self.stats_ids.discard(msg.id)
+                self.list_ids.discard(msg.id)
+                return True
+            raise SessionTerminated
+        if isinstance(msg, JSONRPCResponse | JSONRPCError):
+            self.pending.pop(msg.id, None)
+            if isinstance(msg, JSONRPCResponse) and msg.id in self.list_ids:
+                self.list_ids.discard(msg.id)
+                tools = msg.result.get("tools")
+                if isinstance(tools, list):
+                    # A non-object entry is not a tool; raising here would read
+                    # as a lost connection and fail every request in flight.
+                    msg.result["tools"] = [
+                        t
+                        for t in tools
+                        if isinstance(t, dict)
+                        and not str(t.get("name", "")).startswith(CRED_PREFIX)
+                    ] + [dict(t) for t in self.extra_tools]
+            elif msg.id in self.stats_ids:
+                self.stats_ids.discard(msg.id)
+                if isinstance(msg, JSONRPCResponse):
+                    self._patch_stats(msg)
+        try:
+            await self.client_write.send(item)
+        except CLIENT_GONE:
+            scope.cancel()
+            return False
+        return True
 
     def _patch_stats(self, msg: JSONRPCResponse) -> None:
         from .proxy_vault import patch_stats  # proxy_vault imports this module
@@ -220,7 +256,8 @@ class Link:
             )
 
     async def fail_pending(self, reason: str) -> None:
-        """Error every in-flight request. Never replayed: a memory_store would write twice."""
+        """Error every in-flight request. Its fate is unknown, so it is never
+        replayed: a memory_store would write twice."""
         text = _lost(reason)
         for req_id in sorted(self.pending, key=str):
             try:

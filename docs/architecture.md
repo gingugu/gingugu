@@ -1731,7 +1731,9 @@ src/gingugu/
 ├── serve_derive.py         # POST /token/derive: owner token -> short-lived derived token
 ├── serve_hooks.py          # POST /hook/recall|tripwires|trip|warmup: the brain's side of remote-mode hooks
 ├── derived_tokens.py       # Derived tokens: in-memory, hashed, TTL-bound; never on disk
-├── proxy.py                # Remote mode: stdio <-> streamable-HTTP relay, preflight, refresh
+├── proxy.py                # Remote mode: stdio <-> streamable-HTTP relay, reconnect, refresh
+├── proxy_auth.py           # Proxy's /mcp auth: per-request token, renew + retry once on 401
+├── proxy_preflight.py      # Remote mode's startup gate: refuse before relaying a byte
 ├── proxy_session.py        # Proxy building blocks: derivation, messages, one live link
 ├── proxy_vault.py          # Remote mode: the machine's credential vault, served locally
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command

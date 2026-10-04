@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A brain restart no longer costs a remote client its next calls.** A
+  restarted brain has forgotten every derived token and every MCP session, so
+  the first calls from a long-lived proxy came back `remote brain unavailable,
+  reconnecting` - every call of a concurrent batch. The proxy now renews its
+  token and retries a request the brain refused with 401, re-sends once on a
+  fresh session a request it refused with 404, and holds new calls for up to
+  5 seconds while it reconnects. Both refusals happen before any tool runs, so
+  nothing is written twice; a call whose fate is unknown is still failed,
+  never replayed, and so is a refused call more than 10 seconds old, which the
+  client may already have sent again. A brain that refuses every new token
+  gets at most one fresh token per 10 seconds, not one per call.
+
 ---
 
 ## [0.21.1] - 2026-10-04
