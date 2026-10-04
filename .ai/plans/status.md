@@ -68,6 +68,22 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
 
 ## Recently Completed
 
+**Proxy survives a brain restart without losing calls (2026-10-04,
+`fix/proxy-replay-after-restart`, unreleased).** After the 0.21.1 Pi restart,
+Tyrone's live proxy lost a whole batch of `memory_store` calls: the brain had
+forgotten its derived token (401) and its MCP session (404), the first refusal
+tore the link down, and the rest got "remote brain unavailable". Now a 401
+renews the token and retries that request (`proxy_auth.SessionAuth`), a 404'd
+request is re-sent once on the next link, and new calls wait up to 5s for a
+reconnecting link. Both refusals are pre-dispatch, so nothing writes twice;
+unknown-fate requests are still failed. Security review (sonnet) found two
+holes, both fixed red-first: renewal is gated (a token must have been accepted,
+or 10s passed) so a brain refusing every fresh token cannot mint one per call,
+and a refused request over 10s old is errored rather than replayed. This supersedes the 0.21.0 rule below
+that every in-flight request is failed. `preflight` moved to
+`proxy_preflight.py` (re-exported) to keep `proxy.py` under 300 lines. Tests:
+`tests/test_proxy_replay.py`.
+
 **Released 0.21.1 to PyPI (2026-10-04): proxy answers pre-initialize probes
 locally (#105).** Claude Code 2.1.287 sends `server/discover` before
 `initialize`. The proxy forwarded it, the brain 400'd it (no session yet), the
