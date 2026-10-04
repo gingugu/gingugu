@@ -18,14 +18,17 @@ new ones are refused fast, and a background loop re-derives, reconnects and
 replays the client's ``initialize`` itself. The client never re-handshakes.
 Only a rejected owner token ends the proxy.
 
-Two things are handled here rather than relayed. The credential vault is this
-machine's keychain and a remote brain cannot serve it, so `credential_*` tools
-are hidden from ``tools/list`` and refused on ``tools/call``.
+The credential vault is handled here rather than relayed: it is this machine's
+keychain and a remote brain cannot serve it. With credentials enabled, the
+brain's `credential_*` tools are swapped in ``tools/list`` for this machine's
+(``proxy_vault``) and every ``tools/call`` for one is answered locally. With
+them disabled, `credential_*` is hidden and refused.
 """
 
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 from urllib.parse import urlparse
 
 import anyio
@@ -48,6 +51,7 @@ from .proxy_session import (
     leaf_name,
     replay_handshake,
 )
+from .proxy_vault import LocalVault, open_vault
 from .remote import RemoteTarget
 
 __all__ = ["ProxyLost", "ProxyRefused", "preflight", "run", "serve_stdio"]
@@ -68,10 +72,12 @@ def preflight(target: RemoteTarget, *, grant: str | None, credentials_enabled: b
             stdio_grant(grant)  # same rules as stdio; the brain enforces it for real
         except ValueError as exc:
             raise ProxyRefused(f"MEMORY_GRANT: {exc}") from None
-    if credentials_enabled:
+    if credentials_enabled and grant is not None:
+        # The owner's proxy serves the vault locally; a scoped client never
+        # gets it, here or on stdio.
         raise ProxyRefused(
-            "the credential vault is this machine's keychain and a remote brain "
-            "cannot serve it. Set MEMORY_CREDENTIALS_ENABLED=false."
+            "a client with MEMORY_GRANT gets no credential vault. "
+            "Set MEMORY_CREDENTIALS_ENABLED=false."
         )
     try:
         token = remote.token_for(target.url)
@@ -102,7 +108,8 @@ class _Lost(Exception):
 class _Session:
     """State shared by the client reader and the connection loop."""
 
-    def __init__(self, url, owner_token, client_write, derive_args, scope) -> None:
+    def __init__(self, url, owner_token, client_write, derive_args, scope, vault=None) -> None:
+        self.vault: LocalVault | None = vault
         self.url = url
         self.owner_token = owner_token
         self.client_write: ObjectSendStream = client_write
@@ -144,13 +151,15 @@ class _Session:
             if isinstance(msg, JSONRPCRequest):
                 called = str((msg.params or {}).get("name", ""))
                 if msg.method == "tools/call" and called.startswith(CRED_PREFIX):
-                    await self.client_write.send(
-                        error(
+                    if self.vault is not None:
+                        reply = await self.vault.call(msg.id, msg.params or {})
+                    else:
+                        reply = error(
                             msg.id,
                             "credential tools are not available through a remote brain; "
                             "the vault stays on this machine",
                         )
-                    )
+                    await self.client_write.send(reply)
                     continue
             link = self.link
             if link is None:
@@ -180,7 +189,8 @@ class _Session:
                 if self.initialized:
                     self.reinits += 1
                     await replay_handshake(r, w, self.init_params, self.reinits)
-                link = Link(self.client_write, r, w)
+                extra = self.vault.tools if self.vault is not None else []
+                link = Link(self.client_write, r, w, extra_tools=extra)
                 self.link = link
                 self.attempted.set()
                 async with anyio.create_task_group() as tg:
@@ -240,12 +250,17 @@ async def run(
     home: str | None = None,
     ttl: int = 3600,
     name: str | None = None,
+    vault_db: Path | None = None,
 ) -> None:
-    """Relay until the client closes (returns) or the owner token is refused (ProxyLost)."""
+    """Relay until the client closes (returns) or the owner token is refused (ProxyLost).
+
+    ``vault_db`` is this machine's DB; given, ``credential_*`` is served from it.
+    """
     derive_args = {"grant": grant, "home": home, "ttl": ttl, "name": name}
+    vault = await open_vault(vault_db)
     try:
         async with anyio.create_task_group() as tg:
-            session = _Session(url, owner_token, client_write, derive_args, tg.cancel_scope)
+            session = _Session(url, owner_token, client_write, derive_args, tg.cancel_scope, vault)
             tg.start_soon(session.read_client, client_read)
             tg.start_soon(session.connect_loop)
     except BaseExceptionGroup as group:
@@ -253,14 +268,19 @@ async def run(
         if fatal is None:
             raise
         raise fatal from None
+    finally:
+        if vault is not None:
+            vault.close()
 
 
-def serve_stdio(url: str, token: str, *, grant: str | None, home: str | None) -> int:
+def serve_stdio(
+    url: str, token: str, *, grant: str | None, home: str | None, vault_db: Path | None = None
+) -> int:
     from mcp.server.stdio import stdio_server
 
     async def _main() -> None:
         async with stdio_server() as (read, write):
-            await run(url, token, read, write, grant=grant, home=home, name=home)
+            await run(url, token, read, write, grant=grant, home=home, name=home, vault_db=vault_db)
 
     anyio.run(_main)
     return 0
