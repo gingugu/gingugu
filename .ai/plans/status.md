@@ -47,19 +47,24 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
   code: agent files already set `MEMORY_GRANT` and
   `MEMORY_CREDENTIALS_ENABLED=false`, so a minion's own `gingugu` becomes a
   proxy on a derived token.
-- **D0 (the vault stays local): built on `feature/hybrid-vault-proxy` (this
-  PR).** Remote mode used to refuse to start with credentials on, which would
+- **D0 (the vault stays local): merged (#102, `6b4f6a7`), unreleased.** Remote mode used to refuse to start with credentials on, which would
   have cost a cut-over machine its vault. The owner's proxy now serves
   `credential_*` itself from the local DB's vault tables and keychain
   (`proxy_vault.py`), swapped in for the brain's in `tools/list`; a credential
   call never reaches the brain and answers while it is down. A client with
   `MEMORY_GRANT` and credentials on is still refused.
+- **D0 follow-up (`fix/proxy-stats-credentials`, this PR).** With this machine
+  switched, `memory_stats` showed `credentials.total: 0` - the brain's vault,
+  which holds none - while `credential_list` returned the full local vault. The
+  proxy now patches `memory_stats` replies with the local vault's summary. The
+  suite also sandboxes the remote setting, so it runs green on a switched
+  machine instead of trying to reach its brain.
 - **Clients off the working tree.** ChatGPT desktop (Tyrone) and this machine's
   Claude Code now launch a pinned `uv tool` install of `gingugu`, not
   `uv run --directory` on the repo, so a branch switch cannot break them.
-- **Remaining:** D - cutover: re-copy the live brain to the Pi (the Pi's
-  current brain is test data and is overwritten), switch this machine, then a
-  second machine.
+- **This machine is switched (2026-10-04).** `gingugu remote on` points it at
+  the Pi; the Pi serves the same 3,053 memories the local DB last held.
+- **Remaining:** D - switch a second machine.
 
 ## Recently Completed
 

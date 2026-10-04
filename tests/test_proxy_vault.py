@@ -159,6 +159,82 @@ async def test_a_vault_that_cannot_open_ends_the_proxy_with_a_message(brain, tmp
     assert "MEMORY_CREDENTIALS_ENABLED=false" in str(raised)
 
 
+async def _two_namespaces(session) -> None:
+    for ns in ("alpha", "beta"):
+        args = {"content": "x", "title": f"in {ns}", "type": "fact", "namespace": ns}
+        assert payload(await session.call_tool("memory_store", args))["ok"]
+
+
+async def test_memory_stats_reports_the_local_vault_not_the_brains(brain, local_db):
+    async with serving(brain.app()) as served:
+        async with through_proxy(served.url, brain.machine, vault_db=local_db) as (session, _):
+            await session.initialize()
+            await _store(session)
+            await _two_namespaces(session)
+            single = await session.call_tool("memory_stats", {})
+            multi = await session.call_tool("memory_stats", {"namespace": "alpha,beta"})
+    assert payload(single)["stats"]["credentials"]["total"] == 1
+    assert payload(multi)["global"]["credentials"]["total"] == 1
+    for result in (single, multi):
+        assert json.dumps(result.structuredContent or {}).count('"total": 0') == 0
+
+
+async def test_without_a_vault_memory_stats_passes_through(brain):
+    async with serving(brain.app()) as served:
+        async with through_proxy(served.url, brain.machine) as (session, _):
+            await session.initialize()
+            got = payload(await session.call_tool("memory_stats", {}))
+    assert got["ok"] and got["stats"]["credentials"]["total"] == 0  # the brain's own
+
+
+def test_a_stats_reply_that_is_not_json_passes_through_untouched():
+    from gingugu.proxy_vault import patch_stats
+
+    health = {"total": 3, "expired": 0, "expiring_soon": 0}
+    text = {"content": [{"type": "text", "text": "not json"}]}
+    assert patch_stats(json.loads(json.dumps(text)), health) == text
+    error = {"content": [{"type": "text", "text": '{"ok": false, "error": "nope"}'}]}
+    assert patch_stats(json.loads(json.dumps(error)), health) == error
+
+
+def test_a_patch_that_fails_part_way_relays_the_brains_reply_whole(capsys):
+    from mcp.types import JSONRPCResponse
+
+    from gingugu.proxy_session import Link
+
+    class _Vault:
+        def health(self):
+            return {"total": 3, "expired": 0, "expiring_soon": 0}
+
+    stats = json.dumps({"ok": True, "stats": {"credentials": {"total": 0}}})
+    # A valid stats block, then an item patch_stats cannot read: it raises mid-way.
+    result = {"content": [{"type": "text", "text": stats}, "not-a-block"]}
+    msg = JSONRPCResponse(jsonrpc="2.0", id=1, result=json.loads(json.dumps(result)))
+    Link(None, None, None, vault=_Vault())._patch_stats(msg)
+    assert msg.result == result
+    assert "not patched" in capsys.readouterr().err
+
+
+async def test_a_malformed_tools_list_entry_is_dropped_not_fatal_to_the_link():
+    from mcp.types import JSONRPCRequest, JSONRPCResponse
+
+    from gingugu.proxy_session import Link, wrap
+
+    to_brain, _brain_in = anyio.create_memory_object_stream(10)
+    brain_out, from_brain = anyio.create_memory_object_stream(10)
+    to_client, client_in = anyio.create_memory_object_stream(10)
+    local = {"name": "credential_get", "inputSchema": {"type": "object"}}
+    link = Link(to_client, from_brain, to_brain, extra_tools=[local])
+    await link.forward(wrap(JSONRPCRequest(jsonrpc="2.0", id=7, method="tools/list")))
+    tools = ["junk", None, {"name": "credential_get"}, {"name": "memory_store"}]
+    await brain_out.send(wrap(JSONRPCResponse(jsonrpc="2.0", id=7, result={"tools": tools})))
+    await brain_out.aclose()  # the brain hangs up after one reply
+    with anyio.fail_after(5), pytest.raises(ConnectionError, match="brain closed"):
+        await link.pump(anyio.CancelScope())
+    relayed = (await client_in.receive()).message.root.result["tools"]
+    assert relayed == [{"name": "memory_store"}, local]
+
+
 async def test_without_a_vault_credentials_stay_hidden_and_refused(brain):
     # MEMORY_CREDENTIALS_ENABLED=false (personas, minions): unchanged from B1.
     async with serving(brain.app()) as served:
