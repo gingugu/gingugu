@@ -395,11 +395,25 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
 
 - **Preflight** (`proxy.preflight`, config refusals first so they never touch the
   keychain or network): malformed, blank or `*=write` `MEMORY_GRANT`;
-  `MEMORY_CREDENTIALS_ENABLED` not false (the vault is the machine's keychain, a
-  remote brain cannot serve it); no keychain token (points at
+  `MEMORY_CREDENTIALS_ENABLED` not false together with a `MEMORY_GRANT` (a
+  scoped client never gets the vault); no keychain token (points at
   `gingugu remote login`); brain unreachable (`/healthz`). Plain http to a
-  non-loopback host warns on stderr. Exit 2 on refusal. `credential_*` tools are
-  stripped from `tools/list` and refused on `tools/call`.
+  non-loopback host warns on stderr. Exit 2 on refusal.
+- **Local vault** (`proxy_vault.py`): the vault is the machine's keychain plus
+  its local DB's `credential_*` tables, which a remote brain cannot serve. With
+  credentials on (owner only, per preflight), `server.main` hands the proxy
+  `config.db_path`; `LocalVault` registers `handlers/credentials.py` on a private
+  FastMCP over that DB with `transport="stdio"` (so `into=` writes locally),
+  bypassing `_HeartbeatMCP` (the grant is always full here and the local brain is
+  not in use). `Link.pump` swaps the brain's `credential_*` entries in
+  `tools/list` for the local ones; `read_client` answers every `credential_*`
+  `tools/call` locally and never forwards it, so the vault answers while the
+  brain is down. `credential_get` with `reveal` is refused before the handler
+  runs (security review, 2026-10-04): everything else in the session is relayed,
+  so a steered model could otherwise put an inline secret into a brain-bound
+  call; `into` cannot. A vault that fails to open ends the proxy with a
+  `ProxyLost` message. With credentials off, `credential_*` is stripped and
+  refused.
 - **Derive route** (`serve_derive.py`, `POST /token/derive`): `BearerAuthMiddleware`
   tags each request `token_kind` (owner, derived, scoped); only an owner token
   may derive (others get 403). `DerivedTokens` (`derived_tokens.py`) keeps

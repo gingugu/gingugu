@@ -29,11 +29,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or `MEMORY_REMOTE_URL` selects a remote brain, `gingugu` relays MCP JSON-RPC
   over stdio to `gingugu serve` (streamable HTTP) and never opens the local DB,
   so every client config stays `command: gingugu`. It refuses to start (exit 2)
-  on a malformed, blank or `*=write` `MEMORY_GRANT`, on `MEMORY_CREDENTIALS_ENABLED`
-  not `false` (the vault is the machine's keychain, which a remote brain cannot
-  serve), on no keychain token (it points at `gingugu remote login`), and on an
-  unreachable brain. Plain `http` to a non-loopback host warns. `credential_*`
-  tools are stripped from `tools/list` and refused on `tools/call`.
+  on a malformed, blank or `*=write` `MEMORY_GRANT`, on a `MEMORY_GRANT` with
+  `MEMORY_CREDENTIALS_ENABLED` not `false` (a scoped client never gets the vault),
+  on no keychain token (it points at `gingugu remote login`), and on an
+  unreachable brain. Plain `http` to a non-loopback host warns.
+- **Remote mode keeps the credential vault local.** The vault is the machine's
+  keychain, which a remote brain cannot serve, so with credentials on the proxy
+  serves `credential_*` itself from the local database's vault tables (`into`
+  included) and swaps them for the brain's in `tools/list`. A credential call
+  never reaches the brain and still answers while it is down. `credential_get`
+  refuses `reveal` in remote mode (use `into`), so an inline secret cannot be
+  relayed on to the brain by another tool call. With
+  `MEMORY_CREDENTIALS_ENABLED=false`, `credential_*` is stripped and refused.
 - **Persona session tokens.** The proxy trades the machine's owner token at
   `POST /token/derive` (owner tokens only; scoped and derived tokens get 403)
   for a short-lived derived token: in memory, TTL up to 1 hour, SHA-256 only, at

@@ -54,9 +54,15 @@ def test_a_malformed_or_full_grant_is_refused(vault, bad):
     assert "MEMORY_GRANT" in _refusal(grant=bad)
 
 
-def test_credentials_enabled_is_refused(vault):
-    # The vault is this machine's keychain; a remote brain cannot serve it.
-    assert "MEMORY_CREDENTIALS_ENABLED=false" in _refusal(credentials_enabled=True)
+def test_credentials_enabled_is_allowed_for_the_owner(vault):
+    # The proxy serves the vault from this machine; nothing to refuse.
+    assert proxy.preflight(TARGET, grant=None, credentials_enabled=True) == TOKEN
+
+
+def test_credentials_enabled_with_a_grant_is_refused(vault):
+    # A scoped client never gets the vault, here or on stdio (fence._CLOSED_TO_SCOPED).
+    message = _refusal(grant="tyrone=write,crow=read", credentials_enabled=True)
+    assert "MEMORY_CREDENTIALS_ENABLED=false" in message
 
 
 def test_missing_token_points_at_login(vault):
@@ -84,7 +90,7 @@ def test_grant_is_checked_before_the_network(vault, monkeypatch):
 
     monkeypatch.setattr(remote, "_reachable", boom)
     _refusal(grant="alpha")
-    _refusal(credentials_enabled=True)
+    _refusal(grant="tyrone=write", credentials_enabled=True)
 
 
 # --- server.main dispatch ----------------------------------------------------
@@ -118,10 +124,33 @@ def test_remote_refusal_exits_2_without_touching_the_local_db(
 ):
     monkeypatch.setenv("MEMORY_REMOTE_URL", URL)
     monkeypatch.setenv("MEMORY_CREDENTIALS_ENABLED", "true")
+    monkeypatch.setenv("MEMORY_GRANT", "tyrone=write")
     code, err = _main_exit(capsys)
     assert code == 2
     assert "MEMORY_CREDENTIALS_ENABLED=false" in err
     assert TOKEN not in err
+    assert not (no_local_server / "local.db").exists()
+
+
+@pytest.mark.parametrize("enabled, expected", [("true", "local.db"), ("false", None)])
+def test_the_vault_db_is_handed_to_the_proxy_only_when_credentials_are_on(
+    no_local_server, vault, monkeypatch, capsys, enabled, expected
+):
+    monkeypatch.setenv("MEMORY_REMOTE_URL", URL)
+    monkeypatch.setenv("MEMORY_CREDENTIALS_ENABLED", enabled)
+    monkeypatch.delenv("MEMORY_GRANT", raising=False)
+    seen = {}
+
+    def fake_serve(url, token, *, grant, home, vault_db):
+        seen["vault_db"] = vault_db
+        return 0
+
+    monkeypatch.setattr(proxy, "serve_stdio", fake_serve)
+    code, _ = _main_exit(capsys)
+    assert code == 0
+    got = seen["vault_db"]
+    assert (got.name if got is not None else None) == expected
+    # main only names the file; the proxy opens it.
     assert not (no_local_server / "local.db").exists()
 
 
@@ -158,7 +187,7 @@ def test_remote_ok_hands_off_to_the_proxy_with_grant_and_home(
         monkeypatch.setenv(key, value)
     seen = {}
 
-    def fake_serve(url, token, *, grant, home):
+    def fake_serve(url, token, *, grant, home, vault_db):
         seen["args"] = (url, token, grant, home)
         return 0
 

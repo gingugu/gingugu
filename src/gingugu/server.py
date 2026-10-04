@@ -242,6 +242,8 @@ def main() -> None:
                     token,
                     grant=config.grant or None,
                     home=config.resolved_namespace,
+                    # The vault stays on this machine; the proxy serves it.
+                    vault_db=config.db_path if config.credentials_enabled else None,
                 )
             )
         except proxy.ProxyLost as exc:
