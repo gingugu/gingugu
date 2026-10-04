@@ -382,7 +382,7 @@ signature changed.
 
 ## Remote mode (stdio proxy and derived tokens)
 
-Unreleased (merged in #100; hooks on `feature/remote-hooks`). When
+Shipped in 0.21.0 (#99-#103). When
 `gingugu remote on` or
 `MEMORY_REMOTE_URL` selects a brain, a bare `gingugu` (`server.main`) does not
 open the local DB: `proxy.py` relays MCP JSON-RPC between its stdio and
@@ -439,7 +439,11 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   is replayed on the new session. In-flight requests at a loss are failed, never
   replayed (a `memory_store` would write twice); requests while down get an
   immediate error. A 429 or 5xx from derive is transient; a 401/403 on derive
-  ends the proxy (`ProxyLost`).
+  ends the proxy (`ProxyLost`). A request that arrives before the client's
+  `initialize` (Claude Code's `server/discover` version probe) is answered
+  locally with `-32601` and never relayed: the brain 400s any non-initialize
+  request without a session, which would read as a lost link and fail the
+  `initialize` behind it.
 - **Hooks in remote mode** (board #1 B2, `hook_remote.py` client,
   `serve_hooks.py` server): with a remote brain on, the three hooks never open
   the local DB or load a local encoder. They POST to owner-token-only routes on

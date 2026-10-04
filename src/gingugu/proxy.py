@@ -35,7 +35,7 @@ import anyio
 import httpx
 from anyio.abc import ObjectReceiveStream, ObjectSendStream
 from mcp.client.streamable_http import streamable_http_client
-from mcp.types import JSONRPCRequest
+from mcp.types import METHOD_NOT_FOUND, JSONRPCRequest
 
 from . import remote
 from .handlers.fence import stdio_grant
@@ -160,6 +160,14 @@ class _Session:
                             "the vault stays on this machine",
                         )
                     await self.client_write.send(reply)
+                    continue
+                if self.init_params is None and msg.method != "initialize":
+                    # A pre-initialize probe (Claude Code's `server/discover`). The brain
+                    # 400s any non-initialize request without a session, which would
+                    # drop the link under the initialize that follows. Answer it here.
+                    await self.client_write.send(
+                        error(msg.id, f"method not found: {msg.method}", METHOD_NOT_FOUND)
+                    )
                     continue
             link = self.link
             if link is None:
