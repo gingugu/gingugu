@@ -187,7 +187,7 @@ Generated sets hold real memory content and stay in `bench/local/`.
   inline. Gated by `MEMORY_CREDENTIALS_ENABLED` (default true); a shared/central
   instance runs with it `false` to omit the vault.
 
-- **Warm minions (unreleased):** `MEMORY_GRANT="ns=read|write,..."` fences a
+- **Warm minions (v0.20.0):** `MEMORY_GRANT="ns=read|write,..."` fences a
   stdio server exactly like a scoped serve token (`handlers/fence.stdio_grant`,
   `ServerContext.stdio_grant`); unset = full grant; a bad spec or `*=write`
   exits 2. Fenced agent files in `.claude/agents/*.md` declare an inline
@@ -349,7 +349,13 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.20.0** (PyPI). Warm minions: a subagent gets its own
+- Current version: **0.21.0** (PyPI). The central brain: machine tokens minted
+  over SSH (`gingugu token add --owner`, `token ssh-mint`, `gingugu remote`),
+  remote mode (a bare `gingugu` is a stdio proxy to `gingugu serve`), persona
+  tokens (`POST /token/derive`) and `MEMORY_PERSONA` (three-layer memory), the
+  hooks following the brain (`POST /hook/*`), and the credential vault staying
+  on the machine in remote mode (#99-#103).
+- Previous: **0.20.0**. Warm minions: a subagent gets its own
   fenced, pre-loaded brain - `MEMORY_GRANT` fences a stdio server like a scoped
   serve token, agent files declare an inline `brain` server, and the
   `SubagentStart` hook warms it with the memories its task woke (`gingugu init`
@@ -398,10 +404,10 @@ gap between the count and the rows.
 - **0.13.0** - introduced the derived `age` payload field and fixed the
   startup contract's workspace inference.
 - Three-layer namespace convention (`crow` shared + persona via `MEMORY_PERSONA` +
-  project) is merged (#100, unreleased); before it, two layers
+  project) shipped in 0.21.0 (#100); before it, two layers
   (`crow` + project).
-- Remote mode (unreleased): a bare `gingugu` is a stdio proxy to `gingugu serve`
+- Remote mode (0.21.0): a bare `gingugu` is a stdio proxy to `gingugu serve`
   when a remote brain is on; persona sessions use derived tokens from
-  `POST /token/derive` (merged, #100). The hooks follow it over `POST /hook/*`
-  (B2, `feature/remote-hooks`).
+  `POST /token/derive` (#100). The hooks follow it over `POST /hook/*` (#101),
+  and the vault stays local (#102, #103).
 - See `.ai/plans/status.md` for in-flight work and carry-overs.

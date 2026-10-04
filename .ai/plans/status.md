@@ -27,7 +27,7 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
   the restricted key gets no shell, PTY or port forward; the minted token
   authenticates (200), a wrong one does not (401).
 - **B1 (proxy) and C (derived persona tokens + `MEMORY_PERSONA`): merged
-  (#100, `374dab6`), unreleased.** A bare `gingugu` relays to the remote brain
+  (#100, `374dab6`), shipped in 0.21.0.** A bare `gingugu` relays to the remote brain
   when one is selected; the proxy trades the machine token for a short-lived
   derived token carrying the client's grant and home namespace. Verified live
   from a second process over the LAN against the Pi: a persona store lands in
@@ -38,7 +38,7 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
   flag under the next server, seen on 3.11), and the minion fence treats a
   rooted Glob pattern (`\Users\...`) as absolute, since Python 3.13 on Windows
   no longer does.
-- **B2 (the hooks follow the brain): merged (#101, `23a367e`), unreleased.**
+- **B2 (the hooks follow the brain): merged (#101, `23a367e`), shipped in 0.21.0.**
   In remote mode prompt recall, tripwires and minion warm-up never open
   the local DB: four owner-only routes on `gingugu serve` (`/hook/recall`,
   `/hook/tripwires`, `/hook/trip`, `/hook/warmup`). Tripwire rules are matched
@@ -47,13 +47,13 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
   code: agent files already set `MEMORY_GRANT` and
   `MEMORY_CREDENTIALS_ENABLED=false`, so a minion's own `gingugu` becomes a
   proxy on a derived token.
-- **D0 (the vault stays local): merged (#102, `6b4f6a7`), unreleased.** Remote mode used to refuse to start with credentials on, which would
+- **D0 (the vault stays local): merged (#102, `6b4f6a7`), shipped in 0.21.0.** Remote mode used to refuse to start with credentials on, which would
   have cost a cut-over machine its vault. The owner's proxy now serves
   `credential_*` itself from the local DB's vault tables and keychain
   (`proxy_vault.py`), swapped in for the brain's in `tools/list`; a credential
   call never reaches the brain and answers while it is down. A client with
   `MEMORY_GRANT` and credentials on is still refused.
-- **D0 follow-up (`fix/proxy-stats-credentials`, this PR).** With this machine
+- **D0 follow-up: merged (#103, `1004285`), shipped in 0.21.0.** With this machine
   switched, `memory_stats` showed `credentials.total: 0` - the brain's vault,
   which holds none - while `credential_list` returned the full local vault. The
   proxy now patches `memory_stats` replies with the local vault's summary. The
@@ -68,8 +68,13 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
 
 ## Recently Completed
 
+**Released 0.21.0 to PyPI (2026-10-04).** The central brain: machine tokens and
+`gingugu remote` (#99), the remote-mode proxy, persona tokens and
+`MEMORY_PERSONA` (#100), the hooks following the brain (#101), and the vault
+staying local (#102, #103).
+
 **Board #1 B1 + C: remote-mode proxy, persona tokens, `MEMORY_PERSONA` (merged
-as `374dab6` (#100), unreleased).** A bare `gingugu` relays stdio to
+as `374dab6` (#100), shipped in 0.21.0).** A bare `gingugu` relays stdio to
 `gingugu serve` when a remote brain is on, and never opens the local DB.
 
 - `proxy.py` / `proxy_session.py`: preflight refuses to start (malformed, blank or
