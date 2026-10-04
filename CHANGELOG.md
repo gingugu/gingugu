@@ -85,6 +85,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `BearerAuthMiddleware` resolves a header to a grant and a kind (owner, derived,
   scoped), and `gingugu serve` builds its app in `serve.build_app`.
 
+### Fixed
+
+- In remote mode `memory_stats` reports this machine's credential vault (count
+  and expiry flags), not the brain's, matching where `credential_*` is served.
+- The test suite runs locally on a machine switched to a remote brain: the
+  remote setting is sandboxed like the other per-user settings.
+
 ### Security
 
 - A remote URL carrying a username or password is refused, and never echoed.
