@@ -414,14 +414,22 @@ forces local). A URL carrying a username or password is refused.
 With a remote brain on (`gingugu remote on`, or `MEMORY_REMOTE_URL`), a bare
 `gingugu` never opens the local database. It relays MCP over stdio to
 `gingugu serve`, so every client config stays `command: gingugu`. It never falls
-back to the local DB: it refuses to start (exit 2) when
+back to the local DB for memory: it refuses to start (exit 2) when
 
 - `MEMORY_GRANT` is malformed, blank or `*=write`;
-- `MEMORY_CREDENTIALS_ENABLED` is not `false` - the vault is this machine's
-  keychain, which a remote brain cannot serve, so set it in the client's `env`
-  (the `credential_*` tools are then hidden and refused);
+- `MEMORY_GRANT` is set and `MEMORY_CREDENTIALS_ENABLED` is not `false` - a
+  scoped client never gets the vault;
 - the keychain holds no token (run `gingugu remote login`);
 - the brain is unreachable.
+
+The credential vault stays on the machine: secrets are in its keychain and a
+remote brain cannot serve them. With credentials on (the default, and only
+without `MEMORY_GRANT`), the proxy serves the `credential_*` tools itself from
+the local database's vault tables, so they keep working - `into` included - and
+a credential call never reaches the brain, even while it is down. `reveal` is
+refused there: every other tool is relayed, so an inline secret could be carried
+off the machine, while `into` keeps it in a local 0600 file. Set
+`MEMORY_CREDENTIALS_ENABLED=false` and they are hidden and refused.
 
 Plain `http` to a non-loopback host starts with a warning. The proxy sends the
 machine token only to `POST /token/derive` (owner tokens only; scoped tokens get
@@ -889,7 +897,7 @@ Environment variables (all optional):
 | `MEMORY_CREDENTIALS_ENABLED` | `true` | Expose the `credential_*` vault tools. Set `false` to run an instance without a secret vault (e.g. a shared/central server) |
 | `MEMORY_GRANT` | *(unset)* | Fence a stdio server like a scoped token: `ns=read\|write,...` (e.g. `my-project=read,minions=write`). Unset is full access. A bad spec, an empty value, or `*=write` refuses to start. Used by a subagent's own `brain` server in its agent file |
 | `MEMORY_PERSONA` | *(unset)* | This agent's own namespace (e.g. `research`). Recall, tripwires and the SessionStart contract load `crow`, then the persona, then the repo. A malformed value is ignored |
-| `MEMORY_REMOTE_URL` | *(unset)* | Use this remote brain for this client only (`off` forces local). A bare `gingugu` then relays to it; set `MEMORY_CREDENTIALS_ENABLED=false` too |
+| `MEMORY_REMOTE_URL` | *(unset)* | Use this remote brain for this client only (`off` forces local). A bare `gingugu` then relays to it; the credential vault stays local |
 | `MEMORY_MINION_FENCE` | `on` | Set `off` to disable the subagent fence in `gingugu hook tool` (data-dir file/shell access and inherited-server writes) |
 | `MEMORY_SERVE_HOST` | `127.0.0.1` | Bind host for `gingugu serve` (set `0.0.0.0` to accept remote connections) |
 | `MEMORY_SERVE_PORT` | `8765` | Bind port for `gingugu serve` |

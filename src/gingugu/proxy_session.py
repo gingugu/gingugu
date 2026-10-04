@@ -138,8 +138,12 @@ async def replay_handshake(
 class Link:
     """One live connection to the brain: its streams and the requests in flight."""
 
-    def __init__(self, client_write: ObjectSendStream, srv_read, srv_write) -> None:
+    def __init__(
+        self, client_write: ObjectSendStream, srv_read, srv_write, *, extra_tools=()
+    ) -> None:
         self.client_write = client_write
+        # This machine's credential tools, listed in place of the brain's.
+        self.extra_tools: list[dict] = list(extra_tools)
         self.srv_read: ObjectReceiveStream = srv_read
         self.srv_write: ObjectSendStream = srv_write
         self.pending: set[str | int] = set()
@@ -179,7 +183,7 @@ class Link:
                     if isinstance(tools, list):
                         msg.result["tools"] = [
                             t for t in tools if not str(t.get("name", "")).startswith(CRED_PREFIX)
-                        ]
+                        ] + [dict(t) for t in self.extra_tools]
             try:
                 await self.client_write.send(item)
             except CLIENT_GONE:
