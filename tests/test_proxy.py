@@ -128,6 +128,40 @@ async def test_a_rejected_owner_token_fails_loudly_not_a_hang(brain):
     assert "not-the-token" not in str(raised)
 
 
+async def test_a_pre_initialize_probe_is_refused_locally_and_initialize_still_lands(brain):
+    # Claude Code >=2.1.287 sends `server/discover` before `initialize`. Forwarded,
+    # the brain answers 400 (no session yet) and the link dies under the initialize.
+    from mcp.shared.message import SessionMessage
+    from mcp.types import JSONRPCError, JSONRPCMessage, JSONRPCRequest, JSONRPCResponse
+
+    from gingugu import proxy
+
+    def request(rid: int, method: str, params: dict) -> SessionMessage:
+        req = JSONRPCRequest(jsonrpc="2.0", id=rid, method=method, params=params)
+        return SessionMessage(JSONRPCMessage(req))
+
+    init = {
+        "protocolVersion": "2025-11-25",
+        "capabilities": {},
+        "clientInfo": {"name": "probe", "version": "0"},
+    }
+    c2p_send, c2p_recv = anyio.create_memory_object_stream(16)
+    p2c_send, p2c_recv = anyio.create_memory_object_stream(16)
+    async with serving(brain.app()) as served:
+        with anyio.fail_after(15):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(proxy.run, served.url, brain.machine, c2p_recv, p2c_send)
+                await c2p_send.send(request(0, "server/discover", {}))
+                probe = (await p2c_recv.receive()).message.root
+                await c2p_send.send(request(1, "initialize", init))
+                reply = (await p2c_recv.receive()).message.root
+                await c2p_send.aclose()
+    assert isinstance(probe, JSONRPCError) and probe.id == 0
+    assert probe.error.code == -32601  # method not found: the client falls back
+    assert isinstance(reply, JSONRPCResponse) and reply.id == 1, reply
+    assert reply.result["serverInfo"]["name"] == "gingugu"
+
+
 async def test_client_closing_ends_the_proxy_cleanly(brain):
     async with serving(brain.app()) as served:
         with anyio.fail_after(15):

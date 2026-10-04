@@ -80,10 +80,8 @@ def wrap(message: JSONRPCRequest | JSONRPCResponse | JSONRPCError | JSONRPCNotif
     return SessionMessage(JSONRPCMessage(message))
 
 
-def error(req_id: str | int, text: str) -> SessionMessage:
-    return wrap(
-        JSONRPCError(jsonrpc="2.0", id=req_id, error=ErrorData(code=INVALID_REQUEST, message=text))
-    )
+def error(req_id: str | int, text: str, code: int = INVALID_REQUEST) -> SessionMessage:
+    return wrap(JSONRPCError(jsonrpc="2.0", id=req_id, error=ErrorData(code=code, message=text)))
 
 
 def leaf_name(exc: BaseException) -> str:
