@@ -393,7 +393,7 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
                     └─────Bearer <derived token>  /mcp (streamable HTTP)────▶ serve
 ```
 
-- **Preflight** (`proxy.preflight`, config refusals first so they never touch the
+- **Preflight** (`proxy.preflight`, in `proxy_preflight.py`; config refusals first so they never touch the
   keychain or network): malformed, blank or `*=write` `MEMORY_GRANT`;
   `MEMORY_CREDENTIALS_ENABLED` not false together with a `MEMORY_GRANT` (a
   scoped client never gets the vault); no keychain token (points at
@@ -432,13 +432,20 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   asks for the client's `MEMORY_GRANT` (full if unset) and home = the
   client's resolved namespace (`MEMORY_NAMESPACE`, else the `MEMORY_NAMESPACE_PATH`
   basename; may be unset).
-- **Resilience** (`proxy.py`, `proxy_session.py`): one reader of the client for
-  the whole run, routed to the live `Link`. Refresh at half the TTL; the token is
-  reused across reconnects (deriving per attempt would fill the live cap);
-  re-derive after a 401; backoff 0.25s doubling to 5s; the client's `initialize`
-  is replayed on the new session. In-flight requests at a loss are failed, never
-  replayed (a `memory_store` would write twice); requests while down get an
-  immediate error. A 429 or 5xx from derive is transient; a 401/403 on derive
+- **Resilience** (`proxy.py`, `proxy_session.py`, `proxy_auth.py`): one reader of
+  the client for the whole run, routed to the live `Link`. Refresh at half the
+  TTL; the token is reused across reconnects (deriving per attempt would fill the
+  live cap); backoff 0.25s doubling to 5s; the client's `initialize` is replayed
+  on the new session. A restarted brain has forgotten every derived token and
+  MCP session, and refuses both before any tool runs, so those requests are
+  safe to send again: a 401 renews the token (once per stale token, and only if
+  that token was ever accepted or 10s have passed, so a brain refusing every
+  fresh token cannot drain the live cap) and retries that request in place
+  (`SessionAuth`); a 404 sends it again, once, on the next link - unless it is
+  over 10s old, when it is errored instead (the client may have re-sent it). A
+  request whose fate is unknown is failed, never replayed (a `memory_store`
+  would write twice). A new request waits up to 5s for a
+  reconnecting link, then gets an error. A 429 or 5xx from derive is transient; a 401/403 on derive
   ends the proxy (`ProxyLost`). A request that arrives before the client's
   `initialize` (Claude Code's `server/discover` version probe) is answered
   locally with `-32601` and never relayed: the brain 400s any non-initialize
