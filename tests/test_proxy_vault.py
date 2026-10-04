@@ -215,6 +215,26 @@ def test_a_patch_that_fails_part_way_relays_the_brains_reply_whole(capsys):
     assert "not patched" in capsys.readouterr().err
 
 
+async def test_a_malformed_tools_list_entry_is_dropped_not_fatal_to_the_link():
+    from mcp.types import JSONRPCRequest, JSONRPCResponse
+
+    from gingugu.proxy_session import Link, wrap
+
+    to_brain, _brain_in = anyio.create_memory_object_stream(10)
+    brain_out, from_brain = anyio.create_memory_object_stream(10)
+    to_client, client_in = anyio.create_memory_object_stream(10)
+    local = {"name": "credential_get", "inputSchema": {"type": "object"}}
+    link = Link(to_client, from_brain, to_brain, extra_tools=[local])
+    await link.forward(wrap(JSONRPCRequest(jsonrpc="2.0", id=7, method="tools/list")))
+    tools = ["junk", None, {"name": "credential_get"}, {"name": "memory_store"}]
+    await brain_out.send(wrap(JSONRPCResponse(jsonrpc="2.0", id=7, result={"tools": tools})))
+    await brain_out.aclose()  # the brain hangs up after one reply
+    with anyio.fail_after(5), pytest.raises(ConnectionError, match="brain closed"):
+        await link.pump(anyio.CancelScope())
+    relayed = (await client_in.receive()).message.root.result["tools"]
+    assert relayed == [{"name": "memory_store"}, local]
+
+
 async def test_without_a_vault_credentials_stay_hidden_and_refused(brain):
     # MEMORY_CREDENTIALS_ENABLED=false (personas, minions): unchanged from B1.
     async with serving(brain.app()) as served:

@@ -89,6 +89,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - In remote mode `memory_stats` reports this machine's credential vault (count
   and expiry flags), not the brain's, matching where `credential_*` is served.
+- In remote mode a malformed entry in the brain's `tools/list` is dropped
+  instead of tearing down the connection and failing every request in flight.
 - The test suite runs locally on a machine switched to a remote brain: the
   remote setting is sandboxed like the other per-user settings.
 
