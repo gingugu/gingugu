@@ -20,6 +20,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import CallToolResult, JSONRPCResponse, TextContent
 
+from .credentials import CredentialVault
 from .database import Database
 from .handlers import ServerContext
 from .handlers import credentials as credential_handlers
@@ -66,8 +67,44 @@ class LocalVault:
             result = _failed(f"{name} failed: {type(exc).__name__}")
         return _reply(req_id, result)
 
+    def health(self) -> dict:
+        """The vault summary ``memory_stats`` reports; metadata only, no keychain."""
+        return CredentialVault(self._db.connect()).health()
+
     def close(self) -> None:
         self._db.close()
+
+
+def patch_stats(result: dict, health: dict) -> dict:
+    """Swap the brain's credential summary in a ``memory_stats`` result for ``health``.
+
+    The brain counts its own vault, which in remote mode is not this machine's.
+    Anything that is not a recognisable stats reply passes through untouched.
+    """
+    for block in result.get("content") or []:
+        if block.get("type") != "text":
+            continue
+        try:
+            data = json.loads(block.get("text", ""))
+        except (TypeError, ValueError):
+            continue
+        if _swap(data, health):
+            block["text"] = json.dumps(data, indent=2)
+    structured = result.get("structuredContent")
+    if isinstance(structured, dict) and not _swap(structured, health):
+        _swap(structured.get("result"), health)  # FastMCP's wrapped form
+    return result
+
+
+def _swap(data, health: dict) -> bool:
+    if not isinstance(data, dict):
+        return False
+    for key in ("global", "stats"):  # comma-list shape, then single/unscoped shape
+        holder = data.get(key)
+        if isinstance(holder, dict) and "credentials" in holder:
+            holder["credentials"] = dict(health)
+            return True
+    return False
 
 
 _NO_REVEAL = (

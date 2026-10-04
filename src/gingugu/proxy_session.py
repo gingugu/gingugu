@@ -139,11 +139,14 @@ class Link:
     """One live connection to the brain: its streams and the requests in flight."""
 
     def __init__(
-        self, client_write: ObjectSendStream, srv_read, srv_write, *, extra_tools=()
+        self, client_write: ObjectSendStream, srv_read, srv_write, *, extra_tools=(), vault=None
     ) -> None:
         self.client_write = client_write
         # This machine's credential tools, listed in place of the brain's.
         self.extra_tools: list[dict] = list(extra_tools)
+        # This machine's vault: its summary replaces the brain's in memory_stats.
+        self.vault = vault
+        self.stats_ids: set[str | int] = set()
         self.srv_read: ObjectReceiveStream = srv_read
         self.srv_write: ObjectSendStream = srv_write
         self.pending: set[str | int] = set()
@@ -159,6 +162,9 @@ class Link:
         self.pending.add(msg.id)
         if msg.method == "tools/list":
             self.list_ids.add(msg.id)
+        elif self.vault is not None and msg.method == "tools/call":
+            if (msg.params or {}).get("name") == "memory_stats":
+                self.stats_ids.add(msg.id)
         try:
             await self.srv_write.send(item)
         except CLIENT_GONE:
@@ -184,12 +190,24 @@ class Link:
                         msg.result["tools"] = [
                             t for t in tools if not str(t.get("name", "")).startswith(CRED_PREFIX)
                         ] + [dict(t) for t in self.extra_tools]
+                elif msg.id in self.stats_ids:
+                    self.stats_ids.discard(msg.id)
+                    if isinstance(msg, JSONRPCResponse):
+                        self._patch_stats(msg)
             try:
                 await self.client_write.send(item)
             except CLIENT_GONE:
                 scope.cancel()
                 return
         raise ConnectionError("brain closed the stream")
+
+    def _patch_stats(self, msg: JSONRPCResponse) -> None:
+        from .proxy_vault import patch_stats  # proxy_vault imports this module
+
+        try:
+            msg.result = patch_stats(msg.result, self.vault.health())
+        except Exception:  # noqa: BLE001 - relay the brain's reply rather than crash
+            pass
 
     async def fail_pending(self, reason: str) -> None:
         """Error every in-flight request. Never replayed: a memory_store would write twice."""
