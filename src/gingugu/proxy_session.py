@@ -6,6 +6,9 @@ into a message or an exception.
 
 from __future__ import annotations
 
+import copy
+import sys
+
 import anyio
 import httpx
 from anyio.abc import ObjectReceiveStream, ObjectSendStream
@@ -168,6 +171,7 @@ class Link:
         try:
             await self.srv_write.send(item)
         except CLIENT_GONE:
+            self.stats_ids.discard(msg.id)
             if msg.id in self.pending:  # else fail_pending already answered it
                 self.pending.discard(msg.id)
                 await self.client_write.send(error(msg.id, _lost("ConnectionLost")))
@@ -204,10 +208,13 @@ class Link:
     def _patch_stats(self, msg: JSONRPCResponse) -> None:
         from .proxy_vault import patch_stats  # proxy_vault imports this module
 
-        try:
-            msg.result = patch_stats(msg.result, self.vault.health())
-        except Exception:  # noqa: BLE001 - relay the brain's reply rather than crash
-            pass
+        try:  # on a copy: a failure part-way never relays a half-patched reply
+            msg.result = patch_stats(copy.deepcopy(msg.result), self.vault.health())
+        except Exception as exc:  # noqa: BLE001 - relay the brain's reply rather than crash
+            print(
+                f"gingugu proxy: memory_stats credentials not patched ({type(exc).__name__})",
+                file=sys.stderr,
+            )
 
     async def fail_pending(self, reason: str) -> None:
         """Error every in-flight request. Never replayed: a memory_store would write twice."""
