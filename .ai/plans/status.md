@@ -909,7 +909,7 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-## The Board (current: 2026-10-02, after #99)
+## The Board (current: 2026-10-04, after 0.21.0)
 
 **Resequenced 2026-09-29 into build order.** The table below is the order the
 work gets done in, top first; `#` is that position. Item numbers used to be
@@ -932,7 +932,7 @@ below it moved up one, and the row-position cross-references moved with them.
 
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **One central brain, several clients** - IN FLIGHT | 11 | Hardware up, design approved and measured (see In Flight). B1, C and B2 merged; D0 (local vault) in this PR; D (cutover) remains |
+| 1 | **One central brain, several clients** - IN FLIGHT | 11 | Hardware up, design approved and measured (see In Flight). B1, C, B2 and D0 (local vault) merged and released in 0.21.0; this machine is switched; D (a second machine) remains |
 | 2 | **A shared board between agents** | 15 | Needs 1 |
 | 3 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
 | 4 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
@@ -944,6 +944,7 @@ below it moved up one, and the row-position cross-references moved with them.
 | 10 | **MCP SDK 2.x migration** | - | We pin `mcp<2` (lock 1.28.1); 2.x is a major (2.3.0 out 2026-10-02). The proxy sits on two transport APIs, and `tests/test_proxy*.py` is the safety net |
 | 11 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
 | 12 | **TLS on the brain** | - | Entered 2026-10-03. Every remote-mode hook call carries the machine's owner token, so on plain `http` it crosses the LAN unencrypted on every prompt (the B2 security review's accepted finding). `gingugu serve` behind TLS (uvicorn certs or a reverse proxy) plus a trust story for a home-LAN cert; `gingugu remote` should then prefer `https` |
+| 13 | **Hook recall honours the client's grant** | - | Entered 2026-10-04. ChatGPT desktop runs Codex hooks (same protocol as Claude Code: `UserPromptSubmit`, `hookSpecificOutput.additionalContext`), and a probe proved `gingugu hook prompt` injects into a plain ChatGPT chat. Two gaps before a scoped client keeps it: the prompt hook never reads `MEMORY_GRANT` and, in remote mode, calls the owner-only `/hook/recall` with the machine token, so a client fenced to `tyrone=write,crow=read` is shown any namespace its cwd names; and ChatGPT gives every chat its own working folder (`~/Documents/Codex/<date>/<slug>`), so the cwd basename adds a junk namespace. Also: tripwire input fields are keyed on Claude Code tool names; Codex's built-in names are still unobserved |
 | - | **Template/sibling noise in retrieval - PARKED** | 1 | Ten dead fixes and no live hypothesis; see below |
 
 ### Previous board (2026-09-28), kept for its numbering
