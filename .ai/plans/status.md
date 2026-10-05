@@ -68,8 +68,8 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
 
 ## Recently Completed
 
-**Preflight retries a slow brain (2026-10-04, `fix/preflight-retry`,
-unreleased).** A session opened with gingugu down: the proxy's one 3s
+**Released 0.21.3 to PyPI (2026-10-04): preflight retries a slow brain
+(#107).** A session opened with gingugu down: the proxy's one 3s
 `/healthz` probe missed because `beepboop.local` did not resolve after hours
 idle, and Claude Code never retries a server that exits at startup. Cause, measured on the
 Pi: it is on WiFi (`brcmfmac`) with power saving on by default - pings with 4s
