@@ -22,8 +22,9 @@ from pathlib import Path
 from ..prompt_hook import _PERSONA_RE as NAMESPACE_RE
 from . import init_claude_code, theme
 from ._files import read_template, safe_read, write_file
+from .harness_migrate import migrate_settings, prune, retire_legacy
 from .harness_settings import wire_harness_settings
-from .settings import is_user_level
+from .settings import is_user_level, load_settings, write_settings
 
 HARNESS_BEGIN = "<!-- BEGIN GINGUGU HARNESS -->"
 HARNESS_END = "<!-- END GINGUGU HARNESS -->"
@@ -63,13 +64,21 @@ def minion_grant(namespace: str) -> str:
 
 
 def _install_managed(
-    target: Path, namespace: str, *, force: bool, dry_run: bool, results: list[str]
+    target: Path,
+    namespace: str,
+    *,
+    force: bool,
+    dry_run: bool,
+    results: list[str],
+    force_hooks: bool = False,
 ) -> None:
+    """``force_hooks`` force-replaces only our hook scripts (``--migrate``)."""
     grant = minion_grant(namespace)
     for template, dest in _MANAGED:
         content = read_template(f"{_T}{template}.tmpl")
         content = content.replace("{{grant}}", grant).replace("{{namespace}}", namespace)
-        write_file(target / dest, content, force=force, dry_run=dry_run, results=results)
+        forced = force or (force_hooks and dest.startswith(".claude/hooks/"))
+        write_file(target / dest, content, force=forced, dry_run=dry_run, results=results)
 
 
 def _scaffold_ai(target: Path, *, dry_run: bool, results: list[str]) -> None:
@@ -147,6 +156,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--dry-run", action="store_true", help="Show what would happen, write nothing"
     )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--migrate",
+        action="store_true",
+        help="Also replace our hooks, unwire an older per-event hook kit, retire its scripts",
+    )
+    mode.add_argument(
+        "--prune",
+        action="store_true",
+        help="Only delete the stubs and retired files a --migrate left behind",
+    )
     args = parser.parse_args(argv)
 
     target = Path(args.path).expanduser().resolve()
@@ -167,29 +187,59 @@ def main(argv: list[str] | None = None) -> int:
         print("error: 'minions' is the minions' scratch namespace; it cannot be a repo's.")
         return 1
 
+    if args.prune:
+        results = ["Claude Code harness prune:", *prune(target, dry_run=args.dry_run)]
+        print(theme.render(results, dry_run=args.dry_run))
+        return 0
+
     claude_md = target / "CLAUDE.md"
     original = safe_read(claude_md) if claude_md.exists() else None
     if not claude_md.exists() and not args.dry_run:
         # Created before init so its protocol block merges in this same run.
         claude_md.write_text(f"# {namespace}\n")
-    settings_existed = (target / ".claude" / "settings.json").exists()
+    settings_path = target / ".claude" / "settings.json"
+    settings_existed = settings_path.exists()
+    settings_start = settings_path.read_text() if settings_existed else None
 
-    results = init_claude_code(target, force=args.force, dry_run=args.dry_run)
+    migrated: list[str] = []
+    if args.migrate:
+        # Before init, so init's additive merge sees the cleaned settings.
+        settings = load_settings(settings_path)
+        migrated = migrate_settings(settings, dry_run=args.dry_run)
+        if migrated and not args.dry_run:
+            write_settings(settings_path, settings)
+
+    results = init_claude_code(target, force=args.force or args.migrate, dry_run=args.dry_run)
     project_settings = str(target / ".claude" / "settings.json")
     init_backed_up = any(
         project_settings in line and "settings.json.bak" in line for line in results
     )
 
     results.extend(["", "Claude Code harness:"])
-    _install_managed(target, namespace, force=args.force, dry_run=args.dry_run, results=results)
+    _install_managed(
+        target,
+        namespace,
+        force=args.force,
+        dry_run=args.dry_run,
+        results=results,
+        force_hooks=args.migrate,
+    )
     _scaffold_ai(target, dry_run=args.dry_run, results=results)
     _apply_claude_md(target, original, dry_run=args.dry_run, results=results)
     lines, _ = wire_harness_settings(
         target,
         dry_run=args.dry_run,
-        user_original_kept=init_backed_up or not settings_existed,
+        user_original_kept=init_backed_up or not settings_existed or args.migrate,
     )
     results.extend(lines)
+
+    if args.migrate:
+        if settings_start is not None and not args.dry_run:
+            if settings_path.read_text() != settings_start:  # the user's original, once
+                (settings_path.parent / "settings.json.bak").write_text(settings_start)
+        report = [*migrated, *retire_legacy(target, dry_run=args.dry_run)]
+        report = report or ["  nothing to migrate - already clean"]
+        results.extend(["", "Claude Code harness migrate:", *report])
 
     print(theme.render(results, dry_run=args.dry_run))
     return 0
