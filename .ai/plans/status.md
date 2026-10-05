@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-10-04_
+_Last updated: 2026-10-05_
 
 ## In Flight
 
@@ -64,9 +64,26 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
   `uv run --directory` on the repo, so a branch switch cannot break them.
 - **This machine is switched (2026-10-04).** `gingugu remote on` points it at
   the Pi; the Pi serves the same 3,053 memories the local DB last held.
-- **Remaining:** D - switch a second machine.
+- **D: a second machine switched (2026-10-05).** Another Mac on the LAN got its
+  own mint key, pinned to its own name on the Pi, and verified to get no
+  shell, PTY or port forward. It ran `gingugu remote login` and `remote on`,
+  and runs the same persona as this machine. Live: `/mcp`, `/hook/recall`
+  and `/hook/tripwires` all answer 200 from it. `remote login` has to run in
+  the machine's own GUI session: over SSH the login keychain refuses writes
+  (`errSecInteractionNotAllowed`), though the token is still minted.
 
 ## Recently Completed
+
+**`gingugu init` aimed at the home directory does the user-level steps only
+(2026-10-05, branch `fix/init-home-target`, unreleased).** Run from `~`, init
+wrote its hooks into `~/.claude/settings.json` - the user-level file, loaded in
+every project - as `$CLAUDE_PROJECT_DIR/.claude/hooks/...`. In any project
+without its own `init` the script is missing, `uv` exits 2, and Claude Code
+treats that as a block for UserPromptSubmit and PreToolUse. Found setting up the
+second machine. `settings.is_user_level` compares the target's settings path
+with the user-level one; on a match init refreshes the managed `CLAUDE.md` block
+and the `mcp__brain` permission, skips hooks, skill, `.gitignore` and repo rules,
+and says to run `init` inside each project. `tests/test_init_home.py` (6 tests).
 
 **Released 0.21.4 to PyPI (2026-10-05): proxy exits on stdin EOF (#108).**
 Found live-verifying 0.21.3: a remote-mode `gingugu` answered `initialize`, then

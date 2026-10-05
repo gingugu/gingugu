@@ -9,6 +9,7 @@ Idempotent: re-running is a no-op.
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 
@@ -200,6 +201,23 @@ def merge_permissions(settings: dict) -> bool:
 
 def user_settings_path() -> Path:
     return Path.home() / ".claude" / "settings.json"
+
+
+def is_user_level(target: Path) -> bool:
+    """True when ``target``'s project settings file IS the user-level one.
+
+    Anchored on ``user_settings_path()`` rather than ``Path.home()`` so the
+    check names the actual hazard: hooks written there are wired as
+    ``$CLAUDE_PROJECT_DIR/...`` and fire in every project, where the script is
+    missing and ``uv`` exits 2 - a block for UserPromptSubmit and PreToolUse.
+    ``samefile`` compares the directories on disk, so neither a symlink nor a
+    differently cased path on a case-insensitive volume slips past;
+    ``resolve()`` alone keeps the case it was given.
+    """
+    try:
+        return os.path.samefile(target, user_settings_path().parent.parent)
+    except OSError:
+        return False
 
 
 def init_user_permissions(*, dry_run: bool, path: Path | None = None) -> list[str]:

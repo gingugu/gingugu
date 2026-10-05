@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`gingugu init` run from the home directory no longer wires global hooks.**
+  `~/.claude/settings.json` is Claude Code's user-level settings, loaded in
+  every project, so hooks wired there pointed at a project's
+  `.claude/hooks/` and blocked prompts in any project without its own `init`.
+  From home, `init` now refreshes the managed `CLAUDE.md` block and the
+  `mcp__brain` permission only, and says to run `gingugu init` inside each
+  project.
+
 ---
 
 ## [0.21.4] - 2026-10-05
