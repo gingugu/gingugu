@@ -420,7 +420,8 @@ back to the local DB for memory: it refuses to start (exit 2) when
 - `MEMORY_GRANT` is set and `MEMORY_CREDENTIALS_ENABLED` is not `false` - a
   scoped client never gets the vault;
 - the keychain holds no token (run `gingugu remote login`);
-- the brain is unreachable.
+- the brain is unreachable - after retrying for up to 15 seconds, so a brain
+  slow to answer after a quiet spell does not cost the session.
 
 The credential vault stays on the machine: secrets are in its keychain and a
 remote brain cannot serve them. With credentials on (the default, and only
