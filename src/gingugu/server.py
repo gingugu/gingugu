@@ -99,6 +99,9 @@ Usage:
   gingugu remote status|on|off|login  Choose which brain this machine talks to.
   gingugu promote [options]    Promote local gold memories up to a central brain.
   gingugu init [options]       Bootstrap a repo so an AI assistant uses Gingugu.
+  gingugu harness [options]    Install the Claude Code harness on top of init: safety
+                               guard, event logs, fenced minions, the creating-pr
+                               skill, the .ai/ knowledge base.
   gingugu ui [options]         Launch the Memory Explorer web UI in a browser.
   gingugu dream [namespace]    Run the deterministic consolidation pass over the
                                memory graph and stage what it finds for review.
@@ -133,6 +136,7 @@ def main() -> None:
     ``gingugu serve``   → run over streamable HTTP for a remote/central brain.
     ``gingugu promote`` → promote local gold memories up to a central brain.
     ``gingugu init``    → bootstrap a repo's Claude Code hooks / rules file.
+    ``gingugu harness`` → `init` plus the Claude Code harness (hooks, minions, skill, .ai/).
     ``gingugu ui``      → launch the Memory Explorer web UI in a browser.
     ``gingugu dream``   → run the consolidation pass; stages proposals only.
     ``gingugu embed``   → run the embedding backfill to completion.
@@ -179,6 +183,10 @@ def main() -> None:
         from .bootstrap import main as init_main
 
         raise SystemExit(init_main(sys.argv[2:]))
+    if cmd == ["harness"]:
+        from .bootstrap.harness import main as harness_main
+
+        raise SystemExit(harness_main(sys.argv[2:]))
     if cmd == ["ui"]:
         from .webui import main as ui_main
 

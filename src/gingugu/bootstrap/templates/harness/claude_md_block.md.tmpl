@@ -1,0 +1,37 @@
+## AI Knowledge Base Enforcement
+
+This repo keeps a living knowledge base in `.ai/`. These rules apply to every session.
+
+### Before every commit or PR - mandatory assessment
+
+| File | Update when |
+|------|-------------|
+| `.ai/plans/status.md` | **Always** - reflect current in-flight, blocked, and recently completed work |
+| `.ai/memory.md` | Module structure, public interfaces, data model, or release state changed |
+| `.ai/specs/01-architecture.md` | A module was added, the data model changed, or a key decision was made |
+| `.ai/specs/dataflow.md` | How data moves through the system changed |
+| `.ai/specs/product-spec.md` | A feature shipped, got blocked, or was descoped |
+| `.claude/agents/` | A subagent's scope, tool allowlist, or model tier changed |
+| `.ai/standards/` | Testing or code discipline changed |
+
+### PR creation
+
+Always use the `/creating-pr` skill (`.claude/skills/creating-pr/SKILL.md`) when
+opening a PR. Never skip the `.ai/` assessment. Never open a PR without updating
+`.ai/plans/status.md`.
+
+### Available subagents (`.claude/agents/`)
+
+Opus is never a minion. Each agent reads `crow` and this repo's namespace through
+its own fenced `brain` server, and writes only the `minions` scratch namespace.
+
+| Agent | Tier | Use for |
+|---|---|---|
+| `repo-scout` | haiku | Mechanical search and inventory: every place X appears, file listings, counts. |
+| `security-reviewer` | sonnet | Secrets, PII, unguarded paths, destructive writes without a backup. Run before every commit that touches credentials or path handling. |
+| `ai-docs-auditor` | sonnet | Audits `.ai/` against the code and reports drift as `path:line`. Run before every PR. |
+
+### Logs
+
+Hook events are logged as JSON lines in `logs/*.jsonl`, and transcripts are
+backed up before compaction to `logs/transcript_backups/`. Both are git-ignored.

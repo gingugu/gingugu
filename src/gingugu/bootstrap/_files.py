@@ -29,8 +29,14 @@ TEMPLATE_SIGNATURE = "gingugu-init:managed-file"
 
 
 def read_template(name: str) -> str:
-    """Read a packaged template from ``gingugu/bootstrap/templates``."""
-    return (files("gingugu.bootstrap") / "templates" / name).read_text()
+    """Read a packaged template from ``gingugu/bootstrap/templates``.
+
+    ``name`` may be nested (``"harness/hooks/log_event.py.tmpl"``).
+    """
+    node = files("gingugu.bootstrap") / "templates"
+    for part in name.split("/"):
+        node = node / part
+    return node.read_text()
 
 
 def safe_read(path: Path) -> str:
