@@ -23,6 +23,7 @@ from .global_rules import init_global_rules, init_repo_rules
 from .settings import (
     MINION_ALLOW,
     init_user_permissions,
+    is_user_level,
     load_settings,
     merge_permissions,
     merge_settings,
@@ -56,6 +57,14 @@ _MCP_HINT = (
 )
 
 
+_HOME_NOTE = [
+    "skip hooks: this is your home directory. Its .claude/settings.json is the",
+    "  user-level file loaded in every project, so hooks wired there would block",
+    "  prompts in any project without its own hooks.",
+    "Run `gingugu init` inside each project to install its hooks.",
+]
+
+
 def _ensure_gitignore(target: Path, *, dry_run: bool, results: list[str]) -> None:
     """Append any missing Claude Code / Gingugu ignore rules, non-destructively."""
     path = target / ".gitignore"
@@ -83,6 +92,18 @@ def init_claude_code(target: Path, *, force: bool, dry_run: bool, adopt: bool = 
     # the command in. Naming the path up front turns a silent wrong-repo write
     # into something you notice on line one.
     results: list[str] = ["Claude Code bootstrap:", f"  target {target}"]
+    if is_user_level(target):
+        # User-level steps only: the managed CLAUDE.md block and the minion
+        # permission belong in ~/.claude; hooks, the skill, and .gitignore are
+        # per-project.
+        results.extend(_HOME_NOTE)
+        results.append("")
+        results.extend(init_global_rules(dry_run=dry_run, adopt=adopt))
+        results.extend(init_user_permissions(dry_run=dry_run))
+        results.append("")
+        results.append(_MCP_HINT)
+        return results
+
     hooks_dir = target / ".claude" / "hooks"
     skill_path = target / ".claude" / "skills" / "sink-the-ship" / "SKILL.md"
     legacy_command = target / ".claude" / "commands" / "sink-the-ship.md"
