@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.21.3] - 2026-10-04
+
 ### Fixed
 
 - **Remote mode rides out a brain that is slow to answer at startup.** The

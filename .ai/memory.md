@@ -351,7 +351,11 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.21.2** (PyPI). Patch: the remote-mode proxy survives a
+- Current version: **0.21.3** (PyPI). Patch: remote-mode preflight retries
+  `/healthz` for up to 15s before refusing to start, so a brain slow to answer
+  after idle (WiFi power save, cold `.local` lookup) no longer costs the
+  session (#107).
+- 0.21.2: patch: the remote-mode proxy survives a
   brain restart without losing calls - a 401 renews the token and retries in
   place, a 404'd request is re-sent once on the next session (if under 10s
   old), and new calls wait up to 5s for a reconnecting link (#106).
