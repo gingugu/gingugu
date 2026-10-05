@@ -74,6 +74,14 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
 
 ## Recently Completed
 
+**`gingugu harness` (2026-10-05, branch `feature/harness-command`, stacked on
+`fix/init-home-target`, unreleased).** A separate command that runs `init` and
+installs the Claude Code harness this repo runs on: guard, JSON-lines event
+logging, transcript backup, three fenced minions, `/creating-pr`, the `.ai/`
+scaffold, a managed `CLAUDE.md` block and deny rules - with the voice/LLM hooks
+left out so nothing installed needs an API key. Tests first
+(`tests/test_harness_install.py`, `tests/test_harness_hooks.py`).
+
 **`gingugu init` aimed at the home directory does the user-level steps only
 (2026-10-05, branch `fix/init-home-target`, unreleased).** Run from `~`, init
 wrote its hooks into `~/.claude/settings.json` - the user-level file, loaded in

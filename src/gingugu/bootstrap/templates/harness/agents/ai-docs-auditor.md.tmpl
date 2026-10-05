@@ -8,8 +8,8 @@ mcpServers:
       type: stdio
       command: gingugu
       env:
-        MEMORY_NAMESPACE: {{namespace}}
-        MEMORY_GRANT: "crow=read,{{namespace}}=read,minions=write"
+        MEMORY_NAMESPACE: "{{namespace}}"
+        MEMORY_GRANT: "{{grant}}"
         MEMORY_CREDENTIALS_ENABLED: "false"
 model: sonnet
 color: yellow

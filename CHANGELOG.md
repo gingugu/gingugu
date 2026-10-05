@@ -9,8 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`gingugu harness`: the full Claude Code kit, on top of `init`.** Runs `init`,
+  then adds a secrets-and-`rm` guard hook, one JSON-lines logger for every other
+  hook event (metadata only, never contents or prompts), an owner-only
+  transcript backup under `.claude/data/` before compaction, three fenced minions
+  (`repo-scout`, `security-reviewer`, `ai-docs-auditor`), the `/creating-pr`
+  skill, an `.ai/` knowledge base scaffold, a managed `CLAUDE.md` block, and
+  `permissions.deny` entries for Opus minions and destructive git and `rm`
+  commands. Nothing it installs calls out to the network or needs an API key.
+  Plain `init` is unchanged.
+
 ### Fixed
 
+- **`gingugu init` git-ignores the backups it leaves at the repo root.** A
+  refreshed `CLAUDE.md` or `AGENTS.md` leaves `CLAUDE.md.bak` / `AGENTS.md.bak`
+  beside it; both are now in the `.gitignore` rules `init` appends.
+- **A refreshed managed block keeps the blank line after it.** Re-running
+  `init` dropped the blank line between its `CLAUDE.md` block and whatever
+  followed, rewriting the file (and leaving a `.bak`) for a change nobody made.
 - **`gingugu init` run from the home directory no longer wires global hooks.**
   `~/.claude/settings.json` is Claude Code's user-level settings, loaded in
   every project, so hooks wired there pointed at a project's

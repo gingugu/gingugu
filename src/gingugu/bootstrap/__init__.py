@@ -46,6 +46,8 @@ GITIGNORE_ENTRIES = [
     ".claude/settings.local.json",
     ".claude/hooks/**/__pycache__/",
     ".claude/**/*.bak",
+    "CLAUDE.md.bak",
+    "AGENTS.md.bak",
 ]
 
 _MCP_HINT = (

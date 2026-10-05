@@ -53,11 +53,22 @@ _AI_FILES = (
 )
 
 
+def minion_grant(namespace: str) -> str:
+    """The minions' grant: read ``crow`` and this repo, write only ``minions``.
+
+    A repo named ``crow`` is listed once - a namespace granted twice is refused.
+    """
+    reads = ["crow"] if namespace == "crow" else ["crow", namespace]
+    return ",".join([*(f"{name}=read" for name in reads), "minions=write"])
+
+
 def _install_managed(
     target: Path, namespace: str, *, force: bool, dry_run: bool, results: list[str]
 ) -> None:
+    grant = minion_grant(namespace)
     for template, dest in _MANAGED:
-        content = read_template(f"{_T}{template}.tmpl").replace("{{namespace}}", namespace)
+        content = read_template(f"{_T}{template}.tmpl")
+        content = content.replace("{{grant}}", grant).replace("{{namespace}}", namespace)
         write_file(target / dest, content, force=force, dry_run=dry_run, results=results)
 
 
@@ -94,7 +105,14 @@ def _block_of(text: str) -> str | None:
     return text[start : end + len(HARNESS_END)] if start != -1 and end > start else None
 
 
-def _apply_claude_md(target: Path, *, dry_run: bool, results: list[str]) -> None:
+def _apply_claude_md(
+    target: Path, original: str | None, *, dry_run: bool, results: list[str]
+) -> None:
+    """Merge the harness block. ``original`` is the file before this run, if any.
+
+    The backup is that pre-run text, not what init left behind: init may have
+    refreshed its own block (and written CLAUDE.md.bak) moments earlier.
+    """
     path = target / "CLAUDE.md"
     if not path.exists():  # dry-run: init could not have created it either
         results.append(f"  would append harness block to {path}")
@@ -109,7 +127,7 @@ def _apply_claude_md(target: Path, *, dry_run: bool, results: list[str]) -> None
     backup = old_block is not None and old_block != _block_of(merged)
     if not dry_run:
         if backup:
-            (target / "CLAUDE.md.bak").write_text(existing)
+            (target / "CLAUDE.md.bak").write_text(existing if original is None else original)
         path.write_text(merged)
     if old_block is None:
         verb = "would append" if dry_run else "appended"
@@ -145,8 +163,12 @@ def main(argv: list[str] | None = None) -> int:
             "(letters, digits, '.', '_', '-'; must start with a letter or digit; max 64)."
         )
         return 1
+    if namespace == "minions":
+        print("error: 'minions' is the minions' scratch namespace; it cannot be a repo's.")
+        return 1
 
     claude_md = target / "CLAUDE.md"
+    original = safe_read(claude_md) if claude_md.exists() else None
     if not claude_md.exists() and not args.dry_run:
         # Created before init so its protocol block merges in this same run.
         claude_md.write_text(f"# {namespace}\n")
@@ -161,7 +183,7 @@ def main(argv: list[str] | None = None) -> int:
     results.extend(["", "Claude Code harness:"])
     _install_managed(target, namespace, force=args.force, dry_run=args.dry_run, results=results)
     _scaffold_ai(target, dry_run=args.dry_run, results=results)
-    _apply_claude_md(target, dry_run=args.dry_run, results=results)
+    _apply_claude_md(target, original, dry_run=args.dry_run, results=results)
     lines, _ = wire_harness_settings(
         target,
         dry_run=args.dry_run,

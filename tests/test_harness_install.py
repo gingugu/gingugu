@@ -14,11 +14,15 @@ import sys
 import pytest
 
 from gingugu.bootstrap._files import TEMPLATE_SIGNATURE
-from gingugu.bootstrap.harness import HARNESS_BEGIN, HARNESS_END, main
 from gingugu.bootstrap.global_rules import BEGIN_MARKER
+from gingugu.bootstrap.harness import HARNESS_BEGIN, HARNESS_END, main
 
 HOOKS = ("pre_tool_use.py", "log_event.py", "pre_compact.py")
-AGENTS = {"repo-scout.md": "haiku", "security-reviewer.md": "sonnet", "ai-docs-auditor.md": "sonnet"}
+AGENTS = {
+    "repo-scout.md": "haiku",
+    "security-reviewer.md": "sonnet",
+    "ai-docs-auditor.md": "sonnet",
+}
 SKILL_FILES = ("SKILL.md", "ai-assessment-checklist.md", "stacking-prs.md")
 AI_FILES = (
     "memory.md",
@@ -50,7 +54,17 @@ LOGGED_EVENTS = (
     "ElicitationResult",
 )
 # What the user cut: no voice, no LLM calls, nothing that needs an API key.
-FORBIDDEN_IN_HOOKS = ("api_key", "anthropic", "openai", "elevenlabs", "pyttsx3", "dotenv", "urllib", "requests", "http")
+FORBIDDEN_IN_HOOKS = (
+    "api_key",
+    "anthropic",
+    "openai",
+    "elevenlabs",
+    "pyttsx3",
+    "dotenv",
+    "urllib",
+    "requests",
+    "http",
+)
 
 
 @pytest.fixture
@@ -100,7 +114,7 @@ def test_agents_are_fenced_to_this_repos_namespace(repo):
     for name, model in AGENTS.items():
         text = (repo / ".claude" / "agents" / name).read_text()
         assert TEMPLATE_SIGNATURE in text
-        assert "MEMORY_NAMESPACE: my-repo" in text
+        assert 'MEMORY_NAMESPACE: "my-repo"' in text  # quoted: `true` or `123` stay strings
         assert 'MEMORY_GRANT: "crow=read,my-repo=read,minions=write"' in text
         assert 'MEMORY_CREDENTIALS_ENABLED: "false"' in text
         assert "disallowedTools: Agent, mcp__gingugu" in text
@@ -211,6 +225,39 @@ def test_claude_md_keeps_user_content_and_refreshes_only_its_block(repo):
     assert "/creating-pr" in final and "/nope" not in final
     assert "keep me" in final and "trailing mine" in final
     assert final.count(HARNESS_BEGIN) == 1
+
+
+def test_claude_md_backup_holds_the_file_as_it_was_before_the_run(repo):
+    """init and harness both refresh CLAUDE.md in one run; the .bak is the pre-run file."""
+    _run(repo)
+    claude = repo / "CLAUDE.md"
+    before = claude.read_text().replace("/creating-pr", "/mine").replace("crow", "CROW-EDIT")
+    claude.write_text(before)
+    _run(repo)
+    assert (repo / "CLAUDE.md.bak").read_text() == before
+
+
+def test_root_rules_backups_are_gitignored(repo):
+    _run(repo)
+    ignored = (repo / ".gitignore").read_text().splitlines()
+    assert "CLAUDE.md.bak" in ignored
+    assert "AGENTS.md.bak" in ignored
+
+
+def test_a_repo_named_crow_gets_a_grant_without_duplicates(tmp_path):
+    repo = tmp_path / "crow"
+    repo.mkdir()
+    assert main(["--path", str(repo)]) == 0
+    text = (repo / ".claude" / "agents" / "repo-scout.md").read_text()
+    assert 'MEMORY_GRANT: "crow=read,minions=write"' in text
+
+
+def test_refuses_a_repo_named_minions(tmp_path, capsys):
+    repo = tmp_path / "minions"
+    repo.mkdir()
+    assert main(["--path", str(repo)]) == 1
+    assert list(repo.iterdir()) == []
+    assert "minions" in capsys.readouterr().out
 
 
 def test_dry_run_writes_nothing(repo):

@@ -115,12 +115,9 @@ def adopt_unmanaged_protocol(existing: str) -> str | None:
     handing the section to gingugu going forward, not preserving the
     hand-written text.
 
-    Whatever comes after the wrapped section ends up glued directly to
-    ``END_MARKER`` with no separating blank line — not a bug introduced here,
-    but the existing, shipped, tested behavior of ``merge_block``'s refresh
-    path (its ``tail`` is always ``lstrip("\\n")``-ed), which this wrap
-    immediately runs through too. Cosmetic only: an HTML comment directly
-    followed by an ATX heading with no blank line still renders correctly.
+    Whatever came after the wrapped section keeps its own leading blank lines:
+    ``merge_block``'s refresh path drops only the newline that closes
+    ``END_MARKER``, which this wrap immediately runs through too.
 
     Returns ``None`` when no heading-bounded section matches, so the caller can
     fall back to the plain conflict message instead of guessing.
