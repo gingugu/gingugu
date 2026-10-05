@@ -101,7 +101,9 @@ Usage:
   gingugu init [options]       Bootstrap a repo so an AI assistant uses Gingugu.
   gingugu harness [options]    Install the Claude Code harness on top of init: safety
                                guard, event logs, fenced minions, the creating-pr
-                               skill, the .ai/ knowledge base.
+                               skill, the .ai/ knowledge base. --migrate moves a repo off
+                               an older per-event hook kit; --prune then deletes the
+                               stubs and retired files it left.
   gingugu ui [options]         Launch the Memory Explorer web UI in a browser.
   gingugu dream [namespace]    Run the deterministic consolidation pass over the
                                memory graph and stage what it finds for review.
