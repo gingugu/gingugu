@@ -451,7 +451,10 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   request whose fate is unknown is failed, never replayed (a `memory_store`
   would write twice). A new request waits up to 5s for a
   reconnecting link, then gets an error. A 429 or 5xx from derive is transient; a 401/403 on derive
-  ends the proxy (`ProxyLost`). A request that arrives before the client's
+  ends the proxy (`ProxyLost`). `proxy.serve` (the body of `serve_stdio`) wraps `run` in the
+  SDK's `stdio_server`: it closes the write stream when `run` ends - the SDK's stdout writer
+  runs until it does - so client stdin EOF exits 0, and it unwraps `ProxyLost` from the
+  transport's task group so `server.main` exits 1 with its message, not a traceback. A request that arrives before the client's
   `initialize` (Claude Code's `server/discover` version probe) is answered
   locally with `-32601` and never relayed: the brain 400s any non-initialize
   request without a session, which would read as a lost link and fail the
