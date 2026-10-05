@@ -259,14 +259,40 @@ async def run(
             vault.close()
 
 
+async def serve(
+    url: str,
+    token: str,
+    *,
+    grant: str | None,
+    home: str | None,
+    vault_db: Path | None = None,
+    stdin=None,
+    stdout=None,
+) -> None:
+    """``run`` over the process's stdio (or the given text files, for tests).
+
+    Returns when the client closes stdin; raises a bare ProxyLost, never one
+    wrapped in the transport's task group, so the caller's exit 1 sees it.
+    """
+    from mcp.server.stdio import stdio_server
+
+    try:
+        async with stdio_server(stdin, stdout) as (read, write):
+            # The SDK's stdout writer runs until this stream closes; left open,
+            # the process outlives its client.
+            async with write:
+                await run(
+                    url, token, read, write, grant=grant, home=home, name=home, vault_db=vault_db
+                )
+    except BaseExceptionGroup as group:
+        fatal = fatal_in(group)
+        if fatal is None:
+            raise
+        raise fatal from None
+
+
 def serve_stdio(
     url: str, token: str, *, grant: str | None, home: str | None, vault_db: Path | None = None
 ) -> int:
-    from mcp.server.stdio import stdio_server
-
-    async def _main() -> None:
-        async with stdio_server() as (read, write):
-            await run(url, token, read, write, grant=grant, home=home, name=home, vault_db=vault_db)
-
-    anyio.run(_main)
+    anyio.run(lambda: serve(url, token, grant=grant, home=home, vault_db=vault_db))
     return 0
