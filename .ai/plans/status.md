@@ -88,10 +88,20 @@ old per-event logging scripts are unwired in favour of `log_event`, and `Stop`
 no longer runs `--chat`/`--notify`. This repo keeps its own gingugu-specific
 minions, `creating-pr` skill and `CLAUDE.md` sections. **Still to do:** delete
 the old kit scripts and `.claude/hooks/utils/` after a Claude Code restart (a
-running session keeps calling the hooks it started with), and a **`migrate`
-mode** for `gingugu harness`: on a repo with an existing kit it should replace
-and unwire old hooks rather than only add, and keep repo-specific agents and
-skills. `--force` overwrites them with the generic templates today.
+running session keeps calling the hooks it started with).
+
+**`gingugu harness --migrate` / `--prune` (2026-10-05, same branch).** What the
+hand migration above did, as a mode: replace gingugu's own hooks, unwire the
+legacy per-event loggers for `log_event`, reset gingugu's hook commands to
+canonical, and retire the legacy scripts behind exit-0 stubs so a running
+session is never blocked; `--prune` clears the stubs and `retired/` after a
+restart. Repo-specific agents and skills stay. Tests first
+(`tests/test_harness_migrate.py`, `tests/test_harness_migrate_safety.py`). A
+security review of the first build found prune deleting by name and by
+directory; it now touches only what is provably the kit's (name + fingerprint)
+and deletes only what a sha256 manifest proves it moved. Live-verified on a copy
+of this repo's own pre-migration `.claude/`: 19 scripts and 10 `utils/` files
+retired, real Claude Code clean, prune removed all 29, re-migrate a no-op.
 
 **`gingugu init` aimed at the home directory does the user-level steps only
 (2026-10-05, branch `fix/init-home-target`, unreleased).** Run from `~`, init

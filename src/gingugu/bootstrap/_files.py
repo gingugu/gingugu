@@ -56,6 +56,11 @@ def write_file(
     results: list[str],
     skip_hint: str = "",
 ) -> None:
+    if path.is_symlink():
+        # Writing would land wherever the link points - possibly outside the repo,
+        # shared with other repos, with the .bak beside the link instead.
+        results.append(f"  skip   {path}  (a symlink; never written through)")
+        return
     if path.exists() and not force:
         results.append(f"  skip   {path}  (exists; use --force to overwrite){skip_hint}")
         return

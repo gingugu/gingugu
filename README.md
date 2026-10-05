@@ -782,6 +782,34 @@ None of it calls out to the network or needs an API key. Same `--force` and
 `--dry-run` semantics as `init`, and the same refusal to install into your home
 directory. The repo's folder name must be a valid namespace.
 
+**Moving off an older hook kit: `--migrate`, then `--prune`.** Plain `harness`
+only ever adds. On a repo that already runs a one-script-per-event logging kit,
+that would leave the old loggers wired beside `log_event`. `gingugu harness
+--migrate` instead:
+
+- replaces gingugu's own hook files (copying each old one to `<name>.bak`);
+- unwires the legacy per-event loggers (`post_tool_use.py`,
+  `user_prompt_submit.py` and the rest of that kit) in favour of `log_event`,
+  and resets gingugu's own hook commands to their current flags;
+- moves the legacy scripts and the kit's own `utils/` files into
+  `.claude/hooks/retired/`, recording a hash of each in a manifest, and leaves a
+  stub at each old path that exits 0 - a running Claude Code session keeps
+  calling the hooks it started with, and a missing script would block your next
+  prompt.
+
+A script counts as the old kit's only if its name matches **and** it carries
+the kit's fingerprint (it writes its own `logs/<name>.json`): a
+`notification.py` you wrote yourself is left wired and untouched. So are your
+own agents, skills, any other files in `utils/`, and any hook it doesn't
+recognise. Symlinks are never written through.
+
+After restarting Claude Code, `gingugu harness --prune` deletes what it can
+prove is ours: stubs that are unedited and that no settings file
+(`settings.json`, `settings.local.json` or your user-level one) still wires, and
+files in `retired/` that the manifest lists and whose bytes still match. A file
+you changed, a stub that is still wired (and the original behind it), and a
+`retired/` that `--migrate` didn't create are all kept.
+
 #### Other tools (Windsurf / Cursor / Cline)
 
 These have no hook system, so there's no auto-injection to install — the setup

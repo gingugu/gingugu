@@ -25,6 +25,11 @@ RETIRED = "gingugu-harness:retired"
 LEGACY = ("post_tool_use.py", "user_prompt_submit.py", "notification.py")
 
 
+def legacy_body(name):
+    """A kit script as the kit wrote it: it names its own JSON-array log file."""
+    return f'# legacy {name}\nlog_path = os.path.join("logs", "{name[:-3]}.json")\n'
+
+
 def _group(*commands, matcher=""):
     return {"matcher": matcher, "hooks": [{"type": "command", "command": c} for c in commands]}
 
@@ -35,9 +40,9 @@ def repo(tmp_path):
     path = tmp_path / "legacy-repo"
     hooks = path / ".claude" / "hooks"
     (hooks / "utils" / "tts").mkdir(parents=True)
-    (hooks / "utils" / "tts" / "speak.py").write_text("# legacy tts\n")
+    (hooks / "utils" / "tts" / "tts_queue.py").write_text("# legacy tts\n")
     for name in LEGACY:
-        (hooks / name).write_text(f"# legacy {name}\n")
+        (hooks / name).write_text(legacy_body(name))
     (hooks / "stop.py").write_text("# old stop\n")
     (hooks / "pre_tool_use.py").write_text("# old guard\n")
     (hooks / "my_lint.py").write_text("# the user's own hook\n")
@@ -97,6 +102,16 @@ def test_migrate_keeps_the_repos_own_minions_and_skills(repo):
     assert (claude / "agents" / "ai-docs-auditor.md").exists()  # missing ones are added
 
 
+def test_migrate_keeps_a_customised_sink_the_ship_skill(repo):
+    """init's skill is a skill: migrate force-replaces hooks, not skills."""
+    skill = repo / ".claude" / "skills" / "sink-the-ship" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("my own sink-the-ship\n")
+    main(["--path", str(repo), "--migrate"])
+    assert skill.read_text() == "my own sink-the-ship\n"
+    assert not (skill.parent / "SKILL.md.bak").exists()
+
+
 def test_migrate_unwires_the_legacy_loggers_in_favour_of_log_event(repo):
     main(["--path", str(repo), "--migrate"])
     settings = _settings(repo)
@@ -123,7 +138,7 @@ def test_migrate_retires_legacy_scripts_behind_exit_zero_stubs(repo):
     hooks = repo / ".claude" / "hooks"
     for name in LEGACY:
         assert RETIRED in (hooks / name).read_text()
-        assert (hooks / "retired" / name).read_text() == f"# legacy {name}\n"
+        assert (hooks / "retired" / name).read_text() == legacy_body(name)
         result = subprocess.run(
             [sys.executable, str(hooks / name), "--log-only"],
             input='{"hook_event_name": "PostToolUse"}',
@@ -132,7 +147,7 @@ def test_migrate_retires_legacy_scripts_behind_exit_zero_stubs(repo):
             timeout=30,
         )
         assert (result.returncode, result.stdout) == (0, "")
-    assert (hooks / "retired" / "utils" / "tts" / "speak.py").exists()
+    assert (hooks / "retired" / "utils" / "tts" / "tts_queue.py").exists()
     assert not (hooks / "utils").exists()
 
 
@@ -178,6 +193,23 @@ def test_prune_keeps_a_stub_that_is_still_wired(repo):
     main(["--path", str(repo), "--prune"])
     assert (repo / ".claude" / "hooks" / "notification.py").exists()
     assert not (repo / ".claude" / "hooks" / "post_tool_use.py").exists()
+
+
+def test_prune_keeps_retired_originals_while_any_stub_is_still_wired(repo):
+    main(["--path", str(repo), "--migrate"])
+    settings = _settings(repo)
+    settings["hooks"]["Notification"].append(_group(f"{RUN}/notification.py"))
+    (repo / ".claude" / "settings.json").write_text(json.dumps(settings))
+    main(["--path", str(repo), "--prune"])
+    assert (repo / ".claude" / "hooks" / "retired" / "notification.py").exists()
+
+
+def test_prune_deletes_only_untouched_stubs(repo):
+    main(["--path", str(repo), "--migrate"])
+    stub = repo / ".claude" / "hooks" / "post_tool_use.py"
+    stub.write_text(stub.read_text() + "# I edited this\n")
+    main(["--path", str(repo), "--prune"])
+    assert stub.exists()
 
 
 def test_prune_installs_nothing(tmp_path):

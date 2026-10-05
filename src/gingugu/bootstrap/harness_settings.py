@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from .settings import load_settings, merge_settings, write_settings
@@ -104,3 +105,56 @@ def wire_harness_settings(
         lines.append(f"  settings.json harness entries already wired (no change) {path}")
     lines.extend(f"  WARNING: {w}" for w in warnings)
     return lines, warnings
+
+
+_TOKEN_SPLIT = re.compile(r"[\s;|&<>()]+")
+
+
+def script_tokens(command: str) -> list[str]:
+    """Every token in a shell command that names a ``.py`` file, quotes dropped."""
+    raw = (
+        t.replace('"', "").replace("'", "").replace("\\", "/") for t in _TOKEN_SPLIT.split(command)
+    )
+    return [t for t in raw if t.endswith(".py")]
+
+
+def basename(token: str) -> str:
+    return token.rsplit("/", 1)[-1]
+
+
+_PROJECT_HOOK_PREFIXES = (
+    "$CLAUDE_PROJECT_DIR/.claude/hooks/",
+    "${CLAUDE_PROJECT_DIR}/.claude/hooks/",
+    ".claude/hooks/",
+    "./.claude/hooks/",
+)
+
+
+def project_hook(token: str, hooks_dir: Path) -> str | None:
+    """The script name if ``token`` is a file directly in THIS project's hooks dir.
+
+    ``~/.claude/hooks/x.py`` (user-level) and ``/opt/team/x.py`` are not.
+    """
+    for prefix in _PROJECT_HOOK_PREFIXES:
+        if token.startswith(prefix) and "/" not in token[len(prefix) :]:
+            return token[len(prefix) :]
+    path = Path(token)
+    if path.is_absolute() and path.parent == hooks_dir:
+        return path.name
+    return None
+
+
+def hook_entries(settings: dict):
+    """Yield (event, group, hook) for every well-formed hook entry."""
+    hooks = settings.get("hooks")
+    if not isinstance(hooks, dict):
+        return
+    for event, groups in hooks.items():
+        if not isinstance(groups, list):
+            continue
+        for group in groups:
+            if not isinstance(group, dict) or not isinstance(group.get("hooks"), list):
+                continue
+            for hook in group["hooks"]:
+                if isinstance(hook, dict):
+                    yield event, group, hook

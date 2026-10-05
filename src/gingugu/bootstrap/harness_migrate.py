@@ -1,48 +1,37 @@
-"""``gingugu harness --migrate`` / ``--prune``: moving a repo off an older hook kit.
+"""``gingugu harness --migrate``: moving a repo off an older per-event hook kit.
 
-Migrate unwires the legacy per-event loggers, resets our own hook commands to
-their canonical form, and retires the legacy scripts behind exit-0 stubs (a
-running Claude Code session keeps calling the hooks it started with, and a
-missing script blocks the prompt). Prune, run after a restart, deletes the stubs
-and the retired copies. Anything the tool does not know is left exactly as is.
+Migrate unwires the legacy loggers, resets our own hook commands to their
+canonical form, and retires the legacy scripts behind exit-0 stubs (a running
+Claude Code session keeps calling the hooks it started with, and a missing
+script blocks the prompt). ``harness_prune`` clears up after a restart.
+
+Only what is provably the kit's is touched. A file NAME proves nothing -
+``notification.py`` or ``permission_request.py`` may be the user's own - so a
+kit script must also carry the kit's fingerprint (it names its own JSON-array
+log, ``<name>.json``), and only the kit's known ``utils/`` files move. Every
+file moved into ``retired/`` is hashed into a manifest, which is the only thing
+prune will delete by. Symlinks are never written through or followed.
 """
 
 from __future__ import annotations
 
 import json
-import re
+import os
 import shutil
 from pathlib import Path
 
-from .harness_settings import HARNESS_HOOKS
+from .harness_retired import (
+    KIT_UTILS,
+    LEGACY_SCRIPTS,
+    MANIFEST,
+    no_symlink_between,
+    read_manifest,
+    sha256,
+)
+from .harness_settings import HARNESS_HOOKS, hook_entries, project_hook, script_tokens
 from .settings import _HOOKS
 
 RETIRED_MARKER = "gingugu-harness:retired"
-
-LEGACY_SCRIPTS = frozenset(
-    f"{name}.py"
-    for name in (
-        "config_change",
-        "cwd_changed",
-        "elicitation",
-        "elicitation_result",
-        "file_changed",
-        "instructions_loaded",
-        "notification",
-        "permission_request",
-        "post_compact",
-        "post_tool_use",
-        "post_tool_use_failure",
-        "session_end",
-        "stop_failure",
-        "subagent_start",
-        "subagent_stop",
-        "task_completed",
-        "task_created",
-        "teammate_idle",
-        "user_prompt_submit",
-    )
-)
 
 STUB = """#!/usr/bin/env -S uv run --script
 # /// script
@@ -58,34 +47,52 @@ sys.exit(0)
 """
 
 
-def _script_names(command: str) -> set[str]:
-    """Basenames of every token in ``command`` that names a ``.py`` script."""
-    names = set()
-    for token in command.split():
-        token = token.strip("\"'")
-        if token.endswith(".py"):
-            names.add(token.rsplit("/", 1)[-1])
-    return names
+def _read_text(path: Path) -> str | None:
+    try:
+        return path.read_text()
+    except (OSError, UnicodeDecodeError):
+        return None
 
 
-def _hook_entries(settings: dict):
-    """Yield (event, group, hook) for every well-formed hook entry."""
-    hooks = settings.get("hooks")
-    if not isinstance(hooks, dict):
-        return
-    for event, groups in hooks.items():
-        if not isinstance(groups, list):
-            continue
-        for group in groups:
-            if not isinstance(group, dict) or not isinstance(group.get("hooks"), list):
-                continue
-            for hook in group["hooks"]:
-                if isinstance(hook, dict):
-                    yield event, group, hook
+def has_stub_marker(path: Path) -> bool:
+    return RETIRED_MARKER in (_read_text(path) or "")
 
 
-def unwire_legacy(settings: dict) -> list[str]:
-    """Remove hook entries running a ``LEGACY_SCRIPTS`` script; returns what went."""
+def is_untouched_stub(path: Path) -> bool:
+    return not path.is_symlink() and _read_text(path) == STUB
+
+
+def is_kit_script(path: Path) -> bool:
+    """A legacy-named script that also carries the kit's fingerprint."""
+    if path.name not in LEGACY_SCRIPTS or path.is_symlink() or not path.is_file():
+        return False
+    text = _read_text(path) or ""
+    return f"{path.stem}.json" in text and "logs" in text
+
+
+def _retirable(hooks_dir: Path, name: str) -> bool:
+    """A legacy entry may be unwired: it runs the kit's script, our stub, or nothing."""
+    path = hooks_dir / name
+    if path.is_symlink():
+        return False
+    return not path.exists() or is_kit_script(path) or is_untouched_stub(path)
+
+
+def _legacy_in(command: str, hooks_dir: Path) -> set[str]:
+    """The kit scripts a command runs - but only if that is ALL it runs.
+
+    Every script must be this project's own hook, legacy-named and retirable; a
+    command that also runs anything else (the user's ``mine.py``, a user-level
+    ``~/.claude/hooks/`` script) is kept whole.
+    """
+    names = [project_hook(t, hooks_dir) for t in script_tokens(command)]
+    if not names or any(n not in LEGACY_SCRIPTS or not _retirable(hooks_dir, n) for n in names):
+        return set()
+    return set(names)
+
+
+def unwire_legacy(settings: dict, hooks_dir: Path) -> list[str]:
+    """Remove hook entries running the kit's scripts; returns what went."""
     removed: list[str] = []
     hooks = settings.get("hooks")
     if not isinstance(hooks, dict):
@@ -94,8 +101,7 @@ def unwire_legacy(settings: dict) -> list[str]:
         groups = hooks[event]
         if not isinstance(groups, list):
             continue
-        touched = False
-        kept_groups = []
+        touched, kept_groups = False, []
         for group in groups:
             entries = group.get("hooks") if isinstance(group, dict) else None
             if not isinstance(entries, list):
@@ -104,8 +110,8 @@ def unwire_legacy(settings: dict) -> list[str]:
             kept = []
             for hook in entries:
                 legacy = (
-                    _script_names(str(hook.get("command", ""))) & LEGACY_SCRIPTS
-                    if (isinstance(hook, dict))
+                    _legacy_in(str(hook.get("command", "")), hooks_dir)
+                    if isinstance(hook, dict)
                     else set()
                 )
                 if legacy:
@@ -124,19 +130,22 @@ def unwire_legacy(settings: dict) -> list[str]:
     return removed
 
 
-def reset_canonical(settings: dict) -> list[str]:
-    """Reset our own hooks' command and timeout to canonical; returns what changed.
+def reset_canonical(settings: dict, hooks_dir: Path) -> list[str]:
+    """Reset our own hooks' command and timeout to canonical.
 
-    Matches on the exact script basename, so ``stop.py`` never captures
-    ``subagent_stop.py``.
+    Only an entry running this project's own copy of the script, by exact name -
+    a ``~/tools/stop.py`` of the user's is not ours.
     """
     changed: list[str] = []
+    hooks = settings.get("hooks")
+    if not isinstance(hooks, dict):
+        return changed
     for event, command, timeout, marker, *_ in [*_HOOKS, *HARNESS_HOOKS]:
-        hooks = settings.get("hooks")
-        if not isinstance(hooks, dict) or not isinstance(hooks.get(event), list):
+        if not isinstance(hooks.get(event), list):
             continue
-        for ev, _group, hook in _hook_entries({"hooks": {event: hooks[event]}}):
-            if marker not in _script_names(str(hook.get("command", ""))):
+        for ev, _group, hook in hook_entries({"hooks": {event: hooks[event]}}):
+            tokens = script_tokens(str(hook.get("command", "")))
+            if marker not in {project_hook(t, hooks_dir) for t in tokens}:
                 continue
             if hook.get("command") != command or hook.get("timeout") != timeout:
                 hook["command"], hook["timeout"] = command, timeout
@@ -144,29 +153,26 @@ def reset_canonical(settings: dict) -> list[str]:
     return changed
 
 
-def migrate_settings(settings: dict, *, dry_run: bool) -> list[str]:
-    """Unwire the legacy loggers and reset our own commands; result lines."""
+def migrate_settings(settings: dict, hooks_dir: Path, *, dry_run: bool) -> list[str]:
+    """Unwire the kit's loggers and reset our own commands; result lines."""
     unwire, reset = ("would unwire", "would reset") if dry_run else ("unwired", "reset")
-    lines = [f"  {unwire} {entry}" for entry in unwire_legacy(settings)]
+    lines = [f"  {unwire} {entry}" for entry in unwire_legacy(settings, hooks_dir)]
     lines.extend(
-        f"  {reset} {entry} to its canonical command" for entry in reset_canonical(settings)
+        f"  {reset} {entry} to its canonical command"
+        for entry in reset_canonical(settings, hooks_dir)
     )
     return lines
 
 
-def _has_stub_marker(path: Path) -> bool:
-    try:
-        return RETIRED_MARKER in path.read_text()
-    except (OSError, UnicodeDecodeError):
-        return False
-
-
-def _move(src: Path, dst: Path, *, dry_run: bool) -> bool:
-    if dst.exists():
+def _retire(src: Path, retired: Path, rel: str, manifest: dict, dry_run: bool) -> bool:
+    dest = retired / rel
+    if dest.exists() or dest.is_symlink() or not no_symlink_between(retired, dest):
         return False
     if not dry_run:
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(src), str(dst))
+        digest = sha256(src)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(dest))
+        manifest[rel] = digest
     return True
 
 
@@ -174,87 +180,62 @@ def _utils_blockers(hooks: Path) -> list[str]:
     """User-owned hook scripts that mention ``utils`` and may still need it."""
     found = []
     for path in sorted(hooks.glob("*.py")):
-        if path.name in LEGACY_SCRIPTS or not path.is_file() or _has_stub_marker(path):
+        if not path.is_file() or is_kit_script(path) or has_stub_marker(path):
             continue
-        try:
-            if "utils" in path.read_text():
-                found.append(path.name)
-        except (OSError, UnicodeDecodeError):
+        if "utils" in (_read_text(path) or "utils"):
             found.append(path.name)
     return found
 
 
+def _retire_utils(hooks: Path, retired: Path, manifest: dict, dry_run: bool) -> list[str]:
+    utils = hooks / "utils"
+    if not utils.is_dir() or utils.is_symlink():
+        return []
+    blockers = _utils_blockers(hooks)
+    if blockers:
+        return [f"  skip    hooks/utils: {', '.join(blockers)} mention it and may still need it"]
+    moved = 0
+    for rel in KIT_UTILS:
+        src = utils / rel
+        if src.is_file() and not src.is_symlink():
+            moved += _retire(src, retired, f"utils/{rel}", manifest, dry_run)
+    if not dry_run:
+        for dirpath, _dirs, _files in sorted(os.walk(utils), reverse=True):
+            path = Path(dirpath)
+            try:
+                if not path.is_symlink() and not any(path.iterdir()):
+                    path.rmdir()
+            except OSError:
+                pass  # left in place; nothing is lost
+    if not moved:
+        return []
+    verb = "would move" if dry_run else "moved"
+    return [f"  {verb} {moved} kit file(s) from hooks/utils to hooks/retired/utils"]
+
+
 def retire_legacy(target: Path, *, dry_run: bool) -> list[str]:
-    """Move legacy scripts to ``retired/`` behind stubs, then ``utils/`` after them."""
+    """Move the kit's scripts to ``retired/`` behind stubs, then its ``utils/`` files."""
     hooks = target / ".claude" / "hooks"
     retired = hooks / "retired"
+    if hooks.is_symlink() or retired.is_symlink() or (retired / MANIFEST).is_symlink():
+        return ["  skip    retiring: a symlink in .claude/hooks/retired; nothing moved"]
+    manifest = read_manifest(retired)
+    before = dict(manifest)
     lines: list[str] = []
     for name in sorted(LEGACY_SCRIPTS):
         path = hooks / name
-        if not path.is_file() or _has_stub_marker(path):
+        if not is_kit_script(path):
+            if path.exists() and not has_stub_marker(path):
+                lines.append(f"  kept    {path}  (not recognised as the old kit's)")
             continue
-        if not _move(path, retired / name, dry_run=dry_run):
+        if not _retire(path, retired, name, manifest, dry_run):
             lines.append(f"  kept    {path}  (retired/{name} already exists; not overwritten)")
             continue
         if not dry_run:
             path.write_text(STUB)
         verb = "would retire" if dry_run else "retired"
         lines.append(f"  {verb} {name} -> retired/{name}, exit-0 stub left in place")
-    utils = hooks / "utils"
-    if utils.is_dir():
-        blockers = _utils_blockers(hooks)
-        if blockers:
-            lines.append(
-                f"  skip    hooks/utils not moved: {', '.join(blockers)} mention it "
-                "and may still need it"
-            )
-        elif not _move(utils, retired / "utils", dry_run=dry_run):
-            lines.append("  kept    hooks/utils  (retired/utils already exists; not overwritten)")
-        else:
-            verb = "would move" if dry_run else "moved"
-            lines.append(f"  {verb} hooks/utils -> hooks/retired/utils")
-    return lines
-
-
-def _wired(settings_path: Path) -> tuple[list[str], bool]:
-    """Every wired hook command, and whether the file could be read at all."""
-    if not settings_path.exists():
-        return [], True
-    try:
-        settings = json.loads(settings_path.read_text())
-    except (OSError, json.JSONDecodeError):
-        return [], False
-    if not isinstance(settings, dict):
-        return [], False
-    return [str(hook.get("command", "")) for _e, _g, hook in _hook_entries(settings)], True
-
-
-def _is_wired(name: str, commands: list[str]) -> bool:
-    pattern = re.compile(re.escape(f"/.claude/hooks/{name}") + r"""(?=$|[\s"'])""")
-    return any(pattern.search(command) for command in commands)
-
-
-def prune(target: Path, *, dry_run: bool) -> list[str]:
-    """Delete retired stubs that nothing wires, and the ``retired/`` directory."""
-    hooks = target / ".claude" / "hooks"
-    commands, readable = _wired(target / ".claude" / "settings.json")
-    lines: list[str] = []
-    if hooks.is_dir():
-        for path in sorted(p for p in hooks.iterdir() if p.is_file()):
-            if not _has_stub_marker(path):
-                continue
-            if not readable or _is_wired(path.name, commands):
-                why = "still wired" if readable else "settings.json does not parse"
-                lines.append(f"  kept    {path}  ({why})")
-                continue
-            if not dry_run:
-                path.unlink()
-            lines.append(f"  {'would remove' if dry_run else 'removed'} {path}")
-    retired = hooks / "retired"
-    if retired.is_dir():
-        if not dry_run:
-            shutil.rmtree(retired)
-        lines.append(f"  {'would remove' if dry_run else 'removed'} {retired}")
-    if not lines:
-        lines.append("  nothing to prune - already clean")
+    lines.extend(_retire_utils(hooks, retired, manifest, dry_run))
+    if manifest != before and not dry_run:
+        (retired / MANIFEST).write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     return lines
