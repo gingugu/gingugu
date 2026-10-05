@@ -11,7 +11,7 @@ import sys
 
 import pytest
 
-from gingugu import proxy, remote
+from gingugu import proxy, proxy_preflight, remote
 from gingugu.remote import RemoteTarget
 
 URL = "http://brain.local:8765"
@@ -19,8 +19,31 @@ TOKEN = "B" * 43
 TARGET = RemoteTarget(URL, "env")
 
 
+class FakeClock:
+    """Stands in for monotonic + sleep so the retry budget runs instantly."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.sleeps: list[float] = []
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+
 @pytest.fixture
-def vault(monkeypatch):
+def clock(monkeypatch):
+    fake = FakeClock()
+    monkeypatch.setattr(proxy_preflight, "_monotonic", fake.monotonic)
+    monkeypatch.setattr(proxy_preflight, "_sleep", fake.sleep)
+    return fake
+
+
+@pytest.fixture
+def vault(monkeypatch, clock):
     store: dict[str, str] = {URL: TOKEN}
     monkeypatch.setattr(remote, "_kr_get", lambda url: store.get(url))
     monkeypatch.setattr(remote, "_reachable", lambda url, token: True)
@@ -82,6 +105,39 @@ def test_unreachable_brain_is_refused(vault, monkeypatch):
     monkeypatch.setattr(remote, "_reachable", lambda url, token: False)
     message = _refusal()
     assert "unreachable" in message.lower() and URL in message
+
+
+def test_a_brain_that_answers_first_time_costs_no_wait(vault, clock):
+    assert proxy.preflight(TARGET, grant=None, credentials_enabled=False) == TOKEN
+    assert clock.sleeps == []
+
+
+def test_a_brain_slow_to_answer_after_idle_is_retried_not_refused(vault, monkeypatch, clock):
+    # A dozing WiFi radio or a cold .local lookup loses the first probe or two;
+    # one miss must not cost the whole session.
+    answers = iter([False, False, True])
+    monkeypatch.setattr(remote, "_reachable", lambda url, token: next(answers))
+    assert proxy.preflight(TARGET, grant=None, credentials_enabled=False) == TOKEN
+    assert len(clock.sleeps) == 2
+    assert clock.sleeps == sorted(clock.sleeps)  # backs off, never hammers
+
+
+def test_retries_stop_at_the_budget_and_then_refuse(vault, monkeypatch, clock):
+    probes = []
+
+    def never(url, token):
+        probes.append(clock.now)
+        return False
+
+    monkeypatch.setattr(remote, "_reachable", never)
+    message = _refusal()
+    assert "unreachable" in message.lower() and URL in message
+    assert len(probes) > 2
+    # No probe starts after the budget, so the client's own connect timeout
+    # (30s in Claude Code) still sees the refusal rather than a hang.
+    assert max(probes) < proxy_preflight.REACH_BUDGET_S
+    assert clock.now <= proxy_preflight.REACH_BUDGET_S
+    assert max(clock.sleeps) <= proxy_preflight.MAX_BACKOFF_S
 
 
 def test_grant_is_checked_before_the_network(vault, monkeypatch):
