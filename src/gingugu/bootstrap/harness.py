@@ -17,12 +17,14 @@ Ownership rules, in one place:
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from ..prompt_hook import _PERSONA_RE as NAMESPACE_RE
 from . import init_claude_code, theme
 from ._files import read_template, safe_read, write_file
-from .harness_migrate import migrate_settings, prune, retire_legacy
+from .harness_migrate import migrate_settings, retire_legacy
+from .harness_prune import prune
 from .harness_settings import wire_harness_settings
 from .settings import is_user_level, load_settings, write_settings
 
@@ -44,6 +46,13 @@ _MANAGED = [
     ),
     ("skills/creating-pr/stacking-prs.md", ".claude/skills/creating-pr/stacking-prs.md"),
 ]
+_INIT_HOOKS = (
+    "session_start.py",
+    "stop.py",
+    "user_prompt_recall.py",
+    "pre_tool_tripwire.py",
+    "subagent_warmup.py",
+)
 _AI_FILES = (
     "memory.md",
     "plans/status.md",
@@ -72,13 +81,27 @@ def _install_managed(
     results: list[str],
     force_hooks: bool = False,
 ) -> None:
-    """``force_hooks`` force-replaces only our hook scripts (``--migrate``)."""
+    """``force_hooks`` force-replaces only hook scripts (``--migrate``).
+
+    That covers init's five hooks too: migrate runs init without force so init's
+    skill (``sink-the-ship``, which a repo may have made its own) is never
+    replaced, then forces init's hooks here.
+    """
     grant = minion_grant(namespace)
+
+    def write(dest: Path, content: str, forced: bool) -> None:
+        if forced and force_hooks and dest.is_symlink():  # never write through a link
+            results.append(f"  skip   {dest}  (a symlink; not replaced)")
+            return
+        write_file(dest, content, force=forced, dry_run=dry_run, results=results)
+
+    if force_hooks and not force:
+        for name in _INIT_HOOKS:
+            write(target / ".claude" / "hooks" / name, read_template(f"{name}.tmpl"), True)
     for template, dest in _MANAGED:
         content = read_template(f"{_T}{template}.tmpl")
         content = content.replace("{{grant}}", grant).replace("{{namespace}}", namespace)
-        forced = force or (force_hooks and dest.startswith(".claude/hooks/"))
-        write_file(target / dest, content, force=forced, dry_run=dry_run, results=results)
+        write(target / dest, content, force or (force_hooks and dest.startswith(".claude/hooks/")))
 
 
 def _scaffold_ai(target: Path, *, dry_run: bool, results: list[str]) -> None:
@@ -146,6 +169,16 @@ def _apply_claude_md(
     results.append(f"  {verb} harness block in {path}{note}")
 
 
+def _settings_object(raw: str | None) -> bool:
+    """True when there is no settings file, or it holds a JSON object."""
+    if raw is None:
+        return True
+    try:
+        return isinstance(json.loads(raw), dict)
+    except ValueError:
+        return False
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="gingugu harness",
@@ -192,24 +225,34 @@ def main(argv: list[str] | None = None) -> int:
         print(theme.render(results, dry_run=args.dry_run))
         return 0
 
+    settings_path = target / ".claude" / "settings.json"
+    settings_existed = settings_path.exists()
+    settings_start = settings_path.read_text() if settings_existed else None
+    if args.migrate and not _settings_object(settings_start):
+        print(f"error: {settings_path} is not a JSON object; fix it before --migrate.")
+        return 1
+
     claude_md = target / "CLAUDE.md"
     original = safe_read(claude_md) if claude_md.exists() else None
     if not claude_md.exists() and not args.dry_run:
         # Created before init so its protocol block merges in this same run.
         claude_md.write_text(f"# {namespace}\n")
-    settings_path = target / ".claude" / "settings.json"
-    settings_existed = settings_path.exists()
-    settings_start = settings_path.read_text() if settings_existed else None
 
     migrated: list[str] = []
     if args.migrate:
         # Before init, so init's additive merge sees the cleaned settings.
         settings = load_settings(settings_path)
-        migrated = migrate_settings(settings, dry_run=args.dry_run)
+        hooks_dir = target / ".claude" / "hooks"
+        migrated = migrate_settings(settings, hooks_dir, dry_run=args.dry_run)
         if migrated and not args.dry_run:
+            # Back up first: a later step can fail, and the original must survive it.
+            (settings_path.parent / "settings.json.bak").write_text(settings_start or "")
             write_settings(settings_path, settings)
 
-    results = init_claude_code(target, force=args.force or args.migrate, dry_run=args.dry_run)
+    results = init_claude_code(target, force=args.force, dry_run=args.dry_run)
+    if migrated and not args.dry_run:
+        # init backs settings up too - from the already-migrated file. Restore ours.
+        (settings_path.parent / "settings.json.bak").write_text(settings_start or "")
     project_settings = str(target / ".claude" / "settings.json")
     init_backed_up = any(
         project_settings in line and "settings.json.bak" in line for line in results

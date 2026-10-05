@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `permissions.deny` entries for Opus minions and destructive git and `rm`
   commands. Nothing it installs calls out to the network or needs an API key.
   Plain `init` is unchanged.
+- **`gingugu harness --migrate` and `--prune`: move a repo off an older hook
+  kit.** `--migrate` replaces gingugu's own hooks (with a `.bak`), unwires the
+  legacy one-script-per-event loggers in favour of `log_event`, resets gingugu's
+  hook commands to their current flags, and retires the legacy scripts into
+  `.claude/hooks/retired/` behind exit-0 stubs so a running session is never
+  blocked. A script counts as the old kit's only by name *and* the kit's
+  fingerprint; repo-specific agents, skills, unknown hooks and symlinks are
+  untouched. After a restart, `--prune` removes only what a hash manifest proves
+  it moved and nothing still wires - edited files and still-wired stubs stay.
 
 ### Fixed
 
