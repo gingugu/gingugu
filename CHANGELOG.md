@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The remote-mode proxy exits when its client does.** An MCP client shuts a
+  stdio server down by closing its stdin. The proxy noticed, but never closed
+  its own output stream, so the process lived on afterwards - holding a brain
+  session - until something killed it. It now exits cleanly.
+- **A refused machine token gives its clean message again.** In remote mode,
+  "the brain refused the machine token - run `gingugu remote login`" came out
+  buried in a traceback; it now prints alone, with exit code 1.
+
 ---
 
 ## [0.21.3] - 2026-10-04

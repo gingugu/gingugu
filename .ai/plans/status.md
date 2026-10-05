@@ -68,6 +68,19 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
 
 ## Recently Completed
 
+**Proxy exits on stdin EOF (2026-10-04, `fix/proxy-stdin-eof`, unreleased).**
+Found live-verifying 0.21.3: a remote-mode `gingugu` answered `initialize`, then
+kept running after its stdin closed (one probe lived ~58 min). `serve_stdio`
+never closed the stdio write stream, and the SDK's `stdout_writer` runs until it
+closes. Also, a refused machine token escaped `stdio_server`'s task group as an
+ExceptionGroup, so `server.main`'s `except ProxyLost` (exit 1, "run gingugu
+remote login") missed it. New `proxy.serve` (the async body, optional
+stdin/stdout) closes the stream when `run` ends and unwraps `ProxyLost` via
+`fatal_in`. The existing "client closing ends the proxy" test drove `run` on
+memory streams, below the stdio layer; `tests/test_proxy_stdio.py` drives the
+real SDK transport. Live: the branch build exits 0 after EOF. Full suite 1673
+passed; proxy suites green on 3.11.
+
 **Released 0.21.3 to PyPI (2026-10-04): preflight retries a slow brain
 (#107).** A session opened with gingugu down: the proxy's one 3s
 `/healthz` probe missed because `beepboop.local` did not resolve after hours
