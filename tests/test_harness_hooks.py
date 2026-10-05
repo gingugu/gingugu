@@ -81,6 +81,14 @@ def test_log_event_never_fails_the_session(repo):
         ("Read", {"file_path": "/home/me/.ssh/id_ed25519.pem"}),
         ("Bash", {"command": "cat .env"}),
         ("Bash", {"command": "rm -rf /"}),
+        # An ls/find/git prefix exempts only a lone command, not a chain.
+        ("Bash", {"command": "ls; cat .env"}),
+        ("Bash", {"command": "git status && cat ~/.ssh/id_rsa"}),
+        # .pem/.key mid-command, not only at the very end.
+        ("Bash", {"command": "cat server.key | base64"}),
+        # Grep returns file contents, so it is a read.
+        ("Grep", {"pattern": "KEY", "path": "/work/app/.env"}),
+        ("Grep", {"pattern": "KEY", "glob": ".env*"}),
     ],
 )
 def test_guard_blocks(repo, tool, tool_input):
@@ -97,11 +105,60 @@ def test_guard_blocks(repo, tool, tool_input):
         ("Write", {"file_path": "/work/app/.env.example", "content": "KEY="}),
         ("Bash", {"command": "ls -la"}),
         ("Bash", {"command": "rm build/output.txt"}),
+        ("Bash", {"command": "git log --oneline"}),
+        ("Read", {"file_path": "/work/app/docs/keychain.md"}),
+        ("Grep", {"pattern": "def main", "path": "/work/app/src"}),
     ],
 )
 def test_guard_allows(repo, tool, tool_input):
     payload = {"hook_event_name": "PreToolUse", "tool_name": tool, "tool_input": tool_input}
     assert _hook(repo, "pre_tool_use.py", payload).returncode == 0
+
+
+SECRET = "SUPERSECRET123"
+
+
+def test_guard_never_logs_what_it_blocked(repo):
+    write = {"file_path": "/work/app/.env", "content": f"TOKEN={SECRET}"}
+    payload = {"hook_event_name": "PreToolUse", "tool_name": "Write", "tool_input": write}
+    assert _hook(repo, "pre_tool_use.py", payload).returncode == 2
+    bash = {"hook_event_name": "PreToolUse", "tool_name": "Bash"}
+    _hook(repo, "pre_tool_use.py", {**bash, "tool_input": {"command": f"export T={SECRET}"}})
+
+    log = repo / "logs" / "pre_tool_use.jsonl"
+    assert SECRET not in (log.read_text() if log.exists() else "")
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Write",
+            "tool_input": {"file_path": "/work/app/a.txt", "content": SECRET},
+            "tool_response": {"stdout": SECRET},
+        },
+        {"hook_event_name": "UserPromptSubmit", "prompt": f"my key is {SECRET}"},
+        {"hook_event_name": "ElicitationResult", "content": {"password": SECRET}},
+    ],
+)
+def test_log_event_records_metadata_not_content(repo, payload):
+    assert _hook(repo, "log_event.py", payload).returncode == 0
+    logs = "".join(p.read_text() for p in (repo / "logs").glob("*.jsonl"))
+    assert payload["hook_event_name"] in logs
+    assert SECRET not in logs
+
+
+def test_log_event_keeps_the_tool_and_path(repo):
+    payload = {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Write",
+        "tool_input": {"file_path": "/work/app/a.txt", "content": "x"},
+    }
+    _hook(repo, "log_event.py", payload)
+    (entry,) = _lines(repo / "logs" / "post_tool_use.jsonl")
+    assert entry["tool_name"] == "Write"
+    assert entry["tool_input"] == {"file_path": "/work/app/a.txt"}
 
 
 def test_guard_never_fails_on_a_bad_payload(repo):
@@ -122,9 +179,15 @@ def test_pre_compact_backs_up_the_transcript(repo, tmp_path):
     }
     assert _hook(repo, "pre_compact.py", payload, "--backup").returncode == 0
 
-    backups = list((repo / "logs" / "transcript_backups").iterdir())
+    # Under .claude/data/ (git-ignored by init), owner-only: it holds the whole session.
+    backup_dir = repo / ".claude" / "data" / "transcript_backups"
+    backups = list(backup_dir.iterdir())
     assert len(backups) == 1
     assert backups[0].read_text() == transcript.read_text()
+    assert not (repo / "logs" / "transcript_backups").exists()
+    if os.name != "nt":
+        assert backup_dir.stat().st_mode & 0o777 == 0o700
+        assert backups[0].stat().st_mode & 0o777 == 0o600
 
 
 def test_pre_compact_without_a_transcript_is_harmless(repo):

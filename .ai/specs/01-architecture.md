@@ -626,6 +626,22 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   (`theme.py`, degrades to monochrome off-TTY). Other clients (`--client`) get a
   rules file. This closes the gap where the repo's own hook-based install
   outperformed the copy-paste setup shipped to users.
+- **`gingugu harness` is `init` plus the working kit, as a separate command.**
+  Plain `init` stays gingugu-only; `harness` (`bootstrap/harness.py`, templates
+  under `bootstrap/templates/harness/`) runs `init` and layers on a secrets/`rm`
+  guard, one stdlib JSON-lines logger for the remaining hook events (the kit
+  it replaces had one near-identical script per event, each rewriting a growing
+  JSON array on every call), a pre-compaction transcript backup, three fenced
+  minions whose `{{namespace}}` is rendered from the folder name, `/creating-pr`,
+  a create-only `.ai/` scaffold, a managed block in the repo `CLAUDE.md`, and
+  deny rules. Voice and LLM-calling hooks were left out deliberately: nothing
+  installed may call the network or need an API key, and a test enforces it.
+  Logs are metadata-only by allowlist: hook payloads carry file bodies,
+  command output and prompts, and a security review found the guard logging a
+  blocked `.env` write - secret included - before deciding. Transcript backups
+  hold the whole session, so they live under `.claude/data/` at 0700/0600.
+  It creates the repo `CLAUDE.md` before running `init` so `init`'s protocol
+  block lands in the same run and a re-run changes nothing.
 - **The user-level rules file is part of the bootstrap, and is merged, not
   written.** `bootstrap/global_rules.py` manages the protocol inside a marked
   block in `~/.claude/CLAUDE.md` - the file loaded in *every* session, including

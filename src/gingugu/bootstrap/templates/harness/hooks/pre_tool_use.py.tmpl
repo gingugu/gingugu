@@ -21,17 +21,36 @@ import sys
 from datetime import datetime
 
 
-def append_to_log(log_name: str, input_data: dict) -> None:
-    """Append one JSON line to <project>/logs/<log_name>.jsonl."""
+def log_decision(input_data: dict, decision: str) -> None:
+    """Append the tool, the path it named and the decision to logs/pre_tool_use.jsonl.
+
+    Never the content or the command: a blocked write to .env carries the very
+    secret this guard exists to keep off disk.
+    """
     try:
+        tool_input = input_data.get("tool_input")
+        tool_input = tool_input if isinstance(tool_input, dict) else {}
+        entry = {
+            "session_id": input_data.get("session_id"),
+            "tool_name": input_data.get("tool_name"),
+            "decision": decision,
+            "logged_at": datetime.now().isoformat(),
+        }
+        for key in ("file_path", "path"):
+            if isinstance(tool_input.get(key), str):
+                entry[key] = tool_input[key]
         project = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
         log_dir = os.path.join(project, "logs")
         os.makedirs(log_dir, exist_ok=True)
-        entry = {**input_data, "logged_at": datetime.now().isoformat()}
-        with open(os.path.join(log_dir, f"{log_name}.jsonl"), "a") as f:
+        with open(os.path.join(log_dir, "pre_tool_use.jsonl"), "a") as f:
             f.write(json.dumps(entry) + "\n")
     except Exception:
         pass  # Silent failure
+
+
+# ls, find and git may name a sensitive file without reading it - but only as a
+# lone command. `ls; cat .env` is a read.
+_LONE_SAFE_COMMAND = re.compile(r"^(ls|find|git)\s[^;&|`$()<>\n]*$")
 
 
 def is_dangerous_rm_command(command):
@@ -98,27 +117,26 @@ def is_sensitive_file_access(tool_name, tool_input):
         r"(?<![\w.])\.env\b(?!\.sample|\.example|\.template)",
         r"credentials\.(json|yaml|yml|xml|toml)",
         r"secrets?\.(json|yaml|yml|xml|toml)",
-        r"\.pem$",
-        r"\.key$",
+        # A key file named anywhere in the string (`cat a.key | base64`), not
+        # only at its end. The \w before the dot keeps `jq '.key'` passing.
+        r"\w\.pem\b",
+        r"\w\.key\b",
     ]
 
-    if tool_name in ["Read", "Edit", "MultiEdit", "Write"]:
-        file_path = tool_input.get("file_path", "")
-        if names_private_ssh_key(file_path):
+    def sensitive(text):
+        if names_private_ssh_key(text):
             return True
-        for pattern in sensitive_patterns:
-            if re.search(pattern, file_path, re.IGNORECASE):
-                return True
+        return any(re.search(p, text, re.IGNORECASE) for p in sensitive_patterns)
 
-    elif tool_name == "Bash":
+    if tool_name in ["Read", "Edit", "MultiEdit", "Write"]:
+        return sensitive(tool_input.get("file_path", ""))
+
+    if tool_name == "Grep":  # Grep returns file contents, so it is a read
+        return any(sensitive(str(tool_input.get(k) or "")) for k in ("path", "glob"))
+
+    if tool_name == "Bash":
         command = tool_input.get("command", "")
-        if names_private_ssh_key(command) and not re.match(r"^(ls|find|git)\s", command.strip()):
-            return True
-        for pattern in sensitive_patterns:
-            if re.search(pattern, command, re.IGNORECASE):
-                if re.match(r"^(ls|find|git)\s", command.strip()):
-                    return False
-                return True
+        return sensitive(command) and not _LONE_SAFE_COMMAND.match(command.strip())
 
     return False
 
@@ -126,13 +144,11 @@ def is_sensitive_file_access(tool_name, tool_input):
 def main():
     try:
         input_data = json.load(sys.stdin)
-
-        append_to_log("pre_tool_use", input_data)
-
         tool_name = input_data.get("tool_name", "")
         tool_input = input_data.get("tool_input", {})
 
         if is_sensitive_file_access(tool_name, tool_input):
+            log_decision(input_data, "block")
             msg = (
                 "BLOCKED: Access to sensitive files "
                 "(.env, credentials, secrets, keys) "
@@ -149,6 +165,7 @@ def main():
         if tool_name == "Bash":
             command = tool_input.get("command", "")
             if is_dangerous_rm_command(command):
+                log_decision(input_data, "block")
                 print(
                     "BLOCKED: Dangerous rm command "
                     "detected and prevented",
@@ -156,6 +173,7 @@ def main():
                 )
                 sys.exit(2)
 
+        log_decision(input_data, "allow")
         sys.exit(0)
 
     except json.JSONDecodeError:
