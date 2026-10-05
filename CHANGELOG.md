@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.21.4] - 2026-10-05
+
 ### Fixed
 
 - **The remote-mode proxy exits when its client does.** An MCP client shuts a

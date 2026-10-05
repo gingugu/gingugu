@@ -351,7 +351,11 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.21.3** (PyPI). Patch: remote-mode preflight retries
+- Current version: **0.21.4** (PyPI). Patch: the remote-mode proxy exits when
+  its client closes stdin (it closed nothing, so the SDK's stdout writer kept
+  the process alive), and a refused machine token exits 1 with its message
+  instead of a traceback (#108).
+- 0.21.3: patch: remote-mode preflight retries
   `/healthz` for up to 15s before refusing to start, so a brain slow to answer
   after idle (WiFi power save, cold `.local` lookup) no longer costs the
   session (#107).

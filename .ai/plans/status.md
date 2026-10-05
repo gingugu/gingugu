@@ -68,7 +68,7 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
 
 ## Recently Completed
 
-**Proxy exits on stdin EOF (2026-10-04, `fix/proxy-stdin-eof`, unreleased).**
+**Released 0.21.4 to PyPI (2026-10-05): proxy exits on stdin EOF (#108).**
 Found live-verifying 0.21.3: a remote-mode `gingugu` answered `initialize`, then
 kept running after its stdin closed (one probe lived ~58 min). `serve_stdio`
 never closed the stdio write stream, and the SDK's `stdout_writer` runs until it
