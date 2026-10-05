@@ -157,7 +157,12 @@ def merge_block(existing: str, protocol: str) -> tuple[str | None, str]:
     end = existing.find(END_MARKER)
     if start != -1 and end != -1 and end > start:
         head = existing[:start]
-        tail = existing[end + len(END_MARKER) :].lstrip("\n")
+        # Drop only the newline that closes the END marker (the block text ends
+        # with its own). Stripping every leading newline ate the blank line before
+        # whatever follows, so a managed block with content after it was rewritten
+        # on every run.
+        tail = existing[end + len(END_MARKER) :]
+        tail = tail[1:] if tail.startswith("\n") else tail
         rebuilt = f"{head}{block}{tail}"
         if rebuilt == existing:
             return None, "current"
