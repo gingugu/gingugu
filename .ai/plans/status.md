@@ -68,6 +68,20 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
 
 ## Recently Completed
 
+**Preflight retries a slow brain (2026-10-04, `fix/preflight-retry`,
+unreleased).** A session opened with gingugu down: the proxy's one 3s
+`/healthz` probe missed because `beepboop.local` did not resolve after hours
+idle, and Claude Code never retries a server that exits at startup. Cause, measured on the
+Pi: it is on WiFi (`brcmfmac`) with power saving on by default - pings with 4s
+gaps averaged 156 ms (max 392) against 9 ms back to back. `preflight` now
+probes for up to 15s (backoff 0.5s, 1s, 2s cap; no probe starts after the
+deadline); live, a dead host is refused at 16.5s, inside the 30s client connect
+timeout. This supersedes the single-probe "unreachable brain" refusal in the
+B1 entry below. Separately, Pi WiFi power save was turned off
+(`802-11-wireless.powersave 2` on its NetworkManager connection; 4s-gap pings
+then averaged 33 ms) - **a step for the board #11 bootstrap script.** Tests:
+three new preflight cases on a fake clock; full suite 1671 passed.
+
 **Released 0.21.2 to PyPI (2026-10-04): proxy survives a brain restart
 without losing calls (#106).** After the 0.21.1 Pi restart,
 Tyrone's live proxy lost a whole batch of `memory_store` calls: the brain had

@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Remote mode rides out a brain that is slow to answer at startup.** The
+  proxy's startup check made one 3-second probe and refused to start on a miss,
+  and an MCP client does not retry a server that exits at startup - so a brain
+  on WiFi that lost the first packet after a quiet spell (radio power saving, a
+  cold `.local` lookup) cost the whole session its memory. The check now keeps
+  probing for up to 15 seconds with a short backoff before refusing, well
+  inside Claude Code's 30-second connect timeout. A brain that answers first
+  time costs no wait.
+
 ---
 
 ## [0.21.2] - 2026-10-04

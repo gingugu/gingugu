@@ -397,8 +397,13 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   keychain or network): malformed, blank or `*=write` `MEMORY_GRANT`;
   `MEMORY_CREDENTIALS_ENABLED` not false together with a `MEMORY_GRANT` (a
   scoped client never gets the vault); no keychain token (points at
-  `gingugu remote login`); brain unreachable (`/healthz`). Plain http to a
-  non-loopback host warns on stderr. Exit 2 on refusal.
+  `gingugu remote login`); brain unreachable (`/healthz`, retried for up to
+  `REACH_BUDGET_S` = 15s with 0.5s -> 1s -> 2s backoff, no probe after the
+  deadline; refusal reads `unreachable after 15s: <url>`). The retry exists
+  because an MCP client never retries a server that exits at startup, and a
+  brain on WiFi can drop the first packet after idle; the budget stays inside
+  Claude Code's 30s connect timeout. Plain http to a non-loopback host warns
+  on stderr. Exit 2 on refusal.
 - **Local vault** (`proxy_vault.py`): the vault is the machine's keychain plus
   its local DB's `credential_*` tables, which a remote brain cannot serve. With
   credentials on (owner only, per preflight), `server.main` hands the proxy
