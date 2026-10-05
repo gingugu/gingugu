@@ -82,6 +82,17 @@ scaffold, a managed `CLAUDE.md` block and deny rules - with the voice/LLM hooks
 left out so nothing installed needs an API key. Tests first
 (`tests/test_harness_install.py`, `tests/test_harness_hooks.py`).
 
+Dogfooded on this repo by hand: `session_start`, `stop`, `pre_tool_use`,
+`pre_compact` and the new `log_event` are now the packaged templates, the 19
+old per-event logging scripts are unwired in favour of `log_event`, and `Stop`
+no longer runs `--chat`/`--notify`. This repo keeps its own gingugu-specific
+minions, `creating-pr` skill and `CLAUDE.md` sections. **Still to do:** delete
+the old kit scripts and `.claude/hooks/utils/` after a Claude Code restart (a
+running session keeps calling the hooks it started with), and a **`migrate`
+mode** for `gingugu harness`: on a repo with an existing kit it should replace
+and unwire old hooks rather than only add, and keep repo-specific agents and
+skills. `--force` overwrites them with the generic templates today.
+
 **`gingugu init` aimed at the home directory does the user-level steps only
 (2026-10-05, branch `fix/init-home-target`, unreleased).** Run from `~`, init
 wrote its hooks into `~/.claude/settings.json` - the user-level file, loaded in

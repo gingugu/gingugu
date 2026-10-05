@@ -121,7 +121,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/post_tool_use.py",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
             "timeout": 10
           }
         ]
@@ -133,7 +133,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/post_tool_use_failure.py",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
             "timeout": 10
           }
         ]
@@ -144,7 +144,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/user_prompt_submit.py --log-only --store-last-prompt --name-agent",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
             "timeout": 30
           }
         ]
@@ -166,7 +166,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/notification.py --notify",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
             "timeout": 30
           }
         ]
@@ -178,7 +178,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/stop.py --chat --notify --check-memory-saves",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/stop.py --check-memory-saves",
             "timeout": 30
           }
         ]
@@ -190,7 +190,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/subagent_stop.py --notify",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
             "timeout": 30
           }
         ]
@@ -202,7 +202,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/subagent_start.py",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
             "timeout": 10
           }
         ]
@@ -236,7 +236,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/session_end.py",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
             "timeout": 10
           }
         ]
@@ -260,7 +260,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/permission_request.py --log-only",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
             "timeout": 10
           }
         ]
@@ -272,7 +272,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/stop_failure.py",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
             "timeout": 10
           }
         ]
@@ -284,7 +284,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/post_compact.py",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
             "timeout": 15
           }
         ]
@@ -295,7 +295,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/task_created.py",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
             "timeout": 10
           }
         ]
@@ -306,7 +306,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/task_completed.py",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
             "timeout": 10
           }
         ]
@@ -317,7 +317,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/teammate_idle.py",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
             "timeout": 10
           }
         ]
@@ -329,7 +329,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/config_change.py",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
             "timeout": 10
           }
         ]
@@ -340,7 +340,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/cwd_changed.py",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
             "timeout": 10
           }
         ]
@@ -352,7 +352,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/file_changed.py",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
             "timeout": 10
           }
         ]
@@ -364,7 +364,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/instructions_loaded.py",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
             "timeout": 10
           }
         ]
@@ -376,7 +376,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/elicitation.py",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
             "timeout": 10
           }
         ]
@@ -388,7 +388,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/elicitation_result.py",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
             "timeout": 10
           }
         ]
