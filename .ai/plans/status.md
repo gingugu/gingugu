@@ -86,9 +86,10 @@ Dogfooded on this repo by hand: `session_start`, `stop`, `pre_tool_use`,
 `pre_compact` and the new `log_event` are now the packaged templates, the 19
 old per-event logging scripts are unwired in favour of `log_event`, and `Stop`
 no longer runs `--chat`/`--notify`. This repo keeps its own gingugu-specific
-minions, `creating-pr` skill and `CLAUDE.md` sections. **Still to do:** delete
-the old kit scripts and `.claude/hooks/utils/` after a Claude Code restart (a
-running session keeps calling the hooks it started with).
+minions, `creating-pr` skill and `CLAUDE.md` sections. After a restart the old
+kit scripts and `.claude/hooks/utils/` were retired by the shipped
+`--migrate` / `--prune` itself (below); `.claude/hooks/` now holds only the
+eight scripts gingugu ships.
 
 **`gingugu harness --migrate` / `--prune` (2026-10-05, same branch).** What the
 hand migration above did, as a mode: replace gingugu's own hooks, unwire the
@@ -102,6 +103,14 @@ directory; it now touches only what is provably the kit's (name + fingerprint)
 and deletes only what a sha256 manifest proves it moved. Live-verified on a copy
 of this repo's own pre-migration `.claude/`: 19 scripts and 10 `utils/` files
 retired, real Claude Code clean, prune removed all 29, re-migrate a no-op.
+
+Then run for real on this repo, which sharpened three reruns
+(`tests/test_harness_rerun.py`): `--prune --dry-run` now lists the retired
+originals the real run removes (a stub being removed no longer protects its
+original); the `CLAUDE.md` harness block is left out when the file already has
+its own `## AI Knowledge Base Enforcement` section; and `init`'s `.gitignore`
+rules join its existing block instead of a second one under the same header
+(code moved to `bootstrap/gitignore.py`).
 
 **`gingugu init` aimed at the home directory does the user-level steps only
 (2026-10-05, branch `fix/init-home-target`, unreleased).** Run from `~`, init
