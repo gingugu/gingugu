@@ -357,7 +357,11 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.22.0** (PyPI). Minor: `gingugu harness` installs the
+- Current version: **0.22.1** (PyPI). Patch: `gingugu harness` dry runs and
+  reruns report what the real run does (`--migrate` `utils/` move, a missing
+  `CLAUDE.md` created by `init` as a new file, identical bytes are `no change`,
+  `would overwrite`), and a dangling `CLAUDE.md` symlink is skipped (#113).
+- 0.22.0: minor: `gingugu harness` installs the
   Claude Code kit on top of `init` (guard, JSON-lines logging, transcript
   backup, three fenced minions, `/creating-pr`, `.ai/` scaffold, managed
   `CLAUDE.md` block, deny rules); `--migrate` / `--prune` move a repo off the
