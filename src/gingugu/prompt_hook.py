@@ -22,7 +22,7 @@ from pathlib import Path
 from .recall_gate import GateConfig, is_worth_embedding, render, strip_affect
 
 GLOBAL_NAMESPACE = "crow"
-_PERSONA_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+_PERSONA_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")  # also the harness's namespace rule
 
 # How long logging the prompt may wait on a busy database. The hook holds the
 # user's turn, so losing one row beats a visible stall.

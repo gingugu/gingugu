@@ -1725,7 +1725,7 @@ src/gingugu/
 ├── __init__.py             # Package init + version
 │
 │   # ── Entry points ──────────────────────────────────────────────
-├── server.py               # MCP server; stdio / serve / token / remote / promote / init / ui / dream / embed / hook dispatch, plus the remote-proxy branch of bare `gingugu`
+├── server.py               # MCP server; stdio / serve / token / remote / promote / init / harness / ui / dream / embed / hook dispatch, plus the remote-proxy branch of bare `gingugu`
 ├── serve.py                # gingugu serve: streamable HTTP + Bearer auth + /healthz + POST /token/derive; build_app
 ├── serve_tokens.py         # Serve tokens: hashed store, scoped + per-machine owner tokens
 ├── serve_derive.py         # POST /token/derive: owner token -> short-lived derived token
@@ -1748,9 +1748,16 @@ src/gingugu/
 ├── bootstrap/
 │   ├── __init__.py         # gingugu init: hooks + the /sink-the-ship skill
 │   ├── _files.py           # Write primitives; never destroy user bytes without a copy
+│   ├── gitignore.py        # init's .gitignore rules, joined to an earlier run's block
 │   ├── global_rules.py     # The managed protocol block in CLAUDE.md / AGENTS.md
+│   ├── harness.py          # gingugu harness: init + guard, logging, minions, .ai/, CLAUDE.md block
+│   ├── harness_migrate.py  # harness --migrate: unwire + retire an older per-event hook kit
+│   ├── harness_prune.py    # harness --prune: delete only what the manifest proves it moved
+│   ├── harness_retired.py  # Kit file names, sha256 manifest, symlink checks
+│   ├── harness_settings.py # Harness hooks + deny rules, merged additively; hook-command parsing
 │   ├── settings.py         # Non-destructive .claude/settings.json merge
-│   └── theme.py            # The 90s boot sequence; degrades to monochrome off-TTY
+│   ├── theme.py            # The 90s boot sequence; degrades to monochrome off-TTY
+│   └── templates/harness/  # Hooks, minions, skill, .ai/ scaffold, CLAUDE.md block
 │
 │   # ── Storage ───────────────────────────────────────────────────
 ├── database.py             # The connection alone: WAL, foreign keys, busy timeout

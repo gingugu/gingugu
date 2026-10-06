@@ -9,6 +9,7 @@ Idempotent: re-running is a no-op.
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 
@@ -109,15 +110,15 @@ def foreign_flags(command: str, marker: str, *, script: Path | None = None) -> l
     ]
 
 
-def _hook_group(command: str, timeout: int) -> dict:
-    return {
-        "matcher": "",
-        "hooks": [{"type": "command", "command": command, "timeout": timeout}],
-    }
+def _hook_group(command: str, timeout: int, matcher: str | None = "") -> dict:
+    """One hook group. ``matcher=None`` omits the key (events with no matcher)."""
+    group: dict = {} if matcher is None else {"matcher": matcher}
+    group["hooks"] = [{"type": "command", "command": command, "timeout": timeout}]
+    return group
 
 
 def merge_settings(
-    settings: dict, *, hooks_dir: Path | None = None
+    settings: dict, *, hooks_dir: Path | None = None, hooks: list[tuple] | None = None
 ) -> tuple[dict, list[str], list[str]]:
     """Return (updated settings, events added, warnings about existing wiring).
 
@@ -132,12 +133,17 @@ def merge_settings(
     check reads the real script instead of assuming our template's flag set;
     without it the check falls back to that assumption and can cry wolf over a
     repo running a legitimately richer hook of the same name.
+
+    ``hooks`` defaults to ``_HOOKS``. Entries are ``(event, command, timeout,
+    marker)`` with an optional fifth item, the matcher (default ``""``; ``None``
+    omits the key).
     """
     added: list[str] = []
     warnings: list[str] = []
-    hooks = settings.setdefault("hooks", {})
-    for event, command, timeout, marker in _HOOKS:
-        groups = hooks.setdefault(event, [])
+    event_groups = settings.setdefault("hooks", {})
+    for event, command, timeout, marker, *rest in _HOOKS if hooks is None else hooks:
+        matcher = rest[0] if rest else ""
+        groups = event_groups.setdefault(event, [])
         if not isinstance(groups, list):
             continue  # respect an unexpected shape rather than clobber it
         existing = _matching_commands(groups, marker)
@@ -153,7 +159,7 @@ def merge_settings(
                         f"runtime. Left as-is; reconcile it by hand."
                     )
             continue
-        groups.append(_hook_group(command, timeout))
+        groups.append(_hook_group(command, timeout, matcher))
         added.append(event)
     return settings, added, warnings
 
@@ -200,6 +206,23 @@ def merge_permissions(settings: dict) -> bool:
 
 def user_settings_path() -> Path:
     return Path.home() / ".claude" / "settings.json"
+
+
+def is_user_level(target: Path) -> bool:
+    """True when ``target``'s project settings file IS the user-level one.
+
+    Anchored on ``user_settings_path()`` rather than ``Path.home()`` so the
+    check names the actual hazard: hooks written there are wired as
+    ``$CLAUDE_PROJECT_DIR/...`` and fire in every project, where the script is
+    missing and ``uv`` exits 2 - a block for UserPromptSubmit and PreToolUse.
+    ``samefile`` compares the directories on disk, so neither a symlink nor a
+    differently cased path on a case-insensitive volume slips past;
+    ``resolve()`` alone keeps the case it was given.
+    """
+    try:
+        return os.path.samefile(target, user_settings_path().parent.parent)
+    except OSError:
+        return False
 
 
 def init_user_permissions(*, dry_run: bool, path: Path | None = None) -> list[str]:

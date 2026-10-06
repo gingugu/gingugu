@@ -729,11 +729,88 @@ defaults to the current directory, and some wrappers change that for you. `uv ru
 --directory X gingugu init` runs *in* `X`, so it bootstraps `X` rather than the
 directory you typed the command in. Pass `--path` explicitly when in doubt.
 
+Run from your home directory, `init` does the user-level steps only (the
+`~/.claude/CLAUDE.md` block and the `mcp__brain` permission) and installs no
+hooks: `~/.claude/settings.json` is loaded in every project, and hooks there
+would point at scripts most projects don't have. Run `init` inside each project.
+
 Then register the server as `gingugu` and restart your client:
 
 ```bash
 claude mcp add gingugu -- gingugu
 ```
+
+#### The full harness: `gingugu harness`
+
+`init` sets a repo up to use the brain. `gingugu harness` does that and adds a
+working kit around it:
+
+```bash
+cd your-repo
+gingugu harness
+```
+
+On top of everything `init` installs, it adds:
+
+- **`.claude/hooks/pre_tool_use.py`** - a guard that blocks reading (including
+  through `Grep`) or writing secrets (`.env`, credentials, keys) and dangerous
+  `rm` commands. Template files such as `.env.example` pass. It is a speed
+  bump, not a sandbox: the assistant can edit it.
+- **`.claude/hooks/log_event.py`** - one stdlib-only logger wired to every other
+  Claude Code event, appending a JSON line per event to `logs/<event>.jsonl`.
+  It logs metadata only - the tool, the path it touched, the session - never
+  file contents, command output, prompts or form answers. The guard logs its
+  decisions the same way.
+- **`.claude/hooks/pre_compact.py`** - copies the session transcript to
+  `.claude/data/transcript_backups/` (git-ignored, owner-only) before Claude
+  Code compacts it.
+- **Three fenced minions** in `.claude/agents/`: `repo-scout` (haiku, search
+  and inventory), `security-reviewer` and `ai-docs-auditor` (sonnet). Each runs
+  its own `brain` server that reads `crow` and this repo's namespace and writes
+  only `minions`.
+- **The `/creating-pr` skill** - opens a PR only after assessing the `.ai/`
+  knowledge base.
+- **An `.ai/` knowledge base** - `memory.md`, `plans/status.md`, `specs/`,
+  `standards/`, created only where missing and never overwritten, even with
+  `--force`.
+- **A managed block in the repo's `CLAUDE.md`** (created if missing) saying when
+  to update which `.ai/` file, and which minion to use for what. A `CLAUDE.md`
+  that already has its own `## AI Knowledge Base Enforcement` section keeps it,
+  and gets no second copy.
+- **`permissions.deny`** entries for Opus minions (`Agent(model:opus)`), force
+  pushes, `git reset --hard` and `rm -rf`. Existing entries are kept.
+
+None of it calls out to the network or needs an API key. Same `--force` and
+`--dry-run` semantics as `init`, and the same refusal to install into your home
+directory. The repo's folder name must be a valid namespace.
+
+**Moving off an older hook kit: `--migrate`, then `--prune`.** Plain `harness`
+only ever adds. On a repo that already runs a one-script-per-event logging kit,
+that would leave the old loggers wired beside `log_event`. `gingugu harness
+--migrate` instead:
+
+- replaces gingugu's own hook files (copying each old one to `<name>.bak`);
+- unwires the legacy per-event loggers (`post_tool_use.py`,
+  `user_prompt_submit.py` and the rest of that kit) in favour of `log_event`,
+  and resets gingugu's own hook commands to their current flags;
+- moves the legacy scripts and the kit's own `utils/` files into
+  `.claude/hooks/retired/`, recording a hash of each in a manifest, and leaves a
+  stub at each old path that exits 0 - a running Claude Code session keeps
+  calling the hooks it started with, and a missing script would block your next
+  prompt.
+
+A script counts as the old kit's only if its name matches **and** it carries
+the kit's fingerprint (it writes its own `logs/<name>.json`): a
+`notification.py` you wrote yourself is left wired and untouched. So are your
+own agents, skills, any other files in `utils/`, and any hook it doesn't
+recognise. Symlinks are never written through.
+
+After restarting Claude Code, `gingugu harness --prune` deletes what it can
+prove is ours: stubs that are unedited and that no settings file
+(`settings.json`, `settings.local.json` or your user-level one) still wires, and
+files in `retired/` that the manifest lists and whose bytes still match. A file
+you changed, a stub that is still wired (and the original behind it), and a
+`retired/` that `--migrate` didn't create are all kept.
 
 #### Other tools (Windsurf / Cursor / Cline)
 

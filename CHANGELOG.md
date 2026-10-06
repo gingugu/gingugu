@@ -9,6 +9,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`gingugu harness`: the full Claude Code kit, on top of `init`.** Runs `init`,
+  then adds a secrets-and-`rm` guard hook, one JSON-lines logger for every other
+  hook event (metadata only, never contents or prompts), an owner-only
+  transcript backup under `.claude/data/` before compaction, three fenced minions
+  (`repo-scout`, `security-reviewer`, `ai-docs-auditor`), the `/creating-pr`
+  skill, an `.ai/` knowledge base scaffold, a managed `CLAUDE.md` block (left
+  out when `CLAUDE.md` already carries its own knowledge-base section), and
+  `permissions.deny` entries for Opus minions and destructive git and `rm`
+  commands. Nothing it installs calls out to the network or needs an API key.
+  Plain `init` is unchanged.
+- **`gingugu harness --migrate` and `--prune`: move a repo off an older hook
+  kit.** `--migrate` replaces gingugu's own hooks (with a `.bak`), unwires the
+  legacy one-script-per-event loggers in favour of `log_event`, resets gingugu's
+  hook commands to their current flags, and retires the legacy scripts into
+  `.claude/hooks/retired/` behind exit-0 stubs so a running session is never
+  blocked. A script counts as the old kit's only by name *and* the kit's
+  fingerprint; repo-specific agents, skills, unknown hooks and symlinks are
+  untouched. After a restart, `--prune` removes only what a hash manifest proves
+  it moved and nothing still wires - edited files and still-wired stubs stay.
+  `--prune --dry-run` lists exactly what the real run then removes.
+
+### Fixed
+
+- **`gingugu init` git-ignores the backups it leaves at the repo root.** A
+  refreshed `CLAUDE.md` or `AGENTS.md` leaves `CLAUDE.md.bak` / `AGENTS.md.bak`
+  beside it; both are now in the `.gitignore` rules `init` appends.
+- **New `.gitignore` rules join `init`'s existing block.** A rerun that adds
+  rules puts them under the header an earlier run wrote, instead of opening a
+  second block with the same header.
+- **A refreshed managed block keeps the blank line after it.** Re-running
+  `init` dropped the blank line between its `CLAUDE.md` block and whatever
+  followed, rewriting the file (and leaving a `.bak`) for a change nobody made.
+- **`gingugu init` run from the home directory no longer wires global hooks.**
+  `~/.claude/settings.json` is Claude Code's user-level settings, loaded in
+  every project, so hooks wired there pointed at a project's
+  `.claude/hooks/` and blocked prompts in any project without its own `init`.
+  From home, `init` now refreshes the managed `CLAUDE.md` block and the
+  `mcp__brain` permission only, and says to run `gingugu init` inside each
+  project.
+
 ---
 
 ## [0.21.4] - 2026-10-05

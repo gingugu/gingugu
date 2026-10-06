@@ -19,10 +19,13 @@ from . import theme
 from ._files import read_template as _read_template
 from ._files import retire_file as _retire_file
 from ._files import write_file as _write_file
+from .gitignore import GITIGNORE_ENTRIES as GITIGNORE_ENTRIES
+from .gitignore import ensure_gitignore
 from .global_rules import init_global_rules, init_repo_rules
 from .settings import (
     MINION_ALLOW,
     init_user_permissions,
+    is_user_level,
     load_settings,
     merge_permissions,
     merge_settings,
@@ -35,18 +38,6 @@ CLIENT_RULES_FILES = {
     "cline": ".clinerules",
 }
 
-# Runtime artifacts the installed hooks (and Claude Code itself) generate. These
-# must be git-ignored so a session transcript or local override never lands in
-# the repo — especially on a public one. The ``.bak`` files are init's own:
-# the copy of a user's settings or hook it saves before replacing one.
-GITIGNORE_ENTRIES = [
-    "logs/",
-    ".claude/data/",
-    ".claude/settings.local.json",
-    ".claude/hooks/**/__pycache__/",
-    ".claude/**/*.bak",
-]
-
 _MCP_HINT = (
     "Next steps:\n"
     '  1. Register the Gingugu MCP server in your client under the name "gingugu":\n'
@@ -56,24 +47,12 @@ _MCP_HINT = (
 )
 
 
-def _ensure_gitignore(target: Path, *, dry_run: bool, results: list[str]) -> None:
-    """Append any missing Claude Code / Gingugu ignore rules, non-destructively."""
-    path = target / ".gitignore"
-    existing = path.read_text() if path.exists() else ""
-    present = {line.strip() for line in existing.splitlines()}
-    missing = [entry for entry in GITIGNORE_ENTRIES if entry not in present]
-    if not missing:
-        results.append(f"  .gitignore already covers Claude Code artifacts {path}")
-        return
-
-    block = "# Claude Code / Gingugu artifacts (added by `gingugu init`)\n"
-    block += "\n".join(missing) + "\n"
-    if not dry_run:
-        sep = "" if not existing or existing.endswith("\n") else "\n"
-        prefix = "\n" if existing.strip() else ""
-        path.write_text(existing + sep + prefix + block)
-    verb = "would update" if dry_run else "updated"
-    results.append(f"  {verb} {path}  (+{len(missing)} ignore rule(s))")
+_HOME_NOTE = [
+    "skip hooks: this is your home directory. Its .claude/settings.json is the",
+    "  user-level file loaded in every project, so hooks wired there would block",
+    "  prompts in any project without its own hooks.",
+    "Run `gingugu init` inside each project to install its hooks.",
+]
 
 
 def init_claude_code(target: Path, *, force: bool, dry_run: bool, adopt: bool = False) -> list[str]:
@@ -83,6 +62,18 @@ def init_claude_code(target: Path, *, force: bool, dry_run: bool, adopt: bool = 
     # the command in. Naming the path up front turns a silent wrong-repo write
     # into something you notice on line one.
     results: list[str] = ["Claude Code bootstrap:", f"  target {target}"]
+    if is_user_level(target):
+        # User-level steps only: the managed CLAUDE.md block and the minion
+        # permission belong in ~/.claude; hooks, the skill, and .gitignore are
+        # per-project.
+        results.extend(_HOME_NOTE)
+        results.append("")
+        results.extend(init_global_rules(dry_run=dry_run, adopt=adopt))
+        results.extend(init_user_permissions(dry_run=dry_run))
+        results.append("")
+        results.append(_MCP_HINT)
+        return results
+
     hooks_dir = target / ".claude" / "hooks"
     skill_path = target / ".claude" / "skills" / "sink-the-ship" / "SKILL.md"
     legacy_command = target / ".claude" / "commands" / "sink-the-ship.md"
@@ -171,7 +162,7 @@ def init_claude_code(target: Path, *, force: bool, dry_run: bool, adopt: bool = 
     for warning in warnings:
         results.append(f"  WARNING: {warning}")
 
-    _ensure_gitignore(target, dry_run=dry_run, results=results)
+    ensure_gitignore(target, dry_run=dry_run, results=results)
 
     # The user-level rules file is part of the Claude Code bootstrap, same as the
     # hooks and settings.json — it is what makes the protocol load in sessions

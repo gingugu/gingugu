@@ -115,12 +115,9 @@ def adopt_unmanaged_protocol(existing: str) -> str | None:
     handing the section to gingugu going forward, not preserving the
     hand-written text.
 
-    Whatever comes after the wrapped section ends up glued directly to
-    ``END_MARKER`` with no separating blank line — not a bug introduced here,
-    but the existing, shipped, tested behavior of ``merge_block``'s refresh
-    path (its ``tail`` is always ``lstrip("\\n")``-ed), which this wrap
-    immediately runs through too. Cosmetic only: an HTML comment directly
-    followed by an ATX heading with no blank line still renders correctly.
+    Whatever came after the wrapped section keeps its own leading blank lines:
+    ``merge_block``'s refresh path drops only the newline that closes
+    ``END_MARKER``, which this wrap immediately runs through too.
 
     Returns ``None`` when no heading-bounded section matches, so the caller can
     fall back to the plain conflict message instead of guessing.
@@ -157,7 +154,12 @@ def merge_block(existing: str, protocol: str) -> tuple[str | None, str]:
     end = existing.find(END_MARKER)
     if start != -1 and end != -1 and end > start:
         head = existing[:start]
-        tail = existing[end + len(END_MARKER) :].lstrip("\n")
+        # Drop only the newline that closes the END marker (the block text ends
+        # with its own). Stripping every leading newline ate the blank line before
+        # whatever follows, so a managed block with content after it was rewritten
+        # on every run.
+        tail = existing[end + len(END_MARKER) :]
+        tail = tail[1:] if tail.startswith("\n") else tail
         rebuilt = f"{head}{block}{tail}"
         if rebuilt == existing:
             return None, "current"

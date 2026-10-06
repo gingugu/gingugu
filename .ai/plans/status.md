@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-10-04_
+_Last updated: 2026-10-05_
 
 ## In Flight
 
@@ -64,9 +64,64 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
   `uv run --directory` on the repo, so a branch switch cannot break them.
 - **This machine is switched (2026-10-04).** `gingugu remote on` points it at
   the Pi; the Pi serves the same 3,053 memories the local DB last held.
-- **Remaining:** D - switch a second machine.
+- **D: a second machine switched (2026-10-05).** Another Mac on the LAN got its
+  own mint key, pinned to its own name on the Pi, and verified to get no
+  shell, PTY or port forward. It ran `gingugu remote login` and `remote on`,
+  and runs the same persona as this machine. Live: `/mcp`, `/hook/recall`
+  and `/hook/tripwires` all answer 200 from it. `remote login` has to run in
+  the machine's own GUI session: over SSH the login keychain refuses writes
+  (`errSecInteractionNotAllowed`), though the token is still minted.
 
 ## Recently Completed
+
+**`gingugu harness` (2026-10-05, branch `feature/harness-command`, stacked on
+`fix/init-home-target`, unreleased).** A separate command that runs `init` and
+installs the Claude Code harness this repo runs on: guard, JSON-lines event
+logging, transcript backup, three fenced minions, `/creating-pr`, the `.ai/`
+scaffold, a managed `CLAUDE.md` block and deny rules - with the voice/LLM hooks
+left out so nothing installed needs an API key. Tests first
+(`tests/test_harness_install.py`, `tests/test_harness_hooks.py`).
+
+Dogfooded on this repo by hand: `session_start`, `stop`, `pre_tool_use`,
+`pre_compact` and the new `log_event` are now the packaged templates, the 19
+old per-event logging scripts are unwired in favour of `log_event`, and `Stop`
+no longer runs `--chat`/`--notify`. This repo keeps its own gingugu-specific
+minions, `creating-pr` skill and `CLAUDE.md` sections. After a restart the old
+kit scripts and `.claude/hooks/utils/` were retired by the shipped
+`--migrate` / `--prune` itself (below); `.claude/hooks/` now holds only the
+eight scripts gingugu ships.
+
+**`gingugu harness --migrate` / `--prune` (2026-10-05, same branch).** What the
+hand migration above did, as a mode: replace gingugu's own hooks, unwire the
+legacy per-event loggers for `log_event`, reset gingugu's hook commands to
+canonical, and retire the legacy scripts behind exit-0 stubs so a running
+session is never blocked; `--prune` clears the stubs and `retired/` after a
+restart. Repo-specific agents and skills stay. Tests first
+(`tests/test_harness_migrate.py`, `tests/test_harness_migrate_safety.py`). A
+security review of the first build found prune deleting by name and by
+directory; it now touches only what is provably the kit's (name + fingerprint)
+and deletes only what a sha256 manifest proves it moved. Live-verified on a copy
+of this repo's own pre-migration `.claude/`: 19 scripts and 10 `utils/` files
+retired, real Claude Code clean, prune removed all 29, re-migrate a no-op.
+
+Then run for real on this repo, which sharpened three reruns
+(`tests/test_harness_rerun.py`): `--prune --dry-run` now lists the retired
+originals the real run removes (a stub being removed no longer protects its
+original); the `CLAUDE.md` harness block is left out when the file already has
+its own `## AI Knowledge Base Enforcement` section; and `init`'s `.gitignore`
+rules join its existing block instead of a second one under the same header
+(code moved to `bootstrap/gitignore.py`).
+
+**`gingugu init` aimed at the home directory does the user-level steps only
+(2026-10-05, branch `fix/init-home-target`, unreleased).** Run from `~`, init
+wrote its hooks into `~/.claude/settings.json` - the user-level file, loaded in
+every project - as `$CLAUDE_PROJECT_DIR/.claude/hooks/...`. In any project
+without its own `init` the script is missing, `uv` exits 2, and Claude Code
+treats that as a block for UserPromptSubmit and PreToolUse. Found setting up the
+second machine. `settings.is_user_level` compares the target's settings path
+with the user-level one; on a match init refreshes the managed `CLAUDE.md` block
+and the `mcp__brain` permission, skips hooks, skill, `.gitignore` and repo rules,
+and says to run `init` inside each project. `tests/test_init_home.py` (6 tests).
 
 **Released 0.21.4 to PyPI (2026-10-05): proxy exits on stdin EOF (#108).**
 Found live-verifying 0.21.3: a remote-mode `gingugu` answered `initialize`, then
