@@ -621,8 +621,10 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   non-destructively (`settings.py`), allowing `mcp__brain` there and in the
   user-level `~/.claude/settings.json` (`init_user_permissions`) and appending the hooks' runtime artifacts
   (`logs/`, `.claude/data/`, `.claude/settings.local.json`,
-  `.claude/hooks/**/__pycache__/`, `.claude/**/*.bak`) to the target's `.gitignore`
-  so transcripts never get committed. Output is a themed 90s boot sequence
+  `.claude/hooks/**/__pycache__/`, `.claude/**/*.bak`, `CLAUDE.md.bak`,
+  `AGENTS.md.bak`) to the target's `.gitignore` so transcripts never get
+  committed (`bootstrap/gitignore.py`; a rerun adds missing rules under the
+  block an earlier run wrote, never a second block under the same header). Output is a themed 90s boot sequence
   (`theme.py`, degrades to monochrome off-TTY). Other clients (`--client`) get a
   rules file. This closes the gap where the repo's own hook-based install
   outperformed the copy-paste setup shipped to users.
@@ -633,8 +635,10 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   it replaces had one near-identical script per event, each rewriting a growing
   JSON array on every call), a pre-compaction transcript backup, three fenced
   minions whose `{{namespace}}` is rendered from the folder name, `/creating-pr`,
-  a create-only `.ai/` scaffold, a managed block in the repo `CLAUDE.md`, and
-  deny rules. Voice and LLM-calling hooks were left out deliberately: nothing
+  a create-only `.ai/` scaffold, a managed block in the repo `CLAUDE.md` (left
+  out when the file already carries its own `## AI Knowledge Base Enforcement`
+  section - a repo that wrote its own rules keeps them, without a generic copy
+  beside them), and deny rules (`harness_settings.py`). Voice and LLM-calling hooks were left out deliberately: nothing
   installed may call the network or need an API key, and a test enforces it.
   Logs are metadata-only by allowlist: hook payloads carry file bodies,
   command output and prompts, and a security review found the guard logging a
@@ -642,6 +646,16 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   hold the whole session, so they live under `.claude/data/` at 0700/0600.
   It creates the repo `CLAUDE.md` before running `init` so `init`'s protocol
   block lands in the same run and a re-run changes nothing.
+- **`harness --migrate` / `--prune` move a repo off the older per-event kit in
+  two steps, because a running Claude Code session keeps calling the hooks it
+  started with and a missing script blocks the prompt.** `--migrate`
+  (`harness_migrate.py`) replaces gingugu's own hooks, unwires the kit's
+  loggers for `log_event`, and moves each kit script - recognised by name *and*
+  fingerprint - into `.claude/hooks/retired/` behind an exit-0 stub, recording
+  a sha256 manifest (`harness_retired.py`). After a restart `--prune`
+  (`harness_prune.py`) deletes only unedited, unwired stubs and files whose hash
+  still matches the manifest; symlinks and anything changed stay. Its
+  `--dry-run` lists exactly what the real run removes.
 - **The user-level rules file is part of the bootstrap, and is merged, not
   written.** `bootstrap/global_rules.py` manages the protocol inside a marked
   block in `~/.claude/CLAUDE.md` - the file loaded in *every* session, including

@@ -774,7 +774,9 @@ On top of everything `init` installs, it adds:
   `standards/`, created only where missing and never overwritten, even with
   `--force`.
 - **A managed block in the repo's `CLAUDE.md`** (created if missing) saying when
-  to update which `.ai/` file, and which minion to use for what.
+  to update which `.ai/` file, and which minion to use for what. A `CLAUDE.md`
+  that already has its own `## AI Knowledge Base Enforcement` section keeps it,
+  and gets no second copy.
 - **`permissions.deny`** entries for Opus minions (`Agent(model:opus)`), force
   pushes, `git reset --hard` and `rm -rf`. Existing entries are kept.
 
