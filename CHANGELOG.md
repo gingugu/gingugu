@@ -16,7 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hook event (metadata only, never contents or prompts), an owner-only
   transcript backup under `.claude/data/` before compaction, three fenced minions
   (`repo-scout`, `security-reviewer`, `ai-docs-auditor`), the `/creating-pr`
-  skill, an `.ai/` knowledge base scaffold, a managed `CLAUDE.md` block, and
+  skill, an `.ai/` knowledge base scaffold, a managed `CLAUDE.md` block (left
+  out when `CLAUDE.md` already carries its own knowledge-base section), and
   `permissions.deny` entries for Opus minions and destructive git and `rm`
   commands. Nothing it installs calls out to the network or needs an API key.
   Plain `init` is unchanged.
@@ -29,12 +30,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fingerprint; repo-specific agents, skills, unknown hooks and symlinks are
   untouched. After a restart, `--prune` removes only what a hash manifest proves
   it moved and nothing still wires - edited files and still-wired stubs stay.
+  `--prune --dry-run` lists exactly what the real run then removes.
 
 ### Fixed
 
 - **`gingugu init` git-ignores the backups it leaves at the repo root.** A
   refreshed `CLAUDE.md` or `AGENTS.md` leaves `CLAUDE.md.bak` / `AGENTS.md.bak`
   beside it; both are now in the `.gitignore` rules `init` appends.
+- **New `.gitignore` rules join `init`'s existing block.** A rerun that adds
+  rules puts them under the header an earlier run wrote, instead of opening a
+  second block with the same header.
 - **A refreshed managed block keeps the blank line after it.** Re-running
   `init` dropped the blank line between its `CLAUDE.md` block and whatever
   followed, rewriting the file (and leaving a `.bak`) for a change nobody made.

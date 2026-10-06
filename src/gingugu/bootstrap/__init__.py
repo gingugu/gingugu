@@ -19,6 +19,8 @@ from . import theme
 from ._files import read_template as _read_template
 from ._files import retire_file as _retire_file
 from ._files import write_file as _write_file
+from .gitignore import GITIGNORE_ENTRIES as GITIGNORE_ENTRIES
+from .gitignore import ensure_gitignore
 from .global_rules import init_global_rules, init_repo_rules
 from .settings import (
     MINION_ALLOW,
@@ -36,20 +38,6 @@ CLIENT_RULES_FILES = {
     "cline": ".clinerules",
 }
 
-# Runtime artifacts the installed hooks (and Claude Code itself) generate. These
-# must be git-ignored so a session transcript or local override never lands in
-# the repo — especially on a public one. The ``.bak`` files are init's own:
-# the copy of a user's settings or hook it saves before replacing one.
-GITIGNORE_ENTRIES = [
-    "logs/",
-    ".claude/data/",
-    ".claude/settings.local.json",
-    ".claude/hooks/**/__pycache__/",
-    ".claude/**/*.bak",
-    "CLAUDE.md.bak",
-    "AGENTS.md.bak",
-]
-
 _MCP_HINT = (
     "Next steps:\n"
     '  1. Register the Gingugu MCP server in your client under the name "gingugu":\n'
@@ -65,26 +53,6 @@ _HOME_NOTE = [
     "  prompts in any project without its own hooks.",
     "Run `gingugu init` inside each project to install its hooks.",
 ]
-
-
-def _ensure_gitignore(target: Path, *, dry_run: bool, results: list[str]) -> None:
-    """Append any missing Claude Code / Gingugu ignore rules, non-destructively."""
-    path = target / ".gitignore"
-    existing = path.read_text() if path.exists() else ""
-    present = {line.strip() for line in existing.splitlines()}
-    missing = [entry for entry in GITIGNORE_ENTRIES if entry not in present]
-    if not missing:
-        results.append(f"  .gitignore already covers Claude Code artifacts {path}")
-        return
-
-    block = "# Claude Code / Gingugu artifacts (added by `gingugu init`)\n"
-    block += "\n".join(missing) + "\n"
-    if not dry_run:
-        sep = "" if not existing or existing.endswith("\n") else "\n"
-        prefix = "\n" if existing.strip() else ""
-        path.write_text(existing + sep + prefix + block)
-    verb = "would update" if dry_run else "updated"
-    results.append(f"  {verb} {path}  (+{len(missing)} ignore rule(s))")
 
 
 def init_claude_code(target: Path, *, force: bool, dry_run: bool, adopt: bool = False) -> list[str]:
@@ -194,7 +162,7 @@ def init_claude_code(target: Path, *, force: bool, dry_run: bool, adopt: bool = 
     for warning in warnings:
         results.append(f"  WARNING: {warning}")
 
-    _ensure_gitignore(target, dry_run=dry_run, results=results)
+    ensure_gitignore(target, dry_run=dry_run, results=results)
 
     # The user-level rules file is part of the Claude Code bootstrap, same as the
     # hooks and settings.json — it is what makes the protocol load in sessions
