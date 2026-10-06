@@ -74,7 +74,7 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
 
 ## Recently Completed
 
-**`gingugu harness` reports match what it does (2026-10-06, unreleased, `fix/harness-honest-reports`).**
+**Released 0.22.1 to PyPI (2026-10-06): `gingugu harness` reports match what it does (#113).**
 An end-to-end run of `init`, `harness`, `--migrate` and `--prune` against
 fresh, fully-kitted and half-migrated repos found four reports that disagreed
 with disk: `--migrate --dry-run` kept `hooks/utils/` that the real run moves
