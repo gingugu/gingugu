@@ -145,7 +145,7 @@
           {
             "type": "command",
             "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
-            "timeout": 30
+            "timeout": 10
           }
         ]
       },
@@ -167,7 +167,7 @@
           {
             "type": "command",
             "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
-            "timeout": 30
+            "timeout": 10
           }
         ]
       }
@@ -191,7 +191,7 @@
           {
             "type": "command",
             "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
-            "timeout": 30
+            "timeout": 10
           }
         ]
       }
@@ -285,7 +285,7 @@
           {
             "type": "command",
             "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/log_event.py",
-            "timeout": 15
+            "timeout": 10
           }
         ]
       }
