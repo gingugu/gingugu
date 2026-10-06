@@ -111,3 +111,5 @@ for-later/
 # Claude Code / Gingugu artifacts (added by `gingugu init`)
 .claude/settings.local.json
 .claude/**/*.bak
+CLAUDE.md.bak
+AGENTS.md.bak

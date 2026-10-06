@@ -80,6 +80,19 @@ def test_refresh_preserves_prose_written_after_the_block():
     assert "Keep me." in new_text
 
 
+def test_a_blank_line_after_a_current_block_is_not_a_change():
+    """Content after the block keeps its separating blank line, untouched.
+
+    Stripping every newline after the END marker rewrote such a file (and left
+    a .bak) to glue the next line to the marker - a change the user never made.
+    """
+    text = USER_PROSE + "\n" + render_block(PROTOCOL) + "\n## After\n"
+    new_text, status = merge_block(text, PROTOCOL)
+
+    assert status == "current"
+    assert new_text is None
+
+
 def test_second_run_is_idempotent():
     once, _ = merge_block(USER_PROSE, PROTOCOL)
     assert once is not None
