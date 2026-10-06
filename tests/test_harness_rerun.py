@@ -73,7 +73,8 @@ def test_prune_dry_run_still_keeps_the_original_behind_a_kept_stub(tmp_path, cap
 
     main(["--path", str(repo), "--prune", "--dry-run"])
     dry = capsys.readouterr().out
-    assert "retired/notification.py  (its stub is kept)" in dry
+    kept = repo / ".claude" / "hooks" / "retired" / "notification.py"
+    assert f"{kept}  (its stub is kept)" in dry
 
 
 # --- CLAUDE.md that already has its own knowledge-base section ------------------------
