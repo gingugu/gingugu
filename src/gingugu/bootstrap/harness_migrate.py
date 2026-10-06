@@ -176,24 +176,34 @@ def _retire(src: Path, retired: Path, rel: str, manifest: dict, dry_run: bool) -
     return True
 
 
-def _utils_blockers(hooks: Path) -> list[str]:
-    """User-owned hook scripts that mention ``utils`` and may still need it."""
+def _utils_blockers(hooks: Path, replaced: frozenset[str]) -> list[str]:
+    """User-owned hook scripts that mention ``utils`` and may still need it.
+
+    ``replaced`` are the hooks this run overwrites with ours. A dry run still sees
+    the old ones on disk, so they are skipped here or the preview would keep utils
+    that the real run moves.
+    """
     found = []
     for path in sorted(hooks.glob("*.py")):
         if not path.is_file() or is_kit_script(path) or has_stub_marker(path):
+            continue
+        if path.name in replaced and not path.is_symlink():
             continue
         if "utils" in (_read_text(path) or "utils"):
             found.append(path.name)
     return found
 
 
-def _retire_utils(hooks: Path, retired: Path, manifest: dict, dry_run: bool) -> list[str]:
+def _retire_utils(
+    hooks: Path, retired: Path, manifest: dict, dry_run: bool, replaced: frozenset[str]
+) -> list[str]:
     utils = hooks / "utils"
     if not utils.is_dir() or utils.is_symlink():
         return []
-    blockers = _utils_blockers(hooks)
+    blockers = _utils_blockers(hooks, replaced)
     if blockers:
-        return [f"  skip    hooks/utils: {', '.join(blockers)} mention it and may still need it"]
+        verb = "mentions" if len(blockers) == 1 else "mention"
+        return [f"  skip    hooks/utils: {', '.join(blockers)} {verb} it and may still need it"]
     moved = 0
     for rel in KIT_UTILS:
         src = utils / rel
@@ -213,8 +223,13 @@ def _retire_utils(hooks: Path, retired: Path, manifest: dict, dry_run: bool) -> 
     return [f"  {verb} {moved} kit file(s) from hooks/utils to hooks/retired/utils"]
 
 
-def retire_legacy(target: Path, *, dry_run: bool) -> list[str]:
-    """Move the kit's scripts to ``retired/`` behind stubs, then its ``utils/`` files."""
+def retire_legacy(
+    target: Path, *, dry_run: bool, replaced: frozenset[str] = frozenset()
+) -> list[str]:
+    """Move the kit's scripts to ``retired/`` behind stubs, then its ``utils/`` files.
+
+    ``replaced`` names the hooks this run overwrites with ours (see ``_utils_blockers``).
+    """
     hooks = target / ".claude" / "hooks"
     retired = hooks / "retired"
     if hooks.is_symlink() or retired.is_symlink() or (retired / MANIFEST).is_symlink():
@@ -235,7 +250,7 @@ def retire_legacy(target: Path, *, dry_run: bool) -> list[str]:
             path.write_text(STUB)
         verb = "would retire" if dry_run else "retired"
         lines.append(f"  {verb} {name} -> retired/{name}, exit-0 stub left in place")
-    lines.extend(_retire_utils(hooks, retired, manifest, dry_run))
+    lines.extend(_retire_utils(hooks, retired, manifest, dry_run, replaced))
     if manifest != before and not dry_run:
         (retired / MANIFEST).write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     return lines
