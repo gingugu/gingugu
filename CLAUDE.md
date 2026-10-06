@@ -207,12 +207,13 @@ Before any write to external systems (GitHub API, PyPI, npm):
 
 ## Available Subagents (`.claude/agents/`)
 
-Tier rule: Opus is never a minion. All three have no `Bash` and `disallowedTools: Agent, mcp__gingugu`. Each runs its own fenced `brain` server (inline `mcpServers`, `MEMORY_GRANT: gingugu=read,minions=write`): read the brain, write only the `minions` scratch namespace.
+Tier rule: Opus is never a minion. All four have no `Bash` and `disallowedTools: Agent, mcp__gingugu`. Each runs its own fenced `brain` server (inline `mcpServers`, `MEMORY_GRANT: gingugu=read,minions=write`): read the brain, write only the `minions` scratch namespace.
 
 | Agent | Tier | Use for |
 |---|---|---|
 | `ai-docs-auditor` | sonnet | Audits `.ai/` against the code, reports drift as `path:line`. Run before every PR. |
 | `security-reviewer` | sonnet | Secrets, PII, vault boundary, path safety, destructive writes without a backup. Run before every commit touching credentials, bootstrap, or path handling. |
+| `repo-scout` | haiku | Mechanical search and inventory: every place X appears, file lists, counts. Returns raw matches, never an interpretation. Shipped by `gingugu harness`; overrides a user-level `~/.claude/agents/repo-scout.md` with a repo-fenced grant. |
 | `schema-ladder-scout` | haiku | Inventories the `user_version` migration ladder and the FTS5 trigger columns; reports gaps, duplicates, and column mismatches. Run on any change under `migrations/` or to `memories_fts`. |
 
 Not defined on purpose: there is no `backend` or `planner` agent. Both describe
