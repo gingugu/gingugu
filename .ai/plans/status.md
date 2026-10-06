@@ -74,8 +74,7 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
 
 ## Recently Completed
 
-**`gingugu harness` (2026-10-05, branch `feature/harness-command`, stacked on
-`fix/init-home-target`, unreleased).** A separate command that runs `init` and
+**Released 0.22.0 to PyPI (2026-10-05): `gingugu harness` (#109).** A separate command that runs `init` and
 installs the Claude Code harness this repo runs on: guard, JSON-lines event
 logging, transcript backup, three fenced minions, `/creating-pr`, the `.ai/`
 scaffold, a managed `CLAUDE.md` block and deny rules - with the voice/LLM hooks
@@ -113,7 +112,7 @@ rules join its existing block instead of a second one under the same header
 (code moved to `bootstrap/gitignore.py`).
 
 **`gingugu init` aimed at the home directory does the user-level steps only
-(2026-10-05, branch `fix/init-home-target`, unreleased).** Run from `~`, init
+(2026-10-05, shipped in 0.22.0).** Run from `~`, init
 wrote its hooks into `~/.claude/settings.json` - the user-level file, loaded in
 every project - as `$CLAUDE_PROJECT_DIR/.claude/hooks/...`. In any project
 without its own `init` the script is missing, `uv` exits 2, and Claude Code
