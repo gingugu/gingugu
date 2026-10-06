@@ -55,7 +55,9 @@ _HOME_NOTE = [
 ]
 
 
-def init_claude_code(target: Path, *, force: bool, dry_run: bool, adopt: bool = False) -> list[str]:
+def init_claude_code(
+    target: Path, *, force: bool, dry_run: bool, adopt: bool = False, create_rules: bool = False
+) -> list[str]:
     # State the resolved target first. `--path` defaults to the process's cwd,
     # and wrappers move that out from under you — `uv run --directory X` runs in
     # X, so a bare `gingugu init` there bootstraps X, not the directory you typed
@@ -179,10 +181,10 @@ def init_claude_code(target: Path, *, force: bool, dry_run: bool, adopt: bool = 
     results.extend(init_user_permissions(dry_run=dry_run))
 
     # Same rationale, aimed at the repo's own CLAUDE.md / AGENTS.md instead of
-    # the user-level file. Only touches files that already exist — see
-    # init_repo_rules.
+    # the user-level file. Only touches files that already exist, unless the
+    # caller (`gingugu harness`) asks for a CLAUDE.md — see init_repo_rules.
     results.append("")
-    results.extend(init_repo_rules(target, dry_run=dry_run, adopt=adopt))
+    results.extend(init_repo_rules(target, dry_run=dry_run, adopt=adopt, create=create_rules))
 
     results.append("")
     results.append(_MCP_HINT)
