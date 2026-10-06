@@ -62,6 +62,7 @@ def _prune_stubs(hooks: Path, *, dry_run: bool) -> tuple[list[str], set[str]]:
     commands, readable = _settings_commands(hooks.parent.parent)
     lines: list[str] = []
     kept: set[str] = set()
+    removed: set[str] = set()
     for path in sorted(hooks.iterdir()):
         if path.is_symlink() or not path.is_file() or not has_stub_marker(path):
             continue
@@ -76,14 +77,16 @@ def _prune_stubs(hooks: Path, *, dry_run: bool) -> tuple[list[str], set[str]]:
                 if not dry_run:
                     path.unlink()
                 lines.append(f"  {'would remove' if dry_run else 'removed'} {path}")
+                removed.add(path.name)
                 continue
             except OSError as exc:
                 why = f"could not remove: {exc}"
         kept.add(path.name)
         lines.append(f"  kept    {path}  ({why})")
     # Anything still sitting at a kit script's path - a kept stub, or a file or
-    # link the user put there instead - protects the original behind it.
-    kept |= {p.name for p in hooks.iterdir() if p.name in LEGACY_SCRIPTS}
+    # link the user put there instead - protects the original behind it. A stub
+    # this run removes (or, in a dry run, would remove) protects nothing.
+    kept |= {p.name for p in hooks.iterdir() if p.name in LEGACY_SCRIPTS} - removed
     return lines, kept
 
 

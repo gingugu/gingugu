@@ -150,7 +150,12 @@ def _apply_claude_md(
         results.append(f"  would append harness block to {path}")
         return
     existing = safe_read(path)
-    merged = merge_harness_block(existing, read_template(f"{_T}claude_md_block.md.tmpl"))
+    body = read_template(f"{_T}claude_md_block.md.tmpl")
+    heading = body.lstrip().splitlines()[0].strip()
+    if _block_of(existing) is None and heading in {ln.strip() for ln in existing.splitlines()}:
+        results.append(f"  skip   {path}  (has its own '{heading}'; harness block not added)")
+        return
+    merged = merge_harness_block(existing, body)
     if merged == existing:
         results.append(f"  harness block already current (no change) {path}")
         return
