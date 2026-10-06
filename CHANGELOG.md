@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `gingugu harness --migrate --dry-run` reports the move of the old kit's
+  `hooks/utils/` files that the real run makes. The hooks the run replaces with
+  gingugu's own no longer count as still needing them.
+- `gingugu harness` on a repo without a `CLAUDE.md`: the dry run and the real
+  run both report it as a new file (`# <dirname>` + the protocol block), instead
+  of "nothing to do" followed by "added below your existing rules". A dangling
+  `CLAUDE.md` symlink is skipped, never written through.
+- A forced rewrite of identical bytes reports `no change` and writes nothing, so
+  a `--migrate` rerun no longer reports overwriting every hook.
+- A dry run over an existing file says `would overwrite`, and its warning says
+  the file "would be" backed up.
+
 ---
 
 ## [0.22.0] - 2026-10-05
