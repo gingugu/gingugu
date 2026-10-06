@@ -357,7 +357,13 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.21.4** (PyPI). Patch: the remote-mode proxy exits when
+- Current version: **0.22.0** (PyPI). Minor: `gingugu harness` installs the
+  Claude Code kit on top of `init` (guard, JSON-lines logging, transcript
+  backup, three fenced minions, `/creating-pr`, `.ai/` scaffold, managed
+  `CLAUDE.md` block, deny rules); `--migrate` / `--prune` move a repo off the
+  older per-event hook kit; `init` from the home directory does user-level
+  steps only; `.gitignore` reruns join the existing block (#109).
+- 0.21.4: patch: the remote-mode proxy exits when
   its client closes stdin (it closed nothing, so the SDK's stdout writer kept
   the process alive), and a refused machine token exits 1 with its message
   instead of a traceback (#108).

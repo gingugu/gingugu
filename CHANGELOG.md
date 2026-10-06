@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.22.0] - 2026-10-05
+
 ### Added
 
 - **`gingugu harness`: the full Claude Code kit, on top of `init`.** Runs `init`,
