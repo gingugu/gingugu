@@ -644,8 +644,11 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   command output and prompts, and a security review found the guard logging a
   blocked `.env` write - secret included - before deciding. Transcript backups
   hold the whole session, so they live under `.claude/data/` at 0700/0600.
-  It creates the repo `CLAUDE.md` before running `init` so `init`'s protocol
-  block lands in the same run and a re-run changes nothing.
+  It runs `init` with `create_rules=True`, so a missing repo `CLAUDE.md` is
+  created there (`# <dirname>` + the protocol block, reported as a new file) and
+  the harness block lands in it in the same run; plain `init` never creates one.
+  Every report a dry run prints is what the real run then does: identical bytes
+  are `no change`, a forced write over an existing file is `would overwrite`.
 - **`harness --migrate` / `--prune` move a repo off the older per-event kit in
   two steps, because a running Claude Code session keeps calling the hooks it
   started with and a missing script blocks the prompt.** `--migrate`

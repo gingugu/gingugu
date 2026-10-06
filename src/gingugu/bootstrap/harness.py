@@ -53,6 +53,8 @@ _INIT_HOOKS = (
     "pre_tool_tripwire.py",
     "subagent_warmup.py",
 )
+# Every hook --migrate overwrites with ours: init's five plus the harness's own.
+_HOOKS = frozenset([*_INIT_HOOKS, *(Path(d).name for _, d in _MANAGED if "/hooks/" in d)])
 _AI_FILES = (
     "memory.md",
     "plans/status.md",
@@ -146,6 +148,8 @@ def _apply_claude_md(
     refreshed its own block (and written CLAUDE.md.bak) moments earlier.
     """
     path = target / "CLAUDE.md"
+    if path.is_symlink() and not path.exists():  # dangling; init skipped it too
+        return
     if not path.exists():  # dry-run: init could not have created it either
         results.append(f"  would append harness block to {path}")
         return
@@ -239,9 +243,6 @@ def main(argv: list[str] | None = None) -> int:
 
     claude_md = target / "CLAUDE.md"
     original = safe_read(claude_md) if claude_md.exists() else None
-    if not claude_md.exists() and not args.dry_run:
-        # Created before init so its protocol block merges in this same run.
-        claude_md.write_text(f"# {namespace}\n")
 
     migrated: list[str] = []
     if args.migrate:
@@ -254,7 +255,8 @@ def main(argv: list[str] | None = None) -> int:
             (settings_path.parent / "settings.json.bak").write_text(settings_start or "")
             write_settings(settings_path, settings)
 
-    results = init_claude_code(target, force=args.force, dry_run=args.dry_run)
+    # create_rules: init writes a missing CLAUDE.md, so the harness block below lands in it.
+    results = init_claude_code(target, force=args.force, dry_run=args.dry_run, create_rules=True)
     if migrated and not args.dry_run:
         # init backs settings up too - from the already-migrated file. Restore ours.
         (settings_path.parent / "settings.json.bak").write_text(settings_start or "")
@@ -285,7 +287,7 @@ def main(argv: list[str] | None = None) -> int:
         if settings_start is not None and not args.dry_run:
             if settings_path.read_text() != settings_start:  # the user's original, once
                 (settings_path.parent / "settings.json.bak").write_text(settings_start)
-        report = [*migrated, *retire_legacy(target, dry_run=args.dry_run)]
+        report = [*migrated, *retire_legacy(target, dry_run=args.dry_run, replaced=_HOOKS)]
         report = report or ["  nothing to migrate - already clean"]
         results.extend(["", "Claude Code harness migrate:", *report])
 

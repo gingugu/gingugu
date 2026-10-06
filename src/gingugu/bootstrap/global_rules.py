@@ -176,7 +176,7 @@ def merge_block(existing: str, protocol: str) -> tuple[str | None, str]:
 
 
 def _apply_protocol(
-    target: Path, existing: str, protocol: str, *, dry_run: bool, adopt: bool
+    target: Path, existing: str, protocol: str, *, dry_run: bool, adopt: bool, new: bool = False
 ) -> tuple[list[str], str]:
     """Merge the managed block into ``target``. Returns ``(result lines, status)``.
 
@@ -231,7 +231,8 @@ def _apply_protocol(
         detail = "managed block only; your own rules untouched"
     else:
         verb = "would append" if dry_run else "appended"
-        detail = "managed block added below your existing rules" if existing.strip() else "new file"
+        mine = existing.strip() and not new
+        detail = "managed block added below your existing rules" if mine else "new file"
     lines.append(f"  {verb:<13} {target}  ({detail})")
     if status in ("updated", "adopted") and not dry_run:
         lines.append(f"  backup        {target.name}.bak")
@@ -266,27 +267,33 @@ def init_global_rules(*, dry_run: bool, adopt: bool = False, path: Path | None =
 REPO_RULES_FILES = ("CLAUDE.md", "AGENTS.md")
 
 
-def init_repo_rules(target: Path, *, dry_run: bool, adopt: bool = False) -> list[str]:
+def init_repo_rules(
+    target: Path, *, dry_run: bool, adopt: bool = False, create: bool = False
+) -> list[str]:
     """Merge the managed protocol block into the repo's own CLAUDE.md / AGENTS.md.
 
     Only touches files that already exist — creating an AGENTS.md where none
     exists would be presumptuous, and the SessionStart hook already carries the
     protocol into every session regardless of whether a rules file mentions it.
-    Same rationale as the global file: hand-authored, loaded every session, no
-    ``--force``, and per-repo memory sections are not uniform (a shared block
-    can only ever carry the generic protocol — repo-specific rules outside the
-    markers can still drift).
+    ``create`` (``gingugu harness``, which needs a CLAUDE.md) is the exception. No
+    ``--force``: like the global file, it is hand-authored and loaded every session.
     """
     protocol = read_template("rules_protocol.md.tmpl")
     results: list[str] = ["Repo rules files (CLAUDE.md / AGENTS.md):"]
     found = False
     for name in REPO_RULES_FILES:
         rules_path = target / name
-        if not rules_path.exists():
+        new = create and name == "CLAUDE.md" and not rules_path.exists()
+        if not rules_path.exists() and not new:
             continue
         found = True
-        existing = safe_read(rules_path)
-        lines, _ = _apply_protocol(rules_path, existing, protocol, dry_run=dry_run, adopt=adopt)
+        if new and rules_path.is_symlink():  # dangling: a create would land at its target
+            results.append(f"  skip          {rules_path}  (a symlink; never written through)")
+            continue
+        existing = f"# {target.name}\n" if new else safe_read(rules_path)
+        lines, _ = _apply_protocol(
+            rules_path, existing, protocol, dry_run=dry_run, adopt=adopt, new=new
+        )
         results.extend(lines)
     if not found:
         results.append(f"  none present ({', '.join(REPO_RULES_FILES)}); nothing to do")

@@ -66,6 +66,9 @@ def write_file(
         return
 
     existing = safe_read(path) if path.exists() else None
+    if existing == content:
+        results.append(f"  no change {path}  (already current)")
+        return
     # Back up whenever `--force` would change what is on disk - NOT only when the
     # file looks foreign.
     #
@@ -83,7 +86,8 @@ def write_file(
     if changed and not dry_run:
         (path.parent / f"{path.name}.bak").write_text(existing or "")
 
-    verb = "would write" if dry_run else ("overwrite" if path.exists() else "write")
+    verb = "overwrite" if existing is not None else "write"
+    verb = f"would {verb}" if dry_run else verb
     if not dry_run:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content)
@@ -92,7 +96,8 @@ def write_file(
     if foreign:
         results.append(
             f"  WARNING: {path.name} was not written by this version of `gingugu "
-            f"init` — it may be your own or another tool's. Backed up to "
+            f"init` — it may be your own or another tool's. "
+            f"{'Would be backed up' if dry_run else 'Backed up'} to "
             f"{path.name}.bak. If your settings.json invokes it with flags the "
             f"replacement does not declare, that command needs updating too."
         )

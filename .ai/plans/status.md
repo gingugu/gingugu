@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-10-05_
+_Last updated: 2026-10-06_
 
 ## In Flight
 
@@ -73,6 +73,18 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
   (`errSecInteractionNotAllowed`), though the token is still minted.
 
 ## Recently Completed
+
+**`gingugu harness` reports match what it does (2026-10-06, unreleased, `fix/harness-honest-reports`).**
+An end-to-end run of `init`, `harness`, `--migrate` and `--prune` against
+fresh, fully-kitted and half-migrated repos found four reports that disagreed
+with disk: `--migrate --dry-run` kept `hooks/utils/` that the real run moves
+(hooks the run replaces now never hold it back); a repo without `CLAUDE.md`
+got "nothing to do" then "below your existing rules" (`init` now creates it
+for `harness`, reported as a new file, never through a dangling symlink);
+identical bytes reported `overwrite` (now `no change`); dry runs said `would
+write` and "Backed up" (now `would overwrite`, "would be backed up").
+`tests/test_harness_reports.py`. This repo's own `repo-scout` agent is back
+(shipped by `harness`, fenced to `crow` + `gingugu`).
 
 **Released 0.22.0 to PyPI (2026-10-05): `gingugu harness` (#109).** A separate command that runs `init` and
 installs the Claude Code harness this repo runs on: guard, JSON-lines event
