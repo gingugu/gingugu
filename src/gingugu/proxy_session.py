@@ -23,6 +23,8 @@ from mcp.types import (
     JSONRPCResponse,
 )
 
+from .remote_tls import explain, is_clock, tls_failure, verify_for
+
 CRED_PREFIX = "credential_"
 CLIENT_GONE = (anyio.BrokenResourceError, anyio.ClosedResourceError)
 _SESSION_TERMINATED = 32600  # the SDK's synthetic reply when the brain 404s a session
@@ -49,13 +51,21 @@ async def derive(
     fields = {"grant": grant, "home": home, "ttl": ttl, "name": name}
     body = {key: value for key, value in fields.items() if value is not None}
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
+        verify = verify_for(url)
+    except ValueError as exc:  # a corrupt pin: refuse, never fall back
+        raise ProxyLost(str(exc)) from None
+    try:
+        async with httpx.AsyncClient(timeout=10, verify=verify) as client:
             resp = await client.post(
                 f"{url}/token/derive",
                 json=body,
                 headers={"Authorization": f"Bearer {owner_token}"},
             )
     except httpx.HTTPError as exc:
+        cert_err = tls_failure(exc)
+        if cert_err is not None and not is_clock(cert_err):
+            # Not transient: retrying would hide it as "reconnecting".
+            raise ProxyLost(explain(url, cert_err)) from None
         raise DeriveTransient(type(exc).__name__) from None
     status = resp.status_code
     if status in (401, 403):

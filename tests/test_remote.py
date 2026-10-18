@@ -34,7 +34,11 @@ def env(tmp_path, monkeypatch):
 
 
 def _ok_runner(calls: list, stdout: str = TOKEN + "\n", code: int = 0):
+    """A fake ssh. Login asks for the brain's cert first; this brain has none."""
+
     def run(argv, **kwargs):
+        if argv[-1] == "cert":
+            return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
         calls.append(argv)
         return subprocess.CompletedProcess(argv, code, stdout=stdout, stderr="")
 
