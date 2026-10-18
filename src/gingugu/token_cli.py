@@ -32,6 +32,8 @@ Usage:
                                      that machine's owner token, prints only it.
                                      --name pins the key to one machine (use
                                      one key per machine so revoking sticks).
+                                     "cert" instead prints the brain's generated
+                                     TLS cert, for `gingugu remote login` to pin.
 
 SPEC is comma-separated name=level pairs, level read or write, name may be *:
   gingugu token add laptop-2 --ns gingugu=write,crow=read
@@ -85,6 +87,8 @@ def _ssh_mint(store: TokenStore, bound: str | None) -> int:
     the machine itself.
     """
     words = (os.environ.get("SSH_ORIGINAL_COMMAND") or "").split()
+    if words == ["cert"]:
+        return _print_cert()
     if bound is not None:
         if not NAME_RE.fullmatch(bound):
             return _refuse("invalid --name")
@@ -103,6 +107,28 @@ def _ssh_mint(store: TokenStore, bound: str | None) -> int:
         print(f"gingugu token ssh-mint: {exc}", file=sys.stderr)
         return 1
     print(token)
+    return 0
+
+
+def _print_cert() -> int:
+    """``cert``: the brain's generated TLS cert, for the client to pin. Public, never a key.
+
+    Prints nothing when there is none, so a client keeps plain http. Allowed for
+    every key, bound or not: it rotates nothing and reveals nothing secret.
+    """
+    from .config import load_config
+    from .serve_tls import cert_pem
+
+    try:
+        pem = cert_pem(load_config())
+    except ValueError as exc:  # never echo the file: it is not a single cert
+        print(
+            f"gingugu token ssh-mint: the brain's certificate file is unusable ({exc})",
+            file=sys.stderr,
+        )
+        return 1
+    if pem:
+        print(pem, end="")
     return 0
 
 
