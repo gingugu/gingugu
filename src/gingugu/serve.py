@@ -31,6 +31,10 @@ from .server import build
 logger = logging.getLogger(__name__)
 
 _HEALTH_PATH = "/healthz"
+# The SDK refuses an MCP request body over 4 MiB with a 413. A whole-brain
+# ``memory_import`` is one request and outgrows that, so the owner can still
+# restore an export to a central brain in one call.
+_MAX_BODY = 64 * 1024 * 1024
 # request.state.token_kind: only an OWNER token may derive (see serve_derive).
 OWNER, DERIVED, SCOPED = "owner", "derived", "scoped"
 
@@ -160,6 +164,17 @@ def _resolve_token(configured: str | None, token_path: Path) -> str:
     return token
 
 
+def mcp_app(mcp) -> Starlette:
+    """The SDK's streamable-HTTP app as `gingugu serve` configures it.
+
+    ``host`` is the real bind host, not the SDK's 127.0.0.1 default: on a
+    loopback host the SDK allows only localhost Host headers (DNS-rebinding
+    protection), which answered every LAN client with 421. A LAN bind relies
+    on the Bearer token instead; a loopback bind keeps the check.
+    """
+    return mcp.streamable_http_app(host=load_config().serve_host, max_request_body_size=_MAX_BODY)
+
+
 def build_app(
     mcp, token: str, tokens: TokenStore | None, derived: DerivedTokens, *, ctx=None
 ) -> Starlette:
@@ -169,7 +184,7 @@ def build_app(
     """
     from .serve_derive import DERIVE_PATH, derive_endpoint
 
-    app = mcp.streamable_http_app()
+    app = mcp_app(mcp)
     app.add_route(DERIVE_PATH, derive_endpoint(derived), methods=["POST"])
     if ctx is not None:
         from .serve_hooks import hook_routes

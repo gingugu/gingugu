@@ -57,7 +57,7 @@ async def test_tools_are_the_brains_plus_the_local_vault_each_once(brain, local_
     assert _CRED_TOOLS <= set(names)
     assert "memory_store" in names and "memory_recall" in names
     get = next(t for t in tools if t.name == "credential_get")
-    assert "into" in get.inputSchema["properties"]
+    assert "into" in get.input_schema["properties"]
 
 
 async def test_a_credential_call_is_answered_locally_and_never_relayed(brain, local_db):
@@ -141,7 +141,7 @@ async def test_a_tool_error_comes_back_as_a_result_not_a_crash(brain, local_db):
             bad = await session.call_tool("credential_get", {})  # required arg missing
             assert payload(await session.call_tool("memory_stats", {}))["ok"]
     assert missing["ok"] is False and "not found" in missing["error"]
-    assert bad.isError
+    assert bad.is_error
 
 
 async def test_a_vault_that_cannot_open_ends_the_proxy_with_a_message(brain, tmp_path):
@@ -176,7 +176,7 @@ async def test_memory_stats_reports_the_local_vault_not_the_brains(brain, local_
     assert payload(single)["stats"]["credentials"]["total"] == 1
     assert payload(multi)["global"]["credentials"]["total"] == 1
     for result in (single, multi):
-        assert json.dumps(result.structuredContent or {}).count('"total": 0') == 0
+        assert json.dumps(result.structured_content or {}).count('"total": 0') == 0
 
 
 async def test_without_a_vault_memory_stats_passes_through(brain):
@@ -231,7 +231,7 @@ async def test_a_malformed_tools_list_entry_is_dropped_not_fatal_to_the_link():
     await brain_out.aclose()  # the brain hangs up after one reply
     with anyio.fail_after(5), pytest.raises(ConnectionError, match="brain closed"):
         await link.pump(anyio.CancelScope())
-    relayed = (await client_in.receive()).message.root.result["tools"]
+    relayed = (await client_in.receive()).message.result["tools"]
     assert relayed == [{"name": "memory_store"}, local]
 
 
@@ -242,3 +242,18 @@ async def test_without_a_vault_credentials_stay_hidden_and_refused(brain):
             await session.initialize()
             names = {t.name for t in (await session.list_tools()).tools}
     assert not (names & _CRED_TOOLS)
+
+
+@pytest.mark.parametrize("arguments", [["reveal"], "reveal=true", 7])
+async def test_non_object_arguments_are_refused_not_fatal_to_the_proxy(local_db, arguments):
+    """Off-spec, but a malformed client call must never end the proxy."""
+    from gingugu.proxy_vault import LocalVault
+
+    vault = await LocalVault(local_db).load()
+    try:
+        reply = await vault.call(3, {"name": "credential_get", "arguments": arguments})
+    finally:
+        vault.close()
+    result = reply.message.result
+    assert reply.message.id == 3 and result["isError"] is True
+    assert "arguments must be an object" in result["content"][0]["text"]

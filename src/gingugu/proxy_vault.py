@@ -13,11 +13,12 @@ remote mode.
 
 from __future__ import annotations
 
+import functools
 import json
 from pathlib import Path
 
-from mcp.server.fastmcp import FastMCP
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
 from mcp.types import CallToolResult, JSONRPCResponse, TextContent
 
 from .credentials import CredentialVault
@@ -37,8 +38,8 @@ class LocalVault:
         ctx = ServerContext(
             config=None, store=None, namespaces=None, conn=self._db.connect(), transport="stdio"
         )
-        self._mcp = FastMCP("gingugu-vault")
-        credential_handlers.register(self._mcp, ctx)
+        self._mcp = MCPServer("gingugu-vault", subscriptions=False)
+        credential_handlers.register(_OnLoop(self._mcp), ctx)
         self.tools: list[dict] = []
 
     async def load(self) -> LocalVault:
@@ -50,17 +51,18 @@ class LocalVault:
         """Answer one ``tools/call`` as a JSON-RPC response for the client."""
         name = str(params.get("name", ""))
         args = params.get("arguments") or {}
+        if not isinstance(args, dict):
+            # Off-spec, but a client's malformed call must not end the proxy.
+            return _reply(req_id, _failed(f"{name}: arguments must be an object"))
         if name == "credential_get" and args.get("reveal") not in (None, False):
             # Every other tool here is relayed to the brain, so a steered model
             # could carry an inline secret off this machine. `into` cannot.
             return _reply(req_id, _refused(_NO_REVEAL))
         try:
-            out = await self._mcp.call_tool(name, args)
-            if isinstance(out, tuple):  # (content, structured) for a tool with an output schema
-                content, structured = out
-                result = CallToolResult(content=list(content), structuredContent=structured)
-            else:
-                result = CallToolResult(content=list(out))
+            result = await self._mcp.call_tool(name, args)
+        except UnexpectedToolError as exc:  # a crash: name its type, never its text
+            cause = exc.__cause__ or exc
+            result = _failed(f"{name} failed: {type(cause).__name__}")
         except ToolError as exc:
             result = _failed(str(exc))
         except Exception as exc:  # noqa: BLE001 - the proxy must never crash on a tool
@@ -73,6 +75,29 @@ class LocalVault:
 
     def close(self) -> None:
         self._db.close()
+
+
+class _OnLoop:
+    """Registers each tool as ``async`` so it runs on the event loop.
+
+    SDK 2.x runs a plain ``def`` tool on a worker thread, and the vault's
+    sqlite3 connection is bound to the thread that opened it.
+    """
+
+    def __init__(self, mcp: MCPServer) -> None:
+        self._mcp = mcp
+
+    def tool(self, *d_args, **d_kwargs):
+        inner = self._mcp.tool(*d_args, **d_kwargs)
+
+        def decorator(fn):
+            @functools.wraps(fn)
+            async def wrapper(*args, **kwargs):
+                return fn(*args, **kwargs)
+
+            return inner(wrapper)
+
+        return decorator
 
 
 def patch_stats(result: dict, health: dict) -> dict:
@@ -92,7 +117,7 @@ def patch_stats(result: dict, health: dict) -> dict:
             block["text"] = json.dumps(data, indent=2)
     structured = result.get("structuredContent")
     if isinstance(structured, dict) and not _swap(structured, health):
-        _swap(structured.get("result"), health)  # FastMCP's wrapped form
+        _swap(structured.get("result"), health)  # the SDK's {"result": ...} wrapped form
     return result
 
 
@@ -126,7 +151,7 @@ def _refused(text: str) -> CallToolResult:
 
 
 def _failed(text: str) -> CallToolResult:
-    return CallToolResult(content=[TextContent(type="text", text=text)], isError=True)
+    return CallToolResult(content=[TextContent(type="text", text=text)], is_error=True)
 
 
 async def open_vault(db_path: Path | None) -> LocalVault | None:

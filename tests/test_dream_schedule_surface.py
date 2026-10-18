@@ -20,7 +20,7 @@ from gingugu.dream_cli import main as dream_main
 
 
 def _payload(result) -> dict:
-    content = result[0] if isinstance(result, tuple) else result
+    content = result.content
     return json.loads(content[0].text)
 
 
@@ -78,11 +78,11 @@ async def test_wrapping_preserves_every_tool_signature(server) -> None:
     tools = {t.name: t for t in await server.list_tools()}
 
     assert "memory_store" in tools
-    store_params = tools["memory_store"].inputSchema["properties"]
+    store_params = tools["memory_store"].input_schema["properties"]
     assert {"title", "content", "type", "namespace", "tags"} <= set(store_params)
-    assert set(tools["memory_store"].inputSchema["required"]) == {"content", "title", "type"}
+    assert set(tools["memory_store"].input_schema["required"]) == {"content", "title", "type"}
 
-    dream_params = tools["memory_dream"].inputSchema["properties"]
+    dream_params = tools["memory_dream"].input_schema["properties"]
     assert {"action", "proposal_id", "relation_type", "tag"} <= set(dream_params)
 
     # Docstrings are the tool descriptions clients read; wraps must keep them.

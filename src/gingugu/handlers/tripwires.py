@@ -81,7 +81,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 if not tool:
                     return _err("tool is required for action 'test'")
                 try:
-                    # FastMCP pre-parses a JSON-object string into a dict before
+                    # The SDK pre-parses a JSON-object string into a dict before
                     # the handler sees it, so accept both forms.
                     parsed = json.loads(input) if isinstance(input, str) and input else input
                     parsed = {} if parsed is None or parsed == "" else parsed

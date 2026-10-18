@@ -9,8 +9,8 @@ authors = [{ name = "Brian Speagle" }]
 keywords = ["mcp", "memory", "ai", "agent", "sqlite", "fts5", "embeddings", "semantic-search", "windsurf"]
 
 dependencies = [
-    "mcp>=1.25,<2",
-    "pydantic>=2.7,<3",
+    "mcp>=2.3,<3",
+    "pydantic>=2.12,<3",
     "keyring>=24.0,<26",
     "platformdirs>=4.0,<5",
     "fastembed>=0.4,<1",
@@ -18,10 +18,11 @@ dependencies = [
     # today, but serve.py imports them directly, so declare them explicitly.
     "starlette>=0.37",
     "uvicorn>=0.30",
-    # The remote-mode proxy (proxy.py, proxy_session.py) imports these directly;
-    # floors match what mcp itself requires.
-    "httpx>=0.27.1,<1",
-    "anyio>=4.5",
+    # The remote-mode proxy (proxy.py, proxy_session.py) and the hooks import
+    # these directly; floors match what mcp itself requires. httpx2, not httpx:
+    # the SDK only accepts httpx2 clients and auth objects.
+    "httpx2>=2.10,<3",
+    "anyio>=4.9",
     # A hook finds the client it runs under (and that client's servers) by
     # process tree, on every OS CI covers (client_grants.py).
     "psutil>=7,<8",

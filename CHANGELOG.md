@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Gingugu now runs on the MCP Python SDK 2.x (`mcp>=2.3,<3`, the `MCPServer`
+  API) and `httpx2`, which replaces `httpx` as a dependency. The tool surface,
+  tool schemas and every client config are unchanged. Tools still run one at a
+  time on the server's event loop, as before, and the server now reports its
+  own version (`serverInfo.version`) instead of the SDK's.
+- A remote brain and the machines relaying to it can be upgraded in either
+  order: a 2.x proxy relays to a brain still on 0.23.0, and recognises both
+  SDKs' replies for a session the brain has forgotten, so the request is sent
+  again rather than failed.
+- `gingugu serve` accepts MCP requests up to 64 MiB, so a whole-brain
+  `memory_import` can be restored to a central brain in one call (the SDK's
+  own default is 4 MiB). It no longer advertises change-notification
+  subscriptions, since it publishes none.
+- An https brain with no pinned certificate is now verified against the
+  operating system's trust store (httpx2 uses `truststore`) instead of
+  certifi's bundled list, by the proxy, the hooks, `promote`, and the
+  `gingugu remote login` check alike. A pinned brain is still trusted by its
+  pin alone. `SSL_CERT_FILE` / `SSL_CERT_DIR` override the store.
+
+### Fixed
+
+- A `credential_*` call whose `arguments` is not a JSON object is refused with
+  an error instead of ending the remote-mode proxy.
+
 ---
 
 ## [0.23.0] - 2026-10-17

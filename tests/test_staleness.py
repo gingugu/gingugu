@@ -246,7 +246,7 @@ def test_apostrophes_are_not_quote_delimiters() -> None:
 
 
 def _payload(result) -> dict:
-    content = result[0] if isinstance(result, tuple) else result
+    content = result.content
     return json.loads(content[0].text)
 
 

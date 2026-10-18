@@ -290,10 +290,11 @@ CREATE INDEX idx_access_log_memory_time ON access_log(memory_id, accessed_at);
 **`context` is the co-access grouping key.** Every row written by one
 `record_accesses` call carries the id of the MCP session that asked, so the log
 can answer "which memories are retrieved *together*" and not just "when was
-this read". The identity is the MCP session object itself, which is the correct
-unit for both transports without special-casing: stdio runs one session per
-process, and `gingugu serve` gives each client its own, so a process-level id
-would manufacture co-access between clients that never shared a conversation.
+this read". The identity names the client's conversation on its transport
+(`inbound.py`): one id per process on stdio, which runs one client per
+process, and a digest of the `Mcp-Session-Id` header on `gingugu serve`, so a
+process-level id there would not manufacture co-access between clients that
+never shared a conversation. A sessionless (2026-07-28) HTTP client gets `NULL`.
 
 It is `NULL` whenever no session is in flight - tests, CLI paths, background
 maintenance. That is deliberate: a shared placeholder would group unrelated
@@ -1890,6 +1891,7 @@ src/gingugu/
 ├── namespaces.py           # Namespace CRUD; a default_repo change re-derives claims
 ├── credentials.py          # OS-keychain credential vault
 ├── secret_file.py          # 0600 file write for credential_get(into=…)
+├── inbound.py              # Per-message request + session scope (MCP middleware)
 ├── session.py              # Per-session id for access_log's co-access key
 │
 │   # ── MCP tool handlers (split to honor the 300-line limit) ─────

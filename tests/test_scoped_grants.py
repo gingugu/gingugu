@@ -12,7 +12,7 @@ import asyncio
 import contextlib
 import socket
 
-import httpx
+import httpx2
 import pytest
 
 from gingugu.grants import READ, WRITE, Grant
@@ -156,12 +156,12 @@ async def _recall_over_http(url: str, token: str, args: dict) -> dict:
     from tests.scoped_fixtures import payload
 
     headers = {"Authorization": f"Bearer {token}"}
-    async with httpx.AsyncClient(headers=headers, timeout=30) as client:
-        async with streamable_http_client(url, http_client=client) as (read, write, _):
+    async with httpx2.AsyncClient(headers=headers, timeout=30) as client:
+        async with streamable_http_client(url, http_client=client) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 result = await session.call_tool("memory_recall", args)
-                return payload(result.content)
+                return payload(result)
 
 
 async def test_scoped_token_over_real_http(brain, tmp_path):
@@ -178,7 +178,7 @@ async def test_scoped_token_over_real_http(brain, tmp_path):
         assert MARKER in str(owner)
         # Revoked from "another process" - refused on the next request, no restart.
         TokenStore(path).revoke("minion")
-        async with httpx.AsyncClient() as client:
+        async with httpx2.AsyncClient() as client:
             resp = await client.post(url, headers={"Authorization": f"Bearer {scoped}"}, json={})
         assert resp.status_code == 401
 
@@ -188,6 +188,6 @@ async def test_scoped_token_over_real_http(brain, tmp_path):
 )
 async def test_unknown_credentials_get_401_over_http(brain, tmp_path, header):
     async with _serving(brain.server, tmp_path / "serve_tokens.json") as url:
-        async with httpx.AsyncClient() as client:
+        async with httpx2.AsyncClient() as client:
             resp = await client.post(url, headers={"Authorization": header}, json={})
     assert resp.status_code == 401

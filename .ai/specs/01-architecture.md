@@ -256,15 +256,19 @@ AI client (Claude Code / Cursor / Windsurf / …)
 
 `access_log` rows carry the id of the MCP session that requested them
 (`access_log.context`), which turns a log of *when* into a log of *alongside
-what*. `session.current_session_id` reads the SDK's request `ContextVar`
-rather than taking a `Context` handler argument, so no retrieval handler
-signature and no published tool schema changes for a bookkeeping field.
+what*. `session.current_session_id` reads `inbound.current()` - a ContextVar
+gingugu's own middleware sets per message - rather than taking a `Context`
+handler argument, so no retrieval handler signature and no published tool
+schema changes for a bookkeeping field.
 
-The key is the MCP session object, held weakly. That is correct for both
-transports with no special-casing: stdio is one session per process, while
-`gingugu serve` gives each client its own, and a process-level id there would
-manufacture co-access between clients that never shared a conversation. Raw
-`id()` was rejected because CPython reuses addresses after collection.
+The key names the client's conversation on its transport: one id per process
+on stdio (one process per client), and on `gingugu serve` a SHA-256 digest of
+the `Mcp-Session-Id` header the SDK minted at `initialize` - a process-level id
+there would manufacture co-access between clients that never shared a
+conversation, and the digest keeps a live session handle out of the DB. The
+session *object* stopped being usable as a key with SDK 2.x, which builds a
+fresh `ServerSession` per message. A 2026-07-28 HTTP client is sessionless by
+design and gets `NULL`.
 
 Outside a request the value is `NULL`, never a placeholder: "unknown" is true,
 where "these belong together" would not be.
@@ -357,7 +361,8 @@ Authorization: Bearer <token>
     none → 401; sets request.state.grant and request.state.token_kind
   → tool wrapper (handlers/__init__.py, the _HeartbeatMCP proxy):
     fence.request_grant reads the grant off this call's own HTTP request
-    (the SDK's request_ctx), fence.refusal closes whole-brain tools, then
+    (inbound.current(), set per message by inbound.middleware), fence.refusal
+    closes whole-brain tools, then
     grants.bind(grant) scopes the call
   → handler → store chokepoints consult grants.current()
 ```
@@ -417,7 +422,7 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   its local DB's `credential_*` tables, which a remote brain cannot serve. With
   credentials on (owner only, per preflight), `server.main` hands the proxy
   `config.db_path`; `LocalVault` registers `handlers/credentials.py` on a private
-  FastMCP over that DB with `transport="stdio"` (so `into=` writes locally),
+  `MCPServer` over that DB with `transport="stdio"` (so `into=` writes locally),
   bypassing `_HeartbeatMCP` (the grant is always full here and the local brain is
   not in use). `Link.pump` swaps the brain's `credential_*` entries in
   `tools/list` for the local ones; `read_client` answers every `credential_*`
@@ -627,6 +632,21 @@ A subagent gets its own fenced brain and arrives already knowing the task.
 ---
 
 ## Key Decisions
+- **MCP SDK 2.x, with 1.x's runtime shape kept on purpose (2026-10-18).**
+  Three things in the 2.x port are decisions, not renames. *Tools stay on the
+  event loop*: 2.x runs a plain `def` tool on a worker thread, and every
+  handler shares one sqlite3 connection bound to the thread that opened it, so
+  the one tool wrapper (`_HeartbeatMCP`, and the vault's `_OnLoop`) registers
+  each tool as `async` - calls stay serialised as under 1.x. Running tools
+  concurrently would need a connection per thread and is its own decision.
+  *gingugu owns its request scope*: 2.x removed the ambient `request_ctx`, and
+  threading a `Context` through every tool would put an SDK type on published
+  signatures, so `inbound.middleware` scopes the HTTP request and session id
+  to each message for the fence and the access log. The SDK marks middleware
+  provisional; `tests/test_inbound.py` pins what is relied on. *Serve keeps
+  1.x's limits where 2.x tightened them*: the 4 MiB request-body default would
+  refuse a whole-brain `memory_import`, so `serve.mcp_app` allows 64 MiB; and
+  with nothing to publish, change-notification subscriptions are off.
 - **The dream pass computes structure and is forbidden from writing content.**
   A scheduled pass (`dream/`, `gingugu dream`, `memory_dream`) runs PageRank,
   label propagation and cosine similarity over the relation graph and stages
@@ -706,8 +726,8 @@ A subagent gets its own fenced brain and arrives already knowing the task.
 - **Local-first, single file.** No server to run, no cloud dependency; the DB is
   portable and inspectable. Trade-off: no built-in multi-user sync (out of scope).
 - **Optional network transport, still single-owner.** `gingugu serve` exposes
-  the brain over HTTP for a hosted/central instance. FastMCP is built with the
-  real bind host (`MEMORY_SERVE_HOST`): a loopback bind keeps the MCP SDK's
+  the brain over HTTP for a hosted/central instance. Its HTTP app is built with the
+  real bind host (`MEMORY_SERVE_HOST`, `serve.mcp_app`): a loopback bind keeps the MCP SDK's
   localhost-only `Host` allowlist (DNS-rebinding protection), a LAN bind drops
   it and relies on Bearer auth - left at the SDK default, every LAN client got
   `421`. The owner token keeps full

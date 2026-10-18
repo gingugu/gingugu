@@ -470,7 +470,7 @@ def test_claims_are_deleted_with_their_memory(conn: sqlite3.Connection) -> None:
 
 
 def _payload(result) -> dict:
-    content = result[0] if isinstance(result, tuple) else result
+    content = result.content
     return json.loads(content[0].text)
 
 
