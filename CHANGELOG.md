@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.23.0] - 2026-10-17
+
 ### Added
 
 - TLS on the brain, secure by default and zero-setup. `gingugu serve` on any
