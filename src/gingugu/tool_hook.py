@@ -157,6 +157,8 @@ def run(payload: dict) -> int:
 
     app = load_config()
     namespaces = namespaces_for(cwd)
+    if not namespaces:
+        return 0
     target = hook_remote.target()
     if target is not None:
         # Rules come from the brain (cached); matching and trip state stay here.

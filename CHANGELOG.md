@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Involuntary recall and tripwires honour the client's `MEMORY_GRANT`. A client
+  whose MCP calls are fenced (say `tyrone=write,crow=read`) now has its hooks
+  fenced the same way: a namespace the grant cannot read - the repo its working
+  folder names, or a per-chat folder like ChatGPT desktop's - is dropped before
+  any lookup, locally or on a remote brain. A grant that cannot be honoured
+  (empty, malformed, `*=write`) leaves the hooks quiet rather than unfenced.
+  A minion spawned by a fenced client is warmed only from what both grants
+  can read. Unset `MEMORY_GRANT` changes nothing.
+- With a remote brain, a working folder whose name is not a valid namespace name
+  (say `My Repo`) no longer silences involuntary recall and tripwires: the brain
+  refused the whole request; the name is now left out of what is sent, and crow
+  and the persona still recall.
+
 ---
 
 ## [0.22.1] - 2026-10-06
