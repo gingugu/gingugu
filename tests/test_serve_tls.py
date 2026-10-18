@@ -96,6 +96,15 @@ def test_generated_cert_names_this_machine(env):
     assert {"127.0.0.1", "::1"} <= ips
 
 
+def test_a_long_hostname_still_generates(env, monkeypatch):
+    # X.509 caps a common name at 64 characters; CI runners' hostnames exceed it.
+    long_name = "a" * 40 + "-runner-" + "b" * 30
+    monkeypatch.setattr(serve_tls.socket, "gethostname", lambda: long_name)
+    env(MEMORY_SERVE_HOST="0.0.0.0")
+    dns, _ = _sans(serve_tls.resolve(load_config()).cert)
+    assert long_name in dns
+
+
 def test_a_specific_bind_ip_is_named_too(env):
     env(MEMORY_SERVE_HOST="192.168.1.50")
     _, ips = _sans(serve_tls.resolve(load_config()).cert)
