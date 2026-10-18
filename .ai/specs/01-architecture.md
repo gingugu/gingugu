@@ -478,7 +478,9 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   `prompt_hook.namespaces_for` drops what `MEMORY_GRANT` cannot read and fails
   closed (`[]`, no request) on a grant `stdio_grant` rejects. The minion warm-up
   narrows the agent file's spec the same way (`hook_grant.narrow_spec`) before
-  it is used or sent to `/hook/warmup`.
+  it is used or sent to `/hook/warmup`. Every name sent to a `/hook/*` route
+  passes `hook_remote_flows._sendable` first (the routes' own name rule), so an
+  odd folder name is left out rather than 400ing the whole request.
 
 ## Warm minions (stdio grant, warm-up, minion fence)
 

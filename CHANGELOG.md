@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (empty, malformed, `*=write`) leaves the hooks quiet rather than unfenced.
   A minion spawned by a fenced client is warmed only from what both grants
   can read. Unset `MEMORY_GRANT` changes nothing.
+- With a remote brain, a working folder whose name is not a valid namespace name
+  (say `My Repo`) no longer silences involuntary recall and tripwires: the brain
+  refused the whole request; the name is now left out of what is sent, and crow
+  and the persona still recall.
 
 ---
 
