@@ -27,9 +27,11 @@ def trusted(folder: Path, config: Path | None = None) -> bool | None:
     if not isinstance(projects, dict):
         return None
     for path in (folder, *folder.parents):
-        entry = projects.get(str(path))
-        if isinstance(entry, dict) and entry.get("hasTrustDialogAccepted") is True:
-            return True
+        # Native and forward-slash spellings: on Windows they differ.
+        for key in {str(path), path.as_posix()}:
+            entry = projects.get(key)
+            if isinstance(entry, dict) and entry.get("hasTrustDialogAccepted") is True:
+                return True
     return False
 
 

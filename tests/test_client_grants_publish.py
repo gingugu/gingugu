@@ -45,8 +45,10 @@ def test_a_minion_server_says_so(root, monkeypatch) -> None:
     assert json.loads(path.read_text())["role"] == "minion"
 
 
-def test_publish_never_raises(monkeypatch) -> None:
-    monkeypatch.setattr(client_grants, "_root", lambda: Path("/dev/null/not-a-dir"))
+def test_publish_never_raises(monkeypatch, tmp_path) -> None:
+    blocker = tmp_path / "a-file"
+    blocker.write_text("")  # a directory under a regular file fails on every OS
+    monkeypatch.setattr(client_grants, "_root", lambda: blocker / "clients")
     assert client_grants.publish("crow=read") is None
 
 
