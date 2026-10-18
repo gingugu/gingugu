@@ -32,7 +32,7 @@
 - **Python** `>=3.11`; CI matrix ubuntu/macos/windows × 3.11–3.13
 - **MCP** Python SDK (`mcp>=1.25,<2`); **stdio** (default) + **streamable HTTP**
   (`gingugu serve`, via `starlette` + `uvicorn`); **httpx** + **anyio** for the
-  remote-mode proxy
+  remote-mode proxy; **psutil** for the hooks to find their client's servers
 - **SQLite + FTS5** (WAL mode); semantic embeddings for hybrid retrieval
 - **platformdirs** for the cross-platform DB path
 - **uv**-managed; `ruff` + `black`; `pytest` + `pytest-asyncio` + `pytest-timeout`

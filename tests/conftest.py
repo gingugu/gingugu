@@ -16,6 +16,7 @@ from gingugu.database import Database
 from gingugu.namespaces import NamespaceManager
 from gingugu.relations import RelationManager
 from gingugu.storage import MemoryStore
+from tests.client_grants_fixtures import hook, live, root  # noqa: F401 - client-grant suites
 from tests.hook_remote_fixtures import remote  # noqa: F401 - remote-mode hook suites
 from tests.scoped_fixtures import brain  # noqa: F401 - shared fixture for the scoped suites
 
@@ -79,6 +80,25 @@ def sandboxed_user_settings(monkeypatch: pytest.MonkeyPatch, tmp_path_factory):
         "gingugu.bootstrap.settings.user_settings_path", lambda: sandbox, raising=True
     )
     return sandbox
+
+
+@pytest.fixture(autouse=True)
+def sandboxed_client_grants(monkeypatch: pytest.MonkeyPatch, tmp_path_factory):
+    """Keep the suite out of the real client process tree and its grants.
+
+    A hook resolves its grant from what the gingugu servers of the client it
+    runs under published. Under test that client is whoever launched pytest -
+    a live Claude Code session, with its own unfenced server - so every hook
+    test would read the developer's real publications, and a freshly started CI
+    runner would make each hook wait out the startup window. No client, and an
+    empty publication dir, unless a test sets one.
+    """
+    sandbox = tmp_path_factory.mktemp("client-grants")
+    monkeypatch.setattr("gingugu.client_grants._root", lambda: sandbox, raising=True)
+    monkeypatch.setattr("gingugu.client_grants.ancestors", lambda: [], raising=True)
+    monkeypatch.setattr(
+        "gingugu.claude_trust.config_path", lambda: sandbox / "no-claude.json", raising=True
+    )
 
 
 @pytest.fixture(autouse=True)

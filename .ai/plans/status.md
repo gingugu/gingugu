@@ -24,7 +24,36 @@ session-id code read is gone, `ServerSession` becomes a per-message proxy (our
 board #1, which edits the same proxy and server files. 1.x is in maintenance
 (security fixes only); upstream advises pinning `mcp>=1.28,<2` until ready.
 
-Next: board #1 (a missing hook grant fails open) - design first.
+**Board #1, a missing hook grant fails open (branch `fix/hook-grant-publish`,
+stacked on `fix/write-clock`).** Design approved 2026-10-17 (options 1 + 2):
+every gingugu server publishes its grant and ancestor chain for its client's
+hooks (`client_grants.py`, `<user_runtime_dir>/gingugu/clients/<pid>.json`),
+and `hook_grant.client_grant` applies the publications that meet the hook at
+its nearest ancestor (the lowest common ancestor is the client, past any
+launcher); the hook's own `MEMORY_GRANT` and all publications must agree or
+the hooks stay quiet and log why. A fenced server's file is withdrawn only on
+a clean shutdown, so a crashed or grant-refusing one leaves a fence and the
+hooks refuse. A client under 3s old is waited on (measured: the server is
+spawned 51ms before SessionStart finishes). Hardened after two security
+review passes (fail-open fallbacks, launchers, inherited minion mark,
+ownership, the two-server race, stale files, cross-session meetings). Live
+A/B on headless Claude Code 2.1.289 with the working tree behind `uv run` and
+`MEMORY_GRANT=crow=read` only in the MCP `env`: fenced session injected
+nothing, control injected `[gingugu/decision]`, and no publication was left
+behind once SIGTERM withdrew it. Rollout: agent files from an older
+`gingugu harness` (and hand-made ones) lack `MEMORY_SERVER_ROLE`, so while such
+a minion runs its fenced server disagrees with the main one and the main
+hooks go quiet - rerun `gingugu harness --force`. Not yet live-tested on Codex
+(Tyrone).
+Minion servers mark themselves (`MEMORY_SERVER_ROLE: "minion"`, templates and
+this repo's agent files). New dependency: `psutil` (process tree on every CI
+OS). Same branch: a minion in a folder Claude Code has not trusted starts with
+no `brain` (inline agent-file servers need trust; measured 2026-10-17, CLI
+2.1.289), so the warm-up says so and `gingugu harness` warns (`claude_trust.py`).
+Tests first: `tests/test_client_grants.py` (including a real client -> server +
+hook process tree), `tests/test_claude_trust.py`. Later option, not taken:
+Claude Code also hands its MCP servers `CLAUDE_CODE_SESSION_ID`, a cleaner key
+than a pid, but Claude Code only - Tyrone runs on Codex.
 
 ## Recently Completed
 
