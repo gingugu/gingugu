@@ -173,7 +173,7 @@ export default function KnowledgeGraph({ memories, namespaces, relations, onSele
 
   return (
     <div className="relative h-full w-full" ref={containerRef}>
-      <div className="absolute top-4 left-4 z-10 bg-gray-900/80 backdrop-blur px-3 py-2 rounded-lg border border-gray-800">
+      <div className="absolute top-4 left-4 z-10 bg-gray-900/80 backdrop-blur-sm px-3 py-2 rounded-lg border border-gray-800">
         <p className="text-[10px] text-gray-500 mb-1 font-semibold uppercase tracking-wider">Types</p>
         <div className="flex flex-col gap-1">
           {Object.entries(TYPE_COLORS).map(([type, color]) => (

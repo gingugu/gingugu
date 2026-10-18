@@ -60,7 +60,7 @@ export default function GraphToolbar({
             value={filters.text}
             onChange={(e) => onFiltersChange({ ...filters, text: e.target.value })}
             placeholder="Search title, content, tags..."
-            className="w-64 pl-7 pr-2 py-1.5 text-xs bg-gray-900/90 backdrop-blur border border-gray-800 rounded-lg text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-700"
+            className="w-64 pl-7 pr-2 py-1.5 text-xs bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg text-gray-200 placeholder-gray-600 focus:outline-hidden focus:border-blue-700"
           />
         </div>
         <button
@@ -97,12 +97,12 @@ export default function GraphToolbar({
         </button>
       </div>
 
-      <div className="text-[10px] text-gray-500 bg-gray-900/70 backdrop-blur px-2 py-0.5 rounded-full border border-gray-800">
+      <div className="text-[10px] text-gray-500 bg-gray-900/70 backdrop-blur-sm px-2 py-0.5 rounded-full border border-gray-800">
         {matchingCount} / {memories.length} match
       </div>
 
       {openPanel === 'filter' && (
-        <div className="w-72 bg-gray-900/95 backdrop-blur border border-gray-800 rounded-lg p-3 space-y-3 text-xs">
+        <div className="w-72 bg-gray-900/95 backdrop-blur-sm border border-gray-800 rounded-lg p-3 space-y-3 text-xs">
           <div className="flex items-center justify-between">
             <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Filters</span>
             {activeFilterCount > 0 && (
@@ -181,7 +181,7 @@ export default function GraphToolbar({
       )}
 
       {openPanel === 'layout' && (
-        <div className="w-72 bg-gray-900/95 backdrop-blur border border-gray-800 rounded-lg p-3 space-y-3 text-xs">
+        <div className="w-72 bg-gray-900/95 backdrop-blur-sm border border-gray-800 rounded-lg p-3 space-y-3 text-xs">
           <div className="flex items-center justify-between">
             <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Layout</span>
             <button
@@ -233,7 +233,7 @@ export default function GraphToolbar({
               type="checkbox"
               checked={showTagLinks}
               onChange={(e) => onShowTagLinksChange(e.target.checked)}
-              className="rounded"
+              className="rounded-sm"
             />
             Show tag connections
           </label>
