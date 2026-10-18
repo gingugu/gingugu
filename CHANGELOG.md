@@ -52,6 +52,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (say `My Repo`) no longer silences involuntary recall and tripwires: the brain
   refused the whole request; the name is now left out of what is sent, and crow
   and the persona still recall.
+- Bookkeeping no longer counts as a fresh write. Resolving a claim, replacing
+  tags or pinning a memory used to move its `updated_at`, which put an old note
+  back into the next `memory_context` recency bucket and refreshed its
+  freshness anchor for scoring and review hints. `updated_at` now moves only
+  when one of the memory's own fields (title, content, type, confidence,
+  metadata, provenance, about) changes value.
 
 ---
 
