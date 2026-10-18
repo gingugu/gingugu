@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- TLS on the brain, secure by default and zero-setup. `gingugu serve` on any
+  non-loopback bind now serves https with a self-signed certificate it
+  generates once in `<db-dir>/tls/` (key `0600`); a loopback bind stays plain
+  http and local (stdio) mode is untouched. `MEMORY_SERVE_TLS=auto|on|off`,
+  `MEMORY_SERVE_TLS_CERT` + `MEMORY_SERVE_TLS_KEY` to bring your own,
+  `MEMORY_SERVE_TLS_SAN` for extra names.
+- `gingugu remote login` pins the brain's certificate over SSH: the forced
+  command's new `cert` verb hands it over before the token is minted, the token
+  is filed under the `https` URL, and a machine already on that brain over
+  `http` moves to `https`. Nothing is rotated until the live brain passes a
+  check with that exact pin, so a stale certificate or one that does not name
+  the host stops the login with the fix and the old token keeps working.
+- A brain that fails TLS verification says so: the proxy stops with the fix
+  (`gingugu remote login`, or the brain's `MEMORY_SERVE_TLS_SAN`) instead of
+  reconnecting forever, and startup names the TLS reason instead of
+  "unreachable". A clock problem (a cert not yet valid or expired) is still
+  retried and says to check the clock. A corrupt pin is refused, never read
+  as none. `gingugu promote` verifies a pinned brain through its pin. The proxy, its token trade, the hooks and
+  `remote status` verify the brain against the pin alone, and plain `http` to a
+  pinned brain is refused instead of sent.
+
+### Changed
+
+- **Upgrading a network-bound brain turns TLS on.** Run `gingugu remote login`
+  again on each machine, and switch any `MEMORY_REMOTE_URL` to `https://`, or
+  set `MEMORY_SERVE_TLS=off` on the server to keep plain http.
+
 ### Fixed
 
 - Involuntary recall and tripwires honour the client's `MEMORY_GRANT`. A client

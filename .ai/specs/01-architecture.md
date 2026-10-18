@@ -400,11 +400,13 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   scoped client never gets the vault); no keychain token (points at
   `gingugu remote login`); brain unreachable (`/healthz`, retried for up to
   `REACH_BUDGET_S` = 15s with 0.5s -> 1s -> 2s backoff, no probe after the
-  deadline; refusal reads `unreachable after 15s: <url>`). The retry exists
+  deadline; refusal reads `unreachable after 15s: <url>`, or for an https
+  brain the TLS reason from `remote_tls.diagnose`). The retry exists
   because an MCP client never retries a server that exits at startup, and a
   brain on WiFi can drop the first packet after idle; the budget stays inside
   Claude Code's 30s connect timeout. Plain http to a non-loopback host warns
-  on stderr. Exit 2 on refusal.
+  on stderr; to a pinned brain it never gets here (`remote.active()` refuses
+  it). Exit 2 on refusal.
 - **Local vault** (`proxy_vault.py`): the vault is the machine's keychain plus
   its local DB's `credential_*` tables, which a remote brain cannot serve. With
   credentials on (owner only, per preflight), `server.main` hands the proxy
@@ -482,6 +484,61 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   it is used or sent to `/hook/warmup`. Every name sent to a `/hook/*` route
   passes `hook_remote_flows._sendable` first (the routes' own name rule), so an
   odd folder name is left out rather than 400ing the whole request.
+
+## TLS on the brain (secure off the box, zero-setup on it)
+
+Local (stdio) mode has no network hop and never touches a certificate. A
+`gingugu serve` bound to loopback stays plain http. A serve bound to anything
+else gets TLS by default (`serve_tls.resolve`, `MEMORY_SERVE_TLS=auto`): a
+self-signed EC P-256 leaf generated once in `<db-dir>/tls/` (key 0600) and
+reused, naming the hostname, `<host>.local`, loopback, a specific bind IP and
+`MEMORY_SERVE_TLS_SAN`. `MEMORY_SERVE_TLS_CERT` + `_KEY` bring your own;
+`MEMORY_SERVE_TLS=off` opts out; a bad setting refuses to start.
+
+```
+remote login ──ssh: cert──▶ forced command ──▶ <db-dir>/tls/serve_cert.pem (public)
+             ◀── PEM ──────┘   pinned at <user-data-dir>/remote-tls/<host>_<port>.pem
+             ──ssh: mint───▶ machine token ──▶ keychain, under the https URL
+proxy / derive / hooks / status ──https, verify = the pin alone──▶ serve
+```
+
+- **Trust rides SSH.** The login already authenticates the brain by its SSH
+  host key (trust-on-first-use, `StrictHostKeyChecking=accept-new`, so the pin
+  is as good as that first connection), so the cert it hands over on that
+  channel is the brain's. Nobody
+  copies a cert file. An older brain refuses the verb (exit 2): no TLS, http
+  kept.
+- **Nothing rotates until TLS is settled** (`remote_tls.prepare_login`, from
+  the security review): `cert`, then a live `GET /healthz` over https with the
+  exact trust clients will use (`probe`), then the pin is written, and only
+  then `mint`. The SSH session does not run with the service's environment, so
+  `cert` can hand over a cert the brain no longer serves; the probe catches
+  that, and a cert that misses the dialled host, with the fix in the message.
+  An https login with no cert offered drops a stale pin (a brought cert); an
+  http login to a pinned brain is refused.
+- **A TLS failure says so.** `proxy_session.derive` turns a certificate failure
+  into `ProxyLost` with `remote_tls.explain`'s fix rather than an endless
+  "reconnecting" - except a clock failure (not yet valid, expired), which stays
+  transient and retried; preflight's unreachable refusal carries `diagnose`'s reason.
+  A corrupt pin raises (never default trust), and the forced command re-encodes
+  the cert it prints, so nothing but certificate bytes leaves the brain.
+- **The pin is the only trust anchor** (`remote_tls.verify_for`:
+  `create_default_context(cadata=pin)`, hostname checking on). A CA:FALSE leaf
+  verifies as its own anchor on 3.11 and under 3.13's strict mode, and cannot
+  sign anything else. With no pin, https uses the default store, so a brought
+  publicly-trusted cert works without one.
+- **A pin means TLS.** `remote.active()` and `remote on` refuse http to a
+  pinned host:port, so a stale `MEMORY_REMOTE_URL=http://...` fails loudly
+  instead of sending the token in the clear.
+- **A brought cert is never pinned**: a real cert renews every few months and
+  a pin on it would break every client. `cert_pem` offers only the generated
+  one, judged from the forced command's own environment; if a generated cert
+  is left on disk after the service moved to a brought cert or TLS off, `cert`
+  offers it, the login probe fails, nothing rotates, and the message says to
+  delete `<db-dir>/tls`. Regenerating the generated cert means `remote login` again.
+- Five call sites verify through the pin: `proxy_auth.brain_client`,
+  `proxy_session.derive`, `hook_remote.post`, `remote._reachable`, and
+  `promote._session`.
 
 ## Warm minions (stdio grant, warm-up, minion fence)
 
