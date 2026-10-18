@@ -1,10 +1,16 @@
 # Project Status
 
-_Last updated: 2026-10-06_
+_Last updated: 2026-10-17_
 
 ## In Flight
 
-**Board #1, one central brain (design approved 2026-10-02).** A Raspberry Pi 4
+Nothing in flight.
+
+## Recently Completed
+
+**Board #1, one central brain: DONE (2026-10-05; design approved 2026-10-02).**
+Every step below shipped (B1, C, B2, D0 in 0.21.0; D live on a second
+machine), and the item came off the board on 2026-10-17. A Raspberry Pi 4
 on the home network holds the only brain; laptops, minions and non-Claude agents
 connect to `gingugu serve` over HTTP. Hardware is provisioned (64-bit OS, brain
 on a USB SSD, systemd service) and a copy of the real brain is serving there.
@@ -71,8 +77,6 @@ on a USB SSD, systemd service) and a copy of the real brain is serving there.
   and `/hook/tripwires` all answer 200 from it. `remote login` has to run in
   the machine's own GUI session: over SSH the login keychain refuses writes
   (`errSecInteractionNotAllowed`), though the token is still minted.
-
-## Recently Completed
 
 **Released 0.22.1 to PyPI (2026-10-06): `gingugu harness` reports match what it does (#113).**
 An end-to-end run of `init`, `harness`, `--migrate` and `--prune` against
@@ -158,7 +162,7 @@ deadline); live, a dead host is refused at 16.5s, inside the 30s client connect
 timeout. This supersedes the single-probe "unreachable brain" refusal in the
 B1 entry below. Separately, Pi WiFi power save was turned off
 (`802-11-wireless.powersave 2` on its NetworkManager connection; 4s-gap pings
-then averaged 33 ms) - **a step for the board #11 bootstrap script.** Tests:
+then averaged 33 ms) - **a step for the board #12 bootstrap script.** Tests:
 three new preflight cases on a fake clock; full suite 1671 passed.
 
 **Released 0.21.2 to PyPI (2026-10-04): proxy survives a brain restart
@@ -1026,7 +1030,7 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-## The Board (current: 2026-10-04, after 0.21.0)
+## The Board (current: 2026-10-17, after 0.22.1)
 
 **Resequenced 2026-09-29 into build order.** The table below is the order the
 work gets done in, top first; `#` is that position. Item numbers used to be
@@ -1047,21 +1051,27 @@ tokens (old #12) as #92; both came off.
 **2026-10-02:** warm minions (old #13) shipped as #96 and came off; every row
 below it moved up one, and the row-position cross-references moved with them.
 
+**2026-10-17:** the central brain (old #11) is done - D, the second machine,
+went live 2026-10-05 - and came off; every row moved up one. Claim-only
+recency entered as a new row. The board was then reordered: the two security
+items on the live brain (hook grant, TLS) go first, the shared board after
+them, and the SDK migration ahead of the standalone features.
+
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **One central brain, several clients** - IN FLIGHT | 11 | Hardware up, design approved and measured (see In Flight). B1, C, B2 and D0 (local vault) merged and released in 0.21.0; this machine is switched; D (a second machine) remains |
-| 2 | **A shared board between agents** | 15 | Needs 1 |
-| 3 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
-| 4 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
-| 5 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
-| 6 | **A referee for rival memory tools** | 17 | Only a fair comparison once 5 exists |
-| 7 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
-| 8 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
-| 9 | Session flight recorder (low priority) | 18 | Check prior art first |
-| 10 | **MCP SDK 2.x migration** | - | We pin `mcp<2` (lock 1.28.1); 2.x is a major (2.3.0 out 2026-10-02). The proxy sits on two transport APIs, and `tests/test_proxy*.py` is the safety net |
-| 11 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
-| 12 | **TLS on the brain** | - | Entered 2026-10-03. Every remote-mode hook call carries the machine's owner token, so on plain `http` it crosses the LAN unencrypted on every prompt (the B2 security review's accepted finding). `gingugu serve` behind TLS (uvicorn certs or a reverse proxy) plus a trust story for a home-LAN cert; `gingugu remote` should then prefer `https` |
-| 13 | **Hook recall honours the client's grant** | - | Entered 2026-10-04. ChatGPT desktop runs Codex hooks (same protocol as Claude Code: `UserPromptSubmit`, `hookSpecificOutput.additionalContext`), and a probe proved `gingugu hook prompt` injects into a plain ChatGPT chat. Two gaps before a scoped client keeps it: the prompt hook never reads `MEMORY_GRANT` and, in remote mode, calls the owner-only `/hook/recall` with the machine token, so a client fenced to `tyrone=write,crow=read` is shown any namespace its cwd names; and ChatGPT gives every chat its own working folder (`~/Documents/Codex/<date>/<slug>`), so the cwd basename adds a junk namespace. Also: tripwire input fields are keyed on Claude Code tool names; Codex's built-in names are still unobserved |
+| 1 | **Hook recall honours the client's grant** | - | Entered 2026-10-04. First: a live leak through a fenced client. ChatGPT desktop runs Codex hooks (same protocol as Claude Code: `UserPromptSubmit`, `hookSpecificOutput.additionalContext`), and a probe proved `gingugu hook prompt` injects into a plain ChatGPT chat. Two gaps before a scoped client keeps it: the prompt hook never reads `MEMORY_GRANT` and, in remote mode, calls the owner-only `/hook/recall` with the machine token, so a client fenced to `tyrone=write,crow=read` is shown any namespace its cwd names; and ChatGPT gives every chat its own working folder (`~/Documents/Codex/<date>/<slug>`), so the cwd basename adds a junk namespace. Also: tripwire input fields are keyed on Claude Code tool names; Codex's built-in names are still unobserved |
+| 2 | **TLS on the brain** | - | Entered 2026-10-03. Second: the other open security finding on the live brain. Every remote-mode hook call carries the machine's owner token, so on plain `http` it crosses the LAN unencrypted on every prompt (the B2 security review's accepted finding). `gingugu serve` behind TLS (uvicorn certs or a reverse proxy) plus a trust story for a home-LAN cert; `gingugu remote` should then prefer `https` |
+| 3 | **A shared board between agents** | 15 | Unblocked: the central brain is done. After 1 and 2, so more agents join a brain that fences and encrypts properly |
+| 4 | **MCP SDK 2.x migration** | - | Ahead of new features: the pin ages every week. We pin `mcp<2` (lock 1.28.1); 2.x is a major (2.3.0 out 2026-10-02). The proxy sits on two transport APIs, and `tests/test_proxy*.py` is the safety net |
+| 5 | **Bookkeeping is not freshness** | - | Entered 2026-10-17. Small and fully diagnosed. `memory_update(resolve_claims=...)` leaves the prose and `last_confirmed` alone but still bumps `updated_at`, and the `memory_context` recency bucket orders by `updated_at` (#61). So reconciling a claim puts the old note into the next session start: an August "PR #49 open" note surfaced right after its claim was resolved. A claim-only write (and likely any tags-only or pin-only one) should not count as recency. Measured live; not yet built |
+| 6 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
+| 7 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
+| 8 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
+| 9 | **A referee for rival memory tools** | 17 | Only a fair comparison once 8 exists |
+| 10 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
+| 11 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
+| 12 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
+| 13 | Session flight recorder (low priority) | 18 | Check prior art first |
 | - | **Template/sibling noise in retrieval - PARKED** | 1 | Ten dead fixes and no live hypothesis; see below |
 
 ### Previous board (2026-09-28), kept for its numbering
