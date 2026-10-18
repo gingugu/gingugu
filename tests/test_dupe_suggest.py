@@ -94,7 +94,7 @@ def test_title_fallback_clusters_exact_titles(db, store, namespaces) -> None:
 
 
 def _payload(result) -> dict:
-    content = result[0] if isinstance(result, tuple) else result
+    content = result.content
     return json.loads(content[0].text)
 
 

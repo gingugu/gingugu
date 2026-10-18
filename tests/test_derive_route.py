@@ -13,7 +13,7 @@ import contextlib
 import json
 import socket
 
-import httpx
+import httpx2
 import pytest
 from starlette.testclient import TestClient
 
@@ -56,7 +56,7 @@ def rig(tmp_path, monkeypatch):
     return r
 
 
-def _derive(client, token: str | None, body) -> httpx.Response:
+def _derive(client, token: str | None, body) -> httpx2.Response:
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     if isinstance(body, str):
         return client.post(DERIVE, headers=headers, content=body)
@@ -158,8 +158,8 @@ async def _session_calls(base: str, token: str, calls: list[tuple[str, dict]]) -
 
     out = []
     headers = {"Authorization": f"Bearer {token}"}
-    async with httpx.AsyncClient(headers=headers, timeout=30) as client:
-        async with streamable_http_client(f"{base}/mcp", http_client=client) as (r, w, _):
+    async with httpx2.AsyncClient(headers=headers, timeout=30) as client:
+        async with streamable_http_client(f"{base}/mcp", http_client=client) as (r, w):
             async with ClientSession(r, w) as session:
                 await session.initialize()
                 for tool, args in calls:
@@ -169,7 +169,7 @@ async def _session_calls(base: str, token: str, calls: list[tuple[str, dict]]) -
 
 
 async def _derive_async(base: str, owner: str, body: dict) -> str:
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         resp = await client.post(
             f"{base}{DERIVE}", headers={"Authorization": f"Bearer {owner}"}, json=body
         )

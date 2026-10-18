@@ -105,11 +105,20 @@ def clear_pin(url: str) -> None:
 
 
 def _context(pem: str | None) -> ssl.SSLContext:
-    return ssl.create_default_context(cadata=pem) if pem else ssl.create_default_context()
+    """The pin alone, or else the default trust httpx2 gives every client.
+
+    httpx2's default is the OS trust store (via truststore), not OpenSSL's, so
+    building it here keeps ``probe`` checking exactly what the clients check.
+    """
+    if pem:
+        return ssl.create_default_context(cadata=pem)
+    import httpx2
+
+    return httpx2.create_ssl_context()
 
 
 def verify_for(url: str) -> ssl.SSLContext | bool:
-    """httpx's ``verify`` for ``url``: the pin alone when there is one, else default trust."""
+    """httpx2's ``verify`` for ``url``: the pin alone when there is one, else default trust."""
     pem = load_pin(url) if urlparse(url).scheme == "https" else None
     return True if pem is None else _context(pem)
 

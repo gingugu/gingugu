@@ -63,12 +63,10 @@ def request_grant(transport: str, stdio: Grant = FULL) -> Grant | None:
     """
     if transport == "stdio":
         return stdio
-    from mcp.server.lowlevel.server import request_ctx
+    from ..inbound import current
 
-    try:
-        request = request_ctx.get().request
-    except LookupError:
-        return None
+    inbound = current()
+    request = inbound.request if inbound is not None else None
     state = getattr(request, "state", None)
     grant = getattr(state, "grant", None) if state is not None else None
     return grant if isinstance(grant, Grant) else None

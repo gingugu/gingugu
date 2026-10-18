@@ -10,14 +10,13 @@ import copy
 import sys
 
 import anyio
-import httpx
+import httpx2
 from anyio.abc import ObjectReceiveStream, ObjectSendStream
 from mcp.shared.message import SessionMessage
 from mcp.types import (
     INVALID_REQUEST,
     ErrorData,
     JSONRPCError,
-    JSONRPCMessage,
     JSONRPCNotification,
     JSONRPCRequest,
     JSONRPCResponse,
@@ -27,8 +26,18 @@ from .remote_tls import explain, is_clock, tls_failure, verify_for
 
 CRED_PREFIX = "credential_"
 CLIENT_GONE = (anyio.BrokenResourceError, anyio.ClosedResourceError)
-_SESSION_TERMINATED = 32600  # the SDK's synthetic reply when the brain 404s a session
-_SESSION_TERMINATED_TEXT = "Session terminated"
+_SESSION_TERMINATED = INVALID_REQUEST  # the SDK's stand-in when the brain 404s a session
+# The SDK client's own stand-in for a bare 404 ("Session terminated"), and the
+# JSON-RPC bodies a brain's session 404s carry (identical in SDK 1.30 and 2.3),
+# which the 2.x client relays verbatim. Every one is sent before dispatch.
+_SESSION_TERMINATED_TEXT = frozenset(
+    {
+        "Session terminated",
+        "Session not found",
+        "Not Found: Session has been terminated",
+        "Not Found: Invalid or expired session ID",
+    }
+)
 _DRAIN_SECONDS = 2.0  # after a 404, how long the rest of the requests in flight get
 
 
@@ -55,13 +64,13 @@ async def derive(
     except ValueError as exc:  # a corrupt pin: refuse, never fall back
         raise ProxyLost(str(exc)) from None
     try:
-        async with httpx.AsyncClient(timeout=10, verify=verify) as client:
+        async with httpx2.AsyncClient(timeout=10, verify=verify) as client:
             resp = await client.post(
                 f"{url}/token/derive",
                 json=body,
                 headers={"Authorization": f"Bearer {owner_token}"},
             )
-    except httpx.HTTPError as exc:
+    except httpx2.HTTPError as exc:
         cert_err = tls_failure(exc)
         if cert_err is not None and not is_clock(cert_err):
             # Not transient: retrying would hide it as "reconnecting".
@@ -89,7 +98,7 @@ async def derive(
 
 
 def wrap(message: JSONRPCRequest | JSONRPCResponse | JSONRPCError | JSONRPCNotification):
-    return SessionMessage(JSONRPCMessage(message))
+    return SessionMessage(message)
 
 
 def error(req_id: str | int, text: str, code: int = INVALID_REQUEST) -> SessionMessage:
@@ -104,7 +113,7 @@ def leaf_name(exc: BaseException) -> str:
 
 def http_status_in(exc: BaseException) -> int | None:
     """The HTTP status of the first failed response buried in ``exc``, if any."""
-    if isinstance(exc, httpx.HTTPStatusError):
+    if isinstance(exc, httpx2.HTTPStatusError):
         return exc.response.status_code
     if isinstance(exc, BaseExceptionGroup):
         for inner in exc.exceptions:
@@ -137,7 +146,7 @@ async def replay_handshake(
         async for item in link_read:
             if isinstance(item, Exception):
                 raise item
-            msg = item.message.root
+            msg = item.message
             if isinstance(msg, JSONRPCError) and msg.id == req_id:
                 raise ConnectionError("brain refused the re-initialize")
             if isinstance(msg, JSONRPCResponse) and msg.id == req_id:
@@ -172,7 +181,7 @@ class Link:
 
     async def forward(self, item: SessionMessage, *, replay: bool = False) -> None:
         """Send a client message to the brain; a request is tracked until answered."""
-        msg = item.message.root
+        msg = item.message
         if not isinstance(msg, JSONRPCRequest):
             await self.srv_write.send(item)
             return
@@ -218,11 +227,16 @@ class Link:
         if isinstance(item, Exception):
             raise item
         self.answered = True
-        msg = item.message.root
-        if isinstance(msg, JSONRPCError) and msg.error.code == _SESSION_TERMINATED:
-            # The SDK's stand-in for a 404: the brain never ran this request.
-            unrun = msg.error.message == _SESSION_TERMINATED_TEXT  # the SDK's own words
-            refused = self.pending.pop(msg.id, None) if unrun else None
+        msg = item.message
+        if (
+            isinstance(msg, JSONRPCError)
+            and msg.error.code == _SESSION_TERMINATED
+            and msg.error.message in _SESSION_TERMINATED_TEXT
+        ):
+            # A 404 for this session: the brain never ran this request. Gated
+            # on the words as well as the code, since -32600 is also an
+            # ordinary JSON-RPC "invalid request" the brain may send.
+            refused = self.pending.pop(msg.id, None)
             if refused is not None:
                 self.refused.append(refused)
                 self.stats_ids.discard(msg.id)

@@ -15,28 +15,34 @@ from gingugu import session as session_mod
 from gingugu.models import MemoryType
 
 
-class _FakeSession:
-    """Stands in for ``mcp.server.session.ServerSession`` (weak-referenceable)."""
+class _FakeRequest:
+    """Stands in for the Starlette request the SDK attaches to an HTTP message."""
+
+    def __init__(self, session_header: str | None) -> None:
+        self.headers = {} if session_header is None else {"mcp-session-id": session_header}
 
 
-class _FakeRequestContext:
-    def __init__(self, session: object) -> None:
-        self.session = session
+_counter = iter(range(10**6))
+
+
+def _FakeSession() -> _FakeRequest:  # noqa: N802 - reads like the session it names
+    """A fresh streamable-HTTP session: a request carrying its own Mcp-Session-Id."""
+    return _FakeRequest(f"sess-{next(_counter)}")
 
 
 @pytest.fixture
-def in_request(monkeypatch):
-    """Enter a fake MCP request context, and hand back a setter to swap sessions."""
-    from mcp.server.lowlevel.server import request_ctx
+def in_request():
+    """Enter a fake inbound HTTP message, and hand back a setter to swap sessions."""
+    from gingugu import inbound
 
     tokens = []
 
-    def enter(sess: object) -> None:
-        tokens.append(request_ctx.set(_FakeRequestContext(sess)))
+    def enter(request: object) -> None:
+        tokens.append(inbound._CURRENT.set(inbound.Inbound(request, inbound._session_id(request))))
 
     yield enter
     for token in reversed(tokens):
-        request_ctx.reset(token)
+        inbound._CURRENT.reset(token)
 
 
 @pytest.fixture
@@ -76,25 +82,25 @@ def test_distinct_sessions_yield_distinct_ids(in_request):
     assert first != second
 
 
-def test_non_weak_referenceable_session_degrades_to_none(in_request):
-    class _Slotted:
-        __slots__ = ()
-
-    in_request(_Slotted())
+def test_sessionless_http_request_degrades_to_none(in_request):
+    """A 2026-07-28 HTTP client carries no Mcp-Session-Id: unknown, not invented."""
+    in_request(_FakeRequest(None))
     assert session_mod.current_session_id() is None
 
 
-def test_request_context_without_a_session_degrades_to_none(in_request, monkeypatch):
-    from mcp.server.lowlevel.server import request_ctx
+def test_stdio_is_one_session_for_the_process(in_request):
+    """stdio has no HTTP request: one process, one client, one id."""
+    in_request(None)
+    first = session_mod.current_session_id()
+    in_request(None)
+    assert first is not None
+    assert session_mod.current_session_id() == first
 
-    class _NoSession:
-        pass
 
-    token = request_ctx.set(_NoSession())
-    try:
-        assert session_mod.current_session_id() is None
-    finally:
-        request_ctx.reset(token)
+def test_the_raw_session_header_is_never_stored(in_request):
+    in_request(_FakeRequest("live-handle"))
+    stored = session_mod.current_session_id()
+    assert stored is not None and "live-handle" not in stored
 
 
 # --- record_accesses ---------------------------------------------------------

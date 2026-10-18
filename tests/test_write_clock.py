@@ -74,7 +74,7 @@ def test_a_real_field_change_moves_the_clock(store, namespaces, backdate, change
 
 
 def _payload(result) -> dict:
-    content = result[0] if isinstance(result, tuple) else result
+    content = result.content
     return json.loads(content[0].text)
 
 

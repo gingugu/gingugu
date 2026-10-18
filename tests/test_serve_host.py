@@ -1,7 +1,7 @@
 """`gingugu serve` must answer clients that reach it by a LAN name.
 
 The MCP SDK turns on DNS-rebinding protection (Host allowlist of localhost
-only) whenever FastMCP is built with a loopback host, which is its default.
+only) whenever its HTTP app is built for a loopback host, which is its default.
 Built without the real bind host, a server on 0.0.0.0 answered every remote
 client with 421 Misdirected Request before auth ran. A loopback bind keeps
 the protection; a LAN bind relies on the Bearer token instead.
@@ -32,9 +32,10 @@ def _post_init(tmp_path, monkeypatch, bind: str | None, host_header: str) -> int
         monkeypatch.delenv("MEMORY_SERVE_HOST", raising=False)
     else:
         monkeypatch.setenv("MEMORY_SERVE_HOST", bind)
+    from gingugu.serve import mcp_app
     from gingugu.server import build_server
 
-    app = build_server(transport="http").streamable_http_app()
+    app = mcp_app(build_server(transport="http"))
     with TestClient(app, base_url=f"http://{host_header}") as client:
         return client.post("/mcp", json=_INIT, headers=_HEADERS).status_code
 
