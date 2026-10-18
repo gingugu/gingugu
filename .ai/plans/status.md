@@ -49,7 +49,7 @@ what it prints. Tests first:
 `promote` reach a pinned brain, and a missing or impostor pin is refused by
 the token trade, the hooks, `remote status`, preflight and the login probe -
 the proxy's `/mcp` client only runs after the token trade has verified).
-`gingugu promote` verifies through the pin too. Full suite 1917 passed. Still to do: the live
+`gingugu promote` verifies through the pin too. Full suite 1918 passed. Still to do: the live
 cutover on the Pi - upgrade, restart, `gingugu remote login` on each machine,
 and Tyrone's `MEMORY_REMOTE_URL` to `https://`.
 

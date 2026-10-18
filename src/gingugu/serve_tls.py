@@ -172,7 +172,8 @@ def generate(cert_path: Path, key_path: Path, names: list[str]) -> None:
         except ValueError:
             sans.append(x509.DNSName(name))
     key = ec.generate_private_key(ec.SECP256R1())
-    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, f"gingugu brain {names[0]}")])
+    # A fixed CN: X.509 caps it at 64 characters, and hostnames are matched on the SANs.
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "gingugu brain")])
     now = datetime.datetime.now(datetime.UTC)
     ski = x509.SubjectKeyIdentifier.from_public_key(key.public_key())
     usage = dict.fromkeys(
