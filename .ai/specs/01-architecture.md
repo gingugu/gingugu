@@ -53,7 +53,9 @@ AI client (Claude Code / Cursor / Windsurf / …)
    Key Decisions), `minion_fence`, `subagent_hook` and `subagent_warmup` (see Warm minions),
    `recall_pick` (the recall pipeline the local hook and `/hook/recall` share),
    `hook_remote` + `hook_remote_flows` and `serve_hooks` (see Remote mode), `hook_grant`
-   (the client's `MEMORY_GRANT` as the hooks apply it). `storage` owns the `memories` row only; the satellite tables
+   (the client's `MEMORY_GRANT` as the hooks apply it), `client_grants` (each server
+   publishes its grant for its client's hooks; see Warm minions), `claude_trust`
+   (whether Claude Code trusts a folder, for the untrusted-minion warning). `storage` owns the `memories` row only; the satellite tables
    it drags along have their own owners (`tags`, `access`, `embedding_sync`,
    `claim_sync`), reached through the `storage_derived.DerivedTables`
    delegation surface, which also carries `log_query` for `query_log` (owned by
@@ -478,8 +480,9 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   `ctx.conn`. No answer means a quiet hook, never the local DB; tripwires alone
   keep using their last fetched rules. The routes trust the namespace list they
   are sent, so the client's grant is applied before it is sent:
-  `prompt_hook.namespaces_for` drops what `MEMORY_GRANT` cannot read and fails
-  closed (`[]`, no request) on a grant `stdio_grant` rejects. The minion warm-up
+  `prompt_hook.namespaces_for` drops what the client's grant
+  (`hook_grant.client_grant`) cannot read and fails closed (`[]`, no request)
+  on a grant `stdio_grant` rejects or a disagreement. The minion warm-up
   narrows the agent file's spec the same way (`hook_grant.narrow_spec`) before
   it is used or sent to `/hook/warmup`. Every name sent to a `/hook/*` route
   passes `hook_remote_flows._sendable` first (the routes' own name rule), so an
@@ -551,10 +554,50 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   reads as not found. Unset is the full grant. Parsed before the database
   opens; a bad spec or `*=write` raises and `main` exits 2, so a typo can never
   fall back to the whole brain.
+- **The hooks follow the server's grant** (`client_grants`, `hook_grant`). A
+  hook runs in the client's environment, not the MCP server's `env` block, so
+  the server publishes what it runs under: `main` writes
+  `{"grant": MEMORY_GRANT|null, "role", "created", "chain": [[pid, start], ...]}`
+  to `<user_runtime_dir>/gingugu/clients/<pid>.json` (0600, `O_EXCL|O_NOFOLLOW`
+  temp + replace, owner-checked) before serving, stdio and proxy alike. A
+  hook's client is the lowest common ancestor of hook and server - launchers
+  (`uv run`, `sh -c`) sit on one side only, and two sessions under one host
+  meet further up - so a hook takes the publications that meet its chain at
+  its nearest ancestor, and never above its own client (the nearest ancestor
+  with a child off the hook's chain): a meeting at a shared shell or host is
+  another session's server. Every link is a `(pid, start time)` pair (start
+  rounded to 10ms), so a reused pid never matches, and no process names are
+  matched. Live publications
+  apply, `role: minion` skipped only beside a non-minion one. The hook's own
+  `MEMORY_GRANT` and every publication must agree, or the hook refuses (quiet,
+  logged); so does an unreadable or foreign-owned publication, or an
+  unreadable process tree. A publication is withdrawn only on a clean
+  shutdown - a normal return, or the SIGTERM/SIGINT a client stops its servers
+  with (measured: Claude Code left every file behind until `release_on_signal`;
+  the handler withdraws, restores the default and re-raises, so the exit is
+  unchanged) - and a fenced server that crashed, lost its brain or refused a bad
+  grant leaves its file as a fence, and a client with a fence and no live
+  server refuses (unfenced dead ones are ignored). Publishing sweeps dead
+  files: unfenced at once, a fence once nothing above pid 1 in its chain is
+  alive. A young client (nearest ancestor with a child off the hook's chain,
+  under 3s old) is waited on for the whole window: measured on Claude Code
+  2.1.301, the server was spawned 51ms before SessionStart finished and imports
+  for ~300ms. Nothing published at all falls back to the hook's own
+  environment. Residuals (two security passes): a fenced server slower than
+  3s on its very first start, or one that cannot write its publication (it
+  serves fenced and logs; the hook then most likely cannot read the dir
+  either); a hook launcher with two children of its own adds the wait; a main
+  server that inherited the minion mark, beside a second unfenced server under
+  the same client, is skipped; a fence left by a kill (no clean shutdown)
+  stays until its tree is gone, binding only its own dead session.
 - **Fenced agent files** declare an inline `brain` stdio server with
-  `MEMORY_GRANT` and `MEMORY_CREDENTIALS_ENABLED=false`, list `mcp__brain` in
-  `tools`, and put `mcp__gingugu` in `disallowedTools`: a subagent otherwise
-  inherits the parent's full-brain server.
+  `MEMORY_GRANT`, `MEMORY_CREDENTIALS_ENABLED=false` and
+  `MEMORY_SERVER_ROLE=minion`, list `mcp__brain` in `tools`, and put
+  `mcp__gingugu` in `disallowedTools`: a subagent otherwise inherits the
+  parent's full-brain server. Claude Code loads a PROJECT agent file's inline
+  server only once the folder is trusted (`~/.claude.json`
+  `projects[<dir>].hasTrustDialogAccepted`); untrusted, the minion starts with no
+  `brain`, so the warm-up says so and `gingugu harness` warns (`claude_trust`).
 - **Warm-up** (`subagent_hook.py`, `SubagentStart` doorway): `SubagentStart`
   has no task prompt, so the `PreToolUse` hook stashes the spawning `Agent`
   call's prompt (`hook-sessions/spawns-<session>.json`, 300s TTL, 0600, only for
