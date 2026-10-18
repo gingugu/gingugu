@@ -364,7 +364,10 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.23.0** (PyPI, 2026-10-17). Minor: TLS on the brain
+- Current version: **0.24.0** (PyPI, 2026-10-18). Minor: runs on the MCP
+  Python SDK 2.x (`MCPServer`) and `httpx2`, with `serve` taking 64 MiB
+  requests (#122); release and fleet-upgrade scripts (#123).
+- 0.23.0: Minor: TLS on the brain
   (#116), hooks honour `MEMORY_GRANT` (#115), hooks follow the grant their
   client's servers publish plus the untrusted-minion warning (#119), and
   bookkeeping no longer moves `updated_at` (#118). New dependency `psutil`.
