@@ -21,10 +21,41 @@ session-id code read is gone, `ServerSession` becomes a per-message proxy (our
 `WeakKeyDictionary` keyed on it breaks), the JSON-RPC unions lose `.root`,
 `streamable_http_client` yields a 2-tuple, and `httpx` is replaced by `httpx2`
 (our proxy, token trade and `promote` build `httpx.AsyncClient`s). It waits on
-board #1, which edits the same proxy and server files. 1.x is in maintenance
+board #1, which also edits `server.py` (`main`'s serve path). 1.x is in maintenance
 (security fixes only); upstream advises pinning `mcp>=1.28,<2` until ready.
 
-Next: board #1 (a missing hook grant fails open) - design first.
+**Board #1, a missing hook grant fails open (branch `fix/hook-grant-publish`,
+stacked on `fix/write-clock`).** Design approved 2026-10-17 (options 1 + 2):
+every gingugu server publishes its grant and ancestor chain for its client's
+hooks (`client_grants.py`, `<user_runtime_dir>/gingugu/clients/<pid>.json`),
+and `hook_grant.client_grant` applies the publications that meet the hook at
+its nearest ancestor (the lowest common ancestor is the client, past any
+launcher); the hook's own `MEMORY_GRANT` and all publications must agree or
+the hooks stay quiet and log why. A fenced server's file is withdrawn only on
+a clean shutdown, so a crashed or grant-refusing one leaves a fence and the
+hooks refuse. A client under 3s old is waited on (measured: the server is
+spawned 51ms before SessionStart finishes). Hardened after two security
+review passes (fail-open fallbacks, launchers, inherited minion mark,
+ownership, the two-server race, stale files, cross-session meetings). Live
+A/B on headless Claude Code 2.1.289 with the working tree behind `uv run` and
+`MEMORY_GRANT=crow=read` only in the MCP `env`: fenced session injected
+nothing, control injected `[gingugu/decision]`, and no publication was left
+behind once SIGTERM withdrew it. Rollout: agent files from an older
+`gingugu harness` (and hand-made ones) lack `MEMORY_SERVER_ROLE`, so while such
+a minion runs its fenced server disagrees with the main one and the main
+hooks go quiet - rerun `gingugu harness --force`. Not yet live-tested on Codex
+(Tyrone).
+Minion servers mark themselves (`MEMORY_SERVER_ROLE: "minion"`, templates and
+this repo's agent files). New dependency: `psutil` (process tree on every CI
+OS). Same branch: a minion in a folder Claude Code has not trusted starts with
+no `brain` (inline agent-file servers need trust; measured 2026-10-17, CLI
+2.1.289), so the warm-up says so and `gingugu harness` warns (`claude_trust.py`).
+Tests first: `tests/test_client_grants.py` (the hook's side),
+`tests/test_client_grants_publish.py` (publishing, withdrawal, signals, the
+startup race, and a real client -> (server, hook) process tree),
+`tests/client_grants_fixtures.py`, `tests/test_claude_trust.py`. Later option, not taken:
+Claude Code also hands its MCP servers `CLAUDE_CODE_SESSION_ID`, a cleaner key
+than a pid, but Claude Code only - Tyrone runs on Codex.
 
 ## Recently Completed
 
@@ -46,8 +77,10 @@ brain's hook routes would refuse (a folder like `My Repo`) is left out of what
 is sent (`hook_remote_flows._sendable`) instead of 400ing the whole request and
 silencing crow and the persona; local mode keeps it
 (`tests/test_hook_remote_names.py`). Still open after merge: Tyrone's wrapper
-(`~/.codex/hooks/tyrone_hook.py`, outside the repo) must pass `MEMORY_GRANT`,
-and Codex's tool names for tripwire matching are still unobserved.
+(`~/.codex/hooks/tyrone_hook.py`, outside the repo) must pass `MEMORY_GRANT` -
+until the publish route (board #1, In Flight) is shown to work on Codex's
+process tree - and Codex's tool names for tripwire matching are still
+unobserved.
 
 **TLS on the brain: MERGED (#116, merge `d9c0b69`, 2026-10-17), off the
 board.** Secure by default off the box, zero-setup on it
@@ -231,7 +264,7 @@ deadline); live, a dead host is refused at 16.5s, inside the 30s client connect
 timeout. This supersedes the single-probe "unreachable brain" refusal in the
 B1 entry below. Separately, Pi WiFi power save was turned off
 (`802-11-wireless.powersave 2` on its NetworkManager connection; 4s-gap pings
-then averaged 33 ms) - **a step for the board #13 bootstrap script.** Tests:
+then averaged 33 ms) - **a step for the Pi bootstrap script (board row 11 as of 2026-10-17).** Tests:
 three new preflight cases on a fake clock; full suite 1671 passed.
 
 **Released 0.21.2 to PyPI (2026-10-04): proxy survives a brain restart
@@ -1131,14 +1164,14 @@ the rows below it moved down one.
 **2026-10-17 (later):** hook grant (#115) and TLS (#116) merged and came off.
 Reordered: the fail-open hook grant stays first; bookkeeping-is-not-freshness
 moves to second (small, diagnosed, and it skews every session start); the SDK
-migration goes ahead of the shared board, since both the port and the fail-open
-fix sit on `proxy.py` and `server.py`. Rows 5 onward keep their order.
+migration goes ahead of the shared board; the port waits on the fail-open fix,
+since both edit `server.py`. Rows 5 onward keep their order.
 
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **A missing hook grant fails open, silently** | - | Entered 2026-10-17 (security review of #115). The hook fence reads `MEMORY_GRANT` from the hook process's own environment; a client that sets it only in its MCP server's `env` block gets fenced MCP calls and unfenced hooks, and nothing says so. Needs a design: the hook learning the client's grant from the same place the MCP server does, or a loud refusal when a fenced proxy and an unfenced hook run as one client. First: the last open security finding on the live brain |
-| 2 | **Bookkeeping is not freshness** | - | Entered 2026-10-17. Small and fully diagnosed. `memory_update(resolve_claims=...)` leaves the prose and `last_confirmed` alone but still bumps `updated_at`, and the `memory_context` recency bucket orders by `updated_at` (#61). So reconciling a claim puts the old note into the next session start: an August "PR #49 open" note surfaced right after its claim was resolved. A claim-only write (and likely any tags-only or pin-only one) should not count as recency. Measured live; not yet built. Second: it touches the write path only, so it builds alongside 1 |
-| 3 | **MCP SDK 2.x migration** | - | Ahead of new features: the pin ages every week. We pin `mcp<2` (lock 1.28.1); 2.x is a major (2.3.0 out 2026-10-02). The proxy sits on two transport APIs, and `tests/test_proxy*.py` is the safety net. The impact survey can run now; the port waits for 1, which edits the same files |
+| 1 | **A missing hook grant fails open, silently** - IN FLIGHT | - | Entered 2026-10-17 (security review of #115). The hook fence reads `MEMORY_GRANT` from the hook process's own environment; a client that sets it only in its MCP server's `env` block gets fenced MCP calls and unfenced hooks, and nothing says so. Built (see In Flight): every server publishes its grant and the hooks apply it, refusing on disagreement. First: the last open security finding on the live brain |
+| 2 | **Bookkeeping is not freshness** - IN FLIGHT | - | Entered 2026-10-17. Small and fully diagnosed. `memory_update(resolve_claims=...)` leaves the prose and `last_confirmed` alone but still bumps `updated_at`, and the `memory_context` recency bucket orders by `updated_at` (#61). So reconciling a claim puts the old note into the next session start: an August "PR #49 open" note surfaced right after its claim was resolved. A claim-only write (and likely any tags-only or pin-only one) should not count as recency. Measured live; built (see In Flight). Second: it touches the write path only, so it built alongside 1 |
+| 3 | **MCP SDK 2.x migration** | - | Ahead of new features: the pin ages every week. We pin `mcp<2` (lock 1.28.1); 2.x is a major (2.3.0 out 2026-10-02). The proxy sits on two transport APIs, and `tests/test_proxy*.py` is the safety net. Impact surveyed 2026-10-17 (see In Flight); the port waits for 1, which also edits `server.py` |
 | 4 | **A shared board between agents** | 15 | Unblocked: the central brain is done. After 1-3, so more agents join a brain that fences properly, on a current SDK |
 | 5 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
 | 6 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |

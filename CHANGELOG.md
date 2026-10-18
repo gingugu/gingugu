@@ -47,11 +47,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   any lookup, locally or on a remote brain. A grant that cannot be honoured
   (empty, malformed, `*=write`) leaves the hooks quiet rather than unfenced.
   A minion spawned by a fenced client is warmed only from what both grants
-  can read. Unset `MEMORY_GRANT` changes nothing.
+  can read. Unset `MEMORY_GRANT` changes nothing (see below for a grant set
+  only in the MCP server's `env`).
 - With a remote brain, a working folder whose name is not a valid namespace name
   (say `My Repo`) no longer silences involuntary recall and tripwires: the brain
   refused the whole request; the name is now left out of what is sent, and crow
   and the persona still recall.
+- A `MEMORY_GRANT` set only in a client's MCP server `env` block now fences
+  that client's hooks too. Every gingugu server (stdio, or the remote-mode
+  proxy) publishes the grant it runs under for its client's hooks; involuntary
+  recall, tripwires and minion warm-up apply it. If the hook's own
+  `MEMORY_GRANT`, or two of the client's servers, disagree, the hooks stay
+  quiet and log why instead of picking one. A fenced server that crashes or
+  refuses its grant leaves its publication behind, so the hooks stay quiet
+  rather than open; a normal stop (including SIGTERM) withdraws it. Servers started from a minion's
+  agent file mark themselves (`MEMORY_SERVER_ROLE: "minion"`, now in the
+  harness templates) and do not fence the client's hooks. Rerun
+  `gingugu harness --force` in a repo whose agent files predate this: an
+  unmarked minion server disagrees with the main one, and the hooks stay quiet
+  while that minion runs. New dependency: `psutil`.
+- A minion whose `brain` server cannot load says why. Claude Code ignores the
+  inline `mcpServers` of a project agent file until the folder is trusted, and
+  the minion used to start with no memory and no explanation. The warm-up now
+  tells it, and `gingugu harness` warns when it installs into an untrusted repo.
 - Bookkeeping no longer counts as a fresh write. Resolving a claim, replacing
   tags or pinning a memory used to move its `updated_at`, which put an old note
   back into the next `memory_context` recency bucket and refreshed its

@@ -183,14 +183,25 @@ def run(payload: dict) -> int:
     session_id = str(payload.get("session_id") or "unknown")
     hint = take(app.db_path, session_id, agent_type)
     spec = agent_grant(agent_type, _roots(payload))
+    cwd = os.environ.get("CLAUDE_PROJECT_DIR") or payload.get("cwd") or os.getcwd()
+    note = None
+    if spec and agent_grant(agent_type, [Path(cwd)]):
+        # A project agent file's inline server loads only in a trusted folder.
+        from .claude_trust import untrusted_note
+
+        note = untrusted_note(Path(cwd).resolve())
     if spec:
         from .hook_grant import narrow_spec
 
         spec = narrow_spec(spec)  # a fenced client warms no minion past its fence
-    if not spec:
-        return 0
-    cwd = os.environ.get("CLAUDE_PROJECT_DIR") or payload.get("cwd") or os.getcwd()
+    context = _warm_context(app, spec, hint, agent_type, cwd) if spec else None
+    parts = [p for p in (note, context) if p]
+    if parts:
+        _emit("\n\n".join(parts))
+    return 0
 
+
+def _warm_context(app, spec: str, hint: str | None, agent_type: str, cwd: str) -> str | None:
     from . import hook_remote
 
     target = hook_remote.target()
@@ -198,12 +209,9 @@ def run(payload: dict) -> int:
         # The brain ranks, with its warm model; nothing local is opened.
         from .hook_remote_flows import remote_warmup
 
-        context = remote_warmup(target, spec, hint, agent_type, cwd)
-        if context:
-            _emit(context)
-        return 0
+        return remote_warmup(target, spec, hint, agent_type, cwd)
     if not app.db_path.exists():
-        return 0
+        return None
 
     embedder = None
     if app.embeddings_enabled and hint:
@@ -216,10 +224,7 @@ def run(payload: dict) -> int:
             ollama_host=app.embeddings_ollama_host,
             ollama_model=app.embeddings_ollama_model,
         )
-    context = warmup(app.db_path, spec, hint, agent_type=agent_type, embedder=embedder, cwd=cwd)
-    if context:
-        _emit(context)
-    return 0
+    return warmup(app.db_path, spec, hint, agent_type=agent_type, embedder=embedder, cwd=cwd)
 
 
 def main() -> int:

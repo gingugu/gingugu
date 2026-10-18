@@ -66,7 +66,11 @@
 - **The suite never sees the developer's own machine state.** Autouse fixtures
   sandbox `~/.claude/settings.json`, the global `CLAUDE.md`, `MEMORY_PERSONA`
   and the remote-brain setting (`remote.settings_path` plus
-  `MEMORY_REMOTE_URL`). CI has none of that state, so a missing sandbox stays
+  `MEMORY_REMOTE_URL`), and the client-grant lookups (`client_grants._root`,
+  the process-tree `ancestors`, and `claude_trust.config_path` for
+  `~/.claude.json`) - unsandboxed, every hook test would read the grant the
+  developer's live Claude Code session published, and a freshly started CI
+  runner would make each hook wait out the startup window. CI has none of that state, so a missing sandbox stays
   green there and only fails on a configured laptop. A test wanting any of it
   sets its own.
 - **Unit tests** for storage, search, relations, context, decay, consolidation.

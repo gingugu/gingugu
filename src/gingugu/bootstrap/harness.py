@@ -291,5 +291,10 @@ def main(argv: list[str] | None = None) -> int:
         report = report or ["  nothing to migrate - already clean"]
         results.extend(["", "Claude Code harness migrate:", *report])
 
+    from ..claude_trust import untrusted_note
+
+    note = untrusted_note(target.resolve())
+    if note:
+        results.extend(["", "Claude Code trust:", f"  warn   {note}"])
     print(theme.render(results, dry_run=args.dry_run))
     return 0

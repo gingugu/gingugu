@@ -492,8 +492,10 @@ with each request. If the brain cannot answer, recall and warm-up stay quiet
 and tripwires keep their last rules; no hook ever reads a local database
 instead. A client fenced by `MEMORY_GRANT` has its hooks fenced the same way:
 the grant is applied on this machine before anything is sent (the routes trust
-the list they get), so set `MEMORY_GRANT` in the environment the hooks run in,
-not only in the MCP server's `env` block. A folder name the routes would refuse
+the list they get). Setting `MEMORY_GRANT` in the MCP server's `env` block is
+enough: each gingugu server publishes the grant it runs under, and the hooks
+apply what their client's servers published. If the hooks' own environment
+sets it too, the two must agree, or the hooks stay quiet. A folder name the routes would refuse
 (say `My Repo`) is left out of the request. Every hook call carries the machine
 token and goes through the same pin as the proxy; on a brain served with
 `MEMORY_SERVE_TLS=off` it crosses the network unencrypted on every prompt.
@@ -1007,7 +1009,7 @@ Environment variables (all optional):
 | `MEMORY_W_ACCESS` | `0.10` | Composite-score weight for access frequency |
 | `MEMORY_W_CONFIDENCE` | `0.35` | Composite-score weight for confidence (trust — the dominant standalone signal) |
 | `MEMORY_CREDENTIALS_ENABLED` | `true` | Expose the `credential_*` vault tools. Set `false` to run an instance without a secret vault (e.g. a shared/central server) |
-| `MEMORY_GRANT` | *(unset)* | Fence a stdio server like a scoped token: `ns=read\|write,...` (e.g. `my-project=read,minions=write`). Unset is full access. A bad spec, an empty value, or `*=write` refuses to start. Used by a subagent's own `brain` server in its agent file. The hooks read it from their own environment too: recall, tripwires and minion warm-up stay inside it, and an unusable value keeps them quiet |
+| `MEMORY_GRANT` | *(unset)* | Fence a stdio server like a scoped token: `ns=read\|write,...` (e.g. `my-project=read,minions=write`). Unset is full access. A bad spec, an empty value, or `*=write` refuses to start. Used by a subagent's own `brain` server in its agent file. The client's hooks follow it too, whether it is set in the MCP server's `env` block (the server publishes it) or in the hooks' own environment: recall, tripwires and minion warm-up stay inside it, and an unusable value or a disagreement keeps them quiet |
 | `MEMORY_PERSONA` | *(unset)* | This agent's own namespace (e.g. `research`). Recall, tripwires and the SessionStart contract load `crow`, then the persona, then the repo (recall and tripwires narrowed by `MEMORY_GRANT` when set). A malformed value is ignored |
 | `MEMORY_REMOTE_URL` | *(unset)* | Use this remote brain for this client only (`off` forces local). A bare `gingugu` then relays to it; the credential vault stays local |
 | `MEMORY_MINION_FENCE` | `on` | Set `off` to disable the subagent fence in `gingugu hook tool` (data-dir file/shell access and inherited-server writes) |

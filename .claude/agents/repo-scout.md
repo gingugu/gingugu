@@ -11,6 +11,7 @@ mcpServers:
         MEMORY_NAMESPACE: "gingugu"
         MEMORY_GRANT: "crow=read,gingugu=read,minions=write"
         MEMORY_CREDENTIALS_ENABLED: "false"
+        MEMORY_SERVER_ROLE: "minion"
 model: haiku
 color: cyan
 ---

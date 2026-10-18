@@ -8,6 +8,7 @@ goes to stderr (see config.setup_logging).
 from __future__ import annotations
 
 import logging
+import os
 
 from mcp.server.fastmcp import FastMCP
 
@@ -233,6 +234,10 @@ def main() -> None:
     except ValueError as exc:
         print(f"gingugu: {exc}", file=sys.stderr)
         raise SystemExit(2) from exc
+    # Before serving: the client's hooks read this to fence themselves the way
+    # this server is fenced (hook_grant.client_grant). Withdrawn only on a clean
+    # shutdown, so a fenced server that fails leaves its fence behind.
+    release = _publish_grant()
     if target is not None:
         from . import proxy
         from .config import load_config
@@ -246,25 +251,42 @@ def main() -> None:
             print(f"gingugu: remote brain {target.url}: {exc}", file=sys.stderr)
             raise SystemExit(2) from exc
         try:
-            raise SystemExit(
-                proxy.serve_stdio(
-                    target.url,
-                    token,
-                    grant=config.grant or None,
-                    home=config.resolved_namespace,
-                    # The vault stays on this machine; the proxy serves it.
-                    vault_db=config.db_path if config.credentials_enabled else None,
-                )
+            code = proxy.serve_stdio(
+                target.url,
+                token,
+                grant=config.grant or None,
+                home=config.resolved_namespace,
+                # The vault stays on this machine; the proxy serves it.
+                vault_db=config.db_path if config.credentials_enabled else None,
             )
         except proxy.ProxyLost as exc:
             print(f"gingugu: {exc}", file=sys.stderr)
             raise SystemExit(1) from exc
+        release()
+        raise SystemExit(code)
     try:
         server = build_server()
     except ValueError as exc:
         print(f"gingugu: {exc}", file=sys.stderr)
         raise SystemExit(2) from exc
     server.run()
+    release()
+
+
+def _publish_grant():
+    """Publish this server's grant; returns the clean-shutdown withdrawal.
+
+    The import is guarded as well as the publish, so a broken install serves.
+    """
+    try:
+        from . import client_grants
+
+        path = client_grants.publish(os.environ.get("MEMORY_GRANT"))
+    except ImportError as exc:
+        logger.warning("hooks cannot be told this server's grant: %s", exc)
+        return lambda: None
+    client_grants.release_on_signal(path)
+    return lambda: client_grants.release(path)
 
 
 if __name__ == "__main__":
