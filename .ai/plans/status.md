@@ -4,9 +4,27 @@ _Last updated: 2026-10-17_
 
 ## In Flight
 
-Nothing open. Next up, in parallel: board #1 (a missing hook grant fails open)
-and board #2 (bookkeeping is not freshness), with a read-only impact survey for
-#3 (MCP SDK 2.x) alongside.
+**Board #2, bookkeeping is not freshness (branch `fix/write-clock`, stacked on
+`docs/board-reorder`).** `storage.update` wrote `updated_at=now` on every call,
+so a claim-only, tags-only or pin-only `memory_update` - and a call that changed
+nothing - moved the write clock. That clock feeds both the `memory_context`
+recency bucket and `decay.reference_timestamp` (the latest of `last_confirmed`,
+`updated_at`, `created_at`), so reconciling a claim also made the note look
+freshly checked to scoring and review hints, not only recent. Now `updated_at`
+moves only when one of the record's own fields changes value; re-verifying
+still moves `last_confirmed`. No migration. Tests first:
+`tests/test_write_clock.py`; full suite 1933 passed.
+
+**Board #3, MCP SDK 2.x: impact surveyed, not started.** The port is broad:
+`FastMCP` becomes `MCPServer`, the `request_ctx` contextvar our fence and
+session-id code read is gone, `ServerSession` becomes a per-message proxy (our
+`WeakKeyDictionary` keyed on it breaks), the JSON-RPC unions lose `.root`,
+`streamable_http_client` yields a 2-tuple, and `httpx` is replaced by `httpx2`
+(our proxy, token trade and `promote` build `httpx.AsyncClient`s). It waits on
+board #1, which edits the same proxy and server files. 1.x is in maintenance
+(security fixes only); upstream advises pinning `mcp>=1.28,<2` until ready.
+
+Next: board #1 (a missing hook grant fails open) - design first.
 
 ## Recently Completed
 

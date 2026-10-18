@@ -367,7 +367,10 @@ each load refreshed the clock on everything it surfaced, lifting exactly those
 rows to the top of the next load's bucket, so the bucket converged on what it
 had already shown and a newly-stored memory could not break in. The bucket
 orders by `updated_at` instead - a write timestamp no read path touches - which
-is what the bucket was always documented to mean. Dormancy and bucket ordering
+is what the bucket was always documented to mean. Nor does bookkeeping move it:
+`storage.update` advances `updated_at` only when one of the record's own fields
+changes value, so resolving a claim, replacing tags or pinning leaves a note
+where it was in the bucket. Dormancy and bucket ordering
 ask opposite questions ("has anyone touched this lately" vs "is this new to
 me"), so they get two columns rather than one column serving both.
 
