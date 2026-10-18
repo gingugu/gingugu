@@ -141,7 +141,9 @@ match, denies the call once with the memory as the reason and logs the trip to
 `SubagentStart` is the third: `gingugu hook subagent` warms a minion whose agent
 file declares `MEMORY_GRANT`. The spawning `Agent` call's prompt is stashed by
 the `PreToolUse` hook (`hook-sessions/spawns-<session>.json`, 300s TTL) and used
-as the task hint; ranking runs on a read-only connection under the grant. Inside
+as the task hint; ranking runs on a read-only connection under the grant, first
+narrowed to what the spawning client's own `MEMORY_GRANT` can read. All three
+hooks apply that client grant to the namespaces they look up. Inside
 a subagent (`agent_id` present) the `PreToolUse` hook also applies the minion
 fence (`minion_fence.py`). A minion's own stdio server is fenced by
 `MEMORY_GRANT` through the same store chokepoints as a scoped serve token.
@@ -1821,7 +1823,7 @@ src/gingugu/
 ├── hook_grant.py           # the client's MEMORY_GRANT applied to hook namespaces and minion warm-up
 ├── recall_pick.py          # pick(): the recall pipeline shared by the local hook and /hook/recall
 ├── hook_remote.py          # hooks' transport to a remote brain: owner token, None on any failure
-├── hook_remote_flows.py    # remote recall / warm-up / tripwire rules (60s cache) / trip report
+├── hook_remote_flows.py    # remote recall / warm-up / tripwire rules (60s cache) / trip report; _sendable name filter
 ├── tripwire.py             # Tripwire matching (pure regex) + load_tripwires, the remote-brain seam
 ├── tool_hook.py            # gingugu hook tool: PreToolUse entry point; deny once, re-issue passes
 ├── minion_fence.py         # Inside a subagent: deny data-dir access, CLI, inherited-server writes
