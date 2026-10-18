@@ -16,7 +16,7 @@ from typing import Any
 
 import httpx
 
-from . import remote
+from . import remote, remote_tls
 from .remote import RemoteTarget
 
 # Under the hook timeouts `gingugu init` writes (20 / 15 / 20 seconds), so a slow
@@ -44,7 +44,8 @@ def post(target: RemoteTarget, path: str, body: dict, *, timeout: float) -> dict
         token = remote.token_for(target.url)
         if not token:
             return None
-        with httpx.Client(transport=_transport(), timeout=timeout) as client:
+        verify = remote_tls.verify_for(target.url)
+        with httpx.Client(transport=_transport(), timeout=timeout, verify=verify) as client:
             response = client.post(
                 target.url + path, json=body, headers={"Authorization": f"Bearer {token}"}
             )

@@ -9,7 +9,7 @@ import sys
 import time
 from urllib.parse import urlparse
 
-from . import remote
+from . import remote, remote_tls
 from .handlers.fence import stdio_grant
 from .remote import RemoteTarget
 
@@ -69,7 +69,8 @@ def preflight(target: RemoteTarget, *, grant: str | None, credentials_enabled: b
     if not token:
         raise ProxyRefused(f"no token in the keychain. Run: gingugu remote login {target.url}")
     if not _await_brain(target.url, token):
-        raise ProxyRefused(f"unreachable after {REACH_BUDGET_S:g}s: {target.url}")
+        why = remote_tls.diagnose(target.url)
+        raise ProxyRefused(why or f"unreachable after {REACH_BUDGET_S:g}s: {target.url}")
     parsed = urlparse(target.url)
     if parsed.scheme == "http" and parsed.hostname not in remote._LOOPBACK:
         # stderr, never stdout: stdout is the MCP transport.

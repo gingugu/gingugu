@@ -1686,6 +1686,38 @@ except `list`. stdio without `MEMORY_GRANT`, CLI commands, background passes
 
 ---
 
+## TLS
+
+`gingugu serve` is secure by default off the box and zero-setup on it. Local
+(stdio) mode never touches a certificate, and a loopback bind stays plain http.
+On any other bind the server serves https with a self-signed certificate it
+generates once in `<db-dir>/tls/` (`MEMORY_SERVE_TLS=auto`, the default), or
+the owner's own (`MEMORY_SERVE_TLS_CERT` + `MEMORY_SERVE_TLS_KEY`), or plain
+http when told (`MEMORY_SERVE_TLS=off`).
+
+```mermaid
+sequenceDiagram
+    participant M as Machine (gingugu remote login)
+    participant F as Forced command (ssh-mint)
+    participant S as gingugu serve
+    M->>F: ssh ... cert
+    F-->>M: generated cert (PEM, public)
+    M->>S: GET /healthz over https, trusting that cert alone
+    Note over M: only if it passes: pin at remote-tls/HOST_PORT.pem, URL to https
+    M->>F: ssh ... mint NAME
+    F-->>M: machine token (keychain, under the https URL)
+    M->>S: https, verified against the pin alone
+```
+
+The SSH channel the login already trusts is what vouches for the certificate.
+Every remote client (the proxy, its token trade, the hooks, `remote status`)
+verifies the brain against the pin, and plain http to a pinned brain is
+refused (by `remote on` too). Nothing is rotated until the live check passes,
+so a stale certificate or one that misses the host costs a retry, never a
+machine locked out. A brought certificate is never pinned; give `login` its https URL.
+
+---
+
 ## Schema Migrations
 
 Hand-rolled, keyed off `PRAGMA user_version`. No Alembic, no external tooling
@@ -1728,7 +1760,8 @@ src/gingugu/
 │
 │   # ── Entry points ──────────────────────────────────────────────
 ├── server.py               # MCP server; stdio / serve / token / remote / promote / init / harness / ui / dream / embed / hook dispatch, plus the remote-proxy branch of bare `gingugu`
-├── serve.py                # gingugu serve: streamable HTTP + Bearer auth + /healthz + POST /token/derive; build_app
+├── serve.py                # gingugu serve: streamable HTTP + Bearer auth + /healthz + POST /token/derive + TLS; build_app
+├── serve_tls.py            # serve's TLS: auto (https off loopback) / on / off, generated self-signed leaf or your own
 ├── serve_tokens.py         # Serve tokens: hashed store, scoped + per-machine owner tokens
 ├── serve_derive.py         # POST /token/derive: owner token -> short-lived derived token
 ├── serve_hooks.py          # POST /hook/recall|tripwires|trip|warmup: the brain's side of remote-mode hooks
@@ -1741,6 +1774,7 @@ src/gingugu/
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine
 ├── remote_args.py          # usage text + argparse for `gingugu remote`
+├── remote_tls.py           # Client TLS: pins, verify_for, downgrade refusal, login's live check
 ├── grants.py               # Per-namespace read/write grants plus a home namespace (derived tokens), bound per tool call
 ├── webui.py                # gingugu ui: serves the built Memory Explorer bundle
 ├── promote.py              # gingugu promote: local "gold" -> a central brain

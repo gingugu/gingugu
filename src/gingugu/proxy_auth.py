@@ -20,6 +20,7 @@ import anyio
 import httpx
 
 from .proxy_session import derive
+from .remote_tls import verify_for
 
 _RENEW_GAP = 10.0  # a token never accepted is renewed at most this often
 
@@ -90,3 +91,10 @@ class SessionAuth(httpx.Auth):
         response = yield request  # once: a second 401 is the caller's to handle
         if response.status_code != 401:
             self.tokens.accept(self.tokens.token or "")
+
+
+def brain_client(url: str, tokens: SessionTokens) -> httpx.AsyncClient:
+    """The proxy's ``/mcp`` client: session auth, long reads, and the brain's TLS pin."""
+    return httpx.AsyncClient(
+        auth=SessionAuth(tokens), timeout=httpx.Timeout(30, read=300), verify=verify_for(url)
+    )
