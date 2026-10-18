@@ -16,7 +16,7 @@ from pathlib import Path
 
 import anyio
 import pytest
-from mcp.shared.exceptions import McpError
+from mcp.shared.exceptions import MCPError
 
 from gingugu import proxy, proxy_session, remote
 from gingugu.derived_tokens import MAX_LIVE
@@ -58,7 +58,7 @@ async def test_a_flapping_mcp_endpoint_does_not_mint_a_token_per_retry(tmp_path,
             state["down"] = True
             with anyio.move_on_after(4):
                 while True:
-                    with pytest.raises(McpError):
+                    with pytest.raises(MCPError):
                         await s.call_tool("memory_stats", {})
                     await anyio.sleep(0.05)
             state["down"] = False

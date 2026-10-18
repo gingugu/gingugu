@@ -12,7 +12,7 @@ from gingugu.bootstrap.settings import merge_settings
 
 
 def _payload(result) -> dict:
-    content = result[0] if isinstance(result, tuple) else result
+    content = result.content
     return json.loads(content[0].text)
 
 

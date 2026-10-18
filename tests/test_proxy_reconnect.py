@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import anyio
 import pytest
-from mcp.shared.exceptions import McpError
+from mcp.shared.exceptions import MCPError
 
 from tests.proxy_fixtures import Served, free_port, make_brain, payload, through_proxy
 
@@ -24,12 +24,12 @@ def brain(tmp_path, monkeypatch):
 
 
 async def _until_ok(session, tool: str, args: dict, within: float) -> dict:
-    """Retry ``tool`` until it answers; McpError while the brain is away."""
+    """Retry ``tool`` until it answers; MCPError while the brain is away."""
     with anyio.fail_after(within):
         while True:
             try:
                 return payload(await session.call_tool(tool, args))
-            except McpError:
+            except MCPError:
                 await anyio.sleep(0.2)
 
 
@@ -63,7 +63,7 @@ async def test_survives_a_brain_restart_without_a_new_handshake(brain, restart):
             assert stored["ok"]
             await served.stop()
             with anyio.fail_after(10):  # down: a fast error, never a hang
-                with pytest.raises(McpError):
+                with pytest.raises(MCPError):
                     await s.call_tool("memory_stats", {})
             await served.start(brain.app(fresh_derived=restart == "fresh_derived"))
             recalled = await _until_ok(s, "memory_recall", {"query": "lantern"}, within=20)
@@ -89,7 +89,7 @@ async def test_owner_token_revoked_while_down_ends_the_proxy_loudly(brain):
                 while "raised" not in outcome:
                     try:
                         await s.call_tool("memory_stats", {})
-                    except McpError:
+                    except MCPError:
                         pass
                     await anyio.sleep(0.2)
         assert isinstance(outcome["raised"], proxy.ProxyLost)

@@ -75,17 +75,17 @@ def test_an_unanswered_warmup_is_quiet(remote, tmp_path, monkeypatch, capsys, re
 
 
 def test_post_sends_the_owner_token_and_returns_the_json(monkeypatch):
-    import httpx
+    import httpx2
 
     seen = {}
 
-    def handler(request: httpx.Request) -> httpx.Response:
+    def handler(request: httpx2.Request) -> httpx2.Response:
         seen["auth"] = request.headers.get("authorization")
         seen["url"] = str(request.url)
         seen["body"] = json.loads(request.content)
-        return httpx.Response(200, json={"ok": True})
+        return httpx2.Response(200, json={"ok": True})
 
-    monkeypatch.setattr(hook_remote, "_transport", lambda: httpx.MockTransport(handler))
+    monkeypatch.setattr(hook_remote, "_transport", lambda: httpx2.MockTransport(handler))
     monkeypatch.setattr("gingugu.remote._kr_get", lambda url: "owner-" + "t" * 40)
     target = hook_remote.RemoteTarget(URL, "env")
     assert hook_remote.post(target, "/hook/recall", {"a": 1}, timeout=1.0) == {"ok": True}
@@ -100,12 +100,12 @@ def test_post_sends_the_owner_token_and_returns_the_json(monkeypatch):
     "status,token", [(403, "owner-" + "t" * 40), (500, "owner-" + "t" * 40), (200, None)]
 )
 def test_post_is_none_on_any_failure(monkeypatch, status, token):
-    import httpx
+    import httpx2
 
     monkeypatch.setattr(
         hook_remote,
         "_transport",
-        lambda: httpx.MockTransport(lambda r: httpx.Response(status, json={"ok": True})),
+        lambda: httpx2.MockTransport(lambda r: httpx2.Response(status, json={"ok": True})),
     )
     monkeypatch.setattr("gingugu.remote._kr_get", lambda url: token)
     target = hook_remote.RemoteTarget(URL, "env")
@@ -113,12 +113,12 @@ def test_post_is_none_on_any_failure(monkeypatch, status, token):
 
 
 def test_post_survives_a_dead_network(monkeypatch):
-    import httpx
+    import httpx2
 
     def boom(request):
-        raise httpx.ConnectError("down")
+        raise httpx2.ConnectError("down")
 
-    monkeypatch.setattr(hook_remote, "_transport", lambda: httpx.MockTransport(boom))
+    monkeypatch.setattr(hook_remote, "_transport", lambda: httpx2.MockTransport(boom))
     monkeypatch.setattr("gingugu.remote._kr_get", lambda url: "owner-" + "t" * 40)
     target = hook_remote.RemoteTarget(URL, "env")
     assert hook_remote.post(target, "/hook/recall", {}, timeout=1.0) is None

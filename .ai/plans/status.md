@@ -1,16 +1,41 @@
 # Project Status
 
-_Last updated: 2026-10-17_
+_Last updated: 2026-10-18_
 
 ## In Flight
 
-**Board #1, MCP SDK 2.x: impact surveyed, not started.** The port is broad:
-`FastMCP` becomes `MCPServer`, the `request_ctx` contextvar our fence and
-session-id code read is gone, `ServerSession` becomes a per-message proxy (our
-`WeakKeyDictionary` keyed on it breaks), the JSON-RPC unions lose `.root`,
-`streamable_http_client` yields a 2-tuple, and `httpx` is replaced by `httpx2`
-(our proxy, token trade and `promote` build `httpx.AsyncClient`s). Unblocked now that the fail-open fix (#119) is in. 1.x is in maintenance
-(security fixes only); upstream advises pinning `mcp>=1.28,<2` until ready.
+**Board #1, MCP SDK 2.x: built on `feature/mcp-sdk-2`, in review.** `mcp>=2.3,<3`
+(lock 2.3.0), `httpx` -> `httpx2` (`httpx` dropped from our deps). Every page of
+the 2.3.0 docs was read, not just the migration guide, and it found what the
+2026-10-17 survey missed:
+
+- **Sync tools now run on a worker thread.** Every handler is a plain `def`
+  over one thread-bound sqlite3 connection, so the first call would have
+  raised `ProgrammingError`. The one tool wrapper (`_HeartbeatMCP`) and the
+  vault's `_OnLoop` are now `async`, keeping bodies on the event loop as
+  under 1.x. Proven by mutation: drop either and the suite fails with exactly
+  that error.
+- **`request_ctx` is gone and `ServerSession` is per message.** New
+  `inbound.py`: an `MCPServer(middleware=[...])` middleware scopes the HTTP
+  request and a session id to each message. The fence reads the grant
+  through it; the access log keys on one id per stdio process or a digest of
+  `Mcp-Session-Id` (a 2026-07-28 HTTP client is sessionless: NULL).
+- **The proxy's lost-session check would have stopped matching.** 1.x's
+  stand-in was `+32600`; 2.x uses `-32600`, and a 2.x brain's own 404 body
+  (`"Session not found"`, plus two transport texts - the same in SDK 1.30 and
+  2.3) is relayed verbatim. The check now matches the code *and* one of those
+  texts, since `-32600` is also an ordinary error.
+- **Serve:** `host` moved from the constructor to `streamable_http_app`
+  (`serve.mcp_app`); the 4 MiB request-body default would refuse a whole-brain
+  `memory_import`, so serve allows 64 MiB; `version=` is passed (2.x reports
+  an empty one otherwise); subscriptions are off (nothing publishes).
+
+Live, not just green: the branch's stdio server under a real Claude Code
+2.1.289 headless client (store + recall, access-log id set), and the branch's
+proxy (SDK 2.x) relaying to the Pi brain still on 0.23.0 (SDK 1.30) - read-only
+calls, mixed-version rollout works. 1998 passed, 1 xfailed. Security review applied:
+the vault refuses a non-object `arguments` (it could end the proxy), and
+`remote login`'s probe now uses httpx2's trust (the OS store) like the clients.
 
 Nothing else open. 0.23.0 released 2026-10-17.
 
@@ -265,7 +290,7 @@ deadline); live, a dead host is refused at 16.5s, inside the 30s client connect
 timeout. This supersedes the single-probe "unreachable brain" refusal in the
 B1 entry below. Separately, Pi WiFi power save was turned off
 (`802-11-wireless.powersave 2` on its NetworkManager connection; 4s-gap pings
-then averaged 33 ms) - **a step for the Pi bootstrap script (board row 9 after 0.23.0).** Tests:
+then averaged 33 ms) - **a step for the Pi bootstrap script (board row 10 since 2026-10-18).** Tests:
 three new preflight cases on a fake clock; full suite 1671 passed.
 
 **Released 0.21.2 to PyPI (2026-10-04): proxy survives a brain restart
@@ -1133,7 +1158,7 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-## The Board (current: 2026-10-17, after 0.23.0)
+## The Board (current: 2026-10-18)
 
 **Resequenced 2026-09-29 into build order.** The table below is the order the
 work gets done in, top first; `#` is that position. Item numbers used to be
@@ -1172,18 +1197,23 @@ since both edit `server.py`. Rows 5 onward keep their order.
 not freshness (#118) merged, shipped in 0.23.0 and came off; every row moved up
 two.
 
+**2026-10-18:** confirmations on destructive tools entered as #2, the first
+build on SDK 2.x features (approved with the port); every row from the shared
+board down moved down one.
+
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **MCP SDK 2.x migration** | - | Ahead of new features: the pin ages every week. We pin `mcp<2` (lock 1.28.1); 2.x is a major (2.3.0 out 2026-10-02). The proxy sits on two transport APIs, and `tests/test_proxy*.py` is the safety net. Impact surveyed 2026-10-17 (see In Flight); unblocked by #119 |
-| 2 | **A shared board between agents** | 15 | Unblocked: the central brain is done. After 1, so more agents join a brain on a current SDK |
-| 3 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
-| 4 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
-| 5 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
-| 6 | **A referee for rival memory tools** | 17 | Only a fair comparison once 5 exists |
-| 7 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
-| 8 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
-| 9 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
-| 10 | Session flight recorder (low priority) | 18 | Check prior art first |
+| 1 | **MCP SDK 2.x migration** | - | Built, in review (see In Flight). Ahead of new features: 1.x is maintenance-only, and #2 builds on 2.x |
+| 2 | **Confirm destructive tools with the user, not the model** | - | SDK 2.x `Resolve` + `Elicit`: `memory_forget` hard delete, `credential_delete`, an overwriting `memory_import` ask the person, era-portable (a live elicitation on a legacy connection, a multi-round-trip on 2026-07-28). First check that Claude Code answers elicitation and that the proxy relays a server-to-client request; a client that cannot be asked must still get a safe answer |
+| 3 | **A shared board between agents** | 15 | Unblocked: the central brain is done. After 1, so more agents join a brain on a current SDK; 2.x subscriptions (`subscriptions/listen`) are a candidate transport, for 2026-era clients only |
+| 4 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
+| 5 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
+| 6 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
+| 7 | **A referee for rival memory tools** | 17 | Only a fair comparison once 6 exists |
+| 8 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
+| 9 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
+| 10 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
+| 11 | Session flight recorder (low priority) | 18 | Check prior art first |
 | - | **Template/sibling noise in retrieval - PARKED** | 1 | Ten dead fixes and no live hypothesis; see below |
 
 ### Previous board (2026-09-28), kept for its numbering
@@ -2093,7 +2123,9 @@ Every attempt to guarantee the memory protocol runs has been aimed at the
 harness (hooks), where our options genuinely are limited. These two sit in the
 protocol layer we own, and apply to every client at once.
 
-**9a. `FastMCP` accepts `instructions`; `server.py:61` passes none.**
+**9a. The SDK server accepts `instructions`; `server.py` passes none** (still
+true on SDK 2.x `MCPServer`, 2026-10-18 - pass it by keyword when it lands,
+since 2.x put `title` and `description` ahead of it positionally).
 Verified: the SDK signature is `instructions: str | None = None`, and the
 MCP spec (2025-06-18) carries the field in `InitializeResult` - "Instructions
 describing how to use the server and its features... It can be thought of

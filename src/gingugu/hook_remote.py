@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
+import httpx2
 
 from . import remote, remote_tls
 from .remote import RemoteTarget
@@ -33,8 +33,8 @@ def target() -> RemoteTarget | None:
     return remote.active()
 
 
-def _transport() -> httpx.BaseTransport | None:
-    """The httpx transport; None means the default. A seam for tests."""
+def _transport() -> httpx2.BaseTransport | None:
+    """The httpx2 transport; None means the default. A seam for tests."""
     return None
 
 
@@ -45,7 +45,7 @@ def post(target: RemoteTarget, path: str, body: dict, *, timeout: float) -> dict
         if not token:
             return None
         verify = remote_tls.verify_for(target.url)
-        with httpx.Client(transport=_transport(), timeout=timeout, verify=verify) as client:
+        with httpx2.Client(transport=_transport(), timeout=timeout, verify=verify) as client:
             response = client.post(
                 target.url + path, json=body, headers={"Authorization": f"Bearer {token}"}
             )

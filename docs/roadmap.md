@@ -39,7 +39,7 @@ Build the core storage engine and basic MCP server skeleton.
 | Pydantic data models | ✅ | `models.py`: Memory, Namespace, `StrEnum` types + confidence rank (Relation/Tag deferred to Phase 3) |
 | Storage layer (CRUD) | ✅ | `storage.py`: create/get/update/delete + access logging |
 | Namespace management | ✅ | `namespaces.py`: get_or_create, list, resolve (auto-detect) |
-| MCP server skeleton | ✅ | `server.py`: FastMCP over stdio, DI via `ServerContext` |
+| MCP server skeleton | ✅ | `server.py`: `MCPServer` (MCP SDK 2.x) over stdio, DI via `ServerContext` |
 | Basic `memory_store` tool | ✅ | Verified end-to-end via `call_tool` |
 | Basic `memory_recall` tool | ✅ | FTS5/BM25 → normalized relevance score |
 | Unit tests for storage | ✅ | 18 tests across database/storage/search (pytest) |
@@ -243,6 +243,7 @@ for agents." Crystallized after an external architectural review on
 | 2026-04-25 | `is_secret` field-level flag (default true) | Lets `credential_list` show URLs/usernames without hitting Keychain |
 | 2026-05-02 | Verified FTS5 + keyring spikes before building | De-risked the two external integrations; both passed against SQLite 3.50 / macOS Keychain |
 | 2026-05-02 | Pin `mcp>=1.25` (resolved `1.27.2`); use FastMCP | FastMCP stdio API is stable across 1.x→2.x; `uv.lock` pins the exact build |
+| 2026-10-18 | Move to MCP SDK 2.x (`mcp>=2.3,<3`, `MCPServer`, httpx2) | 1.x is maintenance-only; tools are registered `async` so they stay on the event loop with the thread-bound sqlite3 connection, and `inbound.middleware` replaces the removed `request_ctx` |
 | 2026-05-02 | `StrEnum` for type/confidence, `datetime.UTC` | Cleaner than `(str, Enum)`; both stdlib 3.11+ (our floor) |
 | 2026-05-02 | Handlers register via `ServerContext` DI | Avoids module-global singletons; keeps handler modules testable + under 300 lines |
 | 2026-06-04 | Rebrand to **Gingugu** | Unique, memorable, available everywhere (GitHub/PyPI/NPM/.com) |

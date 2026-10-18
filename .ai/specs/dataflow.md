@@ -351,8 +351,10 @@ retrieval, and since 2026-08-30 each row also carries the id of the MCP session
 that asked (`access_log.context`, from `session.current_session_id`). Rows from
 one session share a key, so the log answers "which memories are retrieved
 together" and not only "when was this read" - the co-access signal, derived
-from behaviour rather than authored. It is `NULL` when no session is in flight;
-a placeholder would fake co-access between unrelated rows.
+from behaviour rather than authored. The id is per process on stdio and a
+digest of `Mcp-Session-Id` over HTTP (`inbound.py`). It is `NULL` when no
+session is in flight, or for a sessionless (2026-07-28) HTTP client; a
+placeholder would fake co-access between unrelated rows.
 
 **The signal is a rolling window, not a permanent record.** `prune_access_log`
 deletes rows past `ACCESS_LOG_RETENTION_DAYS` (90), so anything built on

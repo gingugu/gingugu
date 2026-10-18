@@ -8,8 +8,8 @@ import pytest
 
 
 def _payload(result) -> dict:
-    """Unwrap a FastMCP tool result into its JSON dict."""
-    content = result[0] if isinstance(result, tuple) else result
+    """Unwrap an MCPServer tool result into its JSON dict."""
+    content = result.content
     return json.loads(content[0].text)
 
 

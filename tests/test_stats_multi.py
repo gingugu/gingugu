@@ -19,7 +19,7 @@ GLOBAL_KEYS = {"namespaces", "access_log_rows", "query_log_rows", "credentials"}
 
 
 def _payload(result) -> dict:
-    content = result[0] if isinstance(result, tuple) else result
+    content = result.content
     return json.loads(content[0].text)
 
 
