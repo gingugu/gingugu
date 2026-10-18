@@ -203,6 +203,7 @@ Before any write to external systems (GitHub API, PyPI, npm):
 ## Available Skills
 
 - `/creating-pr` - Create a PR with mandatory `.ai/` knowledge base assessment
+- `/releasing` - Cut a release (`scripts/release.py`) and roll it out to every machine (`scripts/fleet.py`)
 - `/sink-the-ship` - Save everything to Gingugu and end session
 
 ## Available Subagents (`.claude/agents/`)

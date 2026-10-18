@@ -37,7 +37,16 @@ calls, mixed-version rollout works. 1998 passed, 1 xfailed. Security review appl
 the vault refuses a non-object `arguments` (it could end the proxy), and
 `remote login`'s probe now uses httpx2's trust (the OS store) like the clients.
 
-Nothing else open. 0.23.0 released 2026-10-17.
+**Release automation (stacked on the port).** `scripts/release.py X.Y.Z` runs
+preflight and every `release.yml` gate locally (tests, lint, UI build, a wheel
+that bundles the UI), then bumps, relocks, rolls the CHANGELOG, tags, pushes,
+watches `release.yml` and waits for PyPI's index; `--dry-run` stops before
+writing. `scripts/fleet.py upgrade X.Y.Z` upgrades every machine listed in
+`~/.config/gingugu/fleet.json` (outside the repo) over SSH, the Pi as its
+service user with a restart and health check. The `/releasing` skill drives
+both; the Release State bullet and commit body stay a person's call.
+
+0.23.0 released 2026-10-17.
 
 ## Recently Completed
 
