@@ -473,7 +473,12 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   session state. Route work runs in a worker thread: reads on its own read-only
   connection, the only writes the `query_log` rows, never the MCP handlers'
   `ctx.conn`. No answer means a quiet hook, never the local DB; tripwires alone
-  keep using their last fetched rules.
+  keep using their last fetched rules. The routes trust the namespace list they
+  are sent, so the client's grant is applied before it is sent:
+  `prompt_hook.namespaces_for` drops what `MEMORY_GRANT` cannot read and fails
+  closed (`[]`, no request) on a grant `stdio_grant` rejects. The minion warm-up
+  narrows the agent file's spec the same way (`hook_grant.narrow_spec`) before
+  it is used or sent to `/hook/warmup`.
 
 ## Warm minions (stdio grant, warm-up, minion fence)
 

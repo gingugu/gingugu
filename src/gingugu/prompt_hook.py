@@ -126,16 +126,26 @@ def persona() -> str | None:
 
 
 def namespaces_for(cwd: str) -> list[str]:
-    """The global namespace, this agent's persona if set, then this repo's.
+    """The global namespace, this agent's persona if set, then this repo's -
+    less any the client's ``MEMORY_GRANT`` cannot read.
 
     Same derivation the SessionStart hook uses: the directory name, so the
-    hook is portable into any repo without configuration.
+    hook is portable into any repo without configuration. The grant is the
+    one the client's own MCP calls are fenced to; applying it here keeps a
+    fenced client's recall inside the same fence. A grant that cannot be
+    honoured yields no namespaces - a quiet hook, never the whole brain.
     """
     names = [GLOBAL_NAMESPACE]
     for name in (persona(), Path(cwd).name):
         if name and name not in names:
             names.append(name)
-    return names
+    from .hook_grant import client_grant
+
+    try:
+        grant = client_grant()
+    except ValueError:
+        return []
+    return names if grant is None else [n for n in names if grant.can_read(n)]
 
 
 def _emit(context: str, count: int) -> None:
@@ -212,6 +222,8 @@ def run(payload: dict) -> int:
 
     app = load_config()
     namespaces = namespaces_for(cwd)
+    if not namespaces:
+        return 0
 
     from . import hook_remote
 

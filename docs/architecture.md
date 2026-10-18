@@ -1818,6 +1818,7 @@ src/gingugu/
 ├── recall_gate.py          # Decision half: pure arithmetic, built around refusing
 ├── recall_sweep.py         # I/O half: read-only cosine sweep + BM25 lexical matches; sqlite_uri()
 ├── prompt_hook.py          # gingugu hook prompt: the entry point; log_prompt() is its one write
+├── hook_grant.py           # the client's MEMORY_GRANT applied to hook namespaces and minion warm-up
 ├── recall_pick.py          # pick(): the recall pipeline shared by the local hook and /hook/recall
 ├── hook_remote.py          # hooks' transport to a remote brain: owner token, None on any failure
 ├── hook_remote_flows.py    # remote recall / warm-up / tripwire rules (60s cache) / trip report

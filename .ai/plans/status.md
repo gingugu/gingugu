@@ -4,7 +4,22 @@ _Last updated: 2026-10-17_
 
 ## In Flight
 
-Nothing in flight.
+**Board #1, hook recall honours the client's grant (branch
+`fix/hook-recall-grant`, stacked on `docs/board-sync`).** `namespaces_for`
+applies `MEMORY_GRANT`: a name the grant cannot read is dropped before any
+lookup, so a client fenced to `tyrone=write,crow=read` no longer gets recall or
+tripwire rules from the namespace its working folder names (a repo, or
+ChatGPT's per-chat `~/Documents/Codex/<date>/<slug>`). A grant `stdio_grant`
+rejects (empty, malformed, `*=write`) fails closed: no namespaces, and the
+prompt and tool hooks exit before the network or the encoder. Unset changes
+nothing. The `/hook/*` routes still trust the list they are sent - the client
+holds the owner token either way, as the proxy does. Minion warm-up is fenced the same way: the agent file's grant is narrowed to
+what the client can read (`hook_grant.narrow_spec`, a `*` entry kept) before
+it is used or sent to `/hook/warmup` - found by the security review. Tests
+first: `tests/test_hook_grant.py`, `tests/test_hook_grant_warmup.py`; full suite
+1815 passed. Still open after merge: Tyrone's wrapper
+(`~/.codex/hooks/tyrone_hook.py`, outside the repo) must pass `MEMORY_GRANT`,
+and Codex's tool names for tripwire matching are still unobserved.
 
 ## Recently Completed
 
@@ -1059,7 +1074,7 @@ them, and the SDK migration ahead of the standalone features.
 
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **Hook recall honours the client's grant** | - | Entered 2026-10-04. First: a live leak through a fenced client. ChatGPT desktop runs Codex hooks (same protocol as Claude Code: `UserPromptSubmit`, `hookSpecificOutput.additionalContext`), and a probe proved `gingugu hook prompt` injects into a plain ChatGPT chat. Two gaps before a scoped client keeps it: the prompt hook never reads `MEMORY_GRANT` and, in remote mode, calls the owner-only `/hook/recall` with the machine token, so a client fenced to `tyrone=write,crow=read` is shown any namespace its cwd names; and ChatGPT gives every chat its own working folder (`~/Documents/Codex/<date>/<slug>`), so the cwd basename adds a junk namespace. Also: tripwire input fields are keyed on Claude Code tool names; Codex's built-in names are still unobserved |
+| 1 | **Hook recall honours the client's grant** - IN FLIGHT | - | Entered 2026-10-04. First: a live leak through a fenced client. ChatGPT desktop runs Codex hooks (same protocol as Claude Code: `UserPromptSubmit`, `hookSpecificOutput.additionalContext`), and a probe proved `gingugu hook prompt` injects into a plain ChatGPT chat. Two gaps before a scoped client keeps it: the prompt hook never reads `MEMORY_GRANT` and, in remote mode, calls the owner-only `/hook/recall` with the machine token, so a client fenced to `tyrone=write,crow=read` is shown any namespace its cwd names; and ChatGPT gives every chat its own working folder (`~/Documents/Codex/<date>/<slug>`), so the cwd basename adds a junk namespace. Also: tripwire input fields are keyed on Claude Code tool names; Codex's built-in names are still unobserved |
 | 2 | **TLS on the brain** | - | Entered 2026-10-03. Second: the other open security finding on the live brain. Every remote-mode hook call carries the machine's owner token, so on plain `http` it crosses the LAN unencrypted on every prompt (the B2 security review's accepted finding). `gingugu serve` behind TLS (uvicorn certs or a reverse proxy) plus a trust story for a home-LAN cert; `gingugu remote` should then prefer `https` |
 | 3 | **A shared board between agents** | 15 | Unblocked: the central brain is done. After 1 and 2, so more agents join a brain that fences and encrypts properly |
 | 4 | **MCP SDK 2.x migration** | - | Ahead of new features: the pin ages every week. We pin `mcp<2` (lock 1.28.1); 2.x is a major (2.3.0 out 2026-10-02). The proxy sits on two transport APIs, and `tests/test_proxy*.py` is the safety net |
