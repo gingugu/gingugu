@@ -1,7 +1,7 @@
 """MCP tool handlers, split by domain to honor the 300-line file limit.
 
 Each handler module exposes a ``register(mcp, ctx)`` function that attaches its
-tools to the shared FastMCP instance. ``ServerContext`` carries the wired-up
+tools to the shared MCPServer instance. ``ServerContext`` carries the wired-up
 dependencies (DB connection, stores, config) into those closures.
 """
 
@@ -45,7 +45,7 @@ class _HeartbeatMCP:
     scoped to it. A refusal is a structured error, like any other.
 
     Only ``tool`` is intercepted; every other attribute passes straight through
-    to the real FastMCP instance.
+    to the real MCPServer instance.
     """
 
     def __init__(self, mcp, ctx: ServerContext) -> None:
@@ -61,8 +61,14 @@ class _HeartbeatMCP:
         conn = ctx.conn
 
         def decorator(fn):
+            # async on purpose: SDK 2.x runs a plain ``def`` tool on a worker
+            # thread, and every handler shares one sqlite3 connection that is
+            # bound to the thread that opened it. An async wrapper keeps the
+            # (synchronous) body on the event loop, one call at a time, as
+            # under 1.x. ``functools.wraps`` keeps the schema the SDK derives:
+            # it reads the signature through ``__wrapped__``.
             @functools.wraps(fn)
-            def wrapper(*args, **kwargs):
+            async def wrapper(*args, **kwargs):
                 from .. import grants
                 from ..activity import stamp
                 from .fence import refusal, request_grant
@@ -93,7 +99,7 @@ class _HeartbeatMCP:
 
 
 def register_all(mcp, ctx: ServerContext) -> None:
-    """Register every handler module's tools onto the FastMCP instance.
+    """Register every handler module's tools onto the MCPServer instance.
 
     Handlers receive a ``_HeartbeatMCP`` proxy rather than the raw server, so
     every tool they attach records that the brain was used. See ``activity``.

@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 
 import anyio
-import httpx
+import httpx2
 
 from .proxy_session import derive
 from .remote_tls import verify_for
@@ -68,15 +68,15 @@ class SessionTokens:
         return await self.derive()
 
 
-class SessionAuth(httpx.Auth):
+class SessionAuth(httpx2.Auth):
     """Bearer auth for the proxy's ``/mcp`` client: renew and retry once on a 401."""
 
     def __init__(self, tokens: SessionTokens) -> None:
         self.tokens = tokens
 
     async def async_auth_flow(
-        self, request: httpx.Request
-    ) -> AsyncGenerator[httpx.Request, httpx.Response]:
+        self, request: httpx2.Request
+    ) -> AsyncGenerator[httpx2.Request, httpx2.Response]:
         await request.aread()  # buffered: the body may be sent twice
         token = self.tokens.token or ""
         request.headers["Authorization"] = f"Bearer {token}"
@@ -93,8 +93,8 @@ class SessionAuth(httpx.Auth):
             self.tokens.accept(self.tokens.token or "")
 
 
-def brain_client(url: str, tokens: SessionTokens) -> httpx.AsyncClient:
+def brain_client(url: str, tokens: SessionTokens) -> httpx2.AsyncClient:
     """The proxy's ``/mcp`` client: session auth, long reads, and the brain's TLS pin."""
-    return httpx.AsyncClient(
-        auth=SessionAuth(tokens), timeout=httpx.Timeout(30, read=300), verify=verify_for(url)
+    return httpx2.AsyncClient(
+        auth=SessionAuth(tokens), timeout=httpx2.Timeout(30, read=300), verify=verify_for(url)
     )

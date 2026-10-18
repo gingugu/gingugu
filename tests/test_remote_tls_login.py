@@ -144,3 +144,14 @@ def test_login_still_does_not_switch_a_local_machine(pem, vault, monkeypatch):
     monkeypatch.setattr(remote, "_run", _runner([], cert=(0, pem.strip())))
     _login(HTTP)
     assert remote.active() is None
+
+
+def test_the_unpinned_probe_trusts_what_the_clients_trust(monkeypatch):
+    """httpx2 trusts the OS store (truststore), not OpenSSL's: the login probe must too."""
+    import truststore
+
+    from gingugu.remote_tls import _context
+
+    monkeypatch.delenv("SSL_CERT_FILE", raising=False)
+    monkeypatch.delenv("SSL_CERT_DIR", raising=False)
+    assert isinstance(_context(None), truststore.SSLContext)

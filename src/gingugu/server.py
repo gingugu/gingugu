@@ -1,6 +1,6 @@
 """MCP server entry point.
 
-Builds the FastMCP server over stdio, wires up storage/namespace dependencies,
+Builds the MCP server (the SDK's ``MCPServer``) over stdio, wires up storage/namespace dependencies,
 registers tool handlers, and runs. stdout is the MCP transport — all logging
 goes to stderr (see config.setup_logging).
 """
@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import os
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from .config import load_config
 from .database import Database
@@ -22,13 +22,13 @@ from .storage import MemoryStore
 logger = logging.getLogger(__name__)
 
 
-def build_server(transport: str = "stdio") -> FastMCP:
-    """Construct and fully wire the FastMCP server (see ``build``)."""
+def build_server(transport: str = "stdio") -> MCPServer:
+    """Construct and fully wire the MCP server (see ``build``)."""
     return build(transport)[0]
 
 
-def build(transport: str = "stdio") -> tuple[FastMCP, ServerContext]:
-    """Construct and fully wire the FastMCP server, and hand back its context.
+def build(transport: str = "stdio") -> tuple[MCPServer, ServerContext]:
+    """Construct and fully wire the MCP server, and hand back its context.
 
     ``transport`` is "stdio" or "http"; `gingugu serve` passes "http" and keeps
     the context so the hook routes can reach the store's embedder and the DB path.
@@ -78,11 +78,14 @@ def build(transport: str = "stdio") -> tuple[FastMCP, ServerContext]:
         if not grant.is_full:
             logger.info("stdio fenced by MEMORY_GRANT: %s", dict(grant.namespaces))
 
-    # The real bind host, not FastMCP's 127.0.0.1 default: on a loopback host
-    # the SDK allows only localhost Host headers (DNS-rebinding protection),
-    # which answered every LAN client of `gingugu serve` with 421. A LAN bind
-    # relies on the Bearer token instead; a loopback bind keeps the check.
-    mcp = FastMCP("gingugu", host=config.serve_host)
+    from . import __version__
+    from .inbound import middleware
+
+    # ``inbound.middleware`` gives the fence and the access log the request
+    # and session each tool call arrived on. Subscriptions are off: nothing
+    # here publishes change notifications, so no client should hold a
+    # ``subscriptions/listen`` stream open waiting for one.
+    mcp = MCPServer("gingugu", version=__version__, subscriptions=False, middleware=[middleware])
     register_all(mcp, ctx)
     return mcp, ctx
 

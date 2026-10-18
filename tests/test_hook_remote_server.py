@@ -13,7 +13,7 @@ import json
 import sqlite3
 
 import anyio
-import httpx
+import httpx2
 import pytest
 
 from gingugu import prompt_hook, tripwire
@@ -70,7 +70,7 @@ async def served(brain):
 
 
 async def _post(served, path, body, token):
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with httpx2.AsyncClient(timeout=10) as client:
         return await client.post(
             served.url + path, json=body, headers={"Authorization": f"Bearer {token}"}
         )
@@ -142,7 +142,7 @@ async def test_recall_refuses_a_malformed_body(brain, served, over):
 
 
 async def test_recall_refuses_a_non_object_body(brain, served):
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with httpx2.AsyncClient(timeout=10) as client:
         r = await client.post(
             served.url + "/hook/recall",
             content=b"[1]",

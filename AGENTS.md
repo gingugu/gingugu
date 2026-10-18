@@ -117,7 +117,7 @@ your own session, on the `gingugu` namespace.
 ## Stack
 
 - **Python** `>=3.11` (CI matrix: ubuntu/macos/windows × 3.11–3.13)
-- **MCP** Python SDK (`mcp>=1.25,<2`), stdio transport
+- **MCP** Python SDK 2.x (`mcp>=2.3,<3`, `MCPServer`), stdio transport
 - **SQLite** + **FTS5** for full-text; semantic embeddings for hybrid retrieval
 - **platformdirs** for the cross-platform DB path
 - **uv**-managed; `ruff` + `black` formatting; `pytest` + `pytest-asyncio`

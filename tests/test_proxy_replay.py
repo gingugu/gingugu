@@ -13,7 +13,7 @@ import sqlite3
 
 import anyio
 import pytest
-from mcp.shared.exceptions import McpError
+from mcp.shared.exceptions import MCPError
 
 from tests.proxy_fixtures import Served, free_port, make_brain, payload, through_proxy
 
@@ -104,7 +104,7 @@ async def test_an_mcp_endpoint_refusing_every_token_does_not_mint_one_per_call(b
             state["refusing"] = True
             with anyio.move_on_after(4):
                 while True:
-                    with pytest.raises(McpError):
+                    with pytest.raises(MCPError):
                         await s.call_tool("memory_stats", {})
                     await anyio.sleep(0.05)
             state["refusing"] = False
@@ -147,7 +147,7 @@ async def test_a_refused_call_is_not_replayed_after_a_long_outage(brain, monkeyp
             async with anyio.create_task_group() as tg:
                 tg.start_soon(heal)
                 with anyio.fail_after(15):
-                    with pytest.raises(McpError):
+                    with pytest.raises(MCPError):
                         args = {"title": "stale-call", "content": "cargo", "type": "fact"}
                         await s.call_tool("memory_store", args)
         assert "raised" not in outcome, outcome.get("raised")

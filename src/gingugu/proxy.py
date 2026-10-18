@@ -104,7 +104,7 @@ class _Session:
         self.replay = [(at, item) for at, item in self.replay if at >= cutoff]
         for item in stale:
             text = "remote brain was away too long; not sent - try again"
-            await self.client_write.send(error(item.message.root.id, text))
+            await self.client_write.send(error(item.message.id, text))
 
     async def read_client(self, client_read: ObjectReceiveStream) -> None:
         """The one reader of the client for the whole run; routes to the live link."""
@@ -113,7 +113,7 @@ class _Session:
             async for item in client_read:
                 if isinstance(item, Exception):
                     continue  # a malformed line from the client; the SDK already logged it
-                msg = item.message.root
+                msg = item.message
                 if isinstance(msg, JSONRPCRequest):
                     called = str((msg.params or {}).get("name", ""))
                     if msg.method == "tools/call" and called.startswith(CRED_PREFIX):
@@ -159,7 +159,7 @@ class _Session:
         reason = "ConnectionLost"
         try:
             transport = streamable_http_client(f"{self.url}/mcp", http_client=http)
-            async with http, transport as (r, w, _):
+            async with http, transport as (r, w):
                 if self.initialized:
                     self.reinits += 1
                     await replay_handshake(r, w, self.init_params, self.reinits)
@@ -190,8 +190,8 @@ class _Session:
         # The transport's task group is gone, so these sends are safe.
         if link is not None:
             for item in link.refused:  # never ran: the next link sends them again
-                if item.message.root.id in link.replayed:
-                    link.pending[item.message.root.id] = item  # refused twice: give up
+                if item.message.id in link.replayed:
+                    link.pending[item.message.id] = item  # refused twice: give up
                 else:
                     self.replay.append((anyio.current_time(), item))
             await link.fail_pending(reason)

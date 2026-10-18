@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import anyio
 import pytest
-from mcp.shared.exceptions import McpError
+from mcp.shared.exceptions import MCPError
 
 from tests.proxy_fixtures import make_brain, payload, serving, through_proxy
 
@@ -29,7 +29,7 @@ async def test_round_trip_store_then_recall_lands_in_the_clients_home(brain):
     async with serving(brain.app()) as served:
         async with through_proxy(served.url, brain.machine, home="gingugu") as (session, _):
             init = await session.initialize()
-            assert init.serverInfo.name == "gingugu"
+            assert init.server_info.name == "gingugu"
             stored = payload(
                 await session.call_tool(
                     "memory_store",
@@ -69,7 +69,7 @@ async def test_credential_calls_are_refused_by_the_proxy(brain, tool):
     async with serving(brain.app()) as served:
         async with through_proxy(served.url, brain.machine) as (session, _):
             await session.initialize()
-            with pytest.raises(McpError) as err:
+            with pytest.raises(MCPError) as err:
                 await session.call_tool(tool, {"service_name": "x"})
             # The proxy's own refusal, not the server's: it names remote mode.
             assert "remote" in str(err.value).lower()
@@ -120,7 +120,7 @@ async def test_a_rejected_owner_token_fails_loudly_not_a_hang(brain):
     async with serving(brain.app()) as served:
         with anyio.fail_after(15):
             async with through_proxy(served.url, "not-the-token") as (session, outcome):
-                with pytest.raises(McpError):
+                with pytest.raises(MCPError):
                     await session.initialize()
     raised = outcome.get("raised")
     assert isinstance(raised, proxy.ProxyLost), outcome
@@ -132,13 +132,13 @@ async def test_a_pre_initialize_probe_is_refused_locally_and_initialize_still_la
     # Claude Code >=2.1.287 sends `server/discover` before `initialize`. Forwarded,
     # the brain answers 400 (no session yet) and the link dies under the initialize.
     from mcp.shared.message import SessionMessage
-    from mcp.types import JSONRPCError, JSONRPCMessage, JSONRPCRequest, JSONRPCResponse
+    from mcp.types import JSONRPCError, JSONRPCRequest, JSONRPCResponse
 
     from gingugu import proxy
 
     def request(rid: int, method: str, params: dict) -> SessionMessage:
         req = JSONRPCRequest(jsonrpc="2.0", id=rid, method=method, params=params)
-        return SessionMessage(JSONRPCMessage(req))
+        return SessionMessage(req)
 
     init = {
         "protocolVersion": "2025-11-25",
@@ -152,9 +152,9 @@ async def test_a_pre_initialize_probe_is_refused_locally_and_initialize_still_la
             async with anyio.create_task_group() as tg:
                 tg.start_soon(proxy.run, served.url, brain.machine, c2p_recv, p2c_send)
                 await c2p_send.send(request(0, "server/discover", {}))
-                probe = (await p2c_recv.receive()).message.root
+                probe = (await p2c_recv.receive()).message
                 await c2p_send.send(request(1, "initialize", init))
-                reply = (await p2c_recv.receive()).message.root
+                reply = (await p2c_recv.receive()).message
                 await c2p_send.aclose()
     assert isinstance(probe, JSONRPCError) and probe.id == 0
     assert probe.error.code == -32601  # method not found: the client falls back
