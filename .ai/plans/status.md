@@ -27,7 +27,7 @@ and Codex's tool names for tripwire matching are still unobserved.
 
 ## Recently Completed
 
-**Board #1, one central brain: DONE (2026-10-05; design approved 2026-10-02).**
+**One central brain (board #1 until 2026-10-17): DONE (2026-10-05; design approved 2026-10-02).**
 Every step below shipped (B1, C, B2, D0 in 0.21.0; D live on a second
 machine), and the item came off the board on 2026-10-17. A Raspberry Pi 4
 on the home network holds the only brain; laptops, minions and non-Claude agents

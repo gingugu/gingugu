@@ -492,6 +492,7 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
       → minion fence / spawn stash first (see "Warm minions"; independent of
         MEMORY_TRIPWIRES)
       → MEMORY_TRIPWIRES=off: exit
+      → namespaces_for(cwd) (narrowed by MEMORY_GRANT; [] → exit before any lookup)
       → load_tripwires(crow + <persona> + <cwd-derived project>)   read-only SQLite
           skips deprecated and superseded memories; pinned ones DO trip
           (a pin loaded at session start is not in front of the agent now)
@@ -539,6 +540,9 @@ subagent starts  →  SubagentStart  →  .claude/hooks/subagent_warmup.py
       → find the agent file whose frontmatter `name` is agent_type
         ($CLAUDE_PROJECT_DIR, then ~/.claude/agents); read MEMORY_GRANT from
         its frontmatter. No grant → exit silently (no warm-up)
+      → narrow_spec: keep only entries the client's MEMORY_GRANT can read
+        (a * entry kept); nothing left, or a client grant that cannot be
+        honoured → exit silently
       → read-only SQLite, grants.bind(grant): build_context per readable
         namespace (encoder only if there is a hint), de-duplicated
       → additionalContext: compact lines + which namespaces it may write
@@ -573,6 +577,8 @@ a 400, and an unexpected failure a 500.
 ```
 UserPromptSubmit → `gingugu hook prompt`
   → length gate (local, no network for a one-liner)
+  → namespaces_for(cwd), narrowed by MEMORY_GRANT ([] → exit), then _sendable
+    drops any name the routes would refuse
   → POST /hook/recall {prompt, session_id, namespaces, suppressed, config}
       brain: strip_affect → embed (model held warm) → sweep + lexical → select
              → query_log row (tool='hook') → {context, ids}
@@ -582,12 +588,14 @@ PreToolUse → `gingugu hook tool`
   → minion fence + spawn stash (local, unchanged)
   → rules: hook-sessions/tripwire-rules-<sha(url, namespaces)>.json if < 60s old,
            else POST /hook/tripwires {namespaces}; on failure the stale copy
+           (namespaces grant-narrowed and _sendable-filtered, as for recall)
   → match locally; suppression in local tripwires-<session>.json
   → on a trip: POST /hook/trip {session_id, text, ids, namespaces}
       brain: query_log row (tool='tripwire')
 
 SubagentStart → `gingugu hook subagent`
-  → take the stashed task + read the agent file's grant (local)
+  → take the stashed task + read the agent file's grant (local), narrowed to
+    the client's MEMORY_GRANT
   → POST /hook/warmup {spec, task_hint, agent_type, namespaces}
       brain: same warm-up, wildcard grants scoped to the sent namespaces
 ```
