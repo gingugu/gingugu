@@ -52,7 +52,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
    consults), `serve_tokens`, `tripwire` (the decision half of the `PreToolUse` hook; see
    Key Decisions), `minion_fence`, `subagent_hook` and `subagent_warmup` (see Warm minions),
    `recall_pick` (the recall pipeline the local hook and `/hook/recall` share),
-   `hook_remote` + `hook_remote_flows` and `serve_hooks` (see Remote mode). `storage` owns the `memories` row only; the satellite tables
+   `hook_remote` + `hook_remote_flows` and `serve_hooks` (see Remote mode), `hook_grant`
+   (the client's `MEMORY_GRANT` as the hooks apply it). `storage` owns the `memories` row only; the satellite tables
    it drags along have their own owners (`tags`, `access`, `embedding_sync`,
    `claim_sync`), reached through the `storage_derived.DerivedTables`
    delegation surface, which also carries `log_query` for `query_log` (owned by
@@ -473,7 +474,14 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   session state. Route work runs in a worker thread: reads on its own read-only
   connection, the only writes the `query_log` rows, never the MCP handlers'
   `ctx.conn`. No answer means a quiet hook, never the local DB; tripwires alone
-  keep using their last fetched rules.
+  keep using their last fetched rules. The routes trust the namespace list they
+  are sent, so the client's grant is applied before it is sent:
+  `prompt_hook.namespaces_for` drops what `MEMORY_GRANT` cannot read and fails
+  closed (`[]`, no request) on a grant `stdio_grant` rejects. The minion warm-up
+  narrows the agent file's spec the same way (`hook_grant.narrow_spec`) before
+  it is used or sent to `/hook/warmup`. Every name sent to a `/hook/*` route
+  passes `hook_remote_flows._sendable` first (the routes' own name rule), so an
+  odd folder name is left out rather than 400ing the whole request.
 
 ## Warm minions (stdio grant, warm-up, minion fence)
 
@@ -496,7 +504,9 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   fenced agents) and the
   warm-up takes it as `task_hint`. Ranking is `build_context` on a read-only
   connection under `grants.bind`; compact lines go out as `additionalContext`.
-  No grant in the agent file, no warm-up.
+  No grant in the agent file, no warm-up. The agent file's grant is first
+  narrowed to what the spawning client's own `MEMORY_GRANT` can read
+  (`hook_grant.narrow_spec`, a `*` entry kept); nothing left means no warm-up.
 - **Minion fence** (`minion_fence.py`, first thing in `tool_hook.run`): only
   when the payload has `agent_id`. Denies file tools on the data dir (and
   Grep/Glob rooted at or above it), shell

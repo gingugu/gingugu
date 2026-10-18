@@ -18,6 +18,7 @@ import dataclasses
 import hashlib
 import json
 import os
+import re
 import time
 from pathlib import Path
 
@@ -27,6 +28,15 @@ from .hook_remote import RemoteTarget
 RULES_TTL_S = 60.0
 # What query_log keeps of a trip's text anyway; the rest never leaves the machine.
 TRIP_TEXT_CHARS = 2000
+# The names the brain's hook routes accept (serve_hooks._NAME_RE). Any other is a
+# 400 for the whole request, so it is left out here rather than sent.
+_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+
+
+def _sendable(namespaces: list[str]) -> list[str]:
+    """``namespaces`` less any name the brain would refuse, such as a folder
+    called \"My Repo\": one bad name must not silence crow and the persona."""
+    return [n for n in namespaces if _NAME_RE.fullmatch(n)]
 
 
 def remote_recall(
@@ -44,7 +54,7 @@ def remote_recall(
         {
             "prompt": prompt[:4000],
             "session_id": session_id,
-            "namespaces": namespaces,
+            "namespaces": _sendable(namespaces),
             "suppressed": sorted(suppressed),
             "config": {
                 "bar": cfg.bar,
@@ -78,7 +88,7 @@ def remote_warmup(
             "spec": spec,
             "task_hint": hint,
             "agent_type": agent_type,
-            "namespaces": namespaces_for(cwd),
+            "namespaces": _sendable(namespaces_for(cwd)),
         },
         timeout=hook_remote.WARMUP_TIMEOUT_S,
     )
@@ -135,6 +145,7 @@ def _write_cache(path: Path, wires: list) -> None:
 def remote_rules(target: RemoteTarget, namespaces: list[str], state_dir: Path) -> list:
     """Tripwire rules for ``namespaces``: fresh cache, else the brain, else the
     stale cache, else none."""
+    namespaces = _sendable(namespaces)
     path = _cache_path(state_dir, target.url, namespaces)
     cached = _read_cache(path)
     if cached and 0 <= time.time() - cached[0] < RULES_TTL_S:
@@ -163,7 +174,7 @@ def report_trip(
             "session_id": session_id,
             "text": text[:TRIP_TEXT_CHARS],
             "ids": ids,
-            "namespaces": namespaces,
+            "namespaces": _sendable(namespaces),
         },
         timeout=hook_remote.TRIP_TIMEOUT_S,
     )
