@@ -170,6 +170,19 @@ class MemoryStore(DerivedTables, TransactionParticipant):
         new_provenance = existing.provenance if provenance is None else provenance or None
         new_about = existing.about if about is None else about or None
         about_changed = new_about != existing.about
+        # updated_at is a write clock: it moves only when one of the record's own
+        # fields changes value. A pin, a tag set or a claim resolution is
+        # bookkeeping, and both readers of this clock - the recency bucket and
+        # decay.reference_timestamp - would otherwise treat it as fresh work.
+        fields_changed = (
+            text_changed
+            or about_changed
+            or new_type != existing.type
+            or new_confidence != existing.confidence
+            or new_metadata != existing.metadata
+            or new_provenance != existing.provenance
+        )
+        updated_at = now if fields_changed else existing.updated_at
         self._conn.execute(
             "UPDATE memories SET title=?, content=?, type=?, confidence=?, metadata=?, "
             "pinned=?, provenance=?, about=?, updated_at=?, last_confirmed=? WHERE id=?",
@@ -182,7 +195,7 @@ class MemoryStore(DerivedTables, TransactionParticipant):
                 int(new_pinned),
                 Provenance(new_provenance).value if new_provenance else None,
                 new_about,
-                now,
+                updated_at,
                 last_confirmed,
                 memory_id,
             ),
