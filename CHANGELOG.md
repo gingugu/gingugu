@@ -38,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Memory Explorer UI moves to Tailwind CSS 4 (`@tailwindcss/postcss`), as
+  the security update to its build dependencies requires; renamed utilities
+  and a border-colour compatibility layer keep the look unchanged. The UI's
+  build dependencies audit clean.
+
 - **Upgrading a network-bound brain turns TLS on.** Run `gingugu remote login`
   again on each machine, and switch any `MEMORY_REMOTE_URL` to `https://`, or
   set `MEMORY_SERVE_TLS=off` on the server to keep plain http.

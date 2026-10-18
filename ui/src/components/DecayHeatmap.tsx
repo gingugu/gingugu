@@ -166,7 +166,7 @@ function Cell({ scored, onClick }: { scored: DecayScored; onClick: () => void })
     <button
       onClick={onClick}
       title={`${scored.memory.title}\ntrust ${(scored.health * 100).toFixed(0)}% · ${scored.memory.access_count} accesses · ${scored.memory.confidence}${dormantNote}`}
-      className="aspect-square rounded relative group hover:scale-110 hover:z-10 transition-transform"
+      className="aspect-square rounded-sm relative group hover:scale-110 hover:z-10 transition-transform"
       style={{ backgroundColor: color }}
     >
       {scored.dormant && (
