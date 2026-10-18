@@ -25,6 +25,34 @@ silencing crow and the persona; local mode keeps it
 (`~/.codex/hooks/tyrone_hook.py`, outside the repo) must pass `MEMORY_GRANT`,
 and Codex's tool names for tripwire matching are still unobserved.
 
+**Board #2, TLS on the brain (branch `feature/serve-tls`, stacked on
+`fix/hook-recall-grant`).** Secure by default off the box, zero-setup on it
+(the owner's call, 2026-10-17: local must stay easy). Local (stdio) mode and a
+loopback `gingugu serve` are untouched. A serve on any other bind generates a
+self-signed EC leaf once in `<db-dir>/tls/` and serves https
+(`serve_tls.py`; `MEMORY_SERVE_TLS=auto|on|off`, `MEMORY_SERVE_TLS_CERT` +
+`_KEY` to bring your own, `MEMORY_SERVE_TLS_SAN`). `gingugu remote login` asks
+the forced command for that cert (new `cert` verb) before it mints, pins it
+beside the machine setting and files the token under the https URL; the
+proxy, its token trade, the hooks and `remote status` verify against the pin
+alone (`remote_tls.py`), and http to a pinned brain is refused. Rejected: a
+Let's Encrypt DNS-01 cert (AWS credentials on the Pi, a public record for a LAN
+host) and Tailscale (a new dependency where SSH already carries trust). Hardened by the security review against lockouts (the SSH session can see a
+different environment from the service, and a cert may not name the host you
+dial): login checks the live brain with the exact pin and writes it before
+minting, a cert failure is reported as one with its fix rather than as
+"unreachable", a corrupt pin fails closed, and the forced command re-encodes
+what it prints. Tests first:
+`tests/test_serve_tls.py`, `tests/test_remote_tls.py`,
+`tests/test_remote_tls_login.py`, `tests/test_ssh_cert_verb.py`,
+`tests/test_tls_end_to_end.py` (real TLS through the real app: the proxy and
+`promote` reach a pinned brain, and a missing or impostor pin is refused by
+the token trade, the hooks, `remote status`, preflight and the login probe -
+the proxy's `/mcp` client only runs after the token trade has verified).
+`gingugu promote` verifies through the pin too. Full suite 1917 passed. Still to do: the live
+cutover on the Pi - upgrade, restart, `gingugu remote login` on each machine,
+and Tyrone's `MEMORY_REMOTE_URL` to `https://`.
+
 ## Recently Completed
 
 **One central brain (board #1 until 2026-10-17): DONE (2026-10-05; design approved 2026-10-02).**
@@ -1081,7 +1109,7 @@ the rows below it moved down one.
 | # | Item | Old # | Why this position |
 |---|---|---|---|
 | 1 | **Hook recall honours the client's grant** - IN FLIGHT | - | Entered 2026-10-04. First: a live leak through a fenced client. ChatGPT desktop runs Codex hooks (same protocol as Claude Code: `UserPromptSubmit`, `hookSpecificOutput.additionalContext`), and a probe proved `gingugu hook prompt` injects into a plain ChatGPT chat. Two gaps before a scoped client keeps it: the prompt hook never reads `MEMORY_GRANT` and, in remote mode, calls the owner-only `/hook/recall` with the machine token, so a client fenced to `tyrone=write,crow=read` is shown any namespace its cwd names; and ChatGPT gives every chat its own working folder (`~/Documents/Codex/<date>/<slug>`), so the cwd basename adds a junk namespace. Also: tripwire input fields are keyed on Claude Code tool names; Codex's built-in names are still unobserved |
-| 2 | **TLS on the brain** | - | Entered 2026-10-03. Second: the other open security finding on the live brain. Every remote-mode hook call carries the machine's owner token, so on plain `http` it crosses the LAN unencrypted on every prompt (the B2 security review's accepted finding). `gingugu serve` behind TLS (uvicorn certs or a reverse proxy) plus a trust story for a home-LAN cert; `gingugu remote` should then prefer `https` |
+| 2 | **TLS on the brain** - IN FLIGHT | - | Entered 2026-10-03. Second: the other open security finding on the live brain. Every remote-mode hook call carries the machine's owner token, so on plain `http` it crosses the LAN unencrypted on every prompt (the B2 security review's accepted finding). Built: uvicorn serves a self-signed cert generated on a LAN bind, pinned by `gingugu remote login` over SSH; http to a pinned brain is refused (see In Flight) |
 | 3 | **A missing hook grant fails open, silently** | - | Entered 2026-10-17 (security review of #1). The hook fence reads `MEMORY_GRANT` from the hook process's own environment; a client that sets it only in its MCP server's `env` block gets fenced MCP calls and unfenced hooks, and nothing says so. Needs a design: the hook learning the client's grant from the same place the MCP server does, or a loud refusal when a fenced proxy and an unfenced hook run as one client. Third: after the live leak (1) and the plaintext token (2) |
 | 4 | **A shared board between agents** | 15 | Unblocked: the central brain is done. After 1-3, so more agents join a brain that fences and encrypts properly |
 | 5 | **MCP SDK 2.x migration** | - | Ahead of new features: the pin ages every week. We pin `mcp<2` (lock 1.28.1); 2.x is a major (2.3.0 out 2026-10-02). The proxy sits on two transport APIs, and `tests/test_proxy*.py` is the safety net |
