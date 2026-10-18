@@ -43,11 +43,11 @@ export default function Dashboard({ memories, namespaces, relations }: Props) {
                 className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800/60 transition-colors"
               >
                 <span
-                  className="w-2 h-2 rounded-full flex-shrink-0"
+                  className="w-2 h-2 rounded-full shrink-0"
                   style={{ backgroundColor: TYPE_COLORS[m.type] ?? '#6b7280' }}
                 />
                 <span className="text-sm text-gray-300 truncate flex-1">{m.title}</span>
-                <span className="text-[10px] text-gray-600 flex-shrink-0">
+                <span className="text-[10px] text-gray-600 shrink-0">
                   {new Date(m.created_at).toLocaleDateString()}
                 </span>
               </div>
