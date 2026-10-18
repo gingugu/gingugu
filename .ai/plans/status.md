@@ -4,28 +4,20 @@ _Last updated: 2026-10-17_
 
 ## In Flight
 
-**Board #2, bookkeeping is not freshness (branch `fix/write-clock`, stacked on
-`docs/board-reorder`).** `storage.update` wrote `updated_at=now` on every call,
-so a claim-only, tags-only or pin-only `memory_update` - and a call that changed
-nothing - moved the write clock. That clock feeds both the `memory_context`
-recency bucket and `decay.reference_timestamp` (the latest of `last_confirmed`,
-`updated_at`, `created_at`), so reconciling a claim also made the note look
-freshly checked to scoring and review hints, not only recent. Now `updated_at`
-moves only when one of the record's own fields changes value; re-verifying
-still moves `last_confirmed`. No migration. Tests first:
-`tests/test_write_clock.py`; full suite 1933 passed.
-
-**Board #3, MCP SDK 2.x: impact surveyed, not started.** The port is broad:
+**Board #1, MCP SDK 2.x: impact surveyed, not started.** The port is broad:
 `FastMCP` becomes `MCPServer`, the `request_ctx` contextvar our fence and
 session-id code read is gone, `ServerSession` becomes a per-message proxy (our
 `WeakKeyDictionary` keyed on it breaks), the JSON-RPC unions lose `.root`,
 `streamable_http_client` yields a 2-tuple, and `httpx` is replaced by `httpx2`
-(our proxy, token trade and `promote` build `httpx.AsyncClient`s). It waits on
-board #1, which also edits `server.py` (`main`'s serve path). 1.x is in maintenance
+(our proxy, token trade and `promote` build `httpx.AsyncClient`s). Unblocked now that the fail-open fix (#119) is in. 1.x is in maintenance
 (security fixes only); upstream advises pinning `mcp>=1.28,<2` until ready.
 
-**Board #1, a missing hook grant fails open (branch `fix/hook-grant-publish`,
-stacked on `fix/write-clock`).** Design approved 2026-10-17 (options 1 + 2):
+Nothing else open. 0.23.0 released 2026-10-17.
+
+## Recently Completed
+
+**A missing hook grant fails open: MERGED (#119, merge `7d9ddf0`), released in
+0.23.0, off the board.** Design approved 2026-10-17 (options 1 + 2):
 every gingugu server publishes its grant and ancestor chain for its client's
 hooks (`client_grants.py`, `<user_runtime_dir>/gingugu/clients/<pid>.json`),
 and `hook_grant.client_grant` applies the publications that meet the hook at
@@ -57,7 +49,16 @@ startup race, and a real client -> (server, hook) process tree),
 Claude Code also hands its MCP servers `CLAUDE_CODE_SESSION_ID`, a cleaner key
 than a pid, but Claude Code only - Tyrone runs on Codex.
 
-## Recently Completed
+**Bookkeeping is not freshness: MERGED (#118, merge `d31cebe`), released in
+0.23.0, off the board.** `storage.update` wrote `updated_at=now` on every call,
+so a claim-only, tags-only or pin-only `memory_update` - and a call that changed
+nothing - moved the write clock. That clock feeds both the `memory_context`
+recency bucket and `decay.reference_timestamp` (the latest of `last_confirmed`,
+`updated_at`, `created_at`), so reconciling a claim also made the note look
+freshly checked to scoring and review hints, not only recent. Now `updated_at`
+moves only when one of the record's own fields changes value; re-verifying
+still moves `last_confirmed`. No migration. Tests first:
+`tests/test_write_clock.py`; full suite 1933 passed.
 
 **Hook recall honours the client's grant: MERGED (#115, 2026-10-17), off the
 board.** `namespaces_for`
@@ -264,7 +265,7 @@ deadline); live, a dead host is refused at 16.5s, inside the 30s client connect
 timeout. This supersedes the single-probe "unreachable brain" refusal in the
 B1 entry below. Separately, Pi WiFi power save was turned off
 (`802-11-wireless.powersave 2` on its NetworkManager connection; 4s-gap pings
-then averaged 33 ms) - **a step for the Pi bootstrap script (board row 11 as of 2026-10-17).** Tests:
+then averaged 33 ms) - **a step for the Pi bootstrap script (board row 9 after 0.23.0).** Tests:
 three new preflight cases on a fake clock; full suite 1671 passed.
 
 **Released 0.21.2 to PyPI (2026-10-04): proxy survives a brain restart
@@ -1132,7 +1133,7 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-## The Board (current: 2026-10-17, after 0.22.1)
+## The Board (current: 2026-10-17, after 0.23.0)
 
 **Resequenced 2026-09-29 into build order.** The table below is the order the
 work gets done in, top first; `#` is that position. Item numbers used to be
@@ -1167,20 +1168,22 @@ moves to second (small, diagnosed, and it skews every session start); the SDK
 migration goes ahead of the shared board; the port waits on the fail-open fix,
 since both edit `server.py`. Rows 5 onward keep their order.
 
+**2026-10-17 (release):** the fail-open hook grant (#119) and bookkeeping is
+not freshness (#118) merged, shipped in 0.23.0 and came off; every row moved up
+two.
+
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **A missing hook grant fails open, silently** - IN FLIGHT | - | Entered 2026-10-17 (security review of #115). The hook fence reads `MEMORY_GRANT` from the hook process's own environment; a client that sets it only in its MCP server's `env` block gets fenced MCP calls and unfenced hooks, and nothing says so. Built (see In Flight): every server publishes its grant and the hooks apply it, refusing on disagreement. First: the last open security finding on the live brain |
-| 2 | **Bookkeeping is not freshness** - IN FLIGHT | - | Entered 2026-10-17. Small and fully diagnosed. `memory_update(resolve_claims=...)` leaves the prose and `last_confirmed` alone but still bumps `updated_at`, and the `memory_context` recency bucket orders by `updated_at` (#61). So reconciling a claim puts the old note into the next session start: an August "PR #49 open" note surfaced right after its claim was resolved. A claim-only write (and likely any tags-only or pin-only one) should not count as recency. Measured live; built (see In Flight). Second: it touches the write path only, so it built alongside 1 |
-| 3 | **MCP SDK 2.x migration** | - | Ahead of new features: the pin ages every week. We pin `mcp<2` (lock 1.28.1); 2.x is a major (2.3.0 out 2026-10-02). The proxy sits on two transport APIs, and `tests/test_proxy*.py` is the safety net. Impact surveyed 2026-10-17 (see In Flight); the port waits for 1, which also edits `server.py` |
-| 4 | **A shared board between agents** | 15 | Unblocked: the central brain is done. After 1-3, so more agents join a brain that fences properly, on a current SDK |
-| 5 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
-| 6 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
-| 7 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
-| 8 | **A referee for rival memory tools** | 17 | Only a fair comparison once 7 exists |
-| 9 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
-| 10 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
-| 11 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
-| 12 | Session flight recorder (low priority) | 18 | Check prior art first |
+| 1 | **MCP SDK 2.x migration** | - | Ahead of new features: the pin ages every week. We pin `mcp<2` (lock 1.28.1); 2.x is a major (2.3.0 out 2026-10-02). The proxy sits on two transport APIs, and `tests/test_proxy*.py` is the safety net. Impact surveyed 2026-10-17 (see In Flight); unblocked by #119 |
+| 2 | **A shared board between agents** | 15 | Unblocked: the central brain is done. After 1, so more agents join a brain on a current SDK |
+| 3 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
+| 4 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
+| 5 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
+| 6 | **A referee for rival memory tools** | 17 | Only a fair comparison once 5 exists |
+| 7 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
+| 8 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
+| 9 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
+| 10 | Session flight recorder (low priority) | 18 | Check prior art first |
 | - | **Template/sibling noise in retrieval - PARKED** | 1 | Ten dead fixes and no live hypothesis; see below |
 
 ### Previous board (2026-09-28), kept for its numbering

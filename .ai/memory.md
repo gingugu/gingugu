@@ -362,11 +362,11 @@ gap between the count and the rows.
 
 ## Release State
 
-- **Unreleased on `main` + stacked branches** (CHANGELOG `[Unreleased]`): TLS on
-  the brain (#116), hooks honour `MEMORY_GRANT` (#115), and on local branches
-  the write clock, hooks following the server's published grant, and the
-  untrusted-minion warning. Next release is a minor (new dependency `psutil`).
-- Current version: **0.22.1** (PyPI). Patch: `gingugu harness` dry runs and
+- Current version: **0.23.0** (PyPI, 2026-10-17). Minor: TLS on the brain
+  (#116), hooks honour `MEMORY_GRANT` (#115), hooks follow the grant their
+  client's servers publish plus the untrusted-minion warning (#119), and
+  bookkeeping no longer moves `updated_at` (#118). New dependency `psutil`.
+- 0.22.1: Patch: `gingugu harness` dry runs and
   reruns report what the real run does (`--migrate` `utils/` move, a missing
   `CLAUDE.md` created by `init` as a new file, identical bytes are `no change`,
   `would overwrite`), and a dangling `CLAUDE.md` symlink is skipped (#113).
