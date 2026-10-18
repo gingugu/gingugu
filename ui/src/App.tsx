@@ -105,7 +105,7 @@ export default function App() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-950">
-      <header className="flex items-center justify-between px-6 py-3 border-b border-gray-800 bg-gray-950/90 backdrop-blur-sm">
+      <header className="flex items-center justify-between px-6 py-3 border-b border-gray-800 bg-gray-950/90 backdrop-blur-xs">
         <div className="flex items-center gap-3">
           <img src="/logo.svg" alt="Gingugu" width={28} height={28} className="rounded-md" />
           <Brain className="text-blue-500" size={24} />
@@ -141,7 +141,7 @@ export default function App() {
             <button
               onClick={refresh}
               disabled={loading}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium text-gray-400 hover:text-white transition-all disabled:opacity-50"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-xs font-medium text-gray-400 hover:text-white transition-all disabled:opacity-50"
               title="Refresh now"
             >
               <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
@@ -151,7 +151,7 @@ export default function App() {
               onChange={(e) => setRefreshInterval(Number(e.target.value) as RefreshInterval)}
               disabled={!live}
               title={live ? 'Auto-refresh interval' : 'Auto-refresh requires live mode'}
-              className="bg-transparent text-xs text-gray-400 px-1 py-1 border-l border-gray-800 focus:outline-none disabled:opacity-40"
+              className="bg-transparent text-xs text-gray-400 px-1 py-1 border-l border-gray-800 focus:outline-hidden disabled:opacity-40"
             >
               {REFRESH_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value} className="bg-gray-900">{opt.label}</option>

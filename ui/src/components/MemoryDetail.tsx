@@ -21,13 +21,13 @@ export default function MemoryDetail({ memory, namespaces, onClose }: Props) {
         <div className="flex-1 min-w-0 pr-2">
           <div className="flex items-center gap-2 mb-1">
             <span
-              className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider"
+              className="inline-block px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider"
               style={{ backgroundColor: TYPE_COLORS[memory.type] + '30', color: TYPE_COLORS[memory.type] }}
             >
               {memory.type}
             </span>
             <span
-              className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider"
+              className="inline-block px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider"
               style={{
                 backgroundColor: (CONFIDENCE_COLORS[memory.confidence] ?? '#6b7280') + '30',
                 color: CONFIDENCE_COLORS[memory.confidence] ?? '#6b7280',
@@ -61,7 +61,7 @@ export default function MemoryDetail({ memory, namespaces, onClose }: Props) {
         {memory.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5 pt-1">
             {memory.tags.map((tag) => (
-              <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-800 text-gray-400 rounded text-[11px]">
+              <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-800 text-gray-400 rounded-sm text-[11px]">
                 <Tag size={10} /> {tag}
               </span>
             ))}
