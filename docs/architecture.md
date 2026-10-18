@@ -142,8 +142,14 @@ match, denies the call once with the memory as the reason and logs the trip to
 file declares `MEMORY_GRANT`. The spawning `Agent` call's prompt is stashed by
 the `PreToolUse` hook (`hook-sessions/spawns-<session>.json`, 300s TTL) and used
 as the task hint; ranking runs on a read-only connection under the grant, first
-narrowed to what the spawning client's own `MEMORY_GRANT` can read. All three
-hooks apply that client grant to the namespaces they look up. Inside
+narrowed to what the spawning client's grant can read. All three hooks apply
+that client grant to the namespaces they look up. The grant is what the
+client's own gingugu servers published (`client_grants.py`: each server writes
+its grant and ancestor chain before serving; a hook takes the publications
+meeting it at its nearest ancestor, never above its client), and the hook's own
+`MEMORY_GRANT`, if set, must agree - any disagreement keeps the hooks quiet. A
+fenced server's publication outlives a crash, so a fenced client with no live
+server keeps quiet hooks too. Inside
 a subagent (`agent_id` present) the `PreToolUse` hook also applies the minion
 fence (`minion_fence.py`). A minion's own stdio server is fenced by
 `MEMORY_GRANT` through the same store chokepoints as a scoped serve token.
@@ -1681,8 +1687,9 @@ write needs `write` on both endpoints.
 Whole-brain tools are closed to scoped tokens: `memory_export`, `memory_import`,
 `memory_dream`, every `credential_*` tool, and every `memory_namespaces` action
 except `list`. stdio without `MEMORY_GRANT`, CLI commands, background passes
-(dream, hooks) and the owner token are unfenced; a stdio server started with
-`MEMORY_GRANT` is fenced the same way as a scoped token.
+(dream) and the owner token are unfenced; a stdio server started with
+`MEMORY_GRANT` is fenced the same way as a scoped token, and the client's hooks
+are fenced by the grant its servers publish (see the hooks section).
 
 ---
 
@@ -1854,7 +1861,9 @@ src/gingugu/
 ├── recall_gate.py          # Decision half: pure arithmetic, built around refusing
 ├── recall_sweep.py         # I/O half: read-only cosine sweep + BM25 lexical matches; sqlite_uri()
 ├── prompt_hook.py          # gingugu hook prompt: the entry point; log_prompt() is its one write
-├── hook_grant.py           # the client's MEMORY_GRANT applied to hook namespaces and minion warm-up
+├── hook_grant.py           # the client's grant (its servers' publications + MEMORY_GRANT) applied to hook namespaces and warm-up
+├── client_grants.py        # each server publishes its grant + ancestor chain; hooks read the ones meeting them
+├── claude_trust.py         # whether Claude Code trusts a folder (untrusted-minion warning)
 ├── recall_pick.py          # pick(): the recall pipeline shared by the local hook and /hook/recall
 ├── hook_remote.py          # hooks' transport to a remote brain: owner token, None on any failure
 ├── hook_remote_flows.py    # remote recall / warm-up / tripwire rules (60s cache) / trip report; _sendable name filter

@@ -448,9 +448,13 @@ UserPromptSubmit event  →  .claude/hooks/user_prompt_recall.py (pure stdlib)
         user's own voice. Matching voice is the dominant false positive.
       → encode → cosine sweep over crow + <MEMORY_PERSONA, if set> + <cwd-derived project>
           (namespaces_for: crow, then persona, then the repo, deduped; a
-          malformed MEMORY_PERSONA is ignored; with MEMORY_GRANT set, any
-          name the grant cannot read is dropped, and a grant stdio_grant
-          rejects yields [] - the hook exits quiet before any lookup)
+          malformed MEMORY_PERSONA is ignored; any name the CLIENT's grant
+          cannot read is dropped - hook_grant.client_grant: what the client's
+          gingugu servers published (client_grants; a client under 3s old is
+          waited on), which the hook's own MEMORY_GRANT must agree with - and
+          a grant stdio_grant rejects, a disagreement, an unreadable
+          publication, or a fenced client with no live server yields [] -
+          the hook exits quiet before any lookup)
           EXCLUDED IN SQL: deprecated; pinned (already loaded unconditionally
           at session start, so injecting one pays twice); superseded (the
           store has already recorded it as replaced)
@@ -495,7 +499,7 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
       → minion fence / spawn stash first (see "Warm minions"; independent of
         MEMORY_TRIPWIRES)
       → MEMORY_TRIPWIRES=off: exit
-      → namespaces_for(cwd) (narrowed by MEMORY_GRANT; [] → exit before any lookup)
+      → namespaces_for(cwd) (narrowed by the client's grant; [] → exit before any lookup)
       → load_tripwires(crow + <persona> + <cwd-derived project>)   read-only SQLite
           skips deprecated and superseded memories; pinned ones DO trip
           (a pin loaded at session start is not in front of the agent now)
@@ -543,7 +547,9 @@ subagent starts  →  SubagentStart  →  .claude/hooks/subagent_warmup.py
       → find the agent file whose frontmatter `name` is agent_type
         ($CLAUDE_PROJECT_DIR, then ~/.claude/agents); read MEMORY_GRANT from
         its frontmatter. No grant → exit silently (no warm-up)
-      → narrow_spec: keep only entries the client's MEMORY_GRANT can read
+      → in a folder Claude Code has not trusted, a project agent file's
+        inline brain will not load: the warm-up says so (claude_trust)
+      → narrow_spec: keep only entries the client's grant can read
         (a * entry kept); nothing left, or a client grant that cannot be
         honoured → exit silently
       → read-only SQLite, grants.bind(grant): build_context per readable
@@ -580,7 +586,7 @@ a 400, and an unexpected failure a 500.
 ```
 UserPromptSubmit → `gingugu hook prompt`
   → length gate (local, no network for a one-liner)
-  → namespaces_for(cwd), narrowed by MEMORY_GRANT ([] → exit), then _sendable
+  → namespaces_for(cwd), narrowed by the client's grant ([] → exit), then _sendable
     drops any name the routes would refuse
   → POST /hook/recall {prompt, session_id, namespaces, suppressed, config}
       brain: strip_affect → embed (model held warm) → sweep + lexical → select
@@ -598,7 +604,7 @@ PreToolUse → `gingugu hook tool`
 
 SubagentStart → `gingugu hook subagent`
   → take the stashed task + read the agent file's grant (local), narrowed to
-    the client's MEMORY_GRANT
+    the client's grant
   → POST /hook/warmup {spec, task_hint, agent_type, namespaces}
       brain: same warm-up, wildcard grants scoped to the sent namespaces
 ```

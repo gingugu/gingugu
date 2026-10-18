@@ -120,7 +120,11 @@ AI client (Claude Code / Cursor / Windsurf / …)
   `storage.update` advances `last_confirmed` when the title or content actually
   changed, reusing the "did the matching surface move?" test that already gates
   claim re-sync and embedding re-encode. Retypes, tag edits and metadata writes
-  assert nothing about truth and leave the clock alone.
+  assert nothing about truth and leave the clock alone. `updated_at` is a write
+  clock with its own discipline (2026-10-17): it moves only when a stored field
+  (title, content, type, confidence, metadata, provenance, about) changes
+  value, so a pin, a tag set, a claim resolution or a no-op moves neither the
+  recency bucket nor this anchor.
 - **State claims:** `claims.py` extracts repo-qualified PR/MR references and the
   state a memory asserts about them into `memory_claims`, with
   `claim_qualify.py` answering *which repo* a ref names. That question is
