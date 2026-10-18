@@ -14,6 +14,7 @@ import json
 import os
 import re
 import socket
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -25,6 +26,7 @@ from urllib.parse import urlparse
 
 import keyring
 
+from . import remote_tls
 from .config import _default_db_path
 from .remote_args import USAGE, _UsageError, build_parser
 
@@ -89,7 +91,18 @@ def active() -> RemoteTarget | None:
     if env is not None:
         if env.strip().lower() == "off":
             return None
-        return RemoteTarget(normalize_url(env), "env")
+        target = RemoteTarget(normalize_url(env), "env")
+    else:
+        url = _machine_url()
+        if url is None:
+            return None
+        target = RemoteTarget(url, "machine")
+    remote_tls.refuse_downgrade(target.url)
+    return target
+
+
+def _machine_url() -> str | None:
+    """The machine setting's URL, or None. A bad file raises."""
     path = settings_path()
     try:
         raw = path.read_text(encoding="utf-8")
@@ -98,11 +111,10 @@ def active() -> RemoteTarget | None:
     except OSError as exc:
         raise ValueError(f"cannot read {path}: {exc.__class__.__name__}") from exc
     try:
-        data = json.loads(raw)
-        url = data["url"]
+        url = json.loads(raw)["url"]
         if not isinstance(url, str):
             raise TypeError
-        return RemoteTarget(normalize_url(url), "machine")
+        return normalize_url(url)
     except (ValueError, KeyError, TypeError) as exc:
         raise ValueError(f"{path} is corrupt; run `gingugu remote off`") from exc
 
@@ -134,7 +146,11 @@ def _run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
 def _reachable(url: str, token: str | None) -> bool:
     """GET /healthz. The token is deliberately not sent."""
     try:
-        with urllib.request.urlopen(f"{url}/healthz", timeout=3) as resp:  # noqa: S310
+        verify = remote_tls.verify_for(url)  # a corrupt pin is unreachable, never unverified
+        context = verify if isinstance(verify, ssl.SSLContext) else None
+        with urllib.request.urlopen(  # noqa: S310
+            f"{url}/healthz", timeout=3, context=context
+        ) as resp:
             return bool(resp.status == 200)
     except Exception:
         return False
@@ -173,6 +189,7 @@ def _status() -> int:
 
 def _on(raw: str) -> int:
     url = normalize_url(raw)
+    remote_tls.refuse_downgrade(url)
     try:
         token = token_for(url)
     except Exception as exc:  # noqa: BLE001 - any keyring backend failure
@@ -211,7 +228,7 @@ def _login(args: argparse.Namespace) -> int:
     if args.ssh.startswith("-"):
         return _usage_error(f"--ssh must be USER@HOST, not an option: {args.ssh!r}")
     key = args.key or str(Path.home() / ".ssh" / "gingugu_mint")
-    argv = [
+    ssh = [
         "ssh",
         "-F",
         "/dev/null",  # ignore ~/.ssh/config: a Host * IdentityFile would bypass the mint key
@@ -226,11 +243,11 @@ def _login(args: argparse.Namespace) -> int:
         "-o",
         "StrictHostKeyChecking=accept-new",  # a new machine's first login has no known_hosts entry
         args.ssh,
-        "mint",
-        name,
     ]
+    # TLS is settled (cert fetched, live brain checked, pin written) before the mint.
+    url, pinned = remote_tls.prepare_login(_run, ssh, url)
     try:
-        proc = _run(argv, capture_output=True, text=True, timeout=30)
+        proc = _run([*ssh, "mint", name], capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.SubprocessError) as exc:
         return _fail(f"ssh failed: {exc.__class__.__name__}")
     lines = proc.stdout.splitlines()
@@ -248,6 +265,12 @@ def _login(args: argparse.Namespace) -> int:
             "rerun login once the keychain works"
         )
     print(f"logged in to {url} as {name}")
+    if pinned is not None:
+        print(f"pinned the brain's TLS certificate (sha256 {pinned})")
+        current = _machine_url()
+        if current is not None and current != url and remote_tls.https_of(current) == url:
+            _write_setting(url)  # this machine was already on this brain over http
+            print(f"remote: {url}")
     return 0
 
 

@@ -80,16 +80,25 @@ def make_brain(tmp_path, monkeypatch, *, credentials: bool = True) -> Brain:
 
 
 class Served:
-    def __init__(self, port: int) -> None:
+    def __init__(self, port: int, tls: tuple[str, str] | None = None) -> None:
         self.port = port
-        self.url = f"http://127.0.0.1:{port}"
+        self.tls = tls  # (certfile, keyfile): serve https, as a network-bound brain does
+        self.url = f"{'https' if tls else 'http'}://127.0.0.1:{port}"
         self._uv = None
         self._task = None
 
     async def start(self, app) -> None:
         import uvicorn
 
-        config = uvicorn.Config(app, host="127.0.0.1", port=self.port, log_level="warning")
+        certfile, keyfile = self.tls or (None, None)
+        config = uvicorn.Config(
+            app,
+            host="127.0.0.1",
+            port=self.port,
+            log_level="warning",
+            ssl_certfile=certfile,
+            ssl_keyfile=keyfile,
+        )
         self._uv = uvicorn.Server(config)
         self._task = asyncio.create_task(self._uv.serve())
         while not self._uv.started:
@@ -117,8 +126,8 @@ class Served:
 
 
 @contextlib.asynccontextmanager
-async def serving(app):
-    served = Served(free_port())
+async def serving(app, tls: tuple[str, str] | None = None):
+    served = Served(free_port(), tls)
     await served.start(app)
     try:
         yield served

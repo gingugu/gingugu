@@ -98,6 +98,12 @@ class Config:
     serve_host: str = "127.0.0.1"
     serve_port: int = 8765
     serve_token: str | None = None
+    # TLS for `gingugu serve` (see serve_tls): mode auto|on|off, an owner's own
+    # cert + key, and extra names for the generated cert.
+    serve_tls: str | None = None
+    serve_tls_cert: str | None = None
+    serve_tls_key: str | None = None
+    serve_tls_san: str | None = None
     # How long the brain must go untouched before `gingugu dream --if-idle`
     # will run. Twenty minutes is long enough to sit outside a coffee break
     # and short enough that an overnight scheduler gets many chances.
@@ -171,6 +177,11 @@ def load_config() -> Config:
         serve_host=os.environ.get("MEMORY_SERVE_HOST") or "127.0.0.1",
         serve_port=_env_int("MEMORY_SERVE_PORT", 8765),
         serve_token=os.environ.get("MEMORY_SERVE_TOKEN") or None,
+        # Not `or None`: a set-but-blank mode is a typo serve_tls refuses.
+        serve_tls=os.environ.get("MEMORY_SERVE_TLS"),
+        serve_tls_cert=os.environ.get("MEMORY_SERVE_TLS_CERT") or None,
+        serve_tls_key=os.environ.get("MEMORY_SERVE_TLS_KEY") or None,
+        serve_tls_san=os.environ.get("MEMORY_SERVE_TLS_SAN") or None,
         dream_idle_minutes=_env_int("MEMORY_DREAM_IDLE_MINUTES", 20),
         # Not `or None`: set-but-blank must reach the fence, which refuses it.
         grant=os.environ.get("MEMORY_GRANT"),

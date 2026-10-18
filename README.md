@@ -346,14 +346,25 @@ gingugu serve   # streamable HTTP on http://127.0.0.1:8765/mcp
 Every request needs a Bearer token. Set `MEMORY_SERVE_TOKEN` to pin one, or let
 the server generate and persist it to `<db-dir>/serve_token` (`0600`, reused
 after; the log shows the path, never the token). Set `MEMORY_SERVE_HOST=0.0.0.0` to accept remote
-connections, and put it behind HTTPS in production — a Bearer token over plain
-HTTP is sniffable. On a loopback bind the server also rejects any `Host` header
+connections. On a loopback bind the server also rejects any `Host` header
 other than localhost (DNS-rebinding protection); on a LAN bind the Bearer token
-is the gate. Point a client at it with:
+is the gate.
+
+**TLS is on by default for any non-loopback bind**, with nothing to set up. On
+first start the server generates a self-signed certificate for this machine's
+name (`<host>`, `<host>.local`, loopback) and keeps it in `<db-dir>/tls/` (key
+`0600`), reused after; the log shows its SHA-256 fingerprint. A loopback bind
+stays plain `http`, and local (stdio) mode never touches a certificate.
+`gingugu remote login` (below) pins that certificate for you over SSH. A client
+pointed at the URL directly will not trust a self-signed cert: give the server
+one it does trust (`MEMORY_SERVE_TLS_CERT` + `MEMORY_SERVE_TLS_KEY`, PEM), or
+opt out with `MEMORY_SERVE_TLS=off` on a network you trust. Extra names for the
+generated cert go in `MEMORY_SERVE_TLS_SAN`. With a cert the client trusts
+(or plain http), point a client at it directly with:
 
 ```json
 { "mcpServers": { "gingugu": {
-  "url": "http://<host>:8765/mcp",
+  "url": "https://<host>:8765/mcp",
   "headers": { "Authorization": "Bearer <token>" }
 } } }
 ```
@@ -398,14 +409,27 @@ machine:
 
 ```bash
 gingugu remote login http://brain.local:8765 --ssh me@brain.local   # token -> OS keychain
-gingugu remote on http://brain.local:8765    # this machine now uses that brain
+gingugu remote on https://brain.local:8765   # this machine now uses that brain
 gingugu remote status
 gingugu remote off                           # back to the local brain
 ```
 
 `login` uses `~/.ssh/gingugu_mint` by default (`--key` to change it) and ignores
 `~/.ssh/config`, so a default identity can never stand in for the restricted
-key. Local is the default: with no setting, nothing is remote. A single client
+key. Before it mints, `login` asks the same forced command for the brain's
+generated certificate (`cert`), pins it in `<user-data-dir>/remote-tls/`, and
+files the token under the `https` URL - the SSH channel you already trust is
+what vouches for the certificate. Before anything is rotated it also checks the
+live brain over `https` with that pin, so a certificate that is stale or does
+not name the host you dial stops the login with the fix spelled out, and the
+old token keeps working. From then on every remote client verifies the
+brain against that pin alone, and plain `http` to it is refused rather than
+sent. A machine already on that brain over `http` is moved to `https`. A brain
+with a certificate you brought is not pinned: give `login` its `https` URL
+(if a generated cert is still in `<db-dir>/tls/` from before, delete it on the
+brain). If the brain's certificate is regenerated, run `login` again.
+
+Local is the default: with no setting, nothing is remote. A single client
 can choose for itself with `MEMORY_REMOTE_URL` in its own environment (`off`
 forces local). A URL carrying a username or password is refused.
 
@@ -470,9 +494,9 @@ instead. A client fenced by `MEMORY_GRANT` has its hooks fenced the same way:
 the grant is applied on this machine before anything is sent (the routes trust
 the list they get), so set `MEMORY_GRANT` in the environment the hooks run in,
 not only in the MCP server's `env` block. A folder name the routes would refuse
-(say `My Repo`) is left out of the request. Every hook call carries the machine token, so on plain `http` it
-crosses the network unencrypted on every prompt - keep a plain-http brain on a
-network you trust.
+(say `My Repo`) is left out of the request. Every hook call carries the machine
+token and goes through the same pin as the proxy; on a brain served with
+`MEMORY_SERVE_TLS=off` it crosses the network unencrypted on every prompt.
 
 #### Personas
 
@@ -497,7 +521,8 @@ GINGUGU_SOURCE_TOKEN=<local-token> GINGUGU_TARGET_TOKEN=<central-token> \
                   --contributor brian --dry-run   # drop --dry-run to actually write
 ```
 
-The promoter is an MCP *client* (the server stays a pure store). It is
+The promoter is an MCP *client* (the server stays a pure store); a brain this
+machine has pinned with `gingugu remote login` is verified against that pin. It is
 read-only on the source, idempotent on re-runs, and applies an exclusion
 filter: only `verified` memories move, minus episodic session noise, minus
 personal-context tags, and it **refuses to promote anything that looks like a
@@ -989,6 +1014,9 @@ Environment variables (all optional):
 | `MEMORY_SERVE_HOST` | `127.0.0.1` | Bind host for `gingugu serve` (set `0.0.0.0` to accept remote connections) |
 | `MEMORY_SERVE_PORT` | `8765` | Bind port for `gingugu serve` |
 | `MEMORY_SERVE_TOKEN` | *(unset)* | The owner's Bearer token for `gingugu serve` (full access). If unset, a token is read from `<db-dir>/serve_token`, or generated and saved `0600` (its path is logged, never the token). Other clients get scoped tokens from `gingugu token add` |
+| `MEMORY_SERVE_TLS` | `auto` | TLS for `gingugu serve`. `auto`: https on any non-loopback bind with a self-signed cert generated in `<db-dir>/tls/`, plain http on loopback. `on`: https on loopback too. `off`: plain http everywhere. Anything else refuses to start |
+| `MEMORY_SERVE_TLS_CERT` / `MEMORY_SERVE_TLS_KEY` | *(unset)* | Your own PEM cert and key instead of the generated one (both or neither); turns TLS on. Never pinned by `gingugu remote login` |
+| `MEMORY_SERVE_TLS_SAN` | *(unset)* | Extra comma-separated names (DNS or IP) for the generated cert. Delete `<db-dir>/tls/` to regenerate it, then `gingugu remote login` again on each machine |
 | `MEMORY_DREAM_IDLE_MINUTES` | `20` | How long the brain must go untouched before `gingugu dream --if-idle` will run. Also the threshold that cancels a run in progress when you come back |
 | `MEMORY_LOG_LEVEL` | `INFO` | Logging verbosity (logs go to **stderr** — stdout is the MCP transport) |
 | `MEMORY_DEBUG` | `false` | Convenience switch for `DEBUG` logging (`MEMORY_LOG_LEVEL` wins if also set) |

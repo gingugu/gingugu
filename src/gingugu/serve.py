@@ -20,6 +20,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, Response
 
+from . import serve_tls
 from .config import load_config
 from .derived_tokens import DerivedTokens
 from .grants import FULL, Grant
@@ -49,6 +50,12 @@ environment variable, since the process is meant to run under a supervisor
   MEMORY_SERVE_TOKEN           The owner's Bearer token, full access
                                 (default: a token persisted next to the DB,
                                 generated on first run if none exists)
+  MEMORY_SERVE_TLS             auto (default): https on any non-loopback
+                                bind with a self-signed cert generated next
+                                to the DB, plain http on loopback; on; off
+  MEMORY_SERVE_TLS_CERT        Your own cert + key (PEM) instead of the
+  MEMORY_SERVE_TLS_KEY          generated one; turns TLS on
+  MEMORY_SERVE_TLS_SAN         Extra names for the generated cert, comma-separated
   MEMORY_LOG_LEVEL             Log verbosity (default: INFO)
   MEMORY_CREDENTIALS_ENABLED   Enable the credential_* tools (default: true)
 
@@ -182,17 +189,43 @@ def serve() -> None:
     token_path = config.db_path.parent / "serve_token"
     token = _resolve_token(config.serve_token, token_path)
 
+    tls = serve_tls.resolve(config)
     app = build_app(mcp, token, TokenStore(default_path()), DerivedTokens(), ctx=ctx)
 
     logger.info(
-        "gingugu serve -> http://%s:%d/mcp (credentials_enabled=%s)",
+        "gingugu serve -> %s://%s:%d/mcp (credentials_enabled=%s)",
+        "https" if tls else "http",
         config.serve_host,
         config.serve_port,
         config.credentials_enabled,
     )
+    _log_tls(config, tls)
     uvicorn.run(
         app,
         host=config.serve_host,
         port=config.serve_port,
         log_level=config.log_level.lower(),
+        ssl_certfile=str(tls.cert) if tls else None,
+        ssl_keyfile=str(tls.key) if tls else None,
+    )
+
+
+def _log_tls(config, tls: serve_tls.TlsFiles | None) -> None:
+    """Say what a client needs, so a refused handshake never leaves anyone guessing."""
+    if tls is None:
+        if not serve_tls.is_loopback(config.serve_host):
+            logger.warning(
+                "MEMORY_SERVE_TLS=off on a network bind: tokens cross the network unencrypted"
+            )
+        return
+    if not tls.generated:
+        logger.info("TLS with the configured cert %s", tls.cert)
+        return
+    logger.info(
+        "TLS with a self-signed cert %s (sha256 %s). `gingugu remote login` pins it for "
+        "you. A client that connects to this URL directly will not trust it: give the "
+        "server a cert that client trusts (MEMORY_SERVE_TLS_CERT + MEMORY_SERVE_TLS_KEY), "
+        "or serve plain http with MEMORY_SERVE_TLS=off",
+        tls.cert,
+        serve_tls.fingerprint(tls.cert.read_text(encoding="ascii")),
     )

@@ -114,11 +114,18 @@ def already_promoted_ids(target_memories: list[dict]) -> set[str]:
 @asynccontextmanager
 async def _session(url: str, token: str):
     """Open an authenticated MCP client session against a serve instance."""
+    import httpx
     from mcp import ClientSession
-    from mcp.client.streamable_http import streamablehttp_client
+    from mcp.client.streamable_http import streamable_http_client
 
-    headers = {"Authorization": f"Bearer {token}"}
-    async with streamablehttp_client(url, headers=headers) as (read, write, _sid):
+    from .remote_tls import verify_for
+
+    http = httpx.AsyncClient(
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=httpx.Timeout(30, read=300),
+        verify=verify_for(url),  # a pinned brain is verified against its pin alone
+    )
+    async with http, streamable_http_client(url, http_client=http) as (read, write, _sid):
         async with ClientSession(read, write) as session:
             await session.initialize()
             yield session

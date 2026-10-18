@@ -32,13 +32,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import anyio
-import httpx
 from anyio.abc import ObjectReceiveStream, ObjectSendStream
 from mcp.client.streamable_http import streamable_http_client
 from mcp.shared.message import SessionMessage
 from mcp.types import METHOD_NOT_FOUND, JSONRPCRequest
 
-from .proxy_auth import SessionAuth, SessionTokens
+from .proxy_auth import SessionTokens, brain_client
 from .proxy_preflight import ProxyRefused, preflight
 from .proxy_session import (
     CLIENT_GONE,
@@ -155,7 +154,7 @@ class _Session:
     async def connect_once(self) -> None:
         """One connection's lifetime. Returns only via cancellation; raises ``_Lost``."""
         _, expires_in = await self.tokens.current()
-        http = httpx.AsyncClient(auth=SessionAuth(self.tokens), timeout=httpx.Timeout(30, read=300))
+        http = brain_client(self.url, self.tokens)
         link: Link | None = None
         reason = "ConnectionLost"
         try:
