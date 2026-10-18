@@ -445,7 +445,9 @@ UserPromptSubmit event  →  .claude/hooks/user_prompt_recall.py (pure stdlib)
         user's own voice. Matching voice is the dominant false positive.
       → encode → cosine sweep over crow + <MEMORY_PERSONA, if set> + <cwd-derived project>
           (namespaces_for: crow, then persona, then the repo, deduped; a
-          malformed MEMORY_PERSONA is ignored)
+          malformed MEMORY_PERSONA is ignored; with MEMORY_GRANT set, any
+          name the grant cannot read is dropped, and a grant stdio_grant
+          rejects yields [] - the hook exits quiet before any lookup)
           EXCLUDED IN SQL: deprecated; pinned (already loaded unconditionally
           at session start, so injecting one pays twice); superseded (the
           store has already recorded it as replaced)

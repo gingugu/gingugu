@@ -183,6 +183,10 @@ def run(payload: dict) -> int:
     session_id = str(payload.get("session_id") or "unknown")
     hint = take(app.db_path, session_id, agent_type)
     spec = agent_grant(agent_type, _roots(payload))
+    if spec:
+        from .hook_grant import narrow_spec
+
+        spec = narrow_spec(spec)  # a fenced client warms no minion past its fence
     if not spec:
         return 0
     cwd = os.environ.get("CLAUDE_PROJECT_DIR") or payload.get("cwd") or os.getcwd()
