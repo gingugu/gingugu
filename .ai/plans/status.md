@@ -4,8 +4,14 @@ _Last updated: 2026-10-17_
 
 ## In Flight
 
-**Board #1, hook recall honours the client's grant (branch
-`fix/hook-recall-grant`, stacked on `docs/board-sync`).** `namespaces_for`
+Nothing open. Next up, in parallel: board #1 (a missing hook grant fails open)
+and board #2 (bookkeeping is not freshness), with a read-only impact survey for
+#3 (MCP SDK 2.x) alongside.
+
+## Recently Completed
+
+**Hook recall honours the client's grant: MERGED (#115, 2026-10-17), off the
+board.** `namespaces_for`
 applies `MEMORY_GRANT`: a name the grant cannot read is dropped before any
 lookup, so a client fenced to `tyrone=write,crow=read` no longer gets recall or
 tripwire rules from the namespace its working folder names (a repo, or
@@ -25,8 +31,8 @@ silencing crow and the persona; local mode keeps it
 (`~/.codex/hooks/tyrone_hook.py`, outside the repo) must pass `MEMORY_GRANT`,
 and Codex's tool names for tripwire matching are still unobserved.
 
-**Board #2, TLS on the brain (branch `feature/serve-tls`, stacked on
-`fix/hook-recall-grant`).** Secure by default off the box, zero-setup on it
+**TLS on the brain: MERGED (#116, merge `d9c0b69`, 2026-10-17), off the
+board.** Secure by default off the box, zero-setup on it
 (the owner's call, 2026-10-17: local must stay easy). Local (stdio) mode and a
 loopback `gingugu serve` are untouched. A serve on any other bind generates a
 self-signed EC leaf once in `<db-dir>/tls/` and serves https
@@ -49,11 +55,9 @@ what it prints. Tests first:
 `promote` reach a pinned brain, and a missing or impostor pin is refused by
 the token trade, the hooks, `remote status`, preflight and the login probe -
 the proxy's `/mcp` client only runs after the token trade has verified).
-`gingugu promote` verifies through the pin too. Full suite 1918 passed. Still to do: the live
-cutover on the Pi - upgrade, restart, `gingugu remote login` on each machine,
-and Tyrone's `MEMORY_REMOTE_URL` to `https://`.
-
-## Recently Completed
+`gingugu promote` verifies through the pin too. Full suite 1918 passed. Live
+test passed on the Pi with the branch wheel. Still to do: release it, then
+Tyrone's `MEMORY_REMOTE_URL` to `https://`.
 
 **One central brain (board #1 until 2026-10-17): DONE (2026-10-05; design approved 2026-10-02).**
 Every step below shipped (B1, C, B2, D0 in 0.21.0; D live on a second
@@ -1106,22 +1110,26 @@ them, and the SDK migration ahead of the standalone features. Later the same
 day the security review of #1 added "a missing hook grant fails open" as #3;
 the rows below it moved down one.
 
+**2026-10-17 (later):** hook grant (#115) and TLS (#116) merged and came off.
+Reordered: the fail-open hook grant stays first; bookkeeping-is-not-freshness
+moves to second (small, diagnosed, and it skews every session start); the SDK
+migration goes ahead of the shared board, since both the port and the fail-open
+fix sit on `proxy.py` and `server.py`. Rows 5 onward keep their order.
+
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **Hook recall honours the client's grant** - IN FLIGHT | - | Entered 2026-10-04. First: a live leak through a fenced client. ChatGPT desktop runs Codex hooks (same protocol as Claude Code: `UserPromptSubmit`, `hookSpecificOutput.additionalContext`), and a probe proved `gingugu hook prompt` injects into a plain ChatGPT chat. Two gaps before a scoped client keeps it: the prompt hook never reads `MEMORY_GRANT` and, in remote mode, calls the owner-only `/hook/recall` with the machine token, so a client fenced to `tyrone=write,crow=read` is shown any namespace its cwd names; and ChatGPT gives every chat its own working folder (`~/Documents/Codex/<date>/<slug>`), so the cwd basename adds a junk namespace. Also: tripwire input fields are keyed on Claude Code tool names; Codex's built-in names are still unobserved |
-| 2 | **TLS on the brain** - IN FLIGHT | - | Entered 2026-10-03. Second: the other open security finding on the live brain. Every remote-mode hook call carries the machine's owner token, so on plain `http` it crosses the LAN unencrypted on every prompt (the B2 security review's accepted finding). Built: uvicorn serves a self-signed cert generated on a LAN bind, pinned by `gingugu remote login` over SSH; http to a pinned brain is refused (see In Flight) |
-| 3 | **A missing hook grant fails open, silently** | - | Entered 2026-10-17 (security review of #1). The hook fence reads `MEMORY_GRANT` from the hook process's own environment; a client that sets it only in its MCP server's `env` block gets fenced MCP calls and unfenced hooks, and nothing says so. Needs a design: the hook learning the client's grant from the same place the MCP server does, or a loud refusal when a fenced proxy and an unfenced hook run as one client. Third: after the live leak (1) and the plaintext token (2) |
-| 4 | **A shared board between agents** | 15 | Unblocked: the central brain is done. After 1-3, so more agents join a brain that fences and encrypts properly |
-| 5 | **MCP SDK 2.x migration** | - | Ahead of new features: the pin ages every week. We pin `mcp<2` (lock 1.28.1); 2.x is a major (2.3.0 out 2026-10-02). The proxy sits on two transport APIs, and `tests/test_proxy*.py` is the safety net |
-| 6 | **Bookkeeping is not freshness** | - | Entered 2026-10-17. Small and fully diagnosed. `memory_update(resolve_claims=...)` leaves the prose and `last_confirmed` alone but still bumps `updated_at`, and the `memory_context` recency bucket orders by `updated_at` (#61). So reconciling a claim puts the old note into the next session start: an August "PR #49 open" note surfaced right after its claim was resolved. A claim-only write (and likely any tags-only or pin-only one) should not count as recency. Measured live; not yet built |
-| 7 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
-| 8 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
-| 9 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
-| 10 | **A referee for rival memory tools** | 17 | Only a fair comparison once 9 exists |
-| 11 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
-| 12 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
-| 13 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
-| 14 | Session flight recorder (low priority) | 18 | Check prior art first |
+| 1 | **A missing hook grant fails open, silently** | - | Entered 2026-10-17 (security review of #115). The hook fence reads `MEMORY_GRANT` from the hook process's own environment; a client that sets it only in its MCP server's `env` block gets fenced MCP calls and unfenced hooks, and nothing says so. Needs a design: the hook learning the client's grant from the same place the MCP server does, or a loud refusal when a fenced proxy and an unfenced hook run as one client. First: the last open security finding on the live brain |
+| 2 | **Bookkeeping is not freshness** | - | Entered 2026-10-17. Small and fully diagnosed. `memory_update(resolve_claims=...)` leaves the prose and `last_confirmed` alone but still bumps `updated_at`, and the `memory_context` recency bucket orders by `updated_at` (#61). So reconciling a claim puts the old note into the next session start: an August "PR #49 open" note surfaced right after its claim was resolved. A claim-only write (and likely any tags-only or pin-only one) should not count as recency. Measured live; not yet built. Second: it touches the write path only, so it builds alongside 1 |
+| 3 | **MCP SDK 2.x migration** | - | Ahead of new features: the pin ages every week. We pin `mcp<2` (lock 1.28.1); 2.x is a major (2.3.0 out 2026-10-02). The proxy sits on two transport APIs, and `tests/test_proxy*.py` is the safety net. The impact survey can run now; the port waits for 1, which edits the same files |
+| 4 | **A shared board between agents** | 15 | Unblocked: the central brain is done. After 1-3, so more agents join a brain that fences properly, on a current SDK |
+| 5 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
+| 6 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
+| 7 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
+| 8 | **A referee for rival memory tools** | 17 | Only a fair comparison once 7 exists |
+| 9 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
+| 10 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
+| 11 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
+| 12 | Session flight recorder (low priority) | 18 | Check prior art first |
 | - | **Template/sibling noise in retrieval - PARKED** | 1 | Ten dead fixes and no live hypothesis; see below |
 
 ### Previous board (2026-09-28), kept for its numbering
