@@ -379,7 +379,11 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.24.0** (PyPI, 2026-10-18). Minor: runs on the MCP
+- Current version: **0.25.0** (PyPI, 2026-10-19). Minor: destructive tools
+  ask the user through the client (MCP elicitation), incl. the proxy's local
+  vault (#125); an http URL on a TLS port is named as such, and
+  `fleet.py status` shows each machine's brain and reach (#124).
+- 0.24.0: Minor: runs on the MCP
   Python SDK 2.x (`MCPServer`) and `httpx2`, with `serve` taking 64 MiB
   requests (#122); release and fleet-upgrade scripts (#123).
 - 0.23.0: Minor: TLS on the brain
