@@ -4,7 +4,27 @@ _Last updated: 2026-10-18_
 
 ## In Flight
 
-**Board #1, MCP SDK 2.x: built on `feature/mcp-sdk-2`, in review.** `mcp>=2.3,<3`
+**Board #1 + #2, TLS diagnostics: built on `fix/tls-diagnostics`.**
+`remote_tls.speaks_tls` does an unverified handshake on an http URL's host and
+port (a ClientHello only, no request, no token); `diagnose` turns a completed
+handshake into "speaks TLS, run `gingugu remote login https://...`", carried by
+preflight's refusal and a new `hint:` line in `remote status`. The mint ssh
+argv moved to `remote_args.ssh_argv` to keep `remote.py` under 300.
+`scripts/fleet.py status` parses each machine's `remote status` into one line
+(URL, reachable, hint) and exits 1 on any unreachable machine. Live: the branch
+named the Pi's TLS over `http://beepboop.local:8765` and stayed quiet on a
+closed port; `fleet.py status` reported all three machines.
+
+**Board #3, confirmations: spiking.** Claude Code 2.1.289 negotiates
+2026-07-28 and declares `elicitation` (form + url); headless `-p` answers an
+elicitation with `cancel`, no prompt. Still open: the interactive dialog, and
+relay through the proxy.
+
+0.24.0 released 2026-10-18.
+
+## Recently Completed
+
+**MCP SDK 2.x: MERGED (#122), released in 0.24.0, off the board.** `mcp>=2.3,<3`
 (lock 2.3.0), `httpx` -> `httpx2` (`httpx` dropped from our deps). Every page of
 the 2.3.0 docs was read, not just the migration guide, and it found what the
 2026-10-17 survey missed:
@@ -37,18 +57,16 @@ calls, mixed-version rollout works. 1998 passed, 1 xfailed. Security review appl
 the vault refuses a non-object `arguments` (it could end the proxy), and
 `remote login`'s probe now uses httpx2's trust (the OS store) like the clients.
 
-**Release automation (stacked on the port).** `scripts/release.py X.Y.Z` runs
+**Release automation: MERGED (#123), released in 0.24.0.** `scripts/release.py X.Y.Z` runs
 preflight and every `release.yml` gate locally (tests, lint, UI build, a wheel
 that bundles the UI), then bumps, relocks, rolls the CHANGELOG, tags, pushes,
 watches `release.yml` and waits for PyPI's index; `--dry-run` stops before
 writing. `scripts/fleet.py upgrade X.Y.Z` upgrades every machine listed in
 `~/.config/gingugu/fleet.json` (outside the repo) over SSH, the Pi as its
 service user with a restart and health check. The `/releasing` skill drives
-both; the Release State bullet and commit body stay a person's call.
-
-0.23.0 released 2026-10-17.
-
-## Recently Completed
+both; the Release State bullet and commit body stay a person's call. First
+real run released 0.24.0 end to end, and `fleet.py` upgraded the Pi and
+dronesense-mbp.
 
 **A missing hook grant fails open: MERGED (#119, merge `7d9ddf0`), released in
 0.23.0, off the board.** Design approved 2026-10-17 (options 1 + 2):
@@ -1210,19 +1228,25 @@ two.
 build on SDK 2.x features (approved with the port); every row from the shared
 board down moved down one.
 
+**2026-10-18 (release):** the SDK 2.x migration (#122) shipped in 0.24.0 and
+came off. Two follow-ups from the dronesense-mbp outage (a machine left on
+http after the Pi went TLS-only) entered at the top: both are small, and both
+turn a silent outage into a named one.
+
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **MCP SDK 2.x migration** | - | Built, in review (see In Flight). Ahead of new features: 1.x is maintenance-only, and #2 builds on 2.x |
-| 2 | **Confirm destructive tools with the user, not the model** | - | SDK 2.x `Resolve` + `Elicit`: `memory_forget` hard delete, `credential_delete`, an overwriting `memory_import` ask the person, era-portable (a live elicitation on a legacy connection, a multi-round-trip on 2026-07-28). First check that Claude Code answers elicitation and that the proxy relays a server-to-client request; a client that cannot be asked must still get a safe answer |
-| 3 | **A shared board between agents** | 15 | Unblocked: the central brain is done. After 1, so more agents join a brain on a current SDK; 2.x subscriptions (`subscriptions/listen`) are a candidate transport, for 2026-era clients only |
-| 4 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
-| 5 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
-| 6 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
-| 7 | **A referee for rival memory tools** | 17 | Only a fair comparison once 6 exists |
-| 8 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
-| 9 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
-| 10 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
-| 11 | Session flight recorder (low priority) | 18 | Check prior art first |
+| 1 | **Proxy names the TLS mismatch** | - | Built, in review (see In Flight). An http URL on a port that completes a TLS handshake gets "speaks TLS, run `gingugu remote login https://...`" in preflight's refusal and `remote status`, instead of "unreachable". The dronesense-mbp outage cost a diagnosis over SSH that this message would have skipped |
+| 2 | **`fleet.py status` shows each machine's remote URL + reachability** | - | Built, in review (see In Flight). One command says which machine still points at a stale URL, before it becomes the next outage |
+| 3 | **Confirm destructive tools with the user, not the model** | - | SDK 2.x `Resolve` + `Elicit`: `memory_forget` hard delete, `credential_delete`, an overwriting `memory_import` ask the person, era-portable (a live elicitation on a legacy connection, a multi-round-trip on 2026-07-28). First check that Claude Code answers elicitation and that the proxy relays a server-to-client request; a client that cannot be asked must still get a safe answer |
+| 4 | **A shared board between agents** | 15 | Unblocked: the central brain is done, and every machine is on SDK 2.x (0.24.0); 2.x subscriptions (`subscriptions/listen`) are a candidate transport, for 2026-era clients only |
+| 5 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
+| 6 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
+| 7 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
+| 8 | **A referee for rival memory tools** | 17 | Only a fair comparison once 7 exists |
+| 9 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
+| 10 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
+| 11 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
+| 12 | Session flight recorder (low priority) | 18 | Check prior art first |
 | - | **Template/sibling noise in retrieval - PARKED** | 1 | Ten dead fixes and no live hypothesis; see below |
 
 ### Previous board (2026-09-28), kept for its numbering

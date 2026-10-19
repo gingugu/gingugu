@@ -411,8 +411,9 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   scoped client never gets the vault); no keychain token (points at
   `gingugu remote login`); brain unreachable (`/healthz`, retried for up to
   `REACH_BUDGET_S` = 15s with 0.5s -> 1s -> 2s backoff, no probe after the
-  deadline; refusal reads `unreachable after 15s: <url>`, or for an https
-  brain the TLS reason from `remote_tls.diagnose`). The retry exists
+  deadline; refusal reads `unreachable after 15s: <url>`, or the reason from
+  `remote_tls.diagnose`: for https the TLS failure, for http on a port that
+  speaks TLS the `gingugu remote login https://...` to run). The retry exists
   because an MCP client never retries a server that exits at startup, and a
   brain on WiFi can drop the first packet after idle; the budget stays inside
   Claude Code's 30s connect timeout. Plain http to a non-loopback host warns
@@ -531,7 +532,10 @@ proxy / derive / hooks / status ──https, verify = the pin alone──▶ ser
 - **A TLS failure says so.** `proxy_session.derive` turns a certificate failure
   into `ProxyLost` with `remote_tls.explain`'s fix rather than an endless
   "reconnecting" - except a clock failure (not yet valid, expired), which stays
-  transient and retried; preflight's unreachable refusal carries `diagnose`'s reason.
+  transient and retried; preflight's unreachable refusal and `remote status`'s `hint:` line carry
+  `diagnose`'s reason. An http URL on a TLS port is named too: `speaks_tls`
+  completes an unverified handshake (a ClientHello only, no request, no token)
+  and `diagnose` says to log in again over https.
   A corrupt pin raises (never default trust), and the forced command re-encodes
   the cert it prints, so nothing but certificate bytes leaves the brain.
 - **The pin is the only trust anchor** (`remote_tls.verify_for`:

@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A machine still set to `http://` for a brain that now serves TLS is told so
+  by name. Remote mode's startup refusal and `gingugu remote status` say the
+  brain speaks TLS and give the `gingugu remote login https://...` to run,
+  instead of "unreachable". The check is a TLS handshake on the same host and
+  port; it sends no request and no token.
+- `scripts/fleet.py status` shows which brain each machine talks to and
+  whether it can reach it, with the hint when it cannot, and exits 1 if any
+  machine is unreachable.
+
 ---
 
 ## [0.24.0] - 2026-10-18

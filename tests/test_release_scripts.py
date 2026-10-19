@@ -126,3 +126,120 @@ def test_duplicate_machine_names_are_refused(tmp_path):
 def test_a_missing_fleet_file_says_where_it_looked(tmp_path):
     with pytest.raises(fleet.FleetError, match="no fleet file"):
         fleet.load(tmp_path / "absent.json")
+
+
+# --- fleet status: each machine's remote URL and reachability ---------------------
+#
+# A machine left pointing at a stale URL (http after the brain went TLS-only)
+# was found only when its session failed to connect. `status` now shows what
+# each machine's `gingugu remote status` says, and fails when one cannot reach.
+
+_REMOTE_OK = "remote: https://brain.local:8765\nsource: machine\ntoken: present\nreachable: yes"
+_REMOTE_TLS = (
+    "remote: http://brain.local:8765\nsource: machine\ntoken: present\nreachable: no\n"
+    "hint: the brain at brain.local:8765 speaks TLS; run "
+    "`gingugu remote login https://brain.local:8765`"
+)
+
+
+def test_parse_remote_status_local():
+    assert fleet.parse_remote_status("local") == {"mode": "local"}
+
+
+def test_parse_remote_status_reachable():
+    assert fleet.parse_remote_status(_REMOTE_OK) == {
+        "mode": "remote",
+        "remote": "https://brain.local:8765",
+        "source": "machine",
+        "token": "present",
+        "reachable": "yes",
+    }
+
+
+def test_parse_remote_status_keeps_the_hint_whole():
+    # The hint carries a URL with its own colons; only the first ": " splits.
+    parsed = fleet.parse_remote_status(_REMOTE_TLS)
+    assert parsed["reachable"] == "no"
+    assert parsed["hint"].endswith("`gingugu remote login https://brain.local:8765`")
+
+
+@pytest.mark.parametrize("text", ["", "gingugu: command not found", "Usage: gingugu remote ..."])
+def test_parse_remote_status_of_anything_else_is_unknown(text):
+    # An older gingugu, a missing binary, or a failed ssh: never guessed at.
+    assert fleet.parse_remote_status(text) == {"mode": "unknown"}
+
+
+def test_remote_status_asks_the_install_user(tmp_path, monkeypatch):
+    (pi,) = fleet.load(_fleet_file(tmp_path, [{"name": "pi", "ssh": "me@pi", "run_as": "svc"}]))
+    sent = []
+
+    def fake_shell(machine, command, *, check=True):
+        sent.append((command, check))
+        return "local"
+
+    monkeypatch.setattr(fleet, "shell", fake_shell)
+    assert fleet.remote_status(pi) == {"mode": "local"}
+    ((command, check),) = sent
+    assert command == fleet.as_user(pi, "gingugu remote status")
+    assert check is False  # a failing machine is reported, not fatal
+
+
+def test_status_line_local():
+    assert fleet.status_line("pi", "0.24.0", {"mode": "local"}) == "pi: 0.24.0, local"
+
+
+def test_status_line_reachable():
+    line = fleet.status_line("mac", "0.24.0", fleet.parse_remote_status(_REMOTE_OK))
+    assert line == "mac: 0.24.0, remote https://brain.local:8765, reachable"
+
+
+def test_status_line_unreachable_carries_the_hint():
+    line = fleet.status_line("mac", "0.24.0", fleet.parse_remote_status(_REMOTE_TLS))
+    assert line.startswith("mac: 0.24.0, remote http://brain.local:8765, UNREACHABLE - ")
+    assert "speaks TLS" in line
+
+
+def test_status_line_unreachable_without_a_hint():
+    status = {"mode": "remote", "remote": "https://b:1", "reachable": "no"}
+    line = fleet.status_line("mac", "0.24.0", status)
+    assert line == "mac: 0.24.0, remote https://b:1, UNREACHABLE"
+
+
+def test_status_line_unknown():
+    line = fleet.status_line("old", "0.19.0", {"mode": "unknown"})
+    assert line == "old: 0.19.0, remote status unknown"
+
+
+def _status_run(tmp_path, monkeypatch, capsys, statuses: dict[str, str]) -> tuple[int, str]:
+    path = _fleet_file(tmp_path, [{"name": name} for name in statuses])
+    monkeypatch.setenv("GINGUGU_FLEET", str(path))
+    monkeypatch.setattr(fleet, "installed", lambda machine: "0.24.0")
+    monkeypatch.setattr(
+        fleet, "remote_status", lambda machine: fleet.parse_remote_status(statuses[machine.name])
+    )
+    code = fleet.main(["status"])
+    return code, capsys.readouterr().out
+
+
+def test_status_prints_one_line_per_machine_and_passes_when_all_reach(
+    tmp_path, monkeypatch, capsys
+):
+    code, out = _status_run(tmp_path, monkeypatch, capsys, {"pi": "local", "mac": _REMOTE_OK})
+    assert code == 0
+    assert out.splitlines() == [
+        "pi: 0.24.0, local",
+        "mac: 0.24.0, remote https://brain.local:8765, reachable",
+    ]
+
+
+def test_status_fails_when_any_machine_cannot_reach_its_brain(tmp_path, monkeypatch, capsys):
+    code, out = _status_run(tmp_path, monkeypatch, capsys, {"pi": "local", "mac": _REMOTE_TLS})
+    assert code == 1
+    assert len(out.splitlines()) == 2  # every machine is still reported
+    assert "UNREACHABLE" in out
+
+
+def test_status_does_not_fail_on_an_unknown_remote_status(tmp_path, monkeypatch, capsys):
+    # Unknown is reported, not treated as an outage: it may be an older gingugu.
+    code, _ = _status_run(tmp_path, monkeypatch, capsys, {"old": ""})
+    assert code == 0
