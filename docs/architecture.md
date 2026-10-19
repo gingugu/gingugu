@@ -1781,8 +1781,8 @@ src/gingugu/
 ├── proxy_vault.py          # Remote mode: the machine's credential vault, served locally
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine
-├── remote_args.py          # usage text + argparse for `gingugu remote`
-├── remote_tls.py           # Client TLS: pins, verify_for, downgrade refusal, login's live check
+├── remote_args.py          # usage text + argparse for `gingugu remote`, mint ssh argv
+├── remote_tls.py           # Client TLS: pins, verify_for, downgrade refusal, login's live check, diagnose/speaks_tls
 ├── grants.py               # Per-namespace read/write grants plus a home namespace (derived tokens), bound per tool call
 ├── webui.py                # gingugu ui: serves the built Memory Explorer bundle
 ├── promote.py              # gingugu promote: local "gold" -> a central brain

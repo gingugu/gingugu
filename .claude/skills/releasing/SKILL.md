@@ -47,7 +47,7 @@ It bumps, relocks, rolls the CHANGELOG, commits, tags, pushes, watches
 ### 4. Roll out
 
 ```bash
-uv run python scripts/fleet.py status
+uv run python scripts/fleet.py status        # version + brain URL + reach per machine; exit 1 if one cannot reach
 uv run python scripts/fleet.py upgrade X.Y.Z [names...]
 ```
 
