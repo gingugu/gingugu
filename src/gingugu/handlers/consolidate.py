@@ -16,7 +16,7 @@ from mcp.server.elicitation import ElicitationResult
 from mcp.server.mcpserver import Context
 from mcp.server.mcpserver.resolve import Resolve
 
-from .. import confirm, consolidation, duplicate_scan
+from .. import confirm, consolidation, duplicate_scan, grants
 from ..relations import RelationManager
 from . import ServerContext
 from .helpers import _err, _single_namespace_not_found
@@ -35,12 +35,19 @@ def register(mcp, ctx: ServerContext) -> None:
         ids = [m.strip() for m in (memory_ids or "").split(",") if m.strip()]
         if keep_originals or len(ids) < 2:
             return confirm.NOT_NEEDED
-        if confirm.fenced(ctx, "memory_consolidate") is None:
+        grant = confirm.fenced(ctx, "memory_consolidate")
+        if grant is None:
             return confirm.FENCED
+        with grants.bind(grant, ctx.conn):
+            found = [ctx.store.get(mid, record_access=False) for mid in ids]
+        if any(mem is None for mem in found):
+            return confirm.NOT_NEEDED  # the body answers "not found" before the answer
+        titles = ", ".join(confirm.shown(mem.title, 40) for mem in found[:3])
+        more = f" and {len(found) - 3} more" if len(found) > 3 else ""
         return confirm.ask(
             ctx_,
-            f"Consolidate {len(ids)} memories and permanently delete the originals "
-            f"({', '.join(ids)})? This cannot be undone.",
+            f"Consolidate {len(ids)} memories ({titles}{more}) and permanently delete "
+            "the originals? This cannot be undone.",
         )
 
     @mcp.tool()
@@ -101,6 +108,9 @@ def register(mcp, ctx: ServerContext) -> None:
             if strategy not in _VALID_STRATEGIES:
                 return _err(f"invalid strategy {strategy!r}; expected one of {_VALID_STRATEGIES}")
             if not keep_originals:
+                for mid in ids:  # before the answer: a missing id never costs a dialog
+                    if ctx.store.get(mid, record_access=False) is None:
+                        return _err(f"memory {mid!r} not found")
                 refused = confirm.refusal(answer, f"deleting {len(ids)} originals by consolidation")
                 if refused is not None:
                     return _err(refused)

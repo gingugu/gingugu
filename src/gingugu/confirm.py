@@ -24,6 +24,7 @@ putting a dialog in front of anyone.
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
 from mcp.server.elicitation import AcceptedElicitation, CancelledElicitation, DeclinedElicitation
@@ -39,6 +40,20 @@ NOT_NEEDED = "gingugu:confirm:not-needed"  # the call is not destructive
 OPTED_OUT = "gingugu:confirm:opted-out"  # MEMORY_CONFIRM_DESTRUCTIVE=off
 CANNOT_ASK = "gingugu:confirm:cannot-ask"  # the client has no form elicitation
 FENCED = "gingugu:confirm:fenced"  # the wrapper refuses before the tool runs
+
+
+# Control, zero-width and bidi-override characters: none may reach a dialog.
+_UNSHOWABLE = re.compile(r"[\x00-\x1f\x7f-\x9f\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]")
+
+
+def shown(text: Any, limit: int = 80) -> str:
+    """A model- or memory-supplied string as it may appear in a dialog: quoted,
+    on one line, with no control or bidi characters, and capped - so a steered
+    model cannot make "Permanently delete ..." read as something else."""
+    flat = " ".join(_UNSHOWABLE.sub(" ", str(text)).split()).replace('"', "'")
+    if len(flat) > limit:
+        flat = flat[: limit - 1] + "\u2026"
+    return f'"{flat}"'
 
 
 class Confirm(BaseModel):

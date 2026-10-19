@@ -40,7 +40,9 @@ def register(mcp, ctx: ServerContext) -> None:
             # never lets a delete through: it only spares the person a dialog.
             return confirm.NOT_NEEDED
         return confirm.ask(
-            ctx_, f'Permanently delete memory "{mem.title}" ({memory_id})? This cannot be undone.'
+            ctx_,
+            f"Permanently delete memory {confirm.shown(mem.title)} ({mem.id})? "
+            "This cannot be undone.",
         )
 
     @mcp.tool()

@@ -224,3 +224,86 @@ async def test_brain_and_vault_questions_open_at_once_each_get_their_own_answer(
     assert results["forget"]["ok"] is True  # accepted: the memory went
     assert results["delete"]["ok"] is False and "declined" in results["delete"]["error"]
     assert left == ["kraken-api"]
+
+
+# --- the vault link fails safe ---------------------------------------------------------
+
+
+def _link(local_db):
+    from gingugu.proxy_vault import LocalVault
+    from gingugu.proxy_vault_link import VaultLink
+
+    async def make():
+        vault = await LocalVault(local_db).load()
+        send, recv = anyio.create_memory_object_stream(16)
+        return VaultLink(vault, send), recv
+
+    return make
+
+
+async def test_a_guessed_vault_id_is_not_claimed(local_db):
+    """The rename carries a per-process nonce: a brain cannot name its own request
+    after a vault question and have the person's answer handed to the vault."""
+    from mcp.types import JSONRPCResponse
+
+    link, _ = await _link(local_db)()
+    link._asked[link._rename(1)] = 1
+    for guess in ("vault:1", 1, "1", "vault-1", f"{link._rename(1)}x"):
+        assert not link.claims(JSONRPCResponse(jsonrpc="2.0", id=guess, result={}))
+    assert link.claims(JSONRPCResponse(jsonrpc="2.0", id=link._rename(1), result={}))
+    other, _ = await _link(local_db)()
+    assert other._rename(1) != link._rename(1)  # never the same across processes
+
+
+async def test_a_vault_that_fails_its_handshake_answers_the_call_and_the_proxy_lives(
+    local_db, monkeypatch
+):
+    from mcp.types import JSONRPCError, JSONRPCRequest
+
+    from gingugu import proxy_vault_link
+    from gingugu.proxy_session import wrap
+
+    link, out = await _link(local_db)()
+
+    async def refuse(*a, **k):
+        raise ConnectionError("vault refused the initialize")
+
+    monkeypatch.setattr(proxy_vault_link, "replay_handshake", refuse)
+    params = {"name": "credential_list", "arguments": {}}
+    call = JSONRPCRequest(jsonrpc="2.0", id=9, method="tools/call", params=params)
+    async with anyio.create_task_group() as tg:
+        await tg.start(link.run)
+        await link.submit(wrap(call), {"protocolVersion": "2025-11-25", "capabilities": {}})
+        with anyio.fail_after(5):
+            reply = (await out.receive()).message
+        tg.cancel_scope.cancel()
+    assert isinstance(reply, JSONRPCError) and reply.id == 9
+    assert "vault" in reply.error.message
+
+
+async def test_a_vault_that_dies_mid_call_answers_what_it_held(local_db):
+    from mcp.types import JSONRPCError, JSONRPCRequest
+
+    from gingugu.proxy_session import wrap
+
+    link, out = await _link(local_db)()
+    async with anyio.create_task_group() as tg:
+        await tg.start(link.run)
+        link._ready = True  # skip the handshake: the call is "held" by a vault that dies
+        link._pending.add(5)
+        await link._lost()
+        with anyio.fail_after(5):
+            reply = (await out.receive()).message
+        call = JSONRPCRequest(
+            jsonrpc="2.0",
+            id=6,
+            method="tools/call",
+            params={"name": "credential_list", "arguments": {}},
+        )
+        await link.submit(wrap(call), {"protocolVersion": "2025-11-25", "capabilities": {}})
+        with anyio.fail_after(5):
+            after = (await out.receive()).message
+        tg.cancel_scope.cancel()
+    assert isinstance(reply, JSONRPCError) and reply.id == 5
+    assert isinstance(after, JSONRPCError) and after.id == 6
+    assert "unavailable" in after.error.message

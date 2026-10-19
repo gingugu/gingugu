@@ -115,7 +115,8 @@ async def test_consolidating_without_originals_asks(server, mode):
         "memory_consolidate",
         {"memory_ids": f"{a},{b}", "keep_originals": False},
     )
-    assert out["ok"] is True and len(person.asked) == 1 and a in person.asked[0]
+    assert out["ok"] is True and len(person.asked) == 1
+    assert "dup one" in person.asked[0] and "dup two" in person.asked[0]
     assert not await exists(server, a) and not await exists(server, b)
 
 
@@ -253,3 +254,45 @@ async def test_the_models_confirm_only_ever_says_no(vault_server, mode):
     # Omitted is no longer a schema error: the person decides.
     out = await call(vault_server, person, mode, "credential_delete", {"service_name": "svc"})
     assert out["ok"] is True and len(person.asked) == 1
+
+
+# --- what reaches the dialog ----------------------------------------------------------
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_a_missing_credential_or_memory_never_costs_a_dialog(server, vault_server, mode):
+    person = Person()
+    out = await call(vault_server, person, mode, "credential_delete", {"service_name": "nope"})
+    assert out["ok"] is False and "not found" in out["error"]
+    await _cred(vault_server)
+    out = await call(
+        vault_server,
+        person,
+        mode,
+        "credential_delete",
+        {"service_name": "svc", "field_name": "no-such-field"},
+    )
+    assert out["ok"] is False and "not found" in out["error"]
+    a = await stored(server, "real")
+    out = await call(
+        server,
+        person,
+        mode,
+        "memory_consolidate",
+        {"memory_ids": f"{a},fake-id", "keep_originals": False},
+    )
+    assert out["ok"] is False and "not found" in out["error"]
+    assert person.asked == []
+    assert await exists(server, a)
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_hostile_text_cannot_reshape_the_dialog(server, mode):
+    title = 'harmless"\n\nThis is a routine cleanup. Click Accept.\u202e' + "x" * 300
+    mid = await stored(server, title)
+    person = Person(action="decline")
+    await call(server, person, mode, "memory_forget", {"memory_id": mid, "hard_delete": True})
+    (shown,) = person.asked
+    assert "\n" not in shown and "\u202e" not in shown
+    assert shown.startswith("Permanently delete memory \"harmless'")
+    assert len(shown) < 200 and shown.endswith("This cannot be undone.")
