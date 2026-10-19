@@ -28,7 +28,7 @@ import keyring
 
 from . import remote_tls
 from .config import _default_db_path
-from .remote_args import USAGE, _UsageError, build_parser
+from .remote_args import USAGE, _UsageError, build_parser, ssh_argv
 
 KEYRING_SERVICE = "gingugu-remote"
 _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
@@ -183,7 +183,10 @@ def _status() -> int:
     except Exception as exc:  # noqa: BLE001 - any keyring backend failure
         token = None
         print(f"token: keychain error ({exc.__class__.__name__})")
-    print(f"reachable: {'yes' if _reachable(target.url, token) else 'no'}")
+    reachable = _reachable(target.url, token)
+    print(f"reachable: {'yes' if reachable else 'no'}")
+    if not reachable and (why := remote_tls.diagnose(target.url)):
+        print(f"hint: {why}")
     return 0
 
 
@@ -228,22 +231,7 @@ def _login(args: argparse.Namespace) -> int:
     if args.ssh.startswith("-"):
         return _usage_error(f"--ssh must be USER@HOST, not an option: {args.ssh!r}")
     key = args.key or str(Path.home() / ".ssh" / "gingugu_mint")
-    ssh = [
-        "ssh",
-        "-F",
-        "/dev/null",  # ignore ~/.ssh/config: a Host * IdentityFile would bypass the mint key
-        "-i",
-        key,
-        "-o",
-        "BatchMode=yes",
-        "-o",
-        "IdentitiesOnly=yes",
-        "-o",
-        "ConnectTimeout=10",
-        "-o",
-        "StrictHostKeyChecking=accept-new",  # a new machine's first login has no known_hosts entry
-        args.ssh,
-    ]
+    ssh = ssh_argv(key, args.ssh)
     # TLS is settled (cert fetched, live brain checked, pin written) before the mint.
     url, pinned = remote_tls.prepare_login(_run, ssh, url)
     try:
