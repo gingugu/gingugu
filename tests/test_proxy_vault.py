@@ -251,7 +251,7 @@ async def test_non_object_arguments_are_refused_not_fatal_to_the_proxy(local_db,
 
     vault = await LocalVault(local_db).load()
     try:
-        reply = await vault.call(3, {"name": "credential_get", "arguments": arguments})
+        reply = vault.screen(3, {"name": "credential_get", "arguments": arguments})
     finally:
         vault.close()
     result = reply.message.result

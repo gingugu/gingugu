@@ -136,10 +136,11 @@ async def serving(app, tls: tuple[str, str] | None = None):
 
 
 @contextlib.asynccontextmanager
-async def through_proxy(url: str, owner: str, **kwargs):
+async def through_proxy(url: str, owner: str, *, session_kwargs: dict | None = None, **kwargs):
     """A ClientSession whose transport is ``proxy.run``; yields (session, outcome).
 
     ``outcome`` records what ``proxy.run`` returned or raised once it ends.
+    ``session_kwargs`` go to the ClientSession (an ``elicitation_callback``, say).
     """
     c2p_send, c2p_recv = anyio.create_memory_object_stream(16)
     p2c_send, p2c_recv = anyio.create_memory_object_stream(16)
@@ -155,6 +156,6 @@ async def through_proxy(url: str, owner: str, **kwargs):
 
     async with anyio.create_task_group() as tg:
         tg.start_soon(_run)
-        async with ClientSession(p2c_recv, c2p_send) as session:
+        async with ClientSession(p2c_recv, c2p_send, **(session_kwargs or {})) as session:
             yield session, outcome
         await c2p_send.aclose()

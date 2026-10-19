@@ -3,13 +3,20 @@
 Split out of ``handlers/relations.py`` when the edge-repair tools landed there.
 Consolidation merges *memories*; the relations module now deals exclusively in
 *edges*, so the two no longer share a file.
+
+Consolidating with ``keep_originals=False`` hard-deletes the originals, so the
+user confirms it through the client, never the model (see ``confirm``). No
+``from __future__ import annotations``: ``Resolve(_ask)`` names a closure.
 """
 
-from __future__ import annotations
-
 import logging
+from typing import Annotated
 
-from .. import consolidation, duplicate_scan
+from mcp.server.elicitation import ElicitationResult
+from mcp.server.mcpserver import Context
+from mcp.server.mcpserver.resolve import Resolve
+
+from .. import confirm, consolidation, duplicate_scan, grants
 from ..relations import RelationManager
 from . import ServerContext
 from .helpers import _err, _single_namespace_not_found
@@ -22,6 +29,27 @@ _VALID_STRATEGIES = ("merge", "summarize", "deduplicate")
 def register(mcp, ctx: ServerContext) -> None:
     relations = RelationManager(ctx.conn)
 
+    async def _ask(
+        ctx_: Context, memory_ids: str | None = None, keep_originals: bool = True
+    ) -> object:
+        ids = [m.strip() for m in (memory_ids or "").split(",") if m.strip()]
+        if keep_originals or len(ids) < 2:
+            return confirm.NOT_NEEDED
+        grant = confirm.fenced(ctx, "memory_consolidate")
+        if grant is None:
+            return confirm.FENCED
+        with grants.bind(grant, ctx.conn):
+            found = [ctx.store.get(mid, record_access=False) for mid in ids]
+        if any(mem is None for mem in found):
+            return confirm.NOT_NEEDED  # the body answers "not found" before the answer
+        titles = ", ".join(confirm.shown(mem.title, 40) for mem in found[:3])
+        more = f" and {len(found) - 3} more" if len(found) > 3 else ""
+        return confirm.ask(
+            ctx_,
+            f"Consolidate {len(ids)} memories ({titles}{more}) and permanently delete "
+            "the originals? This cannot be undone.",
+        )
+
     @mcp.tool()
     def memory_consolidate(
         memory_ids: str | None = None,
@@ -29,6 +57,7 @@ def register(mcp, ctx: ServerContext) -> None:
         keep_originals: bool = True,
         namespace: str | None = None,
         min_similarity: float = duplicate_scan.SUGGEST_MIN_SIMILARITY,
+        answer: Annotated[ElicitationResult[confirm.Confirm], Resolve(_ask)] = None,
     ) -> dict:
         """Combine multiple memories into one to reduce redundancy and knowledge bloat.
         Use when several related memories about the same topic have accumulated over time.
@@ -39,7 +68,8 @@ def register(mcp, ctx: ServerContext) -> None:
         of: merge (concatenate all content into one memory), summarize (produce a
         condensed combined summary), deduplicate (keep the highest-confidence entry and
         deprecate the rest). ``keep_originals=True`` (default) preserves originals as
-        deprecated; set False to hard-delete them.
+        deprecated; set False to hard-delete them (the user confirms that through
+        the client).
 
         **Suggest mode:** omit ``memory_ids`` entirely for a read-only near-duplicate
         scan of ``namespace`` (or the resolved default). Returns candidate clusters
@@ -77,6 +107,13 @@ def register(mcp, ctx: ServerContext) -> None:
                 return _err("memory_ids must list at least 2 ids")
             if strategy not in _VALID_STRATEGIES:
                 return _err(f"invalid strategy {strategy!r}; expected one of {_VALID_STRATEGIES}")
+            if not keep_originals:
+                for mid in ids:  # before the answer: a missing id never costs a dialog
+                    if ctx.store.get(mid, record_access=False) is None:
+                        return _err(f"memory {mid!r} not found")
+                refused = confirm.refusal(answer, f"deleting {len(ids)} originals by consolidation")
+                if refused is not None:
+                    return _err(refused)
             result = consolidation.consolidate(
                 ctx.store,
                 relations,

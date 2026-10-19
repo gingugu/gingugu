@@ -9,7 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Destructive tools ask the user, not the model. A hard `memory_forget`, a
+  `memory_namespaces` delete that cascades to memories, `memory_consolidate`
+  with `keep_originals=False`, a `memory_import` with `on_conflict="replace"`
+  that would overwrite memories, and `credential_delete` each show the user a
+  confirmation through the client (MCP elicitation) and go ahead only when the
+  user accepts with the box ticked. Declining, cancelling, or a client that
+  cannot ask (a headless run, a client without elicitation) is a refusal. The
+  model cannot answer for the user: the answer is not a tool argument. Set
+  `MEMORY_CONFIRM_DESTRUCTIVE=off` on the server that runs the tool to skip the
+  confirmation for automation. In remote mode the brain asks for its tools and
+  the proxy asks for this machine's credential vault.
+
 ### Changed
+
+- `credential_delete`'s `confirm` argument is optional; the user's
+  confirmation decides, and `confirm=false` still refuses outright.
 
 - A machine still set to `http://` for a brain that now serves TLS is told so
   by name. Remote mode's startup refusal and `gingugu remote status` say the

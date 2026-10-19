@@ -44,6 +44,9 @@ async def test_write_grant_can_write_its_namespace(brain, monkeypatch):
         {"source_id": ids["A2"], "target_id": stored["memory"]["id"], "relation_type": "caused_by"},
     )
     await _ok(s, "memory_unrelate", {"source_id": ids["A1"], "target_id": ids["A2"]})
+    # In-process calls have no client to confirm a hard delete (test_confirm.py
+    # covers that); this test is about the grant, so opt out of the dialog.
+    monkeypatch.setenv("MEMORY_CONFIRM_DESTRUCTIVE", "off")
     await _ok(s, "memory_forget", {"memory_id": ids["A2"], "hard_delete": True})
 
 
