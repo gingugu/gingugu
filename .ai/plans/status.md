@@ -4,7 +4,23 @@ _Last updated: 2026-10-18_
 
 ## In Flight
 
-Nothing in flight. 0.24.0 released 2026-10-18.
+**Board #1 + #2, TLS diagnostics: built on `fix/tls-diagnostics`.**
+`remote_tls.speaks_tls` does an unverified handshake on an http URL's host and
+port (a ClientHello only, no request, no token); `diagnose` turns a completed
+handshake into "speaks TLS, run `gingugu remote login https://...`", carried by
+preflight's refusal and a new `hint:` line in `remote status`. The mint ssh
+argv moved to `remote_args.ssh_argv` to keep `remote.py` under 300.
+`scripts/fleet.py status` parses each machine's `remote status` into one line
+(URL, reachable, hint) and exits 1 on any unreachable machine. Live: the branch
+named the Pi's TLS over `http://beepboop.local:8765` and stayed quiet on a
+closed port; `fleet.py status` reported all three machines.
+
+**Board #3, confirmations: spiking.** Claude Code 2.1.289 negotiates
+2026-07-28 and declares `elicitation` (form + url); headless `-p` answers an
+elicitation with `cancel`, no prompt. Still open: the interactive dialog, and
+relay through the proxy.
+
+0.24.0 released 2026-10-18.
 
 ## Recently Completed
 
