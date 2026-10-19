@@ -1,10 +1,19 @@
-"""Credential vault tool handlers: store / get / list / delete."""
+"""Credential vault tool handlers: store / get / list / delete.
 
-from __future__ import annotations
+``credential_delete`` asks the user through the client, never the model (see
+``confirm``); its ``confirm`` argument is the model's and only ever says no. No
+``from __future__ import annotations``: ``Resolve(_ask_delete)`` names a closure.
+"""
 
 import json
 import logging
+from typing import Annotated
 
+from mcp.server.elicitation import ElicitationResult
+from mcp.server.mcpserver import Context
+from mcp.server.mcpserver.resolve import Resolve
+
+from .. import confirm as confirmation
 from ..credentials import CredentialVault
 from . import ServerContext
 from .helpers import _err
@@ -14,6 +23,20 @@ logger = logging.getLogger(__name__)
 
 def register(mcp, ctx: ServerContext) -> None:
     vault = CredentialVault(ctx.conn)
+
+    async def _ask_delete(
+        ctx_: Context, service_name: str, confirm: bool = True, field_name: str | None = None
+    ) -> object:
+        if confirm is not True:
+            return confirmation.NOT_NEEDED  # the body refuses before reading the answer
+        if confirmation.fenced(ctx, "credential_delete") is None:
+            return confirmation.FENCED
+        target = f'field "{field_name}" of "{service_name}"' if field_name else f'"{service_name}"'
+        return confirmation.ask(
+            ctx_,
+            f"Permanently delete credential {target} from this machine's keychain? "
+            "This cannot be undone.",
+        )
 
     def _write_into(service_name: str, field_list, into: str, reveal: bool) -> dict:
         if reveal:
@@ -117,19 +140,25 @@ def register(mcp, ctx: ServerContext) -> None:
     @mcp.tool()
     def credential_delete(
         service_name: str,
-        confirm: bool,
+        confirm: bool = True,
         field_name: str | None = None,
+        answer: Annotated[ElicitationResult[confirmation.Confirm], Resolve(_ask_delete)] = None,
     ) -> dict:
         """Permanently remove a credential service or a single field. Secret data is
         deleted from the OS keychain. This action is irreversible — there is no
         soft-delete for credentials. Use credential_list first to confirm what exists.
 
-        ``confirm`` must be set to True to execute (prevents accidental deletion).
+        The user confirms the deletion through the client; it is refused if they
+        decline or the client cannot ask. ``confirm=False`` refuses outright.
         ``field_name`` deletes only that field from the service; omit to delete the
         entire service and all its fields."""
         try:
             if not confirm:
                 return _err("confirm must be true to delete")
+            target = field_name or service_name
+            refused = confirmation.refusal(answer, f"deleting credential {target!r}")
+            if refused is not None:
+                return _err(refused)
             ok = vault.delete(service_name, field_name)
             if not ok:
                 target = field_name or service_name

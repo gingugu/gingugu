@@ -114,7 +114,7 @@ async def test_stdio_under_a_grant_is_fenced(tmp_path, monkeypatch):
     )
     assert ro["ok"] is False
     gone = await call(minion, "memory_forget", {"memory_id": ids["B1"], "hard_delete": True})
-    assert gone["ok"] is False
+    assert gone["ok"] is False and "not found" in gone["error"]  # the fence, not the dialog
 
     # Whole-brain tools are closed, as for a scoped token.
     export = await call(minion, "memory_export", {})
