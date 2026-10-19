@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 import re
+import socket
 import ssl
 import subprocess
 import tempfile
@@ -200,9 +201,37 @@ def probe(url: str, pem: str | None, *, timeout: float = 5) -> None:
         ) from None
 
 
+def speaks_tls(url: str, *, timeout: float = 2) -> bool:
+    """True when the port completes a TLS handshake; False on any failure."""
+    host, port = _host_port(url)
+    # No verification is safe here: the probe only proves the port speaks TLS and
+    # sends nothing but a ClientHello - no request, no token.
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        with socket.create_connection((host, port), timeout=timeout) as sock:
+            with ctx.wrap_socket(sock, server_hostname=host):
+                return True
+    except Exception:
+        return False
+
+
 def diagnose(url: str) -> str | None:
-    """Why an https brain cannot be reached with this machine's trust, or None."""
-    if urlparse(url).scheme != "https":
+    """Why a brain cannot be reached, or None.
+
+    https: this machine's trust fails. http: the port speaks TLS (the brain went TLS-only).
+    """
+    scheme = urlparse(url).scheme
+    if scheme == "http":
+        if not speaks_tls(url):
+            return None
+        host, port = _host_port(url)
+        return (
+            f"the brain at {host}:{port} speaks TLS, not plain http; "
+            f"run `gingugu remote login {https_of(url)} --ssh USER@HOST`"
+        )
+    if scheme != "https":
         return None
     try:
         probe(url, load_pin(url), timeout=2)  # after the 15s budget, inside 30s connect
