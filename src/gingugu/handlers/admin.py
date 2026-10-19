@@ -42,7 +42,8 @@ def _overwrites(conn, data) -> int:
     memories = data.get("memories") if isinstance(data, dict) else None
     if not isinstance(memories, list):
         return 0
-    ids = list({m["id"] for m in memories if isinstance(m, dict) and isinstance(m.get("id"), str)})
+    # Every id the import would DELETE by: SQLite matches by value, so no type filter.
+    ids = list({m["id"] for m in memories if isinstance(m, dict) and m.get("id") is not None})
     total = 0
     for i in range(0, len(ids), 500):
         chunk = ids[i : i + 500]
@@ -74,7 +75,8 @@ def register(mcp, ctx: ServerContext) -> None:
             return confirm.NOT_NEEDED
         return confirm.ask(
             ctx_,
-            f'Delete namespace "{name}" and all {count} memories in it? This cannot be undone.',
+            f"Delete namespace {confirm.shown(name)} and all {count} memories in it? "
+            "This cannot be undone.",
         )
 
     async def _ask_import(ctx_: Context, data: dict, on_conflict: str = "skip") -> object:

@@ -24,6 +24,13 @@ logger = logging.getLogger(__name__)
 def register(mcp, ctx: ServerContext) -> None:
     vault = CredentialVault(ctx.conn)
 
+    def _exists(service_name: str, field_name: str | None) -> bool:
+        """From the metadata alone: never touches the keychain."""
+        entry = next((e for e in vault.list(False) if e["service_name"] == service_name), None)
+        if entry is None or field_name is None:
+            return entry is not None
+        return field_name in entry["non_secret_fields"] or field_name in entry["secret_field_names"]
+
     async def _ask_delete(
         ctx_: Context, service_name: str, confirm: bool = True, field_name: str | None = None
     ) -> object:
@@ -31,7 +38,14 @@ def register(mcp, ctx: ServerContext) -> None:
             return confirmation.NOT_NEEDED  # the body refuses before reading the answer
         if confirmation.fenced(ctx, "credential_delete") is None:
             return confirmation.FENCED
-        target = f'field "{field_name}" of "{service_name}"' if field_name else f'"{service_name}"'
+        if not _exists(service_name, field_name):
+            return confirmation.NOT_NEEDED  # the body answers "not found" before the answer
+        shown = confirmation.shown
+        target = (
+            f"field {shown(field_name)} of {shown(service_name)}"
+            if field_name
+            else shown(service_name)
+        )
         return confirmation.ask(
             ctx_,
             f"Permanently delete credential {target} from this machine's keychain? "
@@ -156,6 +170,8 @@ def register(mcp, ctx: ServerContext) -> None:
             if not confirm:
                 return _err("confirm must be true to delete")
             target = field_name or service_name
+            if not _exists(service_name, field_name):
+                return _err(f"nothing deleted; {target!r} not found")
             refused = confirmation.refusal(answer, f"deleting credential {target!r}")
             if refused is not None:
                 return _err(refused)
