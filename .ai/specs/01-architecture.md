@@ -53,7 +53,9 @@ AI client (Claude Code / Cursor / Windsurf / …)
    Key Decisions), `minion_fence`, `subagent_hook` and `subagent_warmup` (see Warm minions),
    `recall_pick` (the recall pipeline the local hook and `/hook/recall` share),
    `hook_remote` + `hook_remote_flows` and `serve_hooks` (see Remote mode), `hook_grant`
-   (the client's `MEMORY_GRANT` as the hooks apply it), `client_grants` (each server
+   (the client's `MEMORY_GRANT` as the hooks apply it), `confirm` (the user's
+   confirmation for destructive tools; see Key Decisions), `proxy_vault_link`
+   (the local vault behind an in-memory MCP session; see Remote mode), `client_grants` (each server
    publishes its grant for its client's hooks; see Warm minions), `claude_trust`
    (whether Claude Code trusts a folder, for the untrusted-minion warning). `storage` owns the `memories` row only; the satellite tables
    it drags along have their own owners (`tags`, `access`, `embedding_sync`,
@@ -290,7 +292,9 @@ right default: a store call should be durable when it returns. `consolidation`
 is the exception - it is `1 + 2N` writes (create, then a `supersedes` edge and a
 retirement per original), and a partial application is worse than none. Under
 `keep_originals=False` the retirement is a hard delete, so a failure halfway
-through the loop destroys memories the surviving record never absorbed.
+through the loop destroys memories the surviving record never absorbed. That
+hard delete is also the one the user confirms through the client before it
+runs (see the Key Decisions entry on confirmations).
 
 `transactions.atomic()` takes components that share a connection, closes a gate
 on each so its internal `commit()` becomes a no-op, and wraps the block in one
@@ -364,6 +368,8 @@ Authorization: Bearer <token>
     (inbound.current(), set per message by inbound.middleware), fence.refusal
     closes whole-brain tools, then
     grants.bind(grant) scopes the call
+  (a confirmation resolver, `confirm.py`, runs BEFORE this wrapper, so it
+   checks the fence itself via `confirm.fenced` before asking the user)
   → handler → store chokepoints consult grants.current()
 ```
 
@@ -426,12 +432,19 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   `MCPServer` over that DB with `transport="stdio"` (so `into=` writes locally),
   bypassing `_HeartbeatMCP` (the grant is always full here and the local brain is
   not in use). `Link.pump` swaps the brain's `credential_*` entries in
-  `tools/list` for the local ones; `read_client` answers every `credential_*`
-  `tools/call` locally and never forwards it, so the vault answers while the
-  brain is down. `credential_get` with `reveal` is refused before the handler
-  runs (security review, 2026-10-04): everything else in the session is relayed,
-  so a steered model could otherwise put an inline secret into a brain-bound
-  call; `into` cannot. A vault that fails to open ends the proxy with a
+  `tools/list` for the local ones; `read_client` hands every `credential_*`
+  `tools/call` to `VaultLink.submit` and never forwards it, so the vault answers
+  while the brain is down. `LocalVault.screen` refuses `credential_get` with
+  `reveal` (and non-object `arguments`) before the vault sees the call (security
+  review, 2026-10-04): everything else in the session is relayed, so a steered
+  model could otherwise put an inline secret into a brain-bound call; `into`
+  cannot. The vault runs as an MCP server over in-memory streams
+  (`proxy_vault_link.VaultLink`), handshaken with the client's own `initialize`,
+  so it sees the client's capabilities and `credential_delete` can ask the user
+  through the client: the proxy's confirmation, with
+  `MEMORY_CONFIRM_DESTRUCTIVE=off` on the proxy as its opt-out. The brain's own
+  elicitations (hard forget, cascade delete, consolidate, import) relay through
+  the proxy unchanged. A vault that fails to open ends the proxy with a
   `ProxyLost` message. With credentials off, `credential_*` is stripped and
   refused. `memory_stats` is relayed, but its credential summary
   (`global.credentials` or `stats.credentials`) describes the brain's vault, so
@@ -636,6 +649,29 @@ A subagent gets its own fenced brain and arrives already knowing the task.
 ---
 
 ## Key Decisions
+- **Destructive tools ask the user, not the model (unreleased).** Five paths
+  confirm through MCP elicitation (SDK 2.x `Resolve` + `Elicit`): a hard
+  `memory_forget`, a cascading `memory_namespaces` delete of a non-empty
+  namespace, `memory_consolidate` with `keep_originals=False`, a
+  `memory_import` with `on_conflict="replace"` that would overwrite existing ids
+  (the dialog names the count), and `credential_delete`. The logic lives in
+  `confirm.py`. *The answer stays out of the input schema*: it is a resolved
+  parameter, so the model cannot supply it; a plain `confirm=true` argument was
+  the model's own say-so and protected nothing. `credential_delete`'s `confirm`
+  stays as an optional, model-side no (`confirm=false` refuses outright). *Refuse
+  when nobody can be asked*: decline, cancel (what a headless client answers),
+  and a client without elicitation each return a structured `ok: false`; an
+  unrecognised answer refuses too. *The env opt-out sits on the server that
+  executes the tool*: `MEMORY_CONFIRM_DESTRUCTIVE=off` (also `false`/`0`/`no`)
+  is read straight from the environment, so in remote mode it is the brain for
+  memory tools and the local proxy for the vault. *Resolvers run before the
+  wrapper*, so they check the fence themselves and are `async`; each body
+  re-derives whether the call is destructive and checks existence first, so a
+  hidden or out-of-grant id reads "not found" with no dialog. *The proxy's
+  vault gets a real MCP session* (`VaultLink`): a direct `call_tool` carries no
+  client capabilities and no way back to the client, and the answer arrives on
+  the same reader that submitted the call, so `submit` never awaits it and the
+  vault's requests go out as `vault:<id>`.
 - **MCP SDK 2.x, with 1.x's runtime shape kept on purpose (2026-10-18).**
   Three things in the 2.x port are decisions, not renames. *Tools stay on the
   event loop*: 2.x runs a plain `def` tool on a worker thread, and every

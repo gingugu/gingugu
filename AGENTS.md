@@ -157,12 +157,15 @@ src/gingugu/
   hygiene_stats.py   → memory_stats' hygiene block (ghost namespaces, duplicate titles)
   namespaces.py      → namespace CRUD
   credentials.py     → OS-keychain credential vault
+  confirm.py         → destructive tools ask the user (MCP elicitation), not the model
   portability.py     → export / import a namespace
   handlers/          → MCP tool handlers: memory.py, forget.py, hints.py,
                        recall.py, search.py, stats.py, scope.py, excerpt.py,
                        context_merge.py, relations.py, relation_ops.py,
                        consolidate.py, dream.py, admin.py, credentials.py,
                        tripwires.py, helpers.py
+                       (forget, consolidate, admin and credentials ask the user
+                       to confirm destructive calls; see confirm.py)
 ui/                  → Memory Explorer (api.py backend + React/Vite frontend)
 docs/                → architecture.md (mermaids = source of truth), roadmap.md, future-architecture.md
 tests/               → pytest suites (unit + integration MCP flows)
