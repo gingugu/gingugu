@@ -1235,8 +1235,8 @@ turn a silent outage into a named one.
 
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **Proxy names the TLS mismatch** | - | When `http://` gets an empty reply but `https://` on the same host and port answers, say "brain speaks TLS - run `gingugu remote login https://...`" instead of "unreachable". The dronesense-mbp outage cost a diagnosis over SSH that this message would have skipped |
-| 2 | **`fleet.py status` shows each machine's remote URL + reachability** | - | One command says which machine still points at a stale URL, before it becomes the next outage |
+| 1 | **Proxy names the TLS mismatch** | - | Built, in review (see In Flight). An http URL on a port that completes a TLS handshake gets "speaks TLS, run `gingugu remote login https://...`" in preflight's refusal and `remote status`, instead of "unreachable". The dronesense-mbp outage cost a diagnosis over SSH that this message would have skipped |
+| 2 | **`fleet.py status` shows each machine's remote URL + reachability** | - | Built, in review (see In Flight). One command says which machine still points at a stale URL, before it becomes the next outage |
 | 3 | **Confirm destructive tools with the user, not the model** | - | SDK 2.x `Resolve` + `Elicit`: `memory_forget` hard delete, `credential_delete`, an overwriting `memory_import` ask the person, era-portable (a live elicitation on a legacy connection, a multi-round-trip on 2026-07-28). First check that Claude Code answers elicitation and that the proxy relays a server-to-client request; a client that cannot be asked must still get a safe answer |
 | 4 | **A shared board between agents** | 15 | Unblocked: the central brain is done, and every machine is on SDK 2.x (0.24.0); 2.x subscriptions (`subscriptions/listen`) are a candidate transport, for 2026-era clients only |
 | 5 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
