@@ -123,7 +123,7 @@ forget, say) is asked on the client exactly as locally: the brain's elicitation
 relays through the proxy unchanged and the user's answer relays back. The
 proxy's own `credential_delete` is asked by the local vault's in-memory MCP
 session (`proxy_vault_link.VaultLink`), whose requests go to the client as
-`vault:<id>` so they never collide with the brain's.
+`vault-<nonce>:<id>` (a per-process nonce) so they never collide with the brain's.
 
 ## Reconcile
 

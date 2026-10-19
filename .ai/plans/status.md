@@ -12,7 +12,7 @@ preflight's refusal and a new `hint:` line in `remote status`. The mint ssh
 argv moved to `remote_args.ssh_argv` to keep `remote.py` under 300.
 `scripts/fleet.py status` parses each machine's `remote status` into one line
 (URL, reachable, hint) and exits 1 on any unreachable machine. Live: the branch
-named the Pi's TLS over `http://beepboop.local:8765` and stayed quiet on a
+named a TLS-only brain's mismatch over `http://` and stayed quiet on a
 closed port; `fleet.py status` reported all three machines.
 
 **Board #3, confirmations: built on `feature/confirm-destructive` (stacked on
@@ -27,7 +27,7 @@ re-derives whether the call is destructive and checks existence first (a wrong
 sentinel still refuses; a hidden id reads as not found, no dialog). Remote mode:
 the brain's question relays through the proxy unchanged; the proxy's vault now
 runs behind an in-memory MCP session (`proxy_vault_link.VaultLink`) with its
-request ids renamed `vault:<id>`, since brain and vault both number their first
+request ids renamed `vault-<nonce>:<id>` (a per-process nonce), since brain and vault both number their first
 request 1. Spike (Claude Code 2.1.289): the CLI shows the dialog (accept /
 decline / Esc = cancel; an unticked required box cannot be submitted); headless
 `-p` cancels. Mutation-proven: always-allow fails 53 tests, no id rename fails
@@ -78,8 +78,8 @@ writing. `scripts/fleet.py upgrade X.Y.Z` upgrades every machine listed in
 `~/.config/gingugu/fleet.json` (outside the repo) over SSH, the Pi as its
 service user with a restart and health check. The `/releasing` skill drives
 both; the Release State bullet and commit body stay a person's call. First
-real run released 0.24.0 end to end, and `fleet.py` upgraded the Pi and
-dronesense-mbp.
+real run released 0.24.0 end to end, and `fleet.py` upgraded every other
+machine.
 
 **A missing hook grant fails open: MERGED (#119, merge `7d9ddf0`), released in
 0.23.0, off the board.** Design approved 2026-10-17 (options 1 + 2):
@@ -1242,13 +1242,13 @@ build on SDK 2.x features (approved with the port); every row from the shared
 board down moved down one.
 
 **2026-10-18 (release):** the SDK 2.x migration (#122) shipped in 0.24.0 and
-came off. Two follow-ups from the dronesense-mbp outage (a machine left on
+came off. Two follow-ups from an outage (a machine left on
 http after the Pi went TLS-only) entered at the top: both are small, and both
 turn a silent outage into a named one.
 
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **Proxy names the TLS mismatch** | - | Built, in review (see In Flight). An http URL on a port that completes a TLS handshake gets "speaks TLS, run `gingugu remote login https://...`" in preflight's refusal and `remote status`, instead of "unreachable". The dronesense-mbp outage cost a diagnosis over SSH that this message would have skipped |
+| 1 | **Proxy names the TLS mismatch** | - | Built, in review (see In Flight). An http URL on a port that completes a TLS handshake gets "speaks TLS, run `gingugu remote login https://...`" in preflight's refusal and `remote status`, instead of "unreachable". That outage cost a diagnosis over SSH that this message would have skipped |
 | 2 | **`fleet.py status` shows each machine's remote URL + reachability** | - | Built, in review (see In Flight). One command says which machine still points at a stale URL, before it becomes the next outage |
 | 3 | **Confirm destructive tools with the user, not the model** | - | Built, in review (see In Flight). Five paths, not the three first listed: a cascading namespace delete and consolidation without originals delete memories too. Works on both protocol eras and through the proxy, vault included |
 | 4 | **A shared board between agents** | 15 | Unblocked: the central brain is done, and every machine is on SDK 2.x (0.24.0); 2.x subscriptions (`subscriptions/listen`) are a candidate transport, for 2026-era clients only |
