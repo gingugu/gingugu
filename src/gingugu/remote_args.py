@@ -44,3 +44,23 @@ def build_parser() -> argparse.ArgumentParser:
     login.add_argument("--name")
     login.add_argument("--key")
     return parser
+
+
+def ssh_argv(key: str, dest: str) -> list[str]:
+    """ssh to the brain's forced command with the mint key and nothing else."""
+    return [
+        "ssh",
+        "-F",
+        "/dev/null",  # ignore ~/.ssh/config: a Host * IdentityFile would bypass the mint key
+        "-i",
+        key,
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "IdentitiesOnly=yes",
+        "-o",
+        "ConnectTimeout=10",
+        "-o",
+        "StrictHostKeyChecking=accept-new",  # a new machine's first login has no known_hosts entry
+        dest,
+    ]
