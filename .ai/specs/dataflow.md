@@ -118,7 +118,12 @@ token (in memory, SHA-256 only, TTL <= 1h) and sends only that on `/mcp`;
 a `home` namespace (its `MEMORY_NAMESPACE`). A call that names no namespace
 defaults to that home rather than the server's configured namespace (read by
 `NamespaceManager.resolve_name` and `handlers/scope.read_scope`), and a derived
-grant never reaches `credential_*`.
+grant never reaches `credential_*`. A destructive call over the proxy (a hard
+forget, say) is asked on the client exactly as locally: the brain's elicitation
+relays through the proxy unchanged and the user's answer relays back. The
+proxy's own `credential_delete` is asked by the local vault's in-memory MCP
+session (`proxy_vault_link.VaultLink`), whose requests go to the client as
+`vault:<id>` so they never collide with the brain's.
 
 ## Reconcile
 
@@ -789,11 +794,13 @@ without a person passing through the accept step first.
   Also declares `provenance` and `about` (`""` clears either); changing `about`
   does re-embed, since it is part of the text the vector is built from.
   Neither advances `last_confirmed`.
-- `memory_forget` — the ONLY removal path (deprecate or hard-delete). Nothing is
-  auto-forgotten. A hard delete cascades to the memory's `tripwires` rows.
+- `memory_forget` — deprecate, or hard-delete. Nothing is auto-forgotten. A hard
+  delete asks the user first (see Destructive confirmations below) and cascades
+  to the memory's `tripwires` rows.
 - `memory_consolidate` - merge / summarize / deduplicate a cluster; without
   `memory_ids`, a read-only suggest scan surfaces near-dupe clusters
   (pairwise embedding cosine, title-only fallback) to feed back in.
+  `keep_originals=False` hard-deletes the originals and asks the user first.
 - `memory_export` / `memory_import` — back up or transfer a namespace (export
   before any large destructive op). `memory_import` embeds what it writes and
   reports `embeddings_written`; without that, restored memories were reachable
@@ -802,8 +809,31 @@ without a person passing through the accept step first.
   are model-specific, so a 384-dim export restored on a 768-dim host would be
   discarded anyway, and they are derived from the text sitting beside them.
   Encoding happens **after** the commit, so a failing model costs the vectors,
-  never the restore.
+  never the restore. `on_conflict="replace"` that would overwrite existing ids
+  asks the user first, naming how many.
+- `memory_namespaces` `delete` with `cascade=True` on a non-empty namespace asks
+  the user first, naming how many memories go with it.
 - `decay.py` — recomputes dormancy as a resting signal; never mutates confidence.
+
+### Destructive confirmations
+
+```
+memory_forget(hard_delete=True) / memory_namespaces(delete, cascade=True) /
+memory_consolidate(keep_originals=False) / memory_import(on_conflict="replace") /
+credential_delete
+  → resolver (confirm.py; runs BEFORE the tool wrapper, so it checks the fence
+    itself): not destructive, or nothing to lose (id absent or out of grant,
+    namespace empty, no id overwritten) → no dialog
+  → MEMORY_CONFIRM_DESTRUCTIVE=off on this server → no dialog, proceed
+  → client declared no elicitation → refuse
+  → else Elicit(Confirm): the client shows the user a dialog
+  → body: confirm.refusal(answer) → proceed only on accept with confirm=true;
+    decline, cancel (a headless client) and confirm=false are `ok: false`
+```
+
+The answer is a hidden parameter, not in the tool's input schema, so the model
+cannot supply it. Each body re-derives whether the call is destructive and checks
+existence before it reads the answer, so a hidden id reads "not found".
 
 ## Storage / migrations
 
@@ -858,6 +888,8 @@ backfill for DBs stamped v5 by a build whose 005 did not have one.
 
 ```
 credential_store / credential_list / credential_delete
+  (credential_delete: asks the user; `confirm` is optional, default true, and
+   confirm=false refuses outright; on the remote proxy the local vault asks)
   → credentials.py reads/writes secret values in the OS keychain
   → only non-secret metadata is listed; secret values never touch the DB or logs
 

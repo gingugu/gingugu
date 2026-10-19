@@ -454,7 +454,9 @@ the local database's vault tables, so they keep working - `into` included - and
 a credential call never reaches the brain, even while it is down. `reveal` is
 refused there: every other tool is relayed, so an inline secret could be carried
 off the machine, while `into` keeps it in a local 0600 file. Set
-`MEMORY_CREDENTIALS_ENABLED=false` and they are hidden and refused.
+`MEMORY_CREDENTIALS_ENABLED=false` and they are hidden and refused. A
+`credential_delete` still asks you to confirm: the proxy's local vault shows the
+dialog through your client, just as the brain does for its own destructive tools.
 
 Plain `http` to a non-loopback host starts with a warning. The proxy sends the
 machine token only to `POST /token/derive` (owner tokens only; scoped tokens get
@@ -1009,6 +1011,7 @@ Environment variables (all optional):
 | `MEMORY_W_ACCESS` | `0.10` | Composite-score weight for access frequency |
 | `MEMORY_W_CONFIDENCE` | `0.35` | Composite-score weight for confidence (trust — the dominant standalone signal) |
 | `MEMORY_CREDENTIALS_ENABLED` | `true` | Expose the `credential_*` vault tools. Set `false` to run an instance without a secret vault (e.g. a shared/central server) |
+| `MEMORY_CONFIRM_DESTRUCTIVE` | *(unset: confirmations on)* | Destructive tools (hard `memory_forget`, cascading namespace delete, `memory_consolidate` with `keep_originals=false`, overwriting `memory_import`, `credential_delete`) ask *you* to confirm through the client. `off` (also `false`, `0`, `no`) skips the dialog, for automation. Applies to the server that executes the tool: with a remote brain, set it on the brain for memory tools and on the local proxy for the credential vault |
 | `MEMORY_GRANT` | *(unset)* | Fence a stdio server like a scoped token: `ns=read\|write,...` (e.g. `my-project=read,minions=write`). Unset is full access. A bad spec, an empty value, or `*=write` refuses to start. Used by a subagent's own `brain` server in its agent file. The client's hooks follow it too, whether it is set in the MCP server's `env` block (the server publishes it) or in the hooks' own environment: recall, tripwires and minion warm-up stay inside it, and an unusable value or a disagreement keeps them quiet |
 | `MEMORY_PERSONA` | *(unset)* | This agent's own namespace (e.g. `research`). Recall, tripwires and the SessionStart contract load `crow`, then the persona, then the repo (recall and tripwires narrowed by `MEMORY_GRANT` when set). A malformed value is ignored |
 | `MEMORY_REMOTE_URL` | *(unset)* | Use this remote brain for this client only (`off` forces local). A bare `gingugu` then relays to it; the credential vault stays local |
@@ -1053,20 +1056,20 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_relate` | Create relationships between memories; one at a time or a batch (`edges`), all-or-nothing, idempotent |
 | `memory_edges` | List edges with both endpoints' titles, namespaces, and degree; filter by namespace, type, or memory |
 | `memory_unrelate` | Retype an edge in place, reverse a backwards one, or remove it; one at a time or a batch, with `dry_run` |
-| `memory_consolidate` | Merge/summarize/deduplicate; call without ids for a read-only near-dupe scan |
+| `memory_consolidate` | Merge/summarize/deduplicate; call without ids for a read-only near-dupe scan. `keep_originals=false` deletes the originals, so you confirm it |
 | `memory_dream` | Run the deterministic consolidation pass, read its proposal queue, and accept or reject a finding. PageRank, community detection and orphan reconnection over the relation graph - staged for you to decide, never written |
 | `memory_tripwire` | Bind a memory to a tool call so it stops that call once, before it runs: `add` (a tool-name regex + an input regex), `list`, `remove`, and `test` (a dry run that never denies) |
-| `memory_forget` | Deprecate or remove a memory |
-| `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo) |
+| `memory_forget` | Deprecate or remove a memory (a hard delete asks you to confirm) |
+| `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo). Deleting a non-empty namespace asks you to confirm |
 | `memory_export` | Export memories + tags + relations to portable JSON |
-| `memory_import` | Restore a JSON export (skip or replace on conflict) |
+| `memory_import` | Restore a JSON export (skip or replace on conflict; a replace that overwrites memories asks you to confirm) |
 | `memory_stats` | Health overview (dormancy, counts, coverage, review sweep, the `claims` backlog, a relation-graph block whose `orphan_sample` names the memories no edge reaches - `review_limit` raises every sample's cap, a `size` block reporting the character cost of the store and of the always-loaded pinned tier, and `query_log_rows`, the count of recorded queries); a comma-separated `namespace` list returns the global block once plus each namespace's own stats |
 | `memory_search` | Advanced filtered search (type, tags, confidence, dates; one or many namespaces; optional compact mode; fetch by exact `ids`; `claims` to work the reconciliation backlog or read refs the prose never resolved, `orphans` to work the graph backlog, `pinned` to enumerate the always-present tier; `explain` for a per-hit score breakdown) |
 | `memory_excerpt` | Read inside ONE memory: find literal matches with their character offsets, line numbers and surrounding context, and/or slice an exact character range |
 | `credential_store` | Store/update a service credential bundle |
 | `credential_get` | Retrieve a credential bundle - secrets redacted; `into` writes one to a 0600 file, `reveal` shows it inline |
 | `credential_list` | List services + expiry status (no secrets shown) |
-| `credential_delete` | Remove a service or specific credential field |
+| `credential_delete` | Remove a service or specific credential field (asks you to confirm) |
 
 ---
 
