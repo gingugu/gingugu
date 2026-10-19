@@ -18,7 +18,6 @@ import json
 from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
-from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
 from mcp.types import CallToolResult, JSONRPCResponse, TextContent
 
 from .credentials import CredentialVault
@@ -47,8 +46,16 @@ class LocalVault:
         self.tools = [t.model_dump(mode="json", by_alias=True, exclude_none=True) for t in tools]
         return self
 
-    async def call(self, req_id: str | int, params: dict):
-        """Answer one ``tools/call`` as a JSON-RPC response for the client."""
+    @property
+    def server(self):
+        """The low-level server ``proxy_vault_link`` runs over in-memory streams.
+
+        Private in the SDK, which reaches it the same way for its own in-memory
+        transport (``mcp.client._memory``)."""
+        return self._mcp._lowlevel_server
+
+    def screen(self, req_id: str | int, params: dict):
+        """A refusal for a ``tools/call`` that must never reach the vault, or None."""
         name = str(params.get("name", ""))
         args = params.get("arguments") or {}
         if not isinstance(args, dict):
@@ -58,16 +65,7 @@ class LocalVault:
             # Every other tool here is relayed to the brain, so a steered model
             # could carry an inline secret off this machine. `into` cannot.
             return _reply(req_id, _refused(_NO_REVEAL))
-        try:
-            result = await self._mcp.call_tool(name, args)
-        except UnexpectedToolError as exc:  # a crash: name its type, never its text
-            cause = exc.__cause__ or exc
-            result = _failed(f"{name} failed: {type(cause).__name__}")
-        except ToolError as exc:
-            result = _failed(str(exc))
-        except Exception as exc:  # noqa: BLE001 - the proxy must never crash on a tool
-            result = _failed(f"{name} failed: {type(exc).__name__}")
-        return _reply(req_id, result)
+        return None
 
     def health(self) -> dict:
         """The vault summary ``memory_stats`` reports; metadata only, no keychain."""

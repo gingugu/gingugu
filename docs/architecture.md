@@ -24,6 +24,9 @@ The Claude Code hooks follow the same switch: with a remote brain on, prompt
 recall, tripwires and minion warm-up stop reading the local DB and ask the brain
 over owner-token-only `POST /hook/*` routes, keeping per-session suppression on
 the machine (see **Hooks in remote mode** in `.ai/specs/dataflow.md`).
+The proxy also serves this machine's credential vault locally, so a
+`credential_delete` is confirmed with the user by the proxy, while the
+brain's own confirmations (a hard forget, say) relay through it unchanged.
 
 ---
 
@@ -85,6 +88,7 @@ graph LR
     A <-->|stdio, remote brain selected| X
     X -->|owner token, once| V
     X <-->|MCP over HTTP, derived token| B
+    X -->|credential_* on this machine,<br/>in-memory MCP session| K
     B --> C
     C --> D
     C --> E
@@ -92,6 +96,7 @@ graph LR
     C --> G
     C --> L
     C --> K
+    C -.->|confirmation dialog:<br/>destructive calls| A
     D --> H
     D --> I
     E --> H
@@ -1237,7 +1242,9 @@ without `memory_ids`, discover which memories are worth consolidating.
   **Omit entirely for suggest mode** (an empty string is still an error, so a
   caller that built its id list from an empty collection fails loudly).
 - `strategy` (optional) — merge|summarize|deduplicate (default: merge)
-- `keep_originals` (optional) — retain originals as deprecated (default: true)
+- `keep_originals` (optional) — retain originals as deprecated (default: true).
+  `false` hard-deletes the originals, and the user confirms that through the
+  client (see `MEMORY_CONFIRM_DESTRUCTIVE`).
 - `namespace` (optional, suggest mode) - namespace to scan; resolved from
   config when omitted. Unknown namespaces are an error (reads never create).
 - `min_similarity` (optional, suggest mode) - pairwise similarity threshold in
@@ -1265,7 +1272,9 @@ Deprecate or permanently delete a memory.
 
 **Parameters:**
 - `memory_id` (required) — UUID of memory
-- `hard_delete` (optional) — permanently remove vs. mark deprecated (default: false)
+- `hard_delete` (optional) — permanently remove vs. mark deprecated (default: false).
+  A hard delete asks the user to confirm through the client; declining, or a
+  client that cannot ask, is a structured refusal.
 - `reason` (optional) — why this is being forgotten
 
 ### `memory_namespaces`
@@ -1282,6 +1291,10 @@ List and manage namespaces.
   its repo. Pass `""` to declare the namespace is **not** a repo — identity,
   notes, scratch — so bare refs are dropped instead of keyed to a repo that
   cannot exist. `crow` and `default` are seeded `""` by migration 007.
+- `cascade` (optional, `delete` only) — delete a non-empty namespace along
+  with its memories (default: false). The `default` namespace is protected.
+  The user confirms the cascade through the client, and the dialog names how
+  many memories go with it.
 
 ### `memory_stats`
 Get health overview of the memory system.
@@ -1445,6 +1458,19 @@ runs the minion fence first, which does deny the write tools of the inherited
 `mcp__gingugu__*` server (see warm minions). `MEMORY_TRIPWIRES=off` disables
 tripwires; the minion fence has its own switch, `MEMORY_MINION_FENCE`.
 
+**Destructive calls ask the user, not the model.** A hard `memory_forget`, a
+cascading `memory_namespaces` delete, `memory_consolidate` with
+`keep_originals=False`, a `memory_import` with `on_conflict="replace"` that
+would overwrite existing ids, and `credential_delete` each show the user a
+confirmation through the client (MCP elicitation) and go ahead only on accept
+with the box ticked. The answer is a hidden parameter, absent from the tool's
+input schema, so the model cannot supply it. Decline, cancel (what a headless
+client answers) and a client without elicitation each return a structured
+`ok: false`. `MEMORY_CONFIRM_DESTRUCTIVE=off` (also `false`/`0`/`no`,
+case-insensitive; anything else keeps confirmations on) on the server that
+executes the tool skips the dialog, for automation: in remote mode that is
+the brain for memory tools and the local proxy for the credential vault.
+
 ### `memory_export`
 Export memories to a portable JSON payload (backup/transfer). Credentials are
 intentionally excluded — their secrets live in the OS keychain.
@@ -1461,7 +1487,8 @@ Import a payload produced by `memory_export`. Namespaces are matched by
 **Parameters:**
 - `data` (required) — the export payload
 - `on_conflict` (optional) — `skip` (default) or `replace` for memories
-  sharing an id
+  sharing an id. A `replace` that would overwrite existing ids asks the user
+  to confirm through the client, naming how many.
 
 ---
 
@@ -1610,7 +1637,9 @@ Remove a service bundle or a specific field. Cleans up Keychain entries.
 **Parameters:**
 - `service_name` (required) — which service
 - `field_name` (optional) — delete a single field instead of the whole service
-- `confirm` (required) — must be `true` (safety catch against accidental deletion)
+- `confirm` (optional, default `true`) — the user's confirmation dialog decides;
+  `confirm=false` refuses outright. Through a remote-mode proxy the dialog is
+  asked by the proxy's local vault session.
 
 ### Expiry Behavior
 
@@ -1778,11 +1807,13 @@ src/gingugu/
 ├── proxy_auth.py           # Proxy's /mcp auth: per-request token, renew + retry once on 401
 ├── proxy_preflight.py      # Remote mode's startup gate: refuse before relaying a byte
 ├── proxy_session.py        # Proxy building blocks: derivation, messages, one live link
-├── proxy_vault.py          # Remote mode: the machine's credential vault, served locally
+├── proxy_vault.py          # Remote mode: the machine's credential vault, screened (reveal refused) and exposed as a server
+├── proxy_vault_link.py     # Remote mode: runs that vault behind an in-memory MCP session so it can ask the user
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine
 ├── remote_args.py          # usage text + argparse for `gingugu remote`, mint ssh argv
 ├── remote_tls.py           # Client TLS: pins, verify_for, downgrade refusal, login's live check, diagnose/speaks_tls
+├── confirm.py              # Destructive tools ask the user (MCP elicitation); MEMORY_CONFIRM_DESTRUCTIVE opt-out
 ├── grants.py               # Per-namespace read/write grants plus a home namespace (derived tokens), bound per tool call
 ├── webui.py                # gingugu ui: serves the built Memory Explorer bundle
 ├── promote.py              # gingugu promote: local "gold" -> a central brain
@@ -1898,7 +1929,7 @@ src/gingugu/
 └── handlers/
     ├── __init__.py         # Handler registry / dispatch table
     ├── memory.py           # store / update
-    ├── forget.py           # The one destructive tool
+    ├── forget.py           # memory_forget; a hard delete asks the user
     ├── hints.py            # Write-time similar + relation hints
     ├── recall.py           # recall / context
     ├── capability_view.py  # Stamps capability {run, path, exists} onto reads + the lane entries
@@ -1909,12 +1940,12 @@ src/gingugu/
     ├── excerpt.py          # excerpt
     ├── relations.py        # relate / unrelate / edges
     ├── relation_ops.py     # Batch parsing for relate and unrelate
-    ├── consolidate.py      # consolidate
+    ├── consolidate.py      # consolidate; keep_originals=False asks the user
     ├── dream.py            # dream
     ├── fence.py            # Grant policy: request grant (HTTP token or stdio MEMORY_GRANT) + whole-brain tool refusal
-    ├── credentials.py      # credential_store / get / list / delete
+    ├── credentials.py      # credential_store / get / list / delete (delete asks the user)
     ├── tripwires.py        # memory_tripwire: add / list / remove / test
-    ├── admin.py            # namespaces, export, import
+    ├── admin.py            # namespaces, export, import (cascade delete and overwriting import ask the user)
     ├── summaries.py        # Payload shapes: full summary, compact summary, the picker
     ├── choices.py          # Enum argument parsing, shared error wording
     └── helpers.py          # Shared response shaping
