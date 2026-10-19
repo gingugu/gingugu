@@ -23,8 +23,8 @@ refused. Only a rejected owner token ends the proxy.
 The credential vault is handled here rather than relayed: it is this machine's
 keychain and a remote brain cannot serve it. With credentials enabled, the
 brain's `credential_*` tools are swapped in ``tools/list`` for this machine's
-(``proxy_vault``) and every ``tools/call`` for one is answered locally. With
-them disabled, `credential_*` is hidden and refused.
+(``proxy_vault``) and each ``tools/call`` for one goes to the vault's own session
+(``proxy_vault_link``). With them disabled, `credential_*` is hidden and refused.
 """
 
 from __future__ import annotations
@@ -51,7 +51,8 @@ from .proxy_session import (
     leaf_name,
     replay_handshake,
 )
-from .proxy_vault import LocalVault, open_vault
+from .proxy_vault import open_vault
+from .proxy_vault_link import NO_VAULT, VaultLink
 
 __all__ = ["ProxyLost", "ProxyRefused", "preflight", "run", "serve_stdio"]
 
@@ -72,7 +73,7 @@ class _Session:
     """State shared by the client reader and the connection loop."""
 
     def __init__(self, url, owner_token, client_write, derive_args, scope, vault=None) -> None:
-        self.vault: LocalVault | None = vault
+        self.vault: VaultLink | None = vault
         self.url = url
         self.owner_token = owner_token
         self.client_write: ObjectSendStream = client_write
@@ -114,18 +115,16 @@ class _Session:
                 if isinstance(item, Exception):
                     continue  # a malformed line from the client; the SDK already logged it
                 msg = item.message
+                if self.vault is not None and self.vault.claims(msg):
+                    await self.vault.answer(item)  # the person answered the vault's question
+                    continue
                 if isinstance(msg, JSONRPCRequest):
                     called = str((msg.params or {}).get("name", ""))
                     if msg.method == "tools/call" and called.startswith(CRED_PREFIX):
-                        if self.vault is not None:
-                            reply = await self.vault.call(msg.id, msg.params or {})
+                        if self.vault is not None:  # never awaits the vault's answer
+                            await self.vault.submit(item, self.init_params)
                         else:
-                            reply = error(
-                                msg.id,
-                                "credential tools are not available through a remote brain; "
-                                "the vault stays on this machine",
-                            )
-                        await self.client_write.send(reply)
+                            await self.client_write.send(error(msg.id, NO_VAULT))
                         continue
                     if self.init_params is None and msg.method != "initialize":
                         # A pre-initialize probe (Claude Code's `server/discover`). The brain
@@ -163,8 +162,9 @@ class _Session:
                 if self.initialized:
                     self.reinits += 1
                     await replay_handshake(r, w, self.init_params, self.reinits)
-                extra = self.vault.tools if self.vault is not None else []
-                link = Link(self.client_write, r, w, extra_tools=extra, vault=self.vault)
+                vault = self.vault.vault if self.vault is not None else None
+                extra = vault.tools if vault is not None else []
+                link = Link(self.client_write, r, w, extra_tools=extra, vault=vault)
                 async with anyio.create_task_group() as tg:
                     tg.start_soon(link.pump, self.scope)
                     tg.start_soon(self._refresh, expires_in)
@@ -245,7 +245,10 @@ async def run(
     vault = await open_vault(vault_db)
     try:
         async with anyio.create_task_group() as tg:
-            session = _Session(url, owner_token, client_write, derive_args, tg.cancel_scope, vault)
+            link = VaultLink(vault, client_write) if vault is not None else None
+            if link is not None:
+                await tg.start(link.run)
+            session = _Session(url, owner_token, client_write, derive_args, tg.cancel_scope, link)
             tg.start_soon(session.read_client, client_read)
             tg.start_soon(session.connect_loop)
     except BaseExceptionGroup as group:

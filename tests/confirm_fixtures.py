@@ -23,6 +23,9 @@ class Person:
 
     async def __call__(self, context, params):
         self.asked.append(params.message)
+        return self.result()
+
+    def result(self) -> types.ElicitResult:
         content = {"confirm": self.confirm} if self.action == "accept" else None
         return types.ElicitResult(action=self.action, content=content)
 
