@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.24.0] - 2026-10-18
+
 ### Changed
 
 - Gingugu now runs on the MCP Python SDK 2.x (`mcp>=2.3,<3`, the `MCPServer`
