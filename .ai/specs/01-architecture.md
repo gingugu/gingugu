@@ -671,7 +671,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   vault gets a real MCP session* (`VaultLink`): a direct `call_tool` carries no
   client capabilities and no way back to the client, and the answer arrives on
   the same reader that submitted the call, so `submit` never awaits it and the
-  vault's requests go out as `vault:<id>`.
+  vault's requests go out as `vault-<nonce>:<id>` (a per-process nonce).
 - **MCP SDK 2.x, with 1.x's runtime shape kept on purpose (2026-10-18).**
   Three things in the 2.x port are decisions, not renames. *Tools stay on the
   event loop*: 2.x runs a plain `def` tool on a worker thread, and every
