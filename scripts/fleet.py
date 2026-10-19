@@ -2,7 +2,7 @@
 
     uv run python scripts/fleet.py upgrade 0.24.0            # every machine
     uv run python scripts/fleet.py upgrade 0.24.0 pi laptop  # just these
-    uv run python scripts/fleet.py status
+    uv run python scripts/fleet.py status                    # version + brain, per machine
 
 The machines live in ``~/.config/gingugu/fleet.json`` (``GINGUGU_FLEET``
 overrides), never in this repo: host names are yours, and this repo is public.
@@ -18,6 +18,8 @@ overrides), never in this repo: host names are yours, and this repo is public.
 ``ssh: null`` is this machine. ``run_as`` installs as that user (``sudo -n``);
 ``service`` is restarted afterwards and ``health`` polled until it answers 200.
 An install is retried for a few minutes: PyPI's index lags a fresh release.
+``status`` shows each machine's version and which brain it talks to
+(``gingugu remote status``), and exits 1 when one cannot reach it.
 """
 
 from __future__ import annotations
@@ -104,6 +106,36 @@ def installed(machine: Machine) -> str:
     return out.removeprefix("gingugu ").strip() or "not installed"
 
 
+def parse_remote_status(text: str) -> dict[str, str]:
+    """Parse `remote status` output into a dict with a ``mode`` key."""
+    if text.strip() == "local":
+        return {"mode": "local"}
+    parsed: dict[str, str] = {}
+    for line in text.splitlines():
+        key, sep, value = line.partition(": ")
+        if sep:
+            parsed[key.strip()] = value.strip()
+    return {"mode": "remote", **parsed} if "remote" in parsed else {"mode": "unknown"}
+
+
+def remote_status(machine: Machine) -> dict[str, str]:
+    out = shell(machine, as_user(machine, "gingugu remote status"), check=False)
+    return parse_remote_status(out)
+
+
+def status_line(name: str, version: str, status: dict[str, str]) -> str:
+    mode = status.get("mode")
+    if mode == "local":
+        return f"{name}: {version}, local"
+    if mode == "remote":
+        url = status["remote"]
+        if status.get("reachable") == "yes":
+            return f"{name}: {version}, remote {url}, reachable"
+        hint = f" - {status['hint']}" if status.get("hint") else ""
+        return f"{name}: {version}, remote {url}, UNREACHABLE{hint}"
+    return f"{name}: {version}, remote status unknown"
+
+
 def upgrade(machine: Machine, version: str) -> None:
     for attempt in range(1, _INSTALL_ATTEMPTS + 1):
         try:
@@ -150,9 +182,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         machines = load(config_path())
         if args.command == "status":
+            broken = 0
             for machine in machines:
-                print(f"{machine.name}: {installed(machine)}")
-            return 0
+                status = remote_status(machine)
+                print(status_line(machine.name, installed(machine), status), flush=True)
+                if status["mode"] == "remote" and status.get("reachable") != "yes":
+                    broken += 1
+            return 1 if broken else 0
         chosen = [m for m in machines if not args.names or m.name in args.names]
         unknown = set(args.names) - {m.name for m in machines}
         if unknown:
