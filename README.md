@@ -350,6 +350,11 @@ connections. On a loopback bind the server also rejects any `Host` header
 other than localhost (DNS-rebinding protection); on a LAN bind the Bearer token
 is the gate.
 
+Beside `/mcp` and `/healthz`, the server exposes `POST /token/derive`, the
+owner-only `POST /hook/*` routes used by remote-mode hooks, and the owner-only
+`GET /ui/api/*` routes that let `gingugu ui` on another machine show this brain
+(read-only; a scoped token gets 403).
+
 **TLS is on by default for any non-loopback bind**, with nothing to set up. On
 first start the server generates a self-signed certificate for this machine's
 name (`<host>`, `<host>.local`, loopback) and keeps it in `<db-dir>/tls/` (key
@@ -973,6 +978,18 @@ gingugu ui
 That serves the Explorer and a live read of your database from a single process
 on http://127.0.0.1:5174 and opens your browser. No Node.js required. Flags:
 `--port`, `--host`, `--no-browser`.
+
+The Explorer is a read-only observer: it opens the database read-only and does
+not count as a recall, so looking at your brain never changes it. `--host` must
+be a loopback address (anything else is refused), and the server only answers
+requests addressed to a loopback host name. Nothing on the page authenticates,
+so anything that can reach the port can read the brain, which makes this a
+single-user-machine tool.
+
+With a remote brain on (`gingugu remote on`, or `MEMORY_REMOTE_URL`), `gingugu ui`
+shows that brain automatically: the page's requests are forwarded to the brain's
+owner-only `/ui/api/*` routes with this machine's keychain token, which never
+reaches the browser.
 
 **Working on the UI itself?** Use dev mode for Vite hot reload (needs a repo
 checkout + Node.js 18+ and npm):
