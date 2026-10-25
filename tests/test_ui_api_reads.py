@@ -189,3 +189,9 @@ def test_reads_never_move_access_signals(seeded):
 def test_memory_ids_must_be_plain(seeded):
     for bad in ("/memory/../graph", "/memory/a/b", "/memory/x%2Fy", "/memory/" + "a" * 200):
         assert _get(seeded, bad)[0] == 404
+
+
+def test_info_carries_the_graph_version_for_cheap_polling(seeded):
+    _, info_body = _get(seeded, "/info")
+    _, graph_body = _get(seeded, "/graph")
+    assert info_body["graph_version"] == graph_body["version"]
