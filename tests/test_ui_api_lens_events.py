@@ -126,3 +126,66 @@ def test_events_reject_garbage_timestamps(seeded):
     assert _get(seeded, "/events", {"after": "yesterday"})[0] == 400
     assert _get(seeded, "/events", {"from": T1})[0] == 400  # a window needs both ends
     assert _get(seeded, "/events", {"after": T1, "limit": "-3"})[0] == 400
+
+
+# --- cursor correctness under same-timestamp batches ---------------------------
+# access.record stamps every memory a recall returned with ONE timestamp, so a
+# page boundary landing inside that batch must never strand the rest of it.
+
+T5 = "2026-10-23T12:00:00.000000+00:00"
+
+
+def _batch(seeded, n: int) -> None:
+    import sqlite3
+
+    conn = sqlite3.connect(seeded.db_path)
+    conn.executemany(
+        "INSERT INTO access_log (id, memory_id, accessed_at, context) VALUES (?, ?, ?, ?)",
+        [(f"b{i}", seeded.ids["rule"], T5, "sess-2") for i in range(n)],
+    )
+    conn.commit()
+    conn.close()
+
+
+def _drain(seeded, params) -> list[dict]:
+    seen: list[dict] = []
+    for _ in range(50):
+        _, body = _get(seeded, "/events", params)
+        if not body["events"]:
+            return seen
+        seen += body["events"]
+        params = {**params, "after": body["cursor"]}
+        params.pop("from", None)
+    raise AssertionError("cursor never drained")
+
+
+def test_paging_never_splits_a_same_timestamp_batch(seeded):
+    _batch(seeded, 5)
+    seen = _drain(seeded, {"after": T4, "limit": "3"})
+    assert len(seen) == 5 and {e["at"] for e in seen} == {T5}
+
+
+def test_a_batch_bigger_than_the_limit_comes_back_whole(seeded):
+    _batch(seeded, 7)
+    _, body = _get(seeded, "/events", {"after": T4, "limit": "2"})
+    assert len(body["events"]) == 7
+    assert body["cursor"] == T5
+
+
+def test_page_boundary_before_a_batch_stops_short_of_it(seeded):
+    _batch(seeded, 4)
+    _, body = _get(seeded, "/events", {"after": T1, "limit": "4"})
+    # T2, T3, T4 fit; the fourth slot would split the T5 batch, so it is left out.
+    assert [e["at"] for e in body["events"]] == [T2, T3, T4]
+    assert body["cursor"] == T4
+
+
+def test_replay_window_pages_with_after_and_to(seeded):
+    _batch(seeded, 3)
+    end = "2026-10-24T00:00:00.000000+00:00"
+    seen = _drain(seeded, {"from": T1, "to": end, "limit": "2"})
+    assert [e["at"] for e in seen] == [T1, T2, T3, T4, T5, T5, T5]
+
+
+def test_after_and_from_are_exclusive(seeded):
+    assert _get(seeded, "/events", {"after": T1, "from": T1, "to": T4})[0] == 400

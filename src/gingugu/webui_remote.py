@@ -52,6 +52,23 @@ def is_loopback(host: str) -> bool:
         return False
 
 
+def host_header_is_loopback(header: str | None) -> bool:
+    """True when a request's ``Host`` names this machine.
+
+    Binding loopback stops other machines, not other web pages: a page can
+    rebind its own hostname to 127.0.0.1, and the browser then sends that
+    hostname here as ``Host``. Refusing any non-loopback name closes that.
+    """
+    if not header:
+        return False
+    host = header.strip()
+    if host.startswith("["):  # [::1]:port
+        host = host[1:].split("]", 1)[0]
+    elif host.count(":") == 1:
+        host = host.split(":", 1)[0]
+    return is_loopback(host)
+
+
 def netloc(target: RemoteTarget) -> str:
     return urlparse(target.url).netloc
 

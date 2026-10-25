@@ -178,12 +178,23 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send_file(target)
 
+    def _foreign_host(self) -> bool:
+        """Refuse a rebound hostname (see ``webui_remote.host_header_is_loopback``)."""
+        if webui_remote.host_header_is_loopback(self.headers.get("Host")):
+            return False
+        self._send_json(403, {"ok": False, "error": "host not allowed"})
+        return True
+
     def do_OPTIONS(self) -> None:
+        if self._foreign_host():
+            return
         self.send_response(204)
         self._cors_headers()
         self.end_headers()
 
     def do_GET(self) -> None:
+        if self._foreign_host():
+            return
         route, _, query = self.path.partition("?")
         if route == "/api/export":
             self._serve_export_for_mode()

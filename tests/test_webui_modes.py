@@ -148,3 +148,31 @@ def test_remote_without_a_token_says_how_to_fix_it(tmp_path, monkeypatch):
         response = ui.get("/api/graph")
     assert response.status_code == 502
     assert "gingugu remote login" in response.json()["error"]
+
+
+# --- DNS rebinding -------------------------------------------------------------
+# Loopback alone does not stop a web page: rebind evil.example to 127.0.0.1 and
+# the browser will happily send it here. The Host header is what tells them apart.
+
+
+@pytest.mark.parametrize("host", ["evil.example:5174", "192.168.1.20:5174", "attacker.test"])
+def test_foreign_host_header_is_refused(tmp_path, monkeypatch, host):
+    seed(tmp_path, monkeypatch)
+    with UiServer() as ui:
+        response = httpx2.get(
+            f"http://127.0.0.1:{ui.port}/api/graph", headers={"Host": host}, timeout=10
+        )
+    assert response.status_code == 403
+    assert "nodes" not in response.text
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1:{port}", "localhost:{port}", "[::1]:{port}"])
+def test_loopback_host_headers_are_served(tmp_path, monkeypatch, host):
+    seed(tmp_path, monkeypatch)
+    with UiServer() as ui:
+        response = httpx2.get(
+            f"http://127.0.0.1:{ui.port}/api/graph",
+            headers={"Host": host.format(port=ui.port)},
+            timeout=10,
+        )
+    assert response.status_code == 200

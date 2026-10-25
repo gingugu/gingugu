@@ -4,6 +4,12 @@
 are stored as uniform ``+00:00`` microsecond ISO strings, so string comparison
 in SQL is time comparison. With no cursor the feed returns nothing and hands
 back "now" (the newest stored timestamp) so a live viewer starts at the edge.
+
+A page never ends partway through one timestamp. ``access.record`` stamps every
+memory a recall returned with the same instant, and the next page asks for
+events strictly ``after`` the cursor, so a split batch would strand its tail.
+When the limit lands inside a batch, the page stops before it - or, if the
+batch is the whole page, returns the batch entire, over the limit.
 """
 
 from __future__ import annotations
@@ -70,21 +76,40 @@ def _fetch(conn: sqlite3.Connection, bounds: str, args: list[str], limit: int) -
         )
     ]
     found.sort(key=lambda e: e["at"])
-    return found[:limit]
+    return found
+
+
+def _page(conn: sqlite3.Connection, bounds: str, args: list[str], limit: int) -> list[dict]:
+    """Up to ``limit`` events, cut only between two different timestamps."""
+    found = _fetch(conn, bounds, args, limit + 1)
+    if len(found) <= limit:
+        return found
+    edge = found[limit - 1]["at"]
+    if found[limit]["at"] != edge:
+        return found[:limit]
+    kept = [e for e in found[:limit] if e["at"] != edge]
+    if kept:
+        return kept
+    # One batch outgrows the whole page: hand it back entire, cursor past it.
+    return _fetch(conn, "{t} = ?", [edge], MAX_LIMIT * 10)
 
 
 def events(conn: sqlite3.Connection, params: dict[str, str]) -> dict:
     after = _stamp(params, "after")
     start, end = _stamp(params, "from"), _stamp(params, "to")
-    if (start is None) != (end is None):
-        raise ApiError(400, "from and to must be given together")
+    if start is not None and end is None:
+        raise ApiError(400, "from needs to")
+    if start is not None and after is not None:
+        raise ApiError(400, "from and after are exclusive")
     limit = parse_limit(params, DEFAULT_LIMIT, MAX_LIMIT)
-    if start is not None and end is not None:
-        found = _fetch(conn, "{t} >= ? AND {t} < ?", [start, end], limit)
-        cursor = found[-1]["at"] if found else end
-    elif after is not None:
-        found = _fetch(conn, "{t} > ?", [after], limit)
-        cursor = found[-1]["at"] if found else after
-    else:
-        found, cursor = [], _latest(conn)
+    if start is None and after is None:
+        if end is not None:
+            raise ApiError(400, "to needs from or after")
+        return {"ok": True, "events": [], "cursor": _latest(conn)}
+    lower, low = ("{t} >= ?", start) if start is not None else ("{t} > ?", after)
+    bounds, args = lower, [low]
+    if end is not None:
+        bounds, args = f"{lower} AND {{t}} < ?", [low, end]
+    found = _page(conn, bounds, args, limit)
+    cursor = found[-1]["at"] if found else (end if start is not None else after)
     return {"ok": True, "events": found, "cursor": cursor}
