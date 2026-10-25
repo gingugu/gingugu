@@ -71,6 +71,12 @@ def test_local_mode_answers_from_the_local_db(tmp_path, monkeypatch):
         assert info["brain"] == "local"
 
 
+def test_the_full_brain_dump_is_gone(tmp_path, monkeypatch):
+    seed(tmp_path, monkeypatch)
+    with UiServer() as ui:
+        assert ui.get("/api/export").status_code == 404
+
+
 # --- remote --------------------------------------------------------------------
 
 

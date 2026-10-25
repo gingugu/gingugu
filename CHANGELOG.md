@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Memory Explorer 3D brain view. Memories are glowing nodes (bloom), grouped
+  into namespace lobes (the shared `crow` core in the middle, your persona on an
+  inner shell, projects on an outer sphere); size is recall count, glow is trust,
+  dormant and deprecated memories fade, pinned ones carry a halo. Click a node to
+  fly to it and open the detail drawer.
+- Virtualized List view (sortable, filterable, smooth at thousands of rows).
+- Rich detail drawer: markdown body with clickable `[[Title]]` links, relations,
+  claims, tripwires, and a 60-day recall-history sparkline.
+- Source badge in the header (LOCAL, REMOTE <brain>, STATIC demo, or the error),
+  and automatic polling: the Explorer checks `/api/info` every 10s and refetches
+  the graph only when `graph_version` changes. `/api/info` now also carries
+  `graph_version` and the viewer's `persona`.
 - Memory Explorer read API. `gingugu serve` answers `GET /ui/api/*` (`info`,
   `graph`, `memory/<id>`, `search`, `stats`, `events`) for owner tokens only
   (a scoped token gets 403). Every surface is an observer: a read-only
@@ -24,9 +36,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `gingugu ui`'s legacy `/api/export` is local-only: it answers 404 in remote
-  mode and goes away when the new frontend lands. The Explorer reads through the
-  read API instead.
+- CI builds, type-checks and tests the Explorer UI (new `ui` job); the UI
+  workflows use Node 22.
+- The GitHub Pages demo now bundles `graph.json`, `info.json` and `details.json`
+  from `ui/dump_static.py --db <demo db>` instead of a raw export.
+
+### Removed
+
+- The legacy `/api/export` full-brain dump (any request is now a 404). The
+  Explorer reads through the read API instead.
+- The Explorer's "Load JSON" upload, the refresh-interval select (polling is
+  automatic), and the 2D knowledge graph.
 
 ### Security
 

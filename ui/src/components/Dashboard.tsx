@@ -1,4 +1,4 @@
-import { Memory, MemoryNamespace, Relation } from '../types'
+import { MemoryLite, NamespaceRef } from '../types'
 import { TYPE_COLORS } from '../lib/colors'
 import StatsCards from './StatsCards'
 import TypeChart from './TypeChart'
@@ -8,15 +8,15 @@ import TagCloud from './TagCloud'
 import Timeline from './Timeline'
 
 interface Props {
-  memories: Memory[]
-  namespaces: MemoryNamespace[]
-  relations: Relation[]
+  memories: MemoryLite[]
+  namespaces: NamespaceRef[]
+  relationCount: number
 }
 
-export default function Dashboard({ memories, namespaces, relations }: Props) {
+export default function Dashboard({ memories, namespaces, relationCount }: Props) {
   return (
     <div className="p-6 space-y-6 overflow-y-auto h-full">
-      <StatsCards memories={memories} namespaces={namespaces} relations={relations} />
+      <StatsCards memories={memories} namespaces={namespaces} relationCount={relationCount} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <TypeChart memories={memories} />

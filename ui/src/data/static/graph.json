@@ -1,0 +1,313 @@
+{
+ "namespaces": [
+  {
+   "count": 6,
+   "id": "08888dd8-dcdc-4f3f-ade5-8f84749a7719",
+   "name": "orbit-tracker"
+  },
+  {
+   "count": 6,
+   "id": "45ae2b79-e77c-4fb9-adfa-d32512c13b10",
+   "name": "recipe-bot"
+  }
+ ],
+ "nodes": [
+  {
+   "access": 14,
+   "accessed": "2026-05-28T16:40:00+00:00",
+   "conf": "verified",
+   "confirmed": "2026-05-20T11:00:00+00:00",
+   "created": "2026-04-02T10:15:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000001",
+   "ns": "08888dd8-dcdc-4f3f-ade5-8f84749a7719",
+   "pinned": false,
+   "tags": [
+    0,
+    1,
+    2
+   ],
+   "title": "Event-driven ingestion pipeline",
+   "type": "architecture",
+   "updated": "2026-04-02T10:15:00+00:00"
+  },
+  {
+   "access": 7,
+   "accessed": "2026-05-15T10:00:00+00:00",
+   "conf": "verified",
+   "confirmed": "2026-04-11T09:30:00+00:00",
+   "created": "2026-04-10T08:05:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000002",
+   "ns": "08888dd8-dcdc-4f3f-ade5-8f84749a7719",
+   "pinned": false,
+   "tags": [
+    3,
+    4,
+    5
+   ],
+   "title": "TLE parser chokes on leading whitespace",
+   "type": "bug",
+   "updated": "2026-04-11T09:30:00+00:00"
+  },
+  {
+   "access": 11,
+   "accessed": "2026-05-30T09:10:00+00:00",
+   "conf": "verified",
+   "confirmed": "2026-05-01T12:00:00+00:00",
+   "created": "2026-04-05T15:00:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000003",
+   "ns": "08888dd8-dcdc-4f3f-ade5-8f84749a7719",
+   "pinned": false,
+   "tags": [
+    6,
+    7,
+    8
+   ],
+   "title": "Postgres over TimescaleDB for v1",
+   "type": "decision",
+   "updated": "2026-04-05T15:00:00+00:00"
+  },
+  {
+   "access": 19,
+   "accessed": "2026-05-25T14:00:00+00:00",
+   "conf": "verified",
+   "confirmed": "2026-05-25T14:00:00+00:00",
+   "created": "2026-04-08T11:20:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000004",
+   "ns": "08888dd8-dcdc-4f3f-ade5-8f84749a7719",
+   "pinned": false,
+   "tags": [
+    9,
+    10,
+    11
+   ],
+   "title": "Retry with jitter on upstream fetches",
+   "type": "pattern",
+   "updated": "2026-04-08T11:20:00+00:00"
+  },
+  {
+   "access": 4,
+   "accessed": "2026-05-10T08:30:00+00:00",
+   "conf": "inferred",
+   "confirmed": null,
+   "created": "2026-04-20T13:45:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000005",
+   "ns": "08888dd8-dcdc-4f3f-ade5-8f84749a7719",
+   "pinned": false,
+   "tags": [
+    12,
+    13,
+    14
+   ],
+   "title": "Ground station API caps at 100 req/min",
+   "type": "fact",
+   "updated": "2026-04-20T13:45:00+00:00"
+  },
+  {
+   "access": 2,
+   "accessed": "2026-04-12T10:00:00+00:00",
+   "conf": "stale",
+   "confirmed": null,
+   "created": "2026-04-03T09:00:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000006",
+   "ns": "08888dd8-dcdc-4f3f-ade5-8f84749a7719",
+   "pinned": false,
+   "tags": [
+    15,
+    16,
+    17
+   ],
+   "title": "Old map renderer kept for comparison",
+   "type": "context",
+   "updated": "2026-04-03T09:00:00+00:00"
+  },
+  {
+   "access": 9,
+   "accessed": "2026-05-22T20:15:00+00:00",
+   "conf": "verified",
+   "confirmed": "2026-05-22T20:15:00+00:00",
+   "created": "2026-04-16T19:00:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000007",
+   "ns": "45ae2b79-e77c-4fb9-adfa-d32512c13b10",
+   "pinned": false,
+   "tags": [
+    18,
+    19,
+    20
+   ],
+   "title": "Slash commands only, no message scraping",
+   "type": "decision",
+   "updated": "2026-04-16T19:00:00+00:00"
+  },
+  {
+   "access": 6,
+   "accessed": "2026-05-18T12:00:00+00:00",
+   "conf": "verified",
+   "confirmed": "2026-04-26T10:00:00+00:00",
+   "created": "2026-04-25T17:30:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000008",
+   "ns": "45ae2b79-e77c-4fb9-adfa-d32512c13b10",
+   "pinned": false,
+   "tags": [
+    3,
+    21,
+    5
+   ],
+   "title": "Unicode fractions break ingredient parsing",
+   "type": "bug",
+   "updated": "2026-04-26T10:00:00+00:00"
+  },
+  {
+   "access": 12,
+   "accessed": "2026-05-29T18:45:00+00:00",
+   "conf": "verified",
+   "confirmed": "2026-05-29T18:45:00+00:00",
+   "created": "2026-05-02T16:00:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000009",
+   "ns": "45ae2b79-e77c-4fb9-adfa-d32512c13b10",
+   "pinned": false,
+   "tags": [
+    22,
+    23,
+    24
+   ],
+   "title": "Cache embeds, regenerate on edit only",
+   "type": "pattern",
+   "updated": "2026-05-02T16:00:00+00:00"
+  },
+  {
+   "access": 8,
+   "accessed": "2026-05-27T13:20:00+00:00",
+   "conf": "verified",
+   "confirmed": "2026-05-27T13:20:00+00:00",
+   "created": "2026-04-18T12:00:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000010",
+   "ns": "45ae2b79-e77c-4fb9-adfa-d32512c13b10",
+   "pinned": false,
+   "tags": [
+    25,
+    26,
+    27
+   ],
+   "title": "Metric units in all stored recipes",
+   "type": "preference",
+   "updated": "2026-04-18T12:00:00+00:00"
+  },
+  {
+   "access": 3,
+   "accessed": "2026-05-20T11:00:00+00:00",
+   "conf": "inferred",
+   "confirmed": null,
+   "created": "2026-05-05T09:30:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000011",
+   "ns": "45ae2b79-e77c-4fb9-adfa-d32512c13b10",
+   "pinned": false,
+   "tags": [
+    28,
+    29,
+    30
+   ],
+   "title": "Release: tag, changelog, deploy via CI",
+   "type": "workflow",
+   "updated": "2026-05-05T09:30:00+00:00"
+  },
+  {
+   "access": 5,
+   "accessed": "2026-05-25T15:00:00+00:00",
+   "conf": "deprecated",
+   "confirmed": null,
+   "created": "2026-04-17T10:00:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000012",
+   "ns": "45ae2b79-e77c-4fb9-adfa-d32512c13b10",
+   "pinned": false,
+   "tags": [
+    13,
+    31,
+    32
+   ],
+   "title": "Nutrition API free tier: 500 calls/day",
+   "type": "fact",
+   "updated": "2026-05-25T15:00:00+00:00"
+  }
+ ],
+ "ok": true,
+ "relations": [
+  {
+   "created": "2026-04-21T09:00:00+00:00",
+   "s": "b0000000-0000-4000-8000-000000000004",
+   "t": "b0000000-0000-4000-8000-000000000005",
+   "type": "related_to"
+  },
+  {
+   "created": "2026-04-06T10:00:00+00:00",
+   "s": "b0000000-0000-4000-8000-000000000001",
+   "t": "b0000000-0000-4000-8000-000000000003",
+   "type": "related_to"
+  },
+  {
+   "created": "2026-04-11T10:00:00+00:00",
+   "s": "b0000000-0000-4000-8000-000000000002",
+   "t": "b0000000-0000-4000-8000-000000000004",
+   "type": "caused_by"
+  },
+  {
+   "created": "2026-05-25T15:00:00+00:00",
+   "s": "b0000000-0000-4000-8000-000000000009",
+   "t": "b0000000-0000-4000-8000-000000000012",
+   "type": "supersedes"
+  },
+  {
+   "created": "2026-04-26T10:30:00+00:00",
+   "s": "b0000000-0000-4000-8000-000000000008",
+   "t": "b0000000-0000-4000-8000-000000000010",
+   "type": "supersedes"
+  }
+ ],
+ "tag_edges": [
+  {
+   "s": "b0000000-0000-4000-8000-000000000002",
+   "t": "b0000000-0000-4000-8000-000000000008",
+   "w": 3.584
+  },
+  {
+   "s": "b0000000-0000-4000-8000-000000000005",
+   "t": "b0000000-0000-4000-8000-000000000012",
+   "w": 1.792
+  }
+ ],
+ "tags": [
+  "pipeline",
+  "queue",
+  "ingestion",
+  "parser",
+  "tle",
+  "fixed",
+  "postgres",
+  "database",
+  "v1-scope",
+  "retry",
+  "backoff",
+  "resilience",
+  "rate-limit",
+  "api",
+  "scheduler",
+  "legacy",
+  "renderer",
+  "cleanup",
+  "discord",
+  "privacy",
+  "scope",
+  "unicode",
+  "cache",
+  "performance",
+  "embeds",
+  "units",
+  "conventions",
+  "storage",
+  "release",
+  "ci",
+  "deploy",
+  "quota",
+  "nutrition"
+ ],
+ "version": "12:2026-05-25T15:00:00+00:00:5"
+}

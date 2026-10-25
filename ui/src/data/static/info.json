@@ -1,0 +1,11 @@
+{
+ "brain": "demo",
+ "graph_version": "12:2026-05-25T15:00:00+00:00:5",
+ "memories": 12,
+ "mode": "static",
+ "ok": true,
+ "persona": null,
+ "relations": 5,
+ "schema_version": 16,
+ "version": "0.25.0"
+}

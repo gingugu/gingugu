@@ -1,10 +1,10 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { Memory } from '../types'
+import { MemoryLite } from '../types'
 import { CONFIDENCE_COLORS } from '../lib/colors'
 import { getConfidenceDistribution } from '../lib/graph'
 
 interface Props {
-  memories: Memory[]
+  memories: MemoryLite[]
 }
 
 export default function ConfidenceChart({ memories }: Props) {
