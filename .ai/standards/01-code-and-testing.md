@@ -73,6 +73,12 @@
   runner would make each hook wait out the startup window. CI has none of that state, so a missing sandbox stays
   green there and only fails on a configured laptop. A test wanting any of it
   sets its own.
+- **Frontend tests (`ui/`).** `vitest` unit tests at `ui/src/**/*.test.ts` for
+  pure logic (layout, visuals, table sorting, link parsing, deep links, the API
+  client). `cd ui && npm test` and `npm run typecheck` stay green whenever `ui/`
+  changes; CI's `ui` job runs `npm ci`, typecheck, test and build on Node 22.
+  Unit tests cannot see a 3D scene, so a visual change is verified by rendering
+  it (a headless Chrome screenshot) and looking at the result.
 - **Unit tests** for storage, search, relations, context, decay, consolidation.
 - **Integration tests** for end-to-end MCP flows (store → recall → context;
   store → relate → recall include_related).

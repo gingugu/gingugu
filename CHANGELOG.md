@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and automatic polling: the Explorer checks `/api/info` every 10s and refetches
   the graph only when `graph_version` changes. `/api/info` now also carries
   `graph_version` and the viewer's `persona`.
+- Explorer deep links: `?view=<tab>&m=<memory id>` opens a view and a memory,
+  and the address bar follows what you click.
+- Dashboard, Timeline and Trust Map ported onto the read API (they use light
+  nodes without bodies).
 - Memory Explorer read API. `gingugu serve` answers `GET /ui/api/*` (`info`,
   `graph`, `memory/<id>`, `search`, `stats`, `events`) for owner tokens only
   (a scoped token gets 403). Every surface is an observer: a read-only
@@ -60,6 +64,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `gingugu ui` grants no CORS to any origin (the Vite dev server proxies
   `/api`), and the remote forwarder never follows redirects, so the token
   cannot be bounced to another host.
+- The Explorer never loads remote images from a memory body (alt text shows
+  instead), so viewing a memory makes no third-party request; node tooltips
+  escape every field.
 - Fixes the known issue that `gingugu ui --host` exposed an unauthenticated
   full-DB export.
 

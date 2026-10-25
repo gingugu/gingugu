@@ -981,8 +981,21 @@ A subagent gets its own fenced brain and arrives already knowing the task.
 - **The UI ships in the wheel.** `gingugu ui` (`webui.py`) serves the pre-built
   React bundle *and* the live `/api/*` read API from one process on one port, so
   pip-installed users get the Memory Explorer with no repo checkout and no Node.
-  The Explorer reads through that API (`ui_api/`), not the legacy `/api/export`
-  full dump, which stays local-only until the new frontend lands.
+  The Explorer reads through that API (`ui_api/`); the legacy `/api/export` full
+  dump is removed (the route 404s).
+  Frontend layout (`ui/src/`): `api/` (client, `useBrainData` polling hook,
+  static-mode loader), `brain/` (3D scene: lobes, visuals, camera, bloom),
+  `list/` (virtualized table), `detail/` (drawer, markdown body, wiki links),
+  `shell/` (header, source badge, deep links), `components/` (Dashboard,
+  Timeline, Trust Map on a body-less `MemoryLite`). Pure logic (lobes, visuals,
+  table, links, deep links, client) has vitest unit tests beside it. Remote
+  images in a memory body are never loaded (alt text shows), so viewing a memory
+  makes no third-party request.
+  Static demo: `ui/dump_static.py --db <fictional demo db>` runs the real read
+  API and writes `ui/src/data/static/{graph,info,details}.json`; on a static
+  host (GitHub Pages) `/api/info` fails and the page loads those instead, and
+  the source badge reads STATIC demo. CI has a `ui` job (`npm ci`, typecheck, test,
+  build; Node 22); `ui-pages.yml` and `release.yml` also use Node 22.
   The bundle is bundled via hatch `force-include` (`ui/dist` → `gingugu/_ui_dist`,
   built in `release.yml` before `uv build`); `webui.find_dist()` falls back to
   `ui/dist` in a source checkout. `--dev` spawns the Vite dev server for hot
