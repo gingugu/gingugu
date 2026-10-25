@@ -87,3 +87,11 @@ async def test_remote_search_is_an_observer(served, brain):
     response = await _get(served, "/ui/api/search", SERVE_TOKEN, params={"q": "stack parent"})
     assert response.status_code == 200 and response.json()["hits"]
     assert snapshot_signals(brain.seeded.db_path) == before
+
+
+async def test_derived_token_is_refused(served, brain):
+    from gingugu.grants import FULL
+
+    derived = brain.derived.mint(FULL, 60)
+    response = await _get(served, "/ui/api/graph", derived)
+    assert response.status_code == 403

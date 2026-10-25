@@ -17,7 +17,11 @@ to the remote brain's ``/ui/api/*`` with the keychain token. Every JSON body
 carries ``mode``. ``/api/export`` is the legacy full dump, local mode only.
 
 The API is the whole brain and has no auth of its own, so ``main`` refuses to
-bind anything but a loopback address.
+bind anything but a loopback address, every request must carry a loopback
+``Host`` (DNS rebinding), and no origin is ever granted CORS: Vite proxies
+``/api`` in dev, so the browser is always same-origin with the page. Anything
+that can reach this port can still read the brain - in remote mode, the remote
+one - so it is a single-user-machine tool by design.
 """
 
 from __future__ import annotations
@@ -35,7 +39,7 @@ from . import remote, webui_remote
 from .config import load_config
 from .database import Database
 from .portability import export_data
-from .ui_api import UiEnv, dispatch
+from .ui_api import UiEnv, dispatch, known_route
 
 logger = logging.getLogger(__name__)
 
@@ -46,14 +50,6 @@ PORT = 5174
 # the backend on 5174 (see ui/vite.config.ts). --host/--port are prod-only.
 _DEV_FRONTEND_URL = "http://localhost:5173"
 _DEV_BACKEND_PORT = 5174
-
-# Only the Vite dev server may read the API cross-origin. In prod the UI is
-# same-origin so no Origin header ever matches - this matters for --dev only.
-# A wildcard would let any website in the browser exfiltrate the memory DB.
-ALLOWED_ORIGINS = {
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-}
 
 
 def _repo_ui_dir() -> Path | None:
@@ -105,20 +101,11 @@ class Handler(BaseHTTPRequestHandler):
             Handler.db = Database(load_config().db_path)
         return Handler.db.connect()
 
-    def _cors_headers(self) -> None:
-        origin = self.headers.get("Origin")
-        if origin in ALLOWED_ORIGINS:
-            self.send_header("Access-Control-Allow-Origin", origin)
-            self.send_header("Vary", "Origin")
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-
     def _send_json(self, status: int, obj: dict) -> None:
         body = json.dumps(obj).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
-        self._cors_headers()
         self.end_headers()
         self.wfile.write(body)
 
@@ -133,6 +120,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def _serve_api(self, rest: str, query: str) -> None:
         """Answer ``/api/<rest>`` from the local DB or the remote brain."""
+        if not known_route("/" + rest):
+            # Checked before any mode decision: in remote mode an unvetted path
+            # would be forwarded with the owner token (httpx2 resolves `..`).
+            self._send_json(404, {"ok": False, "error": "unknown route"})
+            return
         try:
             target = remote.active()
         except ValueError as exc:
@@ -189,7 +181,6 @@ class Handler(BaseHTTPRequestHandler):
         if self._foreign_host():
             return
         self.send_response(204)
-        self._cors_headers()
         self.end_headers()
 
     def do_GET(self) -> None:
