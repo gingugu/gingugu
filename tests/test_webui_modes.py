@@ -176,3 +176,66 @@ def test_loopback_host_headers_are_served(tmp_path, monkeypatch, host):
             timeout=10,
         )
     assert response.status_code == 200
+
+
+# --- confused deputy -----------------------------------------------------------
+# In remote mode every forward carries the owner token, and httpx2 normalizes
+# `..` - so `/api/../../mcp` would reach the brain's /mcp as owner. Only the
+# Explorer's own routes, with a plain memory id, may ever be forwarded.
+
+
+def _raw_get(port: int, path: str) -> int:
+    import http.client
+
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+    try:
+        conn.request("GET", path)  # sent verbatim: no client-side normalization
+        return conn.getresponse().status
+    finally:
+        conn.close()
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/../../mcp",
+        "/api/graph/../../../mcp",
+        "/api/memory/..%2F..%2F..%2Fmcp",
+        "/api/memory/../../token/derive",
+        "/api/memory/a/b",
+        "/api/healthz",
+        "/api/",
+    ],
+)
+async def test_remote_mode_forwards_only_explorer_routes(
+    served, brain, tmp_path, monkeypatch, path
+):
+    _go_remote(monkeypatch, tmp_path, served.url, brain.machine)
+    with UiServer() as ui:
+        status = await anyio.to_thread.run_sync(_raw_get, ui.port, path)
+    assert status == 404
+    assert [p for p, _ in brain.seen] == []  # nothing reached the brain at all
+
+
+async def test_remote_mode_still_forwards_a_real_memory_id(served, brain, tmp_path, monkeypatch):
+    _go_remote(monkeypatch, tmp_path, served.url, brain.machine)
+    rule = brain.seeded.ids["rule"]
+    with UiServer() as ui:
+        status = await anyio.to_thread.run_sync(_raw_get, ui.port, f"/api/memory/{rule}")
+    assert status == 200
+    assert [p for p, _ in brain.seen] == [f"/ui/api/memory/{rule}"]
+
+
+# --- CORS ----------------------------------------------------------------------
+# Vite proxies /api in dev, so the browser is always same-origin with whatever
+# serves the page. No origin is ever granted cross-origin reads.
+
+
+@pytest.mark.parametrize("origin", ["http://localhost:5173", "http://127.0.0.1:5173", "null"])
+def test_no_origin_is_granted_cross_origin_reads(tmp_path, monkeypatch, origin):
+    seed(tmp_path, monkeypatch)
+    with UiServer() as ui:
+        response = httpx2.get(
+            f"http://127.0.0.1:{ui.port}/api/graph", headers={"Origin": origin}, timeout=10
+        )
+    assert "access-control-allow-origin" not in response.headers

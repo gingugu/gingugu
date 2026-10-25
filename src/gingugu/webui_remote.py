@@ -86,7 +86,9 @@ def forward(target: RemoteTarget, rest: str, query: str) -> tuple[int, dict]:
         }
     url = f"{target.url}/ui/api/{rest}" + (f"?{query}" if query else "")
     try:
-        with httpx2.Client(timeout=TIMEOUT_S, verify=remote_tls.verify_for(target.url)) as client:
+        verify = remote_tls.verify_for(target.url)
+        # Never follow a redirect: it would carry the owner token somewhere else.
+        with httpx2.Client(timeout=TIMEOUT_S, verify=verify, follow_redirects=False) as client:
             response = client.get(url, headers={"Authorization": f"Bearer {token}"})
     except Exception as exc:  # noqa: BLE001
         logger.warning("brain unreachable: %s", exc.__class__.__name__)

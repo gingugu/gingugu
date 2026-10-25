@@ -184,3 +184,8 @@ def test_reads_never_move_access_signals(seeded):
     for path in ("/info", "/graph", "/stats", f"/memory/{seeded.ids['rule']}"):
         assert _get(seeded, path)[0] == 200
     assert snapshot_signals(seeded.db_path) == before
+
+
+def test_memory_ids_must_be_plain(seeded):
+    for bad in ("/memory/../graph", "/memory/a/b", "/memory/x%2Fy", "/memory/" + "a" * 200):
+        assert _get(seeded, bad)[0] == 404
