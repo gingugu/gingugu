@@ -119,7 +119,7 @@ export default function Brain3D({
   const label = useCallback(
     (n: object) => {
       const g = n as GNode
-      return `${escapeHtml(g.title)} · ${escapeHtml(g.nsName)} · ${g.type}`
+      return `${escapeHtml(g.title)} · ${escapeHtml(g.nsName)} · ${escapeHtml(g.type)}`
     },
     [],
   )
