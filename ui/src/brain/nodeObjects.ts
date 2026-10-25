@@ -34,7 +34,7 @@ function material(color: string, opacity: number, glow: number): THREE.MeshLambe
 }
 
 export function radiusOf(n: BrainNode): number {
-  return nodeSize(n) * 0.5
+  return nodeSize(n) * 1.1
 }
 
 /** Trust drives the glow: healthy memories bloom, shaky ones stay dim. */

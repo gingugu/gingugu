@@ -34,8 +34,9 @@ export interface LinkStyle {
 
 export function linkStyle(l: BrainLink, maxTagWeight: number): LinkStyle {
   if (l.kind === 'relation' && l.relType) {
-    return { color: RELATION_COLORS[l.relType] ?? '#6b7280', width: 1.5, opacity: 0.8 }
+    return { color: RELATION_COLORS[l.relType] ?? '#6b7280', width: 0.6, opacity: 0.55 }
   }
   const share = maxTagWeight > 0 ? Math.min(1, l.weight / maxTagWeight) : 0
-  return { color: '#94a3b8', width: 0.4, opacity: 0.06 + 0.29 * share }
+  // width 0 = a 1px GL line: thousands of these cost nothing, cylinders cost a mesh each.
+  return { color: '#94a3b8', width: 0, opacity: 0.015 + 0.085 * share }
 }

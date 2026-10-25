@@ -26,20 +26,20 @@ const TABS: { key: ViewTab; label: string; icon: LucideIcon; active: string }[] 
 
 export default function Header({ tab, onTab, source, info, error, loading, onRefresh }: Props) {
   return (
-    <header className="flex items-center justify-between px-6 py-3 border-b border-gray-800 bg-gray-950/90 backdrop-blur-xs">
+    <header className="flex items-center justify-between gap-3 px-4 lg:px-6 py-3 border-b border-gray-800 bg-gray-950/90 backdrop-blur-xs">
       <div className="flex items-center gap-3 min-w-0">
         <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="Gingugu" width={28} height={28} className="rounded-md" />
         <Brain className="text-blue-500" size={24} />
-        <h1 className="text-lg font-bold text-white tracking-tight">Memory Explorer</h1>
+        <h1 className="hidden md:block text-lg font-bold text-white tracking-tight whitespace-nowrap">Memory Explorer</h1>
         <SourceBadge source={source} info={info} error={error} />
         {info && (
-          <span className="text-[10px] text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full whitespace-nowrap">
+          <span className="hidden xl:inline text-[10px] text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full whitespace-nowrap">
             {info.memories} memories · {info.relations} relations
           </span>
         )}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         <button
           onClick={onRefresh}
           disabled={loading}
@@ -53,11 +53,12 @@ export default function Header({ tab, onTab, source, info, error, loading, onRef
             <button
               key={key}
               onClick={() => onTab(key)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+              title={label}
+              className={`flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all ${
                 tab === key ? `${active} text-white shadow-lg` : 'text-gray-400 hover:text-white'
               }`}
             >
-              <Icon size={14} /> {label}
+              <Icon size={14} /> <span className="hidden lg:inline">{label}</span>
             </button>
           ))}
         </div>

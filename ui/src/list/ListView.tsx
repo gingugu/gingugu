@@ -12,7 +12,7 @@ interface Props {
   onSelect: (id: string) => void
 }
 
-const COLS = 'grid-cols-[minmax(0,1fr)_9rem_8rem_7rem_4rem_6rem_5rem_1.5rem]'
+const COLS = 'grid-cols-[minmax(14rem,1fr)_9rem_8rem_7rem_4rem_6rem_5rem_1.5rem]'
 const HEADERS: { key: SortKey; label: string }[] = [
   { key: 'title', label: 'Title' },
   { key: 'namespace', label: 'Namespace' },
@@ -62,8 +62,8 @@ export default function ListView({ brain, selectedId, onSelect }: Props) {
         <span className="text-xs text-gray-600">{rows.length} of {brain.nodes.length}</span>
       </div>
 
-      <div className="flex-1 min-h-0 flex flex-col border border-gray-800 rounded-xl overflow-hidden">
-        <div className={`grid ${COLS} gap-3 px-3 py-2 bg-gray-900 border-b border-gray-800 text-[10px] uppercase tracking-wider text-gray-500`}>
+      <div className="flex-1 min-h-0 flex flex-col border border-gray-800 rounded-xl overflow-x-auto overflow-y-hidden">
+        <div className={`grid ${COLS} min-w-[60rem] gap-3 px-3 py-2 bg-gray-900 border-b border-gray-800 text-[10px] uppercase tracking-wider text-gray-500`}>
           {HEADERS.map((h) => (
             <button key={h.key} onClick={() => clickHeader(h.key)}
               className="flex items-center gap-1 text-left hover:text-gray-300">
@@ -73,7 +73,7 @@ export default function ListView({ brain, selectedId, onSelect }: Props) {
           ))}
           <span />
         </div>
-        <div ref={scroller} className="flex-1 overflow-y-auto">
+        <div ref={scroller} className="flex-1 min-w-[60rem] overflow-y-auto">
           <div style={{ height: virtual.getTotalSize(), position: 'relative' }}>
             {virtual.getVirtualItems().map((v) => {
               const n = rows[v.index]

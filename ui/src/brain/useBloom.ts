@@ -8,12 +8,15 @@ export function useBloom(fgRef: MutableRefObject<ForceGraphMethods | undefined>,
   useEffect(() => {
     const fg = fgRef.current
     if (!fg || !ready) return
+    // An explicit scene background: without it the composer renders a
+    // transparent clear, and the bloom pass lifts it to slate gray.
+    fg.scene().background = new THREE.Color('#05060a')
     const composer = fg.postProcessingComposer()
     const pass = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
-      1.1,
-      0.6,
-      0.15,
+      0.65, // strength
+      0.35, // radius
+      0.22, // threshold: only genuinely bright things bloom
     )
     composer.addPass(pass)
     return () => {

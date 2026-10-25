@@ -95,7 +95,7 @@ export default function TimelineView({ memories, namespaces }: Props) {
     <div className="p-6 space-y-6 overflow-y-auto h-full">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-lg font-bold text-white">MemoryLite Timeline</h2>
+          <h2 className="text-lg font-bold text-white">Memory Timeline</h2>
           <p className="text-xs text-gray-500 mt-0.5">
             {memories.length} memories across {namespaces.length} namespaces
             {stats && ` · ${stats.first} → ${stats.last} (${stats.totalDays}d, ${stats.avgPerDay}/day avg)`}

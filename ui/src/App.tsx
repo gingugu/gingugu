@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useBrainData } from './api/useBrainData'
 import Brain3D from './brain/Brain3D'
 import { toBrain, toLiteMemories } from './brain/model'
@@ -9,10 +9,17 @@ import DetailDrawer from './detail/DetailDrawer'
 import ListView from './list/ListView'
 import Header from './shell/Header'
 import type { ViewTab } from './types'
+import { readDeepLink, writeDeepLink } from './shell/deepLink'
 
 export default function App() {
-  const [tab, setTab] = useState<ViewTab>('brain')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [link] = useState(() => readDeepLink(window.location.search))
+  const [tab, setTab] = useState<ViewTab>(link.tab)
+  const [selectedId, setSelectedId] = useState<string | null>(link.selectedId)
+  // Keep the address bar a shareable link to what is on screen.
+  useEffect(() => {
+    const query = writeDeepLink({ tab, selectedId })
+    window.history.replaceState(null, '', `${window.location.pathname}${query}`)
+  }, [tab, selectedId])
   const [includeDates, setIncludeDates] = useState(false)
   const { source, info, graph, error, loading, refresh, fetchDetail } = useBrainData(includeDates)
 

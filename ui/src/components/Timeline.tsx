@@ -12,7 +12,7 @@ export default function Timeline({ memories }: Props) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
       <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-        MemoryLite Timeline
+        Memory Timeline
       </h3>
       <ResponsiveContainer width="100%" height={180}>
         <AreaChart data={data} margin={{ left: -10 }}>

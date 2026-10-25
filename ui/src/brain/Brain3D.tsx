@@ -62,10 +62,18 @@ export default function Brain3D({
     if (!fg || !ready) return
     forceRef.current = lobeForce(anchors, settings.lobeStrength)
     fg.d3Force('lobe', forceRef.current)
-    fg.d3Force('charge')?.strength?.(-18)
+    // The anchors place the brain; d3's centroid force would fight them and
+    // drag the core off-centre whenever the lobes are unevenly sized.
+    fg.d3Force('center', null)
+    fg.d3Force('charge')?.strength?.(-30)
+    // Relations shape the brain; tag links mostly draw it. At full strength
+    // thousands of tag links would melt the small lobes into the big ones.
+    fg.d3Force('link')?.strength?.((l: GLink) =>
+      l.kind === 'tag' ? 0.01 + 0.06 * Math.min(1, l.weight / (maxTagWeight || 1)) : 0.35,
+    )
     fg.d3ReheatSimulation()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anchors, ready])
+  }, [anchors, ready, maxTagWeight])
   useEffect(() => {
     forceRef.current?.strength(settings.lobeStrength)
     fgRef.current?.d3ReheatSimulation()
@@ -116,6 +124,15 @@ export default function Brain3D({
     [],
   )
 
+  // Frame the brain once, when the first layout settles; never yank the
+  // camera away from someone who is already exploring.
+  const framed = useRef(false)
+  const onEngineStop = useCallback(() => {
+    if (framed.current || selectedId) return
+    framed.current = true
+    fgRef.current?.zoomToFit(800, 10)
+  }, [selectedId])
+
   const onClick = useCallback(
     (n: object) => {
       const g = n as GNode
@@ -156,6 +173,7 @@ export default function Brain3D({
         linkDirectionalParticles={particles}
         linkDirectionalParticleSpeed={0.006}
         linkDirectionalParticleWidth={1.5}
+        onEngineStop={onEngineStop}
         onNodeClick={onClick}
         onBackgroundClick={() => onSelect(null)}
       />
