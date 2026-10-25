@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Memory Explorer read API. `gingugu serve` answers `GET /ui/api/*` (`info`,
+  `graph`, `memory/<id>`, `search`, `stats`, `events`) for owner tokens only
+  (a scoped token gets 403). Every surface is an observer: a read-only
+  connection, no access credit, no `query_log` row, no spreading activation.
+  `search` returns the score breakdown; `events` is a cursored feed of the
+  agent's recall activity. `gingugu ui` serves the same API from the local DB.
+- `gingugu ui` detects local versus remote brain per request (the same
+  `MEMORY_REMOTE_URL` / machine setting the hooks use) and forwards `/api/*` to
+  the remote brain's `/ui/api/*` with the keychain token, which never reaches
+  the browser. Every response carries `mode`; `/api/info` also names the brain.
+
+### Security
+
+- `gingugu ui` refuses to bind a non-loopback `--host`. The Explorer API is the
+  whole brain and has no auth of its own, so a LAN bind would publish it.
+
 ---
 
 ## [0.25.0] - 2026-10-19
