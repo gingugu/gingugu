@@ -17,6 +17,15 @@ export function linkify(body: string, titleIndex: Map<string, string>): string {
     .join('')
 }
 
+/** A crafted `%` sequence must render as text, not throw out of the drawer. */
+function safeDecode(raw: string): string | null {
+  try {
+    return decodeURIComponent(raw)
+  } catch {
+    return null
+  }
+}
+
 interface Props {
   body: string
   titleIndex: Map<string, string>
@@ -32,7 +41,8 @@ export default function MemoryBody({ body, titleIndex, onSelect }: Props) {
         components={{
           a: ({ href, children }) => {
             if (href?.startsWith(MEM)) {
-              const id = decodeURIComponent(href.slice(MEM.length))
+              const id = safeDecode(href.slice(MEM.length))
+              if (id === null) return <span>{children}</span>
               return (
                 <button onClick={() => onSelect(id)}
                   className="text-blue-400 hover:text-blue-300 underline decoration-dotted">
@@ -42,12 +52,15 @@ export default function MemoryBody({ body, titleIndex, onSelect }: Props) {
             }
             if (href === '#nomem') return <span className="text-gray-600">[[{children}]]</span>
             return (
-              <a href={href} target="_blank" rel="noreferrer noopener"
+              <a href={href} title={href} target="_blank" rel="noreferrer noopener"
                 className="text-blue-400 hover:text-blue-300 underline">
                 {children}
               </a>
             )
           },
+          // Never fetch a remote image: viewing a memory must not tell a third
+          // party who looked, or when. The alt text stands in for it.
+          img: ({ alt }) => <span className="text-gray-500 italic">[image: {alt || 'untitled'}]</span>,
           code: ({ children }) => (
             <code className="bg-gray-800 rounded-sm px-1 py-0.5 text-[12px] text-gray-200">{children}</code>
           ),
