@@ -43,8 +43,8 @@ def test_main_prod_default(monkeypatch):
 def test_main_no_browser_and_custom_port(monkeypatch):
     calls = {}
     monkeypatch.setattr(webui, "serve_prod", _record_prod(calls))
-    webui.main(["--no-browser", "--port", "9999", "--host", "0.0.0.0"])
-    assert calls == {"host": "0.0.0.0", "port": 9999, "ob": False}
+    webui.main(["--no-browser", "--port", "9999", "--host", "127.0.0.1"])
+    assert calls == {"host": "127.0.0.1", "port": 9999, "ob": False}
 
 
 def test_main_dev_flag(monkeypatch):

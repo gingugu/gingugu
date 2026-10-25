@@ -19,6 +19,7 @@ from gingugu.storage import MemoryStore
 from tests.client_grants_fixtures import hook, live, root  # noqa: F401 - client-grant suites
 from tests.hook_remote_fixtures import remote  # noqa: F401 - remote-mode hook suites
 from tests.scoped_fixtures import brain  # noqa: F401 - shared fixture for the scoped suites
+from tests.ui_api_fixtures import seeded  # noqa: F401 - Explorer API suites
 
 
 class _MemoryKeyring(KeyringBackend):
