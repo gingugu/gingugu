@@ -131,7 +131,7 @@ Future upgrades once the core is battle-tested.
 | Memory import/export advanced (selective, encrypted) | ⬜ | Builds on Phase 4 export |
 | Auto-generate rules files from patterns | ⬜ | Learned preferences → rules (`.windsurfrules`, `.cursorrules`, `AGENTS.md`) |
 | Ranking tuning: BM25 relevance weighting | ✅ | v0.3.0: the `normalize_bm25` compression issue (freshness/confidence outranking a more on-topic memory) fixed via RRF (Reciprocal Rank Fusion) hybrid scoring |
-| Web dashboard for browsing memories | ✅ | `ui/`: React knowledge graph + dashboard, Trust Map (confidence-led, dormancy badge), full timeline view, hover highlighting, search/filter, layout controls, auto-refresh, GitHub Pages workflow |
+| Web dashboard for browsing memories | ✅ | `ui/`: 3D brain (namespace lobes, trust glow) + virtualized list + detail drawer (markdown, wiki links, relations, claims, tripwires), Dashboard, Trust Map (confidence-led, dormancy badge), full timeline view, search/filter, source badge with auto-polling and deep links, fictional static demo on GitHub Pages (3D rebuild unreleased) |
 | Tag-based spreading activation | ⬜ | Extend reactivation beyond relation edges to shared-tag clusters |
 | Backup/sync strategy | ⬜ | git-backed or rsync |
 | Multi-workspace support | ⬜ | Multiple IDE/agent instances |

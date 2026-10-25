@@ -13,11 +13,37 @@ owner tokens only (`serve_ui.py`). `gingugu ui` answers per request from the
 local DB or, with a remote brain on, forwards to the brain's `/ui/api/*`
 (`webui_remote.py`; the keychain token goes in the Authorization header and
 nowhere else). Hardening: loopback-only `--host`, loopback `Host` check, route
-allowlist before any forward, no CORS, no redirects, `/api/export` local-only.
-No MCP tool-surface change, no schema migration. Next PRs: the new 3D frontend
-shell; synapses + time-lapse; semantic layout + hygiene overlays; presentation
-mode (namespace visibility + per-memory overrides, `gingugu ui --present` hard
-lock + a soft UI toggle - needs a schema migration).
+allowlist before any forward, no CORS, no redirects.
+No MCP tool-surface change, no schema migration.
+
+**Explorer overhaul, PR 2 of 5: the 3D brain frontend.** Branch
+`feature/ui-3d-brain`, local, stacked on PR 1 (`feature/ui-api`). Frontend
+rebuilt: a 3D brain (`react-force-graph-3d` + `three`, UnrealBloom) with
+namespace lobes (`crow` at the centre, the viewer's persona on an inner shell,
+others on an outer Fibonacci sphere); colour by type, namespace or trust; glow =
+trust; pins haloed; dormant and deprecated fade, never hidden; weighted tag
+links (toggle, date tags opt-in), a lobe-pull slider, camera fit when the layout
+settles, click to fly. A virtualized list view (`@tanstack/react-virtual`); a
+detail drawer (`react-markdown` + `remark-gfm`, no raw HTML, `[[wiki links]]`,
+relations, claims, tripwires, recall sparkline; remote images are never loaded,
+alt text shows instead; external links show their URL on hover); a source badge
+(LOCAL / REMOTE host / STATIC demo / error); polling `/api/info` every 10s and
+refetching `/graph` only when `graph_version` changes; deep links
+`?view=<tab>&m=<id>` synced to the address bar. Dashboard, Timeline and Trust
+Map ported onto a body-less `MemoryLite`. Removed: the 2D graph, the Load JSON
+upload, the refresh-interval select (a manual refresh button stays), and the
+legacy `/api/export` route (gone entirely). `/api/info` gains `graph_version`
+(`ui_api`) and `persona` (`webui`, the viewer's `MEMORY_PERSONA`).
+`ui/dump_static.py --db` (required) writes
+`ui/src/data/static/{graph,info,details}.json`; `sample.json` is deleted and the
+public static demo is fictional. New vitest suite (`cd ui && npm test`,
+`npm run typecheck`), a new `ui` CI job, Node 22 in `ui-pages.yml` and
+`release.yml`.
+
+**Remaining Explorer PRs:** PR 3 synapses + time-lapse + query lens; PR 4
+semantic layout + hygiene overlays; PR 5 presentation mode (namespace visibility
++ per-memory overrides, `gingugu ui --present` hard lock + a soft UI toggle -
+needs a schema migration).
 
 0.25.0 released 2026-10-19.
 

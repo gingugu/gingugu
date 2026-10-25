@@ -636,8 +636,16 @@ browser → gingugu ui (webui.py, loopback bind + loopback Host only)
       local : ui_api.dispatch(path, params, env)  on a mode=ro connection
       remote: webui_remote.forward → GET <brain>/ui/api/*  (owner token, pinned TLS,
               no redirects) → serve_ui (owner-only) → ui_api.dispatch on the brain
-  → JSON body stamped `mode`  (/api/info also names the brain)
+  → JSON body stamped `mode`  (/api/info also names the brain and the viewer's persona)
 ```
+
+Client loop: the page polls `/api/info` every 10s. `/api/info` and `/api/graph`
+both carry `graph_version`; the page refetches `/graph` only when it changes, so
+an idle brain costs one small request per tick. A memory's detail is fetched on
+demand from `/memory/<id>`. The URL mirrors state as `?view=<tab>&m=<id>`. In
+the static demo there is no server: when `/api/info` fails on a static host the page loads the bundled
+`graph.json`/`info.json`/`details.json` (written by `ui/dump_static.py --db`
+from the same `ui_api.dispatch`) and does not poll.
 
 Routes: `/info`, `/graph` (light nodes without bodies, relations, IDF tag
 edges), `/memory/<id>` (body, tags, relations in and out, claims, tripwires,

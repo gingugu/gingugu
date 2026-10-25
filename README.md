@@ -1007,11 +1007,10 @@ cd ui && npm install   # first time only
 gingugu ui --dev       # runs the API backend + Vite (:5173) together
 ```
 
-The UI shows a green **LIVE** badge when pulling from your database. Features:
-
-- **Knowledge Graph** - interactive force-directed graph of memories and relationships
-- **Dashboard** - stats, charts by type/namespace/confidence, tag cloud, timeline
-- **Refresh** - pull fresh data anytime; falls back to static sample when API is offline
+In dev mode the same views apply: the **Brain**, **List**, **Dashboard**,
+**Timeline** and **Trust Map** tabs above, a refresh button for a manual pull,
+and a bundled fictional demo when no API is reachable. Run the UI tests with
+`cd ui && npm test`.
 
 ---
 

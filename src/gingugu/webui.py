@@ -14,7 +14,7 @@ Two modes, one command:
 Either way ``/api/*`` is answered per request by whichever brain is in force
 (``remote.active()``): the local DB through ``ui_api.dispatch``, or a forward
 to the remote brain's ``/ui/api/*`` with the keychain token. Every JSON body
-carries ``mode``. ``/api/export`` is the legacy full dump, local mode only.
+carries ``mode``.
 
 The API is the whole brain and has no auth of its own, so ``main`` refuses to
 bind anything but a loopback address, every request must carry a loopback
