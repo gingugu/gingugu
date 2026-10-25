@@ -22,10 +22,11 @@ def info(conn: sqlite3.Connection, params: dict[str, str]) -> dict:
         "schema_version": LATEST_SCHEMA_VERSION,
         "memories": conn.execute("SELECT COUNT(*) FROM memories").fetchone()[0],
         "relations": conn.execute("SELECT COUNT(*) FROM relations").fetchone()[0],
+        "graph_version": graph_version(conn),
     }
 
 
-def _version(conn: sqlite3.Connection) -> str:
+def graph_version(conn: sqlite3.Connection) -> str:
     """Changes whenever the data does; cheap enough to poll."""
     count, newest = conn.execute("SELECT COUNT(*), MAX(updated_at) FROM memories").fetchone()
     rels = conn.execute("SELECT COUNT(*) FROM relations").fetchone()[0]
@@ -92,7 +93,7 @@ def graph(conn: sqlite3.Connection, params: dict[str, str]) -> dict:
     )
     return {
         "ok": True,
-        "version": _version(conn),
+        "version": graph_version(conn),
         "namespaces": namespaces,
         "tags": tag_names,
         "nodes": nodes,

@@ -1,10 +1,10 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { Memory, MemoryNamespace } from '../types'
+import { MemoryLite, NamespaceRef } from '../types'
 import { getNamespaceDistribution } from '../lib/graph'
 
 interface Props {
-  memories: Memory[]
-  namespaces: MemoryNamespace[]
+  memories: MemoryLite[]
+  namespaces: NamespaceRef[]
 }
 
 export default function NamespaceChart({ memories, namespaces }: Props) {

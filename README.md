@@ -192,7 +192,7 @@ or Rust toolchain required to use it. The MCP SDK is first-class in Python.
 | 🚀 **Auto-Context** | Surfaces relevant memories on session start - one call loads many namespaces deduped, with an optional compact mode for lighter payloads |
 | 📊 **Health Metrics** | Memory stats, dormancy reports, review sweep, namespace overviews |
 | 🔐 **Credential Vault** | Secure service-bundle storage for API keys/tokens via OS Keychain |
-| 🌐 **Memory Explorer UI** | Interactive knowledge graph + dashboard for visualizing memory data |
+| 🌐 **Memory Explorer UI** | 3D brain view, list, and dashboard for exploring memory data |
 | 📡 **Central Brain (optional)** | `gingugu serve` runs the same server over HTTP behind Bearer tokens, each client scoped to its own namespaces; `gingugu promote` harvests a local brain's durable knowledge up to it with provenance stamps |
 
 ---
@@ -979,6 +979,14 @@ That serves the Explorer and a live read of your database from a single process
 on http://127.0.0.1:5174 and opens your browser. No Node.js required. Flags:
 `--port`, `--host`, `--no-browser`.
 
+Views: **Brain** (a 3D map of your memories grouped into namespace lobes; size is
+recall count, glow is trust; click a node to open it), **List** (sortable,
+filterable table), **Dashboard**, **Timeline** and **Trust Map**. The detail
+drawer renders a memory's markdown with clickable `[[Title]]` links, its
+relations, claims, tripwires and recall history. A header badge shows whether
+you are looking at your LOCAL brain, a REMOTE one, or the bundled STATIC demo,
+and the view updates itself as the brain changes.
+
 The Explorer is a read-only observer: it opens the database read-only and does
 not count as a recall, so looking at your brain never changes it. `--host` must
 be a loopback address (anything else is refused), and the server only answers
@@ -992,7 +1000,7 @@ owner-only `/ui/api/*` routes with this machine's keychain token, which never
 reaches the browser.
 
 **Working on the UI itself?** Use dev mode for Vite hot reload (needs a repo
-checkout + Node.js 18+ and npm):
+checkout + Node.js 22 and npm):
 
 ```bash
 cd ui && npm install   # first time only

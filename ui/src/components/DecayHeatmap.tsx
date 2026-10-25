@@ -1,22 +1,21 @@
 import { useMemo, useState } from 'react'
 import { Clock } from 'lucide-react'
-import { Memory, MemoryNamespace, DecayScored } from '../types'
+import { MemoryLite, NamespaceRef, DecayScored } from '../types'
 import { scoreAll, healthColor } from '../lib/decay'
 import { TYPE_COLORS } from '../lib/colors'
-import MemoryDetail from './MemoryDetail'
 
 type SortKey = 'health' | 'days' | 'access' | 'created'
 type GroupKey = 'none' | 'namespace' | 'type' | 'confidence'
 
 interface Props {
-  memories: Memory[]
-  namespaces: MemoryNamespace[]
+  memories: MemoryLite[]
+  namespaces: NamespaceRef[]
+  onSelect: (id: string) => void
 }
 
-export default function DecayHeatmap({ memories, namespaces }: Props) {
+export default function DecayHeatmap({ memories, namespaces, onSelect }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('health')
   const [groupKey, setGroupKey] = useState<GroupKey>('namespace')
-  const [selected, setSelected] = useState<Memory | null>(null)
 
   const scored = useMemo(() => scoreAll(memories), [memories])
 
@@ -128,20 +127,13 @@ export default function DecayHeatmap({ memories, namespaces }: Props) {
             )}
             <div className="grid grid-cols-[repeat(auto-fill,minmax(28px,1fr))] gap-1">
               {items.map((s) => (
-                <Cell key={s.memory.id} scored={s} onClick={() => setSelected(s.memory)} />
+                <Cell key={s.memory.id} scored={s} onClick={() => onSelect(s.memory.id)} />
               ))}
             </div>
           </div>
         ))}
       </div>
 
-      {selected && (
-        <MemoryDetail
-          memory={selected}
-          namespaces={namespaces}
-          onClose={() => setSelected(null)}
-        />
-      )}
     </div>
   )
 }
