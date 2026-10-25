@@ -17,7 +17,9 @@ AI client (Claude Code / Cursor / Windsurf / …)
         ▼                                        ▼
   config.py (DB path)                    SQLite (memories + FTS5 + relations)
                                                  ▲
-                              webui.py ───────────┘  (read-mostly Memory Explorer; `gingugu ui`)
+                              webui.py ───────────┘  (read-only Memory Explorer; `gingugu ui`;
+                                  │                      ui_api.dispatch on a mode=ro connection)
+                                  └──► remote brain's GET /ui/api/*  (when a remote brain is on)
 ```
 
 ## Layers
@@ -27,7 +29,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
    share this path: **stdio** (default) and **streamable HTTP** via `serve.py`
    (`gingugu serve`), which wraps the same server in a Starlette app with
    Bearer-token auth middleware, a `/healthz` probe, `POST /token/derive` and,
-   given the server's context, the owner-only `POST /hook/*` routes; the
+   given the server's context, the owner-only `POST /hook/*` routes and the
+   owner-only `GET /ui/api/*` Explorer read routes (`serve_ui.py`); the
    middleware resolves each token to a grant and a kind (see **Scoped tokens**
    and **Remote mode** below). The `credential_*` tools
    are gated by `MEMORY_CREDENTIALS_ENABLED` so a shared instance can omit the
@@ -57,7 +60,11 @@ AI client (Claude Code / Cursor / Windsurf / …)
    confirmation for destructive tools; see Key Decisions), `proxy_vault_link`
    (the local vault behind an in-memory MCP session; see Remote mode), `client_grants` (each server
    publishes its grant for its client's hooks; see Warm minions), `claude_trust`
-   (whether Claude Code trusts a folder, for the untrusted-minion warning). `storage` owns the `memories` row only; the satellite tables
+   (whether Claude Code trusts a folder, for the untrusted-minion warning),
+   `ui_api/` (the Explorer's read-only observer API: `dispatch` + the
+   `known_route` allowlist over a `mode=ro` connection; see Key Decisions),
+   `serve_ui` and `webui_remote` (its two transports: `/ui/api/*` on a brain, and
+   `gingugu ui`'s forwarder to it; see Remote mode). `storage` owns the `memories` row only; the satellite tables
    it drags along have their own owners (`tags`, `access`, `embedding_sync`,
    `claim_sync`), reached through the `storage_derived.DerivedTables`
    delegation surface, which also carries `log_query` for `query_log` (owned by
@@ -510,6 +517,15 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   it is used or sent to `/hook/warmup`. Every name sent to a `/hook/*` route
   passes `hook_remote_flows._sendable` first (the routes' own name rule), so an
   odd folder name is left out rather than 400ing the whole request.
+- **Explorer read API in remote mode** (`serve_ui.py` server, `webui_remote.py`
+  client): `gingugu serve` answers `GET /ui/api/*` (`info`, `graph`,
+  `memory/<id>`, `search`, `stats`, `events`) for owner tokens only (scoped and
+  derived get 403, no token 401), by running `ui_api.dispatch` in a worker thread
+  on a read-only connection. `gingugu ui` forwards its own `/api/*` there with
+  the keychain owner token in the `Authorization` header only, verifying through
+  `remote_tls.verify_for`, never following a redirect; the token never reaches
+  the browser or an error body. The route allowlist (`ui_api.known_route`) runs
+  before any forward.
 
 ## TLS on the brain (secure off the box, zero-setup on it)
 
@@ -963,13 +979,33 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   safety net when a migration goes wrong, so it is the one copy that must be
   current. See `.ai/standards/02-database.md`.
 - **The UI ships in the wheel.** `gingugu ui` (`webui.py`) serves the pre-built
-  React bundle *and* a live `/api/export` read from one process on one port, so
+  React bundle *and* the live `/api/*` read API from one process on one port, so
   pip-installed users get the Memory Explorer with no repo checkout and no Node.
+  The Explorer reads through that API (`ui_api/`), not the legacy `/api/export`
+  full dump, which stays local-only until the new frontend lands.
   The bundle is bundled via hatch `force-include` (`ui/dist` → `gingugu/_ui_dist`,
   built in `release.yml` before `uv build`); `webui.find_dist()` falls back to
   `ui/dist` in a source checkout. `--dev` spawns the Vite dev server for hot
   reload. Same-origin serving means the prod path needs no CORS. Static serving
   guards against path traversal and falls back to `index.html` (SPA routing).
+- **The Explorer is a pure observer.** `ui_api/` opens the DB `mode=ro` (it never
+  migrates or creates), gives no access credit, writes no `query_log` row and
+  runs no spreading activation; `/stats` passes `prune=False` so a read never
+  prunes `access_log`. Opening the Explorer cannot change the brain it shows.
+  No MCP tool-surface change and no schema migration.
+- **Owner-only on serve, per-request local or remote on `gingugu ui`.** The API
+  shows the whole brain, so `/ui/api/*` takes owner tokens only. `gingugu ui`
+  asks `remote.active()` on every request: the local DB through `dispatch`, or a
+  forward to the brain. The owner token lives in the keychain and is sent only
+  in the forwarder's `Authorization` header, never to the browser.
+- **`gingugu ui` is a loopback-only tool with no auth of its own.** `--host`
+  must be loopback (exit 2 otherwise); every request needs a loopback `Host`
+  header (403 otherwise, against DNS rebinding); unknown `/api` routes 404 from
+  an allowlist *before* anything is forwarded (httpx2 resolves `..`, so a
+  non-allowlisted path could otherwise make the forwarder a confused deputy);
+  no origin is granted CORS (Vite proxies `/api` in dev). Anything that can reach
+  the port can read the brain, the remote one in remote mode, so this is a
+  single-user-machine tool by design.
 - **Never-forget over decay.** Biological-style decay was removed because the
   product promise is "your AI never forgets"; dormancy + spreading activation
   preserves recall quality without deleting history.

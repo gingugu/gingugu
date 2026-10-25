@@ -1,10 +1,25 @@
 # Project Status
 
-_Last updated: 2026-10-19_
+_Last updated: 2026-10-25_
 
 ## In Flight
 
-Nothing in flight. 0.25.0 released 2026-10-19.
+**Explorer overhaul, PR 1 of 5: read API + remote mode + hardening.** Branch
+`feature/ui-api`, local, not yet pushed. `ui_api/` is a read-only observer API
+(`/info`, `/graph`, `/memory/<id>`, `/search`, `/stats`, `/events`: read-only
+connection, no access credit, no `query_log` row, no spreading activation,
+`stats` with `prune=False`). `gingugu serve` mounts it at `GET /ui/api/*` for
+owner tokens only (`serve_ui.py`). `gingugu ui` answers per request from the
+local DB or, with a remote brain on, forwards to the brain's `/ui/api/*`
+(`webui_remote.py`; the keychain token goes in the Authorization header and
+nowhere else). Hardening: loopback-only `--host`, loopback `Host` check, route
+allowlist before any forward, no CORS, no redirects, `/api/export` local-only.
+No MCP tool-surface change, no schema migration. Next PRs: the new 3D frontend
+shell; synapses + time-lapse; semantic layout + hygiene overlays; presentation
+mode (namespace visibility + per-memory overrides, `gingugu ui --present` hard
+lock + a soft UI toggle - needs a schema migration).
+
+0.25.0 released 2026-10-19.
 
 ## Recently Completed
 
@@ -3283,7 +3298,9 @@ v0.2.0).
   self-validating.
 
 - **`gingugu ui --host` exposes an unauthenticated full-DB export.** Found
-  2026-08-03, still unfiled as an issue.
+  2026-08-03. **Fixed on `feature/ui-api` (unreleased):** `--host` refuses a
+  non-loopback address, every request needs a loopback `Host`, and `/api/export`
+  is local-only and slated for removal.
 
 - **Memory cleanup 3B: content read of the untouched namespaces.** The last
   item in the cleanup arc, and the only one not started. ~540 memories across

@@ -22,10 +22,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the remote brain's `/ui/api/*` with the keychain token, which never reaches
   the browser. Every response carries `mode`; `/api/info` also names the brain.
 
+### Changed
+
+- `gingugu ui`'s legacy `/api/export` is local-only: it answers 404 in remote
+  mode and goes away when the new frontend lands. The Explorer reads through the
+  read API instead.
+
 ### Security
 
 - `gingugu ui` refuses to bind a non-loopback `--host`. The Explorer API is the
   whole brain and has no auth of its own, so a LAN bind would publish it.
+- `gingugu ui` answers only requests whose `Host` header is a loopback name or
+  address (403 otherwise), which closes DNS rebinding.
+- `gingugu ui` forwards only the Explorer's own routes (an allowlist, checked
+  before the owner token is attached). An unknown path is a 404 and is never
+  forwarded, so a `..` path cannot turn the forwarder into a confused deputy.
+- `gingugu ui` grants no CORS to any origin (the Vite dev server proxies
+  `/api`), and the remote forwarder never follows redirects, so the token
+  cannot be bounced to another host.
+- Fixes the known issue that `gingugu ui --host` exposed an unauthenticated
+  full-DB export.
 
 ---
 
