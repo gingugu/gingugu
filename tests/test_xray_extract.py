@@ -10,9 +10,9 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from gingugu.xray.extract import XrayError
 
 from gingugu.xray import extract
+from gingugu.xray.extract import XrayError
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -26,7 +26,7 @@ def _git(repo: Path, *args: str) -> None:
 
 def _repo(tmp_path: Path, files: dict[str, str], *, commit: bool = True) -> Path:
     repo = tmp_path / "repo"
-    repo.mkdir()
+    repo.mkdir(parents=True)
     _git(repo, "init", "-q")
     for rel, text in files.items():
         p = repo / rel
@@ -151,7 +151,8 @@ def test_from_import_of_a_submodule_is_a_candidate_edge(tmp_path):
     x = extract.extract(repo)
     assert _edge(x, "main.py", "pkg/__init__.py").certain is True
     assert _edge(x, "main.py", "pkg/mod.py").certain is False
-    # `helper` is a name defined in the package, not a file: no edge, not unresolved.
+    # `helper` is not a file. It may be a name the package defines or nothing at all;
+    # static reading can't tell, so by policy it gets no edge and is not unresolved.
     assert _edges(x) == {("main.py", "pkg/__init__.py"), ("main.py", "pkg/mod.py")}
     assert x.unresolved == 0
 
@@ -251,7 +252,7 @@ def test_typing_dot_type_checking_is_recognized(tmp_path):
     assert _edge(extract.extract(repo), "main.py", "t.py").kind == "type_checking"
 
 
-def test_a_pair_imported_twice_keeps_the_strongest(tmp_path):
+def test_a_pair_imported_twice_keeps_one_real_occurrence(tmp_path):
     repo = _repo(
         tmp_path,
         {
@@ -261,9 +262,43 @@ def test_a_pair_imported_twice_keeps_the_strongest(tmp_path):
         },
     )
     e = _edge(extract.extract(repo), "main.py", "pkg/mod.py")
-    # lazy+certain and module+candidate merge to: certain (any certain), module (most binding)
-    assert e.certain is True
-    assert e.kind == "module"
+    # lazy+certain and module+candidate: the edge is the strongest single occurrence
+    # (certain first, then most binding kind), never fields mixed from two.
+    assert (e.certain, e.kind) == (True, "lazy")
+
+
+def test_merge_prefers_the_most_binding_kind_among_certain_occurrences(tmp_path):
+    repo = _repo(tmp_path, {"b.py": "", "main.py": "def f():\n    import b\nimport b\n"})
+    e = _edge(extract.extract(repo), "main.py", "b.py")
+    assert (e.certain, e.kind) == (True, "module")
+
+
+def test_type_checking_wins_over_lazy(tmp_path):
+    repo = _repo(
+        tmp_path,
+        {
+            "t.py": "",
+            "main.py": (
+                "from typing import TYPE_CHECKING\n"
+                "if TYPE_CHECKING:\n"
+                "    def f():\n"
+                "        import t\n"
+            ),
+        },
+    )
+    assert _edge(extract.extract(repo), "main.py", "t.py").kind == "type_checking"
+
+
+def test_tracked_symlinks_are_skipped(tmp_path):
+    outside = tmp_path / "outside.py"
+    outside.write_text("import os\n")
+    repo = _repo(tmp_path, {"a.py": ""}, commit=False)
+    (repo / "link.py").symlink_to(outside)
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "init")
+    x = extract.extract(repo)
+    assert [f.path for f in x.files] == ["a.py"]
+    assert x.skipped_symlinks == ["link.py"]
 
 
 # --- coverage -------------------------------------------------------------------
@@ -309,6 +344,30 @@ def test_entry_points_from_pyproject_main_guard_and_dunder_main(tmp_path):
     )
     marked = {f.path for f in extract.extract(repo).files if f.is_entry}
     assert marked == {"src/src_pkg/cli.py", "src/src_pkg/__main__.py", "tool.py"}
+
+
+def test_gui_scripts_and_plugin_entry_points_are_entries(tmp_path):
+    repo = _repo(
+        tmp_path,
+        {
+            "pyproject.toml": (
+                '[project]\nname="x"\n'
+                '[project.gui-scripts]\ng = "app.gui:run"\n'
+                '[project.entry-points."pytest11"]\np = "app.plugin"\n'
+            ),
+            "app/__init__.py": "",
+            "app/gui.py": "",
+            "app/plugin.py": "",
+            "app/lib.py": "",
+        },
+    )
+    marked = {f.path for f in extract.extract(repo).files if f.is_entry}
+    assert marked == {"app/gui.py", "app/plugin.py"}
+
+
+def test_a_nested_main_guard_is_not_an_entry(tmp_path):
+    repo = _repo(tmp_path, {"lib.py": "def f():\n    if __name__ == '__main__':\n        pass\n"})
+    assert not any(f.is_entry for f in extract.extract(repo).files)
 
 
 # --- fingerprint ----------------------------------------------------------------
@@ -372,4 +431,11 @@ def test_payload_is_plain_json_without_the_local_root(tmp_path):
     assert body["extractor_version"] == extract.EXTRACTOR_VERSION
     assert {"path": "tests/test_a.py", "is_test": True, "is_entry": False} in body["files"]
     assert {"src": "a.py", "dst": "b.py", "kind": "module", "certain": True} in body["edges"]
-    assert set(body) >= {"commit", "unresolved", "dynamic", "external", "parse_errors"}
+    assert set(body) >= {
+        "commit",
+        "unresolved",
+        "dynamic",
+        "external",
+        "parse_errors",
+        "skipped_symlinks",
+    }
