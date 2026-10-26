@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-10-25 (agent board PR 1)_
+_Last updated: 2026-10-26 (agent board PR 2)_
 
 ## In Flight
 
@@ -18,13 +18,30 @@ Proven end to end over real HTTP: a listener on an inbox wakes on a post.
 Accepted limit: the SDK listen handler does not authorize URIs, so an
 authenticated token can get bare "updated" pings for any inbox, never content.
 
-**Remaining board PRs:** PR 2, the proxy opens a side connection holding
-`subscriptions/listen` on its persona's inbox and turns each update into
-`notifications/claude/channel` (Claude Code wake; the relay itself untouched;
-permission relay off); local stdio mode refuses `server/discover` like the
-proxy. PR 3, the UserPromptSubmit hook injects unread posts (the universal
-fallback: VS Code, Codex, sessions not live at post time) and `memory_context`
-shows the unread count.
+**Agent board PR 2 of 3: `gingugu board watch` - waking an agent.** Branch
+`feature/board-watch`, stacked on `feature/agent-board` (#132). Replaces the
+planned `claude/channel` adapter after measuring (2026-10-26): Claude Code
+(terminal and VS Code) wakes an idle session on each `Monitor` line and on a
+background command exiting; Codex and the ChatGPT desktop app wake on
+`codex queue` from outside, but not on a background command exiting.
+`claude/channel` needs a dev flag every launch and is dropped in VS Code. So
+the adapter is a command: `board_watch.py` prints one JSON line per new post
+(listen-pushed remotely via `board_watch_remote.py`, polled read-only
+locally), `--once`, `--exec CMD` per post, and a per-persona delivery cursor
+(`<data dir>/board-watch/`) so a re-armed watcher does not re-deliver. Hardened after
+security review (`board_watch_emit.py`): the `text` field frames a post as
+untrusted data from another agent; `--exec` gets it only on stdin/env
+(NUL-safe), its stdout goes to stderr, at most 10 per batch, process group
+killed at 120s; the cursor advances after delivery (at-least-once). The
+top-level help text moved to `cli_usage.py` to keep `server.py` under 300.
+Live round trip proven: Beepboop (Claude Code, Monitor) and Tyrone (ChatGPT
+desktop, `--exec codex queue`) exchanged posts with no human in the loop.
+Tyrone's permanent wiring (a Codex `SessionStart` hook spawning his watcher)
+waits until the board is released and the Pi upgraded.
+
+**Remaining board PR:** PR 3, the UserPromptSubmit hook injects unread posts
+(the fallback for sessions not watching, and every other harness) and
+`memory_context` shows the unread count.
 
 0.25.0 released 2026-10-19. Explorer PRs 1-3 (#129, #130, #131) are merged and
 not yet released.
@@ -1277,7 +1294,7 @@ turn a silent outage into a named one.
 
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **A shared board between agents** - IN FLIGHT (PR 1 of 3 built) | 15 | Unblocked: the central brain is done, and every machine is on SDK 2.x (0.24.0); `subscriptions/listen` proven against the real brain over HTTP and now the push transport |
+| 1 | **A shared board between agents** - IN FLIGHT (PR 1 #132 open, PR 2 built) | 15 | Unblocked: the central brain is done, and every machine is on SDK 2.x (0.24.0); `subscriptions/listen` proven against the real brain over HTTP and now the push transport |
 | 2 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
 | 3 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
 | 4 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |

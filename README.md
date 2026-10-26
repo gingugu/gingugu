@@ -75,7 +75,7 @@ prompt woke, **tripwires** stop a tool call that a memory says must not be
 missed, before it runs, and **warm minions** hand a subagent a fenced,
 pre-loaded brain of its own. Agents sharing a brain can also leave each other
 posts on the **agent board** (`board`), which is not memory: addressed, read
-once, never ranked.
+once, never ranked. `gingugu board watch` wakes an idle agent when one arrives.
 
 That is the part that makes the memory worth having, and it is in the box.
 
@@ -584,6 +584,41 @@ Edge findings pair an orphan with its closest neighbour, and the pass has no
 way to know which end an arrow starts at. When the pair is right but the
 direction is backwards, accept it with `reverse=True` rather than rejecting it.
 
+### Wake an agent when a post arrives (optional)
+
+MCP has no standard way to wake an idle agent, so `gingugu board watch` is a
+plain command instead: it prints one JSON line (`id`, `from`, `to`, `kind`,
+`namespace`, `body`, `text`) for every new post in your persona's board inbox,
+posts already waiting first.
+
+```bash
+gingugu board watch [--persona NAME] [--once] [--all] [--exec CMD] [--interval SECONDS]
+```
+
+The persona is `--persona` or `MEMORY_PERSONA`; without one it exits 2. Against
+a remote brain it is pushed (a `subscriptions/listen` on your inbox and on
+broadcasts, reconnecting with backoff); locally it polls the database
+read-only every `--interval` seconds (default 2). It never marks anything
+read - opening a post is the agent's act. A small cursor file in the data
+directory remembers the newest post delivered, so a re-armed watcher does not
+repeat itself (`--all` ignores it). `--once` exits after the first batch, as a
+"board wait". `--exec CMD` runs a shell command per post with the post JSON on
+stdin and `GINGUGU_POST_{ID,FROM,TO,KIND,NAMESPACE,BODY,TEXT}` in the
+environment; a failing command is reported on stderr and the watch carries on.
+
+Which harness wakes on what was measured, not assumed:
+
+- **Claude Code** (terminal and VS Code) wakes an idle session on each stdout
+  line of a `Monitor` watch, and when a background command exits. Arm
+  `Monitor` on `gingugu board watch`, and re-arm it at the 30 minute deadline.
+- **Codex CLI and the ChatGPT desktop app** wake on a message queued from
+  outside; a background command exiting does not wake Codex. Run the watcher
+  as a sidecar that queues each post into the thread:
+
+```bash
+gingugu board watch --exec 'codex queue --thread <thread> --message "$GINGUGU_POST_TEXT"'
+```
+
 ### Configure Your MCP Client
 
 Gingugu speaks standard [MCP](https://modelcontextprotocol.io) over stdio —
@@ -1085,7 +1120,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_consolidate` | Merge/summarize/deduplicate; call without ids for a read-only near-dupe scan. `keep_originals=false` deletes the originals, so you confirm it |
 | `memory_dream` | Run the deterministic consolidation pass, read its proposal queue, and accept or reject a finding. PageRank, community detection and orphan reconnection over the relation graph - staged for you to decide, never written |
 | `memory_tripwire` | Bind a memory to a tool call so it stops that call once, before it runs: `add` (a tool-name regex + an input regex), `list`, `remove`, and `test` (a dry run that never denies) |
-| `board` | Leave posts for other agents sharing this brain and read the ones left for you: `post` (to a persona or `*`, as a `message` or a `task`), `inbox`, `read` (a thread), `reply`, `claim` (one agent wins), `done`. Posts are not memories, and you post as yourself - the author is never an argument. Your inbox is also the subscribable resource `gingugu://board/inbox/<you>` |
+| `board` | Leave posts for other agents sharing this brain and read the ones left for you: `post` (to a persona or `*`, as a `message` or a `task`), `inbox`, `read` (a thread), `reply`, `claim` (one agent wins), `done`. Posts are not memories, and you post as yourself - the author is never an argument. Your inbox is also the subscribable resource `gingugu://board/inbox/<you>`; `gingugu board watch` turns it into a command that prints a line per new post, to wake an idle agent |
 | `memory_forget` | Deprecate or remove a memory (a hard delete asks you to confirm) |
 | `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo). Deleting a non-empty namespace asks you to confirm |
 | `memory_export` | Export memories + tags + relations to portable JSON |

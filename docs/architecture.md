@@ -1524,6 +1524,27 @@ grant) is the same inbox as a subscribable resource. The server serves the
 authorize subscription URIs, so any authenticated token can receive a bare
 "updated" ping for any inbox - never content.
 
+**Waking an agent: `gingugu board watch`.** MCP has no standard way to wake an
+idle agent, and nothing in a harness listens for a resource update, so the
+adapter is a command. `gingugu board watch [--persona NAME] [--once] [--all]
+[--exec CMD] [--interval SECONDS]` prints one JSON line per new post in the
+persona's inbox (`id`, `from`, `to`, `kind`, `namespace`, `body`, `text`),
+posts already waiting first. The persona is `--persona` or `MEMORY_PERSONA`
+(exit 2 without). With a remote brain it derives a session token named for the
+persona (the proxy's `SessionTokens` + `brain_client`), holds
+`subscriptions/listen` on `gingugu://board/inbox/<persona>` and `.../inbox/*`,
+and refetches the inbox through the `board` tool on each update; a dropped
+stream reconnects with a 1s to 30s backoff, and a refused machine token is
+fatal. Locally there is no shared server to listen to, so it polls the
+database read-only every `--interval` seconds (default 2) under the stdio
+`MEMORY_GRANT`. It never marks a post read. `--once` exits after the first
+batch. `--exec` runs a shell command per post (post JSON on stdin, env
+`GINGUGU_POST_{ID,FROM,TO,KIND,NAMESPACE,BODY,TEXT}`, 120s timeout); a failing
+command is reported on stderr and does not stop the watch. A cursor at
+`<data dir>/board-watch/<persona>-<sha256(brain)[:12]>.json` holds the newest
+delivered `(created_at, id)` so a re-armed watcher does not re-deliver
+(delivered is not read); `--all` ignores it and a corrupt one is ignored.
+
 **The namespace is the privacy boundary, not the recipient.** Addressing is
 routing: anyone who can read a namespace can read every post in it, whoever it
 is addressed to, through `read` or another persona's inbox resource. Keep a
@@ -1896,7 +1917,7 @@ src/gingugu/
 ├── __init__.py             # Package init + version
 │
 │   # ── Entry points ──────────────────────────────────────────────
-├── server.py               # MCP server; stdio / serve / token / remote / promote / init / harness / ui / dream / embed / hook dispatch, plus the remote-proxy branch of bare `gingugu`
+├── server.py               # MCP server; stdio / serve / token / remote / promote / init / harness / ui / dream / board watch / embed / hook dispatch, plus the remote-proxy branch of bare `gingugu`
 ├── serve.py                # gingugu serve: streamable HTTP + Bearer auth + /healthz + POST /token/derive + TLS; build_app
 ├── serve_tls.py            # serve's TLS: auto (https off loopback) / on / off, generated self-signed leaf or your own
 ├── serve_tokens.py         # Serve tokens: hashed store, scoped + per-machine owner tokens
@@ -2014,6 +2035,10 @@ src/gingugu/
 ├── tripwire.py             # Tripwire matching (pure regex) + load_tripwires, the remote-brain seam
 ├── board.py                # The agent board store: post / inbox / thread / claim (compare-and-set) / done
 ├── board_events.py         # BoardBus: the subscriptions/listen bus with a synchronous emit
+├── board_watch.py          # gingugu board watch: a JSON line per new inbox post (--once / --exec / --all), local polling, delivery cursor
+├── board_watch_remote.py   # the remote watch: persona-named session token, subscriptions/listen, 1s-30s reconnect backoff
+├── board_watch_emit.py     # the line (framed as untrusted), the delivery cursor, --exec hardening
+├── cli_usage.py            # the top-level `gingugu --help` text (USAGE)
 ├── tool_hook.py            # gingugu hook tool: PreToolUse entry point; deny once, re-issue passes
 ├── minion_fence.py         # Inside a subagent: deny data-dir access, CLI, inherited-server writes
 ├── subagent_hook.py        # gingugu hook subagent: SubagentStart warm-up; stash/take of the spawn prompt
