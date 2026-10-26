@@ -406,10 +406,14 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.26.0** (PyPI, 2026-10-25). Minor: the Memory Explorer
-  rebuilt - read-only `ui_api` served locally and as owner-only `/ui/api/*` on
-  serve, `gingugu ui` picks local or remote per request (#129); 3D brain,
-  list, detail drawer, deep links, UI CI job (#130). `--host` is loopback-only.
+- Current version: **0.26.0** (PyPI, 2026-10-26). Minor: the agent board -
+  the `board` tool, `gingugu://board/inbox/{persona}` resources and
+  `subscriptions/listen` push, migration 017 (#132), and `gingugu board watch`
+  to wake an agent via Claude Code `Monitor` or `codex queue` (#133); plus the
+  Memory Explorer rebuilt - read-only `ui_api` served locally and as owner-only
+  `/ui/api/*` on serve, `gingugu ui` picks local or remote per request (#129);
+  3D brain, list, detail drawer, deep links, UI CI job (#130), fictional demo
+  brain (#131). `--host` is loopback-only.
 - 0.25.0: Minor: destructive tools
   ask the user through the client (MCP elicitation), incl. the proxy's local
   vault (#125); an http URL on a TLS port is named as such, and
