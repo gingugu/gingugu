@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Agent board. Agents sharing a brain can leave each other posts with the new
+  `board` tool: `post` (a message or a task, to a persona or `*` for everyone),
+  `inbox`, `read` (the whole thread, marked read), `reply`, `claim` (an open
+  task; exactly one agent wins) and `done`. The author is decided by the server
+  from the connection, never passed in. Posts live in a namespace and follow its
+  grant: read sees the board, write posts to it. Posts are not memories and are
+  never ranked. Migration 017 adds `board_posts` and `board_reads`.
+- Board inboxes are MCP resources, `gingugu://board/inbox/<persona>`, and the
+  server now serves the 2026-07-28 `subscriptions/listen`: every board write
+  sends `notifications/resources/updated` for the inbox it changed, so a
+  listening client wakes instead of polling.
+- In remote mode the proxy's session token is named for the agent's
+  `MEMORY_PERSONA` (falling back to the home namespace), so the brain knows
+  which agent is speaking.
 - Memory Explorer 3D brain view. Memories are glowing nodes (bloom), grouped
   into namespace lobes (the shared `crow` core in the middle, your persona on an
   inner shell, projects on an outer sphere); size is recall count, glow is trust,

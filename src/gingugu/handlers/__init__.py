@@ -30,6 +30,9 @@ class ServerContext:
     # What a stdio caller may touch: full, unless MEMORY_GRANT narrowed it for
     # a warm minion's own server. Ignored under any other transport.
     stdio_grant: Grant = FULL
+    # The ``subscriptions/listen`` bus the server streams from (``board_events``);
+    # None leaves writes silent, as in tests that build a context by hand.
+    bus: object | None = None
 
 
 class _HeartbeatMCP:
@@ -107,6 +110,7 @@ def register_all(mcp, ctx: ServerContext) -> None:
     mcp = _HeartbeatMCP(mcp, ctx)
     from . import (
         admin,
+        board,
         consolidate,
         credentials,
         dream,
@@ -123,6 +127,7 @@ def register_all(mcp, ctx: ServerContext) -> None:
     memory.register(mcp, ctx)
     forget.register(mcp, ctx)
     tripwires.register(mcp, ctx)
+    board.register(mcp, ctx)
     recall.register(mcp, ctx)
     search.register(mcp, ctx)
     stats.register(mcp, ctx)
