@@ -1,53 +1,40 @@
 # Project Status
 
-_Last updated: 2026-10-25_
+_Last updated: 2026-10-25 (agent board PR 1)_
 
 ## In Flight
 
-**Explorer overhaul, PR 1 of 5: read API + remote mode + hardening.** Branch
-`feature/ui-api`, local, not yet pushed. `ui_api/` is a read-only observer API
-(`/info`, `/graph`, `/memory/<id>`, `/search`, `/stats`, `/events`: read-only
-connection, no access credit, no `query_log` row, no spreading activation,
-`stats` with `prune=False`). `gingugu serve` mounts it at `GET /ui/api/*` for
-owner tokens only (`serve_ui.py`). `gingugu ui` answers per request from the
-local DB or, with a remote brain on, forwards to the brain's `/ui/api/*`
-(`webui_remote.py`; the keychain token goes in the Authorization header and
-nowhere else). Hardening: loopback-only `--host`, loopback `Host` check, route
-allowlist before any forward, no CORS, no redirects.
-No MCP tool-surface change, no schema migration.
+**Agent board (board #1), PR 1 of 3: store, tool, inbox resources, push.**
+Branch `feature/agent-board`. Migration 017 (`migrations/board.py`):
+`board_posts` + `board_reads`, cascading with the namespace, never pruned.
+`board.py` is the store (post / inbox / thread / claim / done, fenced through
+the grant chokepoints; a hidden post reads as missing). `handlers/board.py`
+is the `board` tool and the `gingugu://board/inbox/{persona}` resource; the
+author is server-derived (token name over HTTP, `MEMORY_PERSONA` or `minion` on
+stdio). `server.py` now serves `subscriptions/listen` from a `BoardBus`
+(`board_events.py`) and every write emits `resources/updated` for the inbox it
+touched. The proxy derives its token under the persona (`proxy_auth.derive_name`).
+Proven end to end over real HTTP: a listener on an inbox wakes on a post.
+Accepted limit: the SDK listen handler does not authorize URIs, so an
+authenticated token can get bare "updated" pings for any inbox, never content.
 
-**Explorer overhaul, PR 2 of 5: the 3D brain frontend.** Branch
-`feature/ui-3d-brain`, local, stacked on PR 1 (`feature/ui-api`). Frontend
-rebuilt: a 3D brain (`react-force-graph-3d` + `three`, UnrealBloom) with
-namespace lobes (`crow` at the centre, the viewer's persona on an inner shell,
-others on an outer Fibonacci sphere); colour by type, namespace or trust; glow =
-trust; pins haloed; dormant and deprecated fade, never hidden; weighted tag
-links (toggle, date tags opt-in), a lobe-pull slider, camera fit when the layout
-settles, click to fly. A virtualized list view (`@tanstack/react-virtual`); a
-detail drawer (`react-markdown` + `remark-gfm`, no raw HTML, `[[wiki links]]`,
-relations, claims, tripwires, recall sparkline; remote images are never loaded,
-alt text shows instead; external links show their URL on hover); a source badge
-(LOCAL / REMOTE host / STATIC demo / error); polling `/api/info` every 10s and
-refetching `/graph` only when `graph_version` changes; deep links
-`?view=<tab>&m=<id>` synced to the address bar. Dashboard, Timeline and Trust
-Map ported onto a body-less `MemoryLite`. Removed: the 2D graph, the Load JSON
-upload, the refresh-interval select (a manual refresh button stays), and the
-legacy `/api/export` route (gone entirely). `/api/info` gains `graph_version`
-(`ui_api`) and `persona` (`webui`, the viewer's `MEMORY_PERSONA`).
-`ui/dump_static.py --db` (required) writes
-`ui/src/data/static/{graph,info,details}.json`; `sample.json` is deleted and the
-public static demo is fictional. New vitest suite (`cd ui && npm test`,
-`npm run typecheck`), a new `ui` CI job, Node 22 in `ui-pages.yml` and
-`release.yml`.
+**Remaining board PRs:** PR 2, the proxy opens a side connection holding
+`subscriptions/listen` on its persona's inbox and turns each update into
+`notifications/claude/channel` (Claude Code wake; the relay itself untouched;
+permission relay off); local stdio mode refuses `server/discover` like the
+proxy. PR 3, the UserPromptSubmit hook injects unread posts (the universal
+fallback: VS Code, Codex, sessions not live at post time) and `memory_context`
+shows the unread count.
 
-**Remaining Explorer PRs:** PR 3 synapses + time-lapse + query lens; PR 4
-semantic layout + hygiene overlays; PR 5 presentation mode (namespace visibility
-+ per-memory overrides, `gingugu ui --present` hard lock + a soft UI toggle -
-needs a schema migration).
-
-0.25.0 released 2026-10-19.
+0.25.0 released 2026-10-19. Explorer PRs 1-3 (#129, #130, #131) are merged and
+not yet released.
 
 ## Recently Completed
+
+**Explorer overhaul: MERGED (#129 read API + remote mode, #130 3D brain
+frontend, #131 fictional demo brain), not yet released.** Remaining Explorer
+PRs (synapses + time-lapse + query lens; semantic layout + hygiene overlays;
+presentation mode) stay planned.
 
 **TLS diagnostics (board #1 + #2): MERGED (#124), released in 0.25.0, off the board.**
 `remote_tls.speaks_tls` does an unverified handshake on an http URL's host and
@@ -1290,7 +1277,7 @@ turn a silent outage into a named one.
 
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **A shared board between agents** | 15 | Unblocked: the central brain is done, and every machine is on SDK 2.x (0.24.0); 2.x subscriptions (`subscriptions/listen`) are a candidate transport, for 2026-era clients only |
+| 1 | **A shared board between agents** - IN FLIGHT (PR 1 of 3 built) | 15 | Unblocked: the central brain is done, and every machine is on SDK 2.x (0.24.0); `subscriptions/listen` proven against the real brain over HTTP and now the push transport |
 | 2 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
 | 3 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
 | 4 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |

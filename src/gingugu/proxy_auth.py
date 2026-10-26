@@ -22,6 +22,18 @@ import httpx2
 from .proxy_session import derive
 from .remote_tls import verify_for
 
+
+def derive_name(home: str | None) -> str | None:
+    """The name a session's derived token carries: the agent's persona.
+
+    The brain reads it as who is speaking (the board's author), so it names
+    the agent rather than the repo; with no persona it is the home namespace.
+    """
+    from .prompt_hook import persona
+
+    return persona() or home
+
+
 _RENEW_GAP = 10.0  # a token never accepted is renewed at most this often
 
 

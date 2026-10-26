@@ -42,7 +42,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `hints`, `recall` (+ `context_merge`, the pure merge of per-namespace context
    loads: pins first, then ranked tails interleaved by rank), `search`, `stats`,
    `excerpt`, `relations` (+ `relation_ops`),
-   `consolidate`, `dream`, `admin`, `credentials`, `tripwires`, `capability_view`, `fence`
+   `consolidate`, `dream`, `admin`, `credentials`, `tripwires`, `board`, `capability_view`, `fence`
    (the scoped-token policy and the stdio `MEMORY_GRANT` policy, `stdio_grant`; see Scoped tokens and Warm minions), plus `summaries` (payload
    shapes: full summary, compact summary, the picker between them), `choices`
    (enum argument parsing shared by every write-surface field with a controlled
@@ -53,7 +53,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `context`, `relations`, `consolidation`, `decay`, `stats`, `namespaces`,
    `portability`, `capability`, `grants` (the per-call grant every chokepoint
    consults), `serve_tokens`, `tripwire` (the decision half of the `PreToolUse` hook; see
-   Key Decisions), `minion_fence`, `subagent_hook` and `subagent_warmup` (see Warm minions),
+   Key Decisions), `board` + `board_events` (the agent board store and its
+   `subscriptions/listen` bus; see Key Decisions), `minion_fence`, `subagent_hook` and `subagent_warmup` (see Warm minions),
    `recall_pick` (the recall pipeline the local hook and `/hook/recall` share),
    `hook_remote` + `hook_remote_flows` and `serve_hooks` (see Remote mode), `hook_grant`
    (the client's `MEMORY_GRANT` as the hooks apply it), `confirm` (the user's
@@ -84,7 +85,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `dream_lock`), `fields.py` for write-time declared fields on the memory
    record (`provenance`, `about`) and the FTS5 rebuild that indexes them,
    `queries.py` for the query log (`query_log`, migration 015),
-   `tripwires.py` for the tripwire triggers (`tripwires`, migration 016), and
+   `tripwires.py` for the tripwire triggers (`tripwires`, migration 016),
+   `board.py` for the agent board (`board_posts`, `board_reads`, migration 017), and
    `__init__.py` for the ordered registry and the runner. `config.py` resolves
    the DB path.
 
@@ -702,7 +704,8 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   provisional; `tests/test_inbound.py` pins what is relied on. *Serve keeps
   1.x's limits where 2.x tightened them*: the 4 MiB request-body default would
   refuse a whole-brain `memory_import`, so `serve.mcp_app` allows 64 MiB; and
-  with nothing to publish, change-notification subscriptions are off.
+  change-notification subscriptions are on only for the agent board (a
+  `BoardBus`; see the board decision below), where they used to be off.
 - **The dream pass computes structure and is forbidden from writing content.**
   A scheduled pass (`dream/`, `gingugu dream`, `memory_dream`) runs PageRank,
   label propagation and cosine similarity over the relation graph and stages
@@ -1117,6 +1120,33 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   is logged to `query_log` as `tool='tripwire'`. Accepted v1 limitation: after
   context compaction the memory may drop out of context while suppression still
   counts it as shown.
+- **The agent board is its own pair of tables, and the author is never an
+  argument.** (2026-10.) Agents sharing a brain could only talk by writing a
+  memory and hoping the other recalled it. A post is not a memory: it is
+  addressed, read once, and a task on it is claimed and finished, so storing
+  posts as memories would put chatter into the graph and the ranking.
+  `board_posts` and `board_reads` (migration 017) are separate tables; unread is
+  the absence of a `board_reads` row, so marking read is an idempotent insert
+  and the inbox an anti-join. `kind` and `status` are validated in Python, not
+  `CHECK` constraints, so a new kind needs no table rebuild. Threads are one
+  level deep. `claim` is a compare-and-set (`UPDATE ... WHERE status='open'`),
+  so racing agents cannot both win. The author is derived in
+  `handlers/board.py` from what the server knows of the connection: the HTTP
+  token's name with `derived:` stripped (the proxy now names its derived token
+  for `MEMORY_PERSONA`, falling back to the home namespace), or on stdio
+  `MEMORY_PERSONA`, `minion` for a warm minion's server, else `local`. The
+  fence is the namespace's through the usual chokepoints (read = see, write =
+  post/claim/done); a hidden post reads as "not found". Posting creates the
+  namespace on first use, like `memory_store`. Never pruned.
+  Wake-up is `subscriptions/listen`: the server is built with a `BoardBus`
+  (`board_events`) instead of `subscriptions=False`, and every board write emits
+  `notifications/resources/updated` for the recipient's
+  `gingugu://board/inbox/{persona}` URI (`.../inbox/*` for broadcasts). Tool
+  bodies run synchronously, so `BoardBus.emit` is a sync fan-out the async SDK
+  `publish` cannot give. Accepted limit: the SDK's listen handler does not
+  authorize subscription URIs, so an authenticated token can receive a bare
+  "updated" ping for any inbox (never content; reading it still goes through
+  the fence).
 - **A capability is a memory type with its structure in metadata, and recall
   gives it its own lane.** (2026-10-01.) Memory recorded procedures and never
   artifacts: one integration's REST mechanics were written down four times and
