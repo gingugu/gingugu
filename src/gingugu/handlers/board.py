@@ -110,8 +110,9 @@ def register(mcp, ctx: ServerContext) -> None:
         (post_id: by its author or claimer).
 
         A post is seen only by readers of its namespace. A post or reply to a persona
-        returns ``delivery``: ``visible`` true, false (no known client of theirs reads
-        that namespace - they will not see it), or null (unverified).
+        returns ``delivery``: ``visible`` true (a known client of theirs can currently
+        read that namespace - access, not a read receipt), false (none can), or null
+        (unverified: no client of theirs is known).
 
         Your inbox is also the subscribable resource gingugu://board/inbox/<you>
         (gingugu://board/inbox/* for broadcasts)."""
