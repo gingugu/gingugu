@@ -342,6 +342,8 @@ memory_context(namespace | "ns1,ns2,…", task_hint, limit, compact)
     RESUME memory)
   → task_hint given: one query_log row (tool='context'), ids in rank order.
     No task_hint, no row
+  → a persona caller (not a no-persona stdio "local", "unknown", or a warm
+    "minion") also gets board: {"unread": N}, its board inbox size
 ```
 
 Context loads are protocol-driven reads: they refresh `last_accessed` (dormancy
@@ -450,8 +452,18 @@ memory_stats → stats.size    → total_chars, mean_chars, pinned_chars,
 UserPromptSubmit event  →  .claude/hooks/user_prompt_recall.py (pure stdlib)
   → length floor HERE, before the package is imported: ~44% of real prompts
     are acknowledgements, and rejecting them costs bare interpreter startup
-    instead of ~410ms of package + ~500ms of encoder
+    instead of ~410ms of package + ~500ms of encoder. Exception: with
+    MEMORY_PERSONA set (non-blank) a short prompt goes through too, for its
+    board mail (the package load, never the encoder)
   → survivors piped to `gingugu hook prompt`
+      → BOARD MAIL first, on EVERY prompt of a persona agent, before the
+        length gate (board_hook.mail): the persona's unread inbox, fenced by
+        the client's MEMORY_GRANT (hook_grant.client_grant), not the recall
+        namespaces; minus ids already shown this session (key board:<session>
+        in hook-sessions); read-only, nothing marked read. At most 5 posts, a
+        300-char JSON-encoded preview each, each with its board(action="read")
+        call. Never raises
+      → then _recall (below); a recall exception does not silence the mail
       → strip_affect(): greetings/interjections/emoji removed, because they
         carry REGISTER and the corpus is full of reflections written in the
         user's own voice. Matching voice is the dominant false positive.
@@ -477,7 +489,9 @@ UserPromptSubmit event  →  .claude/hooks/user_prompt_recall.py (pure stdlib)
     timeout), swallows every exception, and skips a store not yet at
     migration 015. Rows carry Claude Code's session id, so they do not join
     to access_log
-  → hookSpecificOutput.additionalContext, or silence
+  → hookSpecificOutput.additionalContext: mail and memories in ONE block,
+    systemMessage "gingugu: N memories surfaced, M board posts" (each part
+    only when nonzero); or silence
 ```
 
 **The margin is the mechanism, not the bar.** An absolute threshold admitted
@@ -594,7 +608,12 @@ a 400, and an unexpected failure a 500.
 
 ```
 UserPromptSubmit → `gingugu hook prompt`
-  → length gate (local, no network for a one-liner)
+  → board mail (persona agents, every prompt, before the gate):
+    POST /hook/inbox {persona, namespaces (grant names, null = unfenced),
+    shown} -> {posts}; 3s timeout; brain: read-only grant-bound inbox query,
+    minus the shown ids; shown ids stay in local hook-sessions/ under
+    board:<session>. A persona agent's one-liner therefore makes this request
+  → length gate (local; no recall request for a one-liner)
   → namespaces_for(cwd), narrowed by the client's grant ([] → exit), then _sendable
     drops any name the routes would refuse
   → POST /hook/recall {prompt, session_id, namespaces, suppressed, config}
