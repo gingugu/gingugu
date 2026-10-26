@@ -206,6 +206,7 @@ def test_find_reports_coverage(conn):
     assert meta["coverage"] == {
         "complete": False,
         "parse_errors": ["orphan.py"],
+        "skipped": [],
         "unresolved": 1,
         "dynamic": 0,
         "external": 7,
@@ -262,3 +263,88 @@ def test_overview_without_roots_says_so(conn):
     files = [{"path": "a.py", "is_test": False, "is_entry": False}]
     sid = store.ingest(conn, ns, _payload(files=files, edges=[]))["snapshot_id"]
     assert store.overview(conn, sid)["unreachable"] is None
+
+
+# --- review round: skips, duplicates, caps, replace -------------------------------
+
+
+def test_skips_are_validated_stored_and_break_completeness_unless_deliberate(conn):
+    ns = _ns(conn, "repo")
+    store.ingest(
+        conn,
+        ns,
+        _payload(skipped=[{"path": "link.py", "reason": "symlink"}]),
+    )
+    meta = store.find(conn, ns)
+    assert meta["coverage"]["complete"] is True  # a symlink is excluded on purpose
+    assert meta["coverage"]["skipped"] == [{"path": "link.py", "reason": "symlink"}]
+
+    store.ingest(
+        conn,
+        ns,
+        _payload("b" * 64, skipped=[{"path": "secret.py", "reason": "unreadable"}]),
+    )
+    assert store.find(conn, ns, "b" * 64)["coverage"]["complete"] is False
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"skipped": [{"path": "x.py", "reason": "because"}]},
+        {"skipped": [{"path": "/abs.py", "reason": "symlink"}]},
+        {"skipped": "nope"},
+        {"files": [{"path": "a.py", "is_test": False, "is_entry": False}] * 2, "edges": []},
+        {
+            "edges": [
+                {
+                    "src": "svc.py",
+                    "dst": "core.py",
+                    "kind": "module",
+                    "certain": True,
+                    "implicit": False,
+                }
+            ]
+            * 2
+        },
+        {"external": 2**40},
+    ],
+)
+def test_review_round_rejections(conn, bad):
+    with pytest.raises(XrayStoreError):
+        store.ingest(conn, _ns(conn, "repo"), _payload(**bad))
+
+
+def test_caps_are_enforced(conn, monkeypatch):
+    from gingugu.xray import validate
+
+    monkeypatch.setattr(validate, "MAX_FILES", 2)
+    with pytest.raises(XrayStoreError):
+        store.ingest(conn, _ns(conn, "repo"), _payload())
+
+
+def test_replace_repairs_a_planted_graph(conn):
+    ns = _ns(conn, "repo")
+    planted = store.ingest(conn, ns, _payload(edges=[]))
+    honest = store.ingest(conn, ns, _payload())
+    assert honest["created"] is False  # same fingerprint: kept, not replaced
+    repaired = store.ingest(conn, ns, _payload(), replace=True)
+    assert repaired["created"] is True
+    assert repaired["snapshot_id"] != planted["snapshot_id"]
+    assert store.find(conn, ns)["edges"] == 3
+    assert conn.execute("SELECT COUNT(*) FROM xray_snapshots").fetchone()[0] == 1
+
+
+def test_replace_with_identical_content_is_a_touch(conn):
+    ns = _ns(conn, "repo")
+    first = store.ingest(conn, ns, _payload())
+    again = store.ingest(conn, ns, _payload(), replace=True)
+    assert again == {**first, "created": False}
+
+
+def test_overview_pages_unreachable(conn):
+    ns = _ns(conn, "repo")
+    files = [{"path": f"m{i}.py", "is_test": False, "is_entry": i == 0} for i in range(6)]
+    sid = store.ingest(conn, ns, _payload(files=files, edges=[]))["snapshot_id"]
+    out = store.overview(conn, sid, limit=2, offset=1)
+    assert out["unreachable"] == ["m2.py", "m3.py"]
+    assert out["unreachable_total"] == 5

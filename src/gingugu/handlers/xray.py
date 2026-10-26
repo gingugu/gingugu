@@ -52,16 +52,17 @@ def register(mcp, ctx: ServerContext) -> None:
         return meta, repo
 
     def _snapshot(ns_id: str, path, fingerprint) -> tuple[dict, object, str]:
+        if path and ctx.transport != "stdio":
+            raise ValueError(_NO_DISK)
         if fingerprint:
             meta = store.find(ctx.conn, ns_id, fingerprint)
             if meta is None:
                 raise _Missing(fingerprint)
-            return meta, None, "current"
+            # The snapshot of exactly that content; no working tree was looked at.
+            return meta, None, "exact"
         if ctx.transport == "stdio":
             meta, repo = _local(ns_id, path)
             return meta, repo, "current"
-        if path:
-            raise ValueError(_NO_DISK)
         meta = store.find(ctx.conn, ns_id)
         if meta is None:
             raise _Missing(None)
@@ -75,6 +76,7 @@ def register(mcp, ctx: ServerContext) -> None:
         path: str | None = None,
         fingerprint: str | None = None,
         payload: dict | None = None,
+        replace: bool = False,
         limit: int = 50,
         offset: int = 0,
         top: int = 20,
@@ -86,11 +88,14 @@ def register(mcp, ctx: ServerContext) -> None:
         returns every transitive importer, split into code and candidate tests, with hop
         count and rank, paged by limit/offset), "overview" (top: the most load-bearing
         files by directed PageRank, plus files no test or entry point reaches), "refresh"
-        (rebuild now), "ingest" (payload: a client-extracted graph).
+        (rebuild now, replacing a stored snapshot whose graph differs), "ingest" (payload:
+        a client-extracted graph; ``replace`` as refresh does).
 
         ``path`` is any directory in the git checkout (default: the working directory).
         The snapshot is rebuilt automatically when the checkout's Python content changed,
-        so results match the working tree. ``namespace`` scopes it like a memory.
+        so results match the working tree (``freshness: current``); a ``fingerprint``
+        names one snapshot exactly (``exact``); with neither, the latest (``unknown``).
+        ``namespace`` scopes it like a memory.
         Results are import-based estimates; see ``caveat`` in each answer."""
         try:
             if action not in _ACTIONS:
@@ -99,21 +104,27 @@ def register(mcp, ctx: ServerContext) -> None:
             if action == "ingest":
                 if payload is None:
                     return _err("payload is required for action 'ingest'")
-                out = store.ingest(ctx.conn, ns_id, payload)
+                out = store.ingest(ctx.conn, ns_id, payload, replace=bool(replace))
                 ctx.conn.commit()
                 return {"ok": True, **out}
             if action == "refresh":
                 if ctx.transport != "stdio":
                     return _err(_NO_DISK)
                 x = extract.extract(local.root(path))
-                out = store.ingest(ctx.conn, ns_id, x.payload())
+                out = store.ingest(ctx.conn, ns_id, x.payload(), replace=True)
                 ctx.conn.commit()
                 return {"ok": True, **out, "snapshot": store.find(ctx.conn, ns_id, x.fingerprint)}
 
             meta, repo, freshness = _snapshot(ns_id, path, fingerprint)
             ctx.conn.commit()
             if action == "overview":
-                out = store.overview(ctx.conn, meta["snapshot_id"], top=top)
+                out = store.overview(
+                    ctx.conn,
+                    meta["snapshot_id"],
+                    top=top,
+                    limit=max(0, limit),
+                    offset=max(0, offset),
+                )
             else:
                 named = local.file_list(files)
                 if not named:
