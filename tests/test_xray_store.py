@@ -52,9 +52,21 @@ def _payload(fp: str = "a" * 64, **over) -> dict:
             {"path": "tests/test_svc.py", "is_test": True, "is_entry": False},
         ],
         "edges": [
-            {"src": "svc.py", "dst": "core.py", "kind": "module", "certain": True},
-            {"src": "cli.py", "dst": "svc.py", "kind": "lazy", "certain": True},
-            {"src": "tests/test_svc.py", "dst": "svc.py", "kind": "module", "certain": False},
+            {
+                "src": "svc.py",
+                "dst": "core.py",
+                "kind": "module",
+                "certain": True,
+                "implicit": False,
+            },
+            {"src": "cli.py", "dst": "svc.py", "kind": "lazy", "certain": True, "implicit": False},
+            {
+                "src": "tests/test_svc.py",
+                "dst": "svc.py",
+                "kind": "module",
+                "certain": False,
+                "implicit": False,
+            },
         ],
         "unresolved": 1,
         "dynamic": 0,
@@ -95,9 +107,39 @@ def test_the_same_fingerprint_in_two_namespaces_is_two_snapshots(conn):
         {"files": [{"path": "/etc/passwd", "is_test": False, "is_entry": False}]},
         {"files": [{"path": "../up.py", "is_test": False, "is_entry": False}]},
         {"files": [{"path": "a\\b.py", "is_test": False, "is_entry": False}]},
-        {"edges": [{"src": "core.py", "dst": "ghost.py", "kind": "module", "certain": True}]},
-        {"edges": [{"src": "core.py", "dst": "svc.py", "kind": "weird", "certain": True}]},
-        {"edges": [{"src": "core.py", "dst": "svc.py", "kind": "module", "certain": "yes"}]},
+        {
+            "edges": [
+                {
+                    "src": "core.py",
+                    "dst": "ghost.py",
+                    "kind": "module",
+                    "certain": True,
+                    "implicit": False,
+                }
+            ]
+        },
+        {
+            "edges": [
+                {
+                    "src": "core.py",
+                    "dst": "svc.py",
+                    "kind": "weird",
+                    "certain": True,
+                    "implicit": False,
+                }
+            ]
+        },
+        {
+            "edges": [
+                {
+                    "src": "core.py",
+                    "dst": "svc.py",
+                    "kind": "module",
+                    "certain": "yes",
+                    "implicit": False,
+                }
+            ]
+        },
         {"unresolved": -1},
         {"parse_errors": ["ghost.py"]},
     ],

@@ -98,19 +98,20 @@ def _validate(payload) -> dict:
     raw_edges = payload.get("edges")
     if not isinstance(raw_edges, list) or len(raw_edges) > MAX_EDGES:
         raise XrayStoreError(f"edges must be a list of at most {MAX_EDGES}")
-    edges: dict[tuple[str, str], tuple[str, bool]] = {}
+    edges: dict[tuple[str, str], tuple[str, bool, bool]] = {}
     for e in raw_edges:
         if not isinstance(e, dict):
             raise XrayStoreError("each edge must be an object")
         src, dst = _path(e.get("src")), _path(e.get("dst"))
         if src not in files or dst not in files:
             raise XrayStoreError(f"edge {src} -> {dst} names a file the payload does not list")
-        if e.get("kind") not in KINDS or not isinstance(e.get("certain"), bool):
+        flags = (e.get("certain"), e.get("implicit"))
+        if e.get("kind") not in KINDS or not all(isinstance(f, bool) for f in flags):
             raise XrayStoreError(
                 f"edge {src} -> {dst}: kind must be one of {KINDS}, certain a bool"
             )
         if src != dst:
-            edges[(src, dst)] = (e["kind"], e["certain"])
+            edges[(src, dst)] = (e["kind"], e["certain"], e["implicit"])
 
     return {
         "fingerprint": fp,
@@ -180,7 +181,7 @@ def ingest(conn: sqlite3.Connection, namespace_id: str, payload) -> dict:
         _touch(conn, found["id"])
         return {"snapshot_id": found["id"], "fingerprint": v["fingerprint"], "created": False}
 
-    links = [rank.Link(s, d, c) for (s, d), (_, c) in v["edges"].items()]
+    links = [rank.Link(s, d, c, i) for (s, d), (_, c, i) in v["edges"].items()]
     ranks = rank.pagerank(sorted(v["files"]), links)
     sid, now = str(uuid.uuid4()), utcnow_iso()
     with conn:  # one transaction: a snapshot is all there or not at all
@@ -212,8 +213,9 @@ def ingest(conn: sqlite3.Connection, namespace_id: str, payload) -> dict:
             [(sid, p, int(t), int(e), ranks[p]) for p, (t, e) in v["files"].items()],
         )
         conn.executemany(
-            "INSERT INTO xray_edges(snapshot_id, src, dst, kind, certain) VALUES (?, ?, ?, ?, ?)",
-            [(sid, s, d, k, int(c)) for (s, d), (k, c) in v["edges"].items()],
+            "INSERT INTO xray_edges(snapshot_id, src, dst, kind, certain, implicit) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            [(sid, s, d, k, int(c), int(i)) for (s, d), (k, c, i) in v["edges"].items()],
         )
         _prune(conn, namespace_id)
     return {"snapshot_id": sid, "fingerprint": v["fingerprint"], "created": True}
@@ -247,9 +249,10 @@ def _graph(conn, snapshot_id: str):
     entries = {r["path"] for r in rows if r["is_entry"]}
     ranks = {r["path"]: r["rank"] for r in rows}
     links = [
-        rank.Link(r["src"], r["dst"], bool(r["certain"]))
+        rank.Link(r["src"], r["dst"], bool(r["certain"]), bool(r["implicit"]))
         for r in conn.execute(
-            "SELECT src, dst, certain FROM xray_edges WHERE snapshot_id = ?", (snapshot_id,)
+            "SELECT src, dst, certain, implicit FROM xray_edges WHERE snapshot_id = ?",
+            (snapshot_id,),
         )
     ]
     return files, entries, ranks, links
@@ -269,7 +272,8 @@ def overview(conn, snapshot_id: str, *, top: int = 20) -> dict:
     files, entries, ranks, links = _graph(conn, snapshot_id)
     imported_by: dict[str, int] = {}
     for ln in links:
-        imported_by[ln.dst] = imported_by.get(ln.dst, 0) + 1
+        if not ln.implicit:  # counted like rank: who asked for it, not who ran it
+            imported_by[ln.dst] = imported_by.get(ln.dst, 0) + 1
     n = len(files) or 1
     ordered = sorted(ranks, key=lambda p: (-ranks[p], p))[: max(0, top)]
     tests = {p for p, is_test in files.items() if is_test}
