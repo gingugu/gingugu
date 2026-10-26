@@ -37,12 +37,21 @@ def _get(env: UiEnv, path: str) -> dict:
     return body
 
 
-def build(db_path: Path) -> dict[str, dict]:
+def build(db_path: Path, persona: str | None = None) -> dict[str, dict]:
     env = UiEnv(db_path=db_path, embedder=lambda: None)
     graph = _get(env, "/graph")
-    info = {**_get(env, "/info"), "mode": "static", "brain": "demo", "persona": None}
+    info = {**_get(env, "/info"), "mode": "static", "brain": "demo", "persona": persona}
     details = {n["id"]: _get(env, f"/memory/{n['id']}") for n in graph["nodes"]}
     return {"graph": graph, "info": info, "details": details}
+
+
+def write(db_path: Path, out: Path, *, persona: str | None = None) -> None:
+    payloads = build(db_path, persona)
+    out.mkdir(parents=True, exist_ok=True)
+    for name, payload in payloads.items():
+        text = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+        (out / f"{name}.json").write_text(text + "\n")
+    logger.info("Wrote %d memories to %s", len(payloads["details"]), out)
 
 
 def main() -> int:
@@ -53,11 +62,7 @@ def main() -> int:
     if not args.db.is_file():
         raise SystemExit(f"no such DB: {args.db}")
 
-    payloads = build(args.db)
-    args.out.mkdir(parents=True, exist_ok=True)
-    for name, payload in payloads.items():
-        (args.out / f"{name}.json").write_text(json.dumps(payload, indent=1, sort_keys=True) + "\n")
-    logger.info("Wrote %d memories to %s", len(payloads["details"]), args.out)
+    write(args.db, args.out)
     return 0
 
 
