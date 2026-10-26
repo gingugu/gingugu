@@ -33,6 +33,11 @@ class ServerContext:
     # The ``subscriptions/listen`` bus the server streams from (``board_events``);
     # None leaves writes silent, as in tests that build a context by hand.
     bus: object | None = None
+    # Under `gingugu serve`: the live derived tokens and the token store, which
+    # the board reads to say whether a post's recipient can see it. None on
+    # stdio, where the board answers "unverified".
+    derived: object | None = None
+    tokens: object | None = None
 
 
 class _HeartbeatMCP:
