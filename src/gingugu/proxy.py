@@ -118,9 +118,9 @@ class _Session:
                 if self.vault is not None and self.vault.claims(msg):
                     await self.vault.answer(item)  # the person answered the vault's question
                     continue
+                if self.xray.take(item):  # code_xray reads the disk here, off this reader
+                    continue
                 if isinstance(msg, JSONRPCRequest):
-                    if self.xray.take(item):  # reads the disk here, off this reader
-                        continue
                     called = str((msg.params or {}).get("name", ""))
                     if msg.method == "tools/call" and called.startswith(CRED_PREFIX):
                         if self.vault is not None:  # never awaits the vault's answer
