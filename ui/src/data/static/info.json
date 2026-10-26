@@ -1,11 +1,1 @@
-{
- "brain": "demo",
- "graph_version": "12:2026-05-25T15:00:00+00:00:5",
- "memories": 12,
- "mode": "static",
- "ok": true,
- "persona": null,
- "relations": 5,
- "schema_version": 16,
- "version": "0.25.0"
-}
+{"brain":"demo","graph_version":"2440:2026-10-20T11:50:05+00:00:2608","memories":2440,"mode":"static","ok":true,"persona":"nova","relations":2608,"schema_version":16,"version":"0.25.0"}
