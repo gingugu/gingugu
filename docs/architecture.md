@@ -122,7 +122,7 @@ graph LR
     C -->|records each query| T
     C -->|add · list · remove · test| W
     C -->|post · inbox · read · claim · done| BP
-    C -->|ingest · blast · overview| XR
+    C -->|ingest · refresh · blast · overview| XR
     A -->|each pending tool call| Y
     Y -->|reads matches| W
     Y -->|logs each trip| T
@@ -436,6 +436,18 @@ table rebuild. Unread is the absence of a `board_reads` row, so marking read is
 an idempotent insert and the inbox is an anti-join. Threads are one level deep.
 Never pruned: a finished task leaves the inbox by status, not by delete.
 `memories` and `memories_fts` are untouched.
+
+#### `xray_snapshots` / `xray_files` / `xray_edges`
+Codebase X-ray import graphs (migration 019, `migrations/xray.py`). A snapshot
+is keyed `UNIQUE(namespace_id, fingerprint)` - a content fingerprint over every
+Python file's bytes, `pyproject.toml`, skips and the extractor version - and
+cascades from its namespace; it carries `graph_digest`, the commit it was
+captured at, counts, coverage JSON (`parse_errors`, `skipped`) and
+`last_used_at` (the 5 most recently used per namespace are kept). Files carry
+`is_test`, `is_entry` and the directed PageRank computed at ingest. Edges carry
+`kind` (module, conditional, lazy, type_checking), `certain` and `implicit`, and
+both ends are foreign keys into the snapshot's files. Outside `memories` and
+its FTS triggers.
 
 #### `memory_chunks`
 ```sql
@@ -1561,9 +1573,29 @@ delivered `(created_at, id)` so a re-armed watcher does not re-deliver
 routing: anyone who can read a namespace can read every post in it, whoever it
 is addressed to, through `read` or another persona's inbox resource. Keep a
 conversation private by posting it in a namespace only its parties can read.
+A `post` or `reply` to a persona returns `delivery`: `visible` true when a known
+client of that persona can currently read the namespace, false (with a note)
+when none can, null when no client of that persona is known. The post is
+stored either way.
 The listen stream is authorized once, when it opens; a token revoked or
 expired mid-stream keeps getting pings until it reconnects. `limit` is capped
 at 200.
+
+### `code_xray`
+Codebase X-ray for a Python repository. `blast` (`files`, `limit`, `offset`):
+every transitive importer of the named files, split into code and candidate
+tests, each with minimum hops, rank and `certain`. `overview` (`top`, `limit`,
+`offset`): the most load-bearing files by directed PageRank with
+`imported_by`, and files no test or entry point reaches. `refresh` rebuilds
+(replacing a snapshot whose graph differs); `ingest` stores a `payload`.
+
+The snapshot is the checkout at `path` (default: the working directory),
+fingerprinted on every call and re-extracted when its content changed
+(`freshness: current`); a `fingerprint` names one exactly (`exact`); with
+neither, the namespace's latest (`unknown`). Extraction runs on the client -
+the local stdio server, or the proxy (`proxy_xray`), which asks the brain by
+fingerprint and ingests on a miss. Under `gingugu serve` a path is refused.
+Answers are import-based estimates and carry a `caveat`.
 
 ### `memory_tripwire`
 Bind a memory to a tool call so it is put in front of the agent at the moment
@@ -1942,6 +1974,8 @@ src/gingugu/
 ├── proxy_session.py        # Proxy building blocks: derivation, messages, one live link
 ├── proxy_vault.py          # Remote mode: the machine's credential vault, screened (reveal refused) and exposed as a server
 ├── proxy_vault_link.py     # Remote mode: runs that vault behind an in-memory MCP session so it can ask the user
+├── proxy_xray.py           # Remote mode: code_xray reads the checkout here, asks the brain by fingerprint
+├── xray/                   # Codebase X-ray: scan, extract, resolve, local (client); validate, rank, store (brain)
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine
 ├── remote_args.py          # usage text + argparse for `gingugu remote`, mint ssh argv
@@ -1988,7 +2022,8 @@ src/gingugu/
 │   ├── fields.py           # Write-time declared fields: provenance, about; FTS5 rebuild
 │   ├── queries.py          # The query log: query_log (migration 015)
 │   ├── tripwires.py        # Tripwire triggers: tripwires (migration 016)
-│   └── board.py            # The agent board: board_posts, board_reads (migration 017; 018 adds author_origin)
+│   ├── board.py            # The agent board: board_posts, board_reads (migration 017; 018 adds author_origin)
+│   └── xray.py             # Codebase X-ray: xray_snapshots, xray_files, xray_edges (migration 019)
 ├── models.py               # Data models + MEMORY_COLUMNS, the one column list
 ├── storage.py              # CRUD for the memories row and its transaction boundary
 ├── storage_derived.py      # The four satellite tables a memory drags along, plus the query log
@@ -2050,6 +2085,7 @@ src/gingugu/
 ├── board_watch.py          # gingugu board watch: a JSON line per new inbox post (--once / --exec / --all), local polling, delivery cursor
 ├── board_watch_remote.py   # the remote watch: persona-named session token, subscriptions/listen, 1s-30s reconnect backoff
 ├── board_watch_emit.py     # the line (labelled as from another agent), the delivery cursor, --exec hardening
+├── board_delivery.py       # board post/reply delivery receipt: can the recipient persona's known clients read it
 ├── board_hook.py           # board mail for the prompt hook: unread posts, grant-fenced, per-session shown ids, local or POST /hook/inbox
 ├── cli_usage.py            # the top-level `gingugu --help` text (USAGE)
 ├── tool_hook.py            # gingugu hook tool: PreToolUse entry point; deny once, re-issue passes
@@ -2098,6 +2134,7 @@ src/gingugu/
     ├── credentials.py      # credential_store / get / list / delete (delete asks the user)
     ├── tripwires.py        # memory_tripwire: add / list / remove / test
     ├── board.py            # board tool + gingugu://board/inbox/{persona} resource; derives the author
+    ├── xray.py             # code_xray tool: snapshot selection, blast, overview, refresh, ingest
     ├── admin.py            # namespaces, export, import (cascade delete and overwriting import ask the user)
     ├── summaries.py        # Payload shapes: full summary, compact summary, the picker
     ├── choices.py          # Enum argument parsing, shared error wording

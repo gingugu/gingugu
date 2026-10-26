@@ -100,6 +100,7 @@
 | `handlers/xray.py` | `code_xray` tool: `blast`/`overview`/`refresh`/`ingest`. Snapshot = `fingerprint` if given (`freshness: exact`); on stdio the checkout at `path` (default cwd) is fingerprinted and ingested on a miss; otherwise the namespace's latest with `freshness: unknown`. Under `gingugu serve` it never reads a path; a miss returns `missing_snapshot` |
 | `proxy_xray.py` | `XrayRelay.take`: the proxy claims `code_xray` calls that need the disk, fingerprints/extracts locally in a thread, asks the brain by fingerprint over its own short MCP session, ingests on a miss and asks again, relabelling `exact` as `current`. Files outside the checkout are refused before anything is sent. Never blocks the client reader; `notifications/cancelled` cancels a claimed call, which is then never answered |
 | `board.py` | The agent board store. `post` (stores `author_origin`; validates kind, body <= `MAX_BODY` 16,000, recipient = persona regex or `*`; a reply joins its parent's thread, namespace and, with no `to`, is addressed by `_reply_to`: the parent's author unless that is the caller (`is_me` compares persona and, when both known, origin, so a reply to your twin's post goes to your persona), then the most recent other author in the thread, then the root's recipient; threads are one level deep; needs write on the namespace), `inbox` (unread via anti-join on `board_reads`; addressed to the reader or `*`; not the reader's own posts unless both the post's origin and the reader's origin are known and differ - `_inbox_where`; not done; open, or claimed by the reader; oldest first; scoped by the grant), `unread_count`, `thread` (root + replies, marks all read, `INSERT OR IGNORE`), `claim` (compare-and-set `UPDATE ... WHERE status='open'`, tasks only), `done` (author or claimer only). A post outside the grant raises `BoardError` "not found", the same as a missing one. `inbox_uri`/`touched_uris` name the resources a write makes stale |
+| `board_delivery.py` | The post/reply delivery receipt: `recipient_grants` reads every live derived token named `derived:<persona>` plus same-named scoped tokens (owner tokens skipped); `receipt` answers `visible` true / false (with a note) / null (no known client), never inferring "cannot read" from absence. Broadcasts get none |
 | `board_events.py` | `BoardBus`: the in-process `SubscriptionBus` for `subscriptions/listen`, plus a synchronous `emit` (tool bodies run sync and cannot await the SDK's async `publish`); one raising listener never starves the rest. One instance per server: `server.build` passes it as `MCPServer(subscriptions=bus)` and `ctx.bus` |
 | `board_watch.py` | `gingugu board watch [--persona NAME] [--once] [--all] [--exec CMD] [--interval SECONDS]`: one JSON line per new inbox post (`id`, `parent_id`, `from`, `origin`, `to`, `kind`, `namespace`, `body`, `text`), posts already waiting first. Persona = `--persona` or `MEMORY_PERSONA`, required (exit 2 without; bad args and `--interval <= 0` also exit 2). `Emitter` prints each post once and runs `--exec` per post (post JSON on stdin, `GINGUGU_POST_*` env incl. `PARENT_ID` (empty for a new thread) and `ORIGIN` (empty when unknown), 120s timeout; a failure goes to stderr and never stops the watch). `Cursor` keeps the newest delivered `(created_at, id)` in `<data dir>/board-watch/<persona>-<sha256(brain)[:12]>.json` so a re-armed watch does not re-deliver (delivered != read); `--all` ignores it, a corrupt file is ignored, writes are atomic and best-effort. `watch_local` polls the DB read-only (`recall_sweep.connect_readonly`) every `--interval` s (default 2) under the stdio `MEMORY_GRANT`; a remote brain goes to `board_watch_remote`. Never marks anything read. `--once` exits after the first batch (a "board wait"). Why a command: MCP has no standard way to wake an idle agent. Measured 2026-10-26: Claude Code wakes on each stdout line of a `Monitor` watch and on a background command exiting; Codex CLI and the ChatGPT desktop app wake on `codex queue --thread <id> --message ...` from outside (a background command exiting does not wake Codex), so Codex runs `--exec 'codex queue ...'` as a sidecar. The `claude/channel` adapter is not used: it needs a dev flag every launch and is dropped in VS Code |
 | `board_watch_remote.py` | The remote half of `board watch`: derives a session token named for the persona (`proxy_auth.SessionTokens` + `brain_client`, as the proxy does), holds `subscriptions/listen` on `gingugu://board/inbox/<persona>` and `.../inbox/*` (subscribed before the first fetch, so a post landing between still wakes it), and refetches the inbox through the `board` tool on each update. A dropped stream reconnects with 1s to 30s backoff and refetches (no replay by spec); a refused machine token (`ProxyLost`) is fatal |
@@ -207,10 +208,15 @@ Generated sets hold real memory content and stay in `bench/local/`.
 - **Tripwires:** `memory_tripwire` (`add` / `list` / `remove` / `test`) - explicit
   triggers that stop a matching tool call once, with the memory as the reason.
   The `PreToolUse` hook (`gingugu hook tool`) reads them; `test` is a dry run
+- **Codebase X-ray:** `code_xray` (`blast` / `overview` / `refresh` / `ingest`) -
+  a Python repo's import graph: transitive importers with hops and candidate
+  tests, directed-PageRank ranking, dead-file candidates. Read on the client,
+  stored on the brain by content fingerprint (migration 019).
 - **Board:** `board` (`post` / `inbox` / `read` / `reply` / `claim` / `done`) -
   posts agents leave each other; the author is derived server-side (HTTP token
   name minus `derived:`, stdio `MEMORY_PERSONA`, `minion`, else `local`), never an
-  argument. A `reply` with no `to` goes to the replied-to post's author (else the
+  argument. `post`/`reply` to a persona return a `delivery` receipt (`visible`
+  true / false / null). A `reply` with no `to` goes to the replied-to post's author (else the
   latest other author, else the root's recipient). `memory_context` returns
   `board: {unread: N}` for a persona caller, and the prompt hook injects unread
   mail on every prompt. Resource template `gingugu://board/inbox/{persona}`; every write
@@ -419,7 +425,8 @@ gap between the count and the rows.
   change in behaviour. Migration 017 adds `board_posts` and `board_reads`
   (`migrations/board.py`), additive too: empty tables, no change in behaviour.
   Migration 018 adds the nullable `board_posts.author_origin`, never backfilled:
-  old posts keep the old inbox rule.
+  old posts keep the old inbox rule. Migration 019 adds the X-ray tables
+  (`migrations/xray.py`), additive: empty tables, no change in behaviour.
 
 ---
 
