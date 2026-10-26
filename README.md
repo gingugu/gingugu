@@ -110,7 +110,7 @@ Where this goes long-term — federated, org-wide agent memory — lives in
 Those are great if you live in one tool. The moment you switch between
 Claude Code in the morning and Cursor in the afternoon, the memory is gone.
 Gingugu's memory follows you across every MCP client, lives on your machine,
-and is programmable (21 tools, structured types, relationships, confidence
+and is programmable (22 tools, structured types, relationships, confidence
 levels). The built-ins are convenience features. Gingugu is infrastructure.
 
 </details>
@@ -257,7 +257,7 @@ uv run gingugu  # or pip install -e .
 
 </details>
 
-> **Usable today.** 21 MCP tools live. 1560+ tests passing. Dogfooded daily in
+> **Usable today.** 22 MCP tools live. 2300+ tests passing. Dogfooded daily in
 > Claude Code and Windsurf — this repo's own memories live in a Gingugu
 > database. Early and seeking broader real-world validation.
 
