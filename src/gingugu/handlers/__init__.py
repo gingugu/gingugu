@@ -127,6 +127,7 @@ def register_all(mcp, ctx: ServerContext) -> None:
         search,
         stats,
         tripwires,
+        xray,
     )
 
     memory.register(mcp, ctx)
@@ -141,6 +142,7 @@ def register_all(mcp, ctx: ServerContext) -> None:
     consolidate.register(mcp, ctx)
     dream.register(mcp, ctx)
     admin.register(mcp, ctx)
+    xray.register(mcp, ctx)
     # Credential vault is opt-out: a shared/central instance runs with
     # MEMORY_CREDENTIALS_ENABLED=false so it never exposes secret tools.
     if ctx.config.credentials_enabled:
