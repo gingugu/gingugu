@@ -193,6 +193,9 @@ def build_app(
 
         for path, handler in hook_routes(ctx).items():
             app.add_route(path, handler, methods=["POST"])
+        from .serve_ui import ui_routes
+
+        app.router.routes.append(ui_routes(ctx))
     app.add_middleware(BearerAuthMiddleware, token=token, tokens=tokens, derived=derived)
     return app
 

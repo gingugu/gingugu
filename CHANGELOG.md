@@ -9,6 +9,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Memory Explorer read API. `gingugu serve` answers `GET /ui/api/*` (`info`,
+  `graph`, `memory/<id>`, `search`, `stats`, `events`) for owner tokens only
+  (a scoped token gets 403). Every surface is an observer: a read-only
+  connection, no access credit, no `query_log` row, no spreading activation.
+  `search` returns the score breakdown; `events` is a cursored feed of the
+  agent's recall activity. `gingugu ui` serves the same API from the local DB.
+- `gingugu ui` detects local versus remote brain per request (the same
+  `MEMORY_REMOTE_URL` / machine setting the hooks use) and forwards `/api/*` to
+  the remote brain's `/ui/api/*` with the keychain token, which never reaches
+  the browser. Every response carries `mode`; `/api/info` also names the brain.
+
+### Changed
+
+- `gingugu ui`'s legacy `/api/export` is local-only: it answers 404 in remote
+  mode and goes away when the new frontend lands. The Explorer reads through the
+  read API instead.
+
+### Security
+
+- `gingugu ui` refuses to bind a non-loopback `--host`. The Explorer API is the
+  whole brain and has no auth of its own, so a LAN bind would publish it.
+- `gingugu ui` answers only requests whose `Host` header is a loopback name or
+  address (403 otherwise), which closes DNS rebinding.
+- `gingugu ui` forwards only the Explorer's own routes (an allowlist, checked
+  before the owner token is attached). An unknown path is a 404 and is never
+  forwarded, so a `..` path cannot turn the forwarder into a confused deputy.
+- `gingugu ui` grants no CORS to any origin (the Vite dev server proxies
+  `/api`), and the remote forwarder never follows redirects, so the token
+  cannot be bounced to another host.
+- Fixes the known issue that `gingugu ui --host` exposed an unauthenticated
+  full-DB export.
+
 ---
 
 ## [0.25.0] - 2026-10-19
