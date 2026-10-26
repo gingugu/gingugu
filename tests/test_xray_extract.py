@@ -154,11 +154,25 @@ def test_implicit_marks_parent_initializers_of_from_imports(tmp_path):
         },
     )
     x = extract.extract(repo)
-    # pkg/__init__ is a parent of pkg.sub (implicit) AND the target of
-    # `from pkg import sub` (explicit): the explicit occurrence is kept.
-    assert _edge(x, "main.py", "pkg/__init__.py").implicit is False
-    assert _edge(x, "main.py", "pkg/sub/__init__.py").implicit is False
+    # Both statements ask only for submodules, so their packages are containers:
+    # they run, nobody asked for them.
+    assert _edge(x, "main.py", "pkg/__init__.py").implicit is True
     assert _edge(x, "main.py", "pkg/sub/mod.py").implicit is False
+
+
+def test_from_import_of_a_name_makes_the_package_explicit(tmp_path):
+    repo = _repo(
+        tmp_path,
+        {
+            "pkg/__init__.py": "VALUE = 1\n",
+            "pkg/mod.py": "",
+            "a.py": "from pkg import mod\n",
+            "b.py": "from pkg import mod, VALUE\n",
+        },
+    )
+    x = extract.extract(repo)
+    assert _edge(x, "a.py", "pkg/__init__.py").implicit is True  # only a submodule asked for
+    assert _edge(x, "b.py", "pkg/__init__.py").implicit is False  # VALUE lives in pkg
 
 
 def test_an_implicit_parent_alone_stays_implicit(tmp_path):
