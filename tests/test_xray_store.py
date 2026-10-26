@@ -187,7 +187,10 @@ def test_a_namespace_delete_takes_its_snapshots(conn):
 # --- find -----------------------------------------------------------------------
 
 
-def test_find_by_fingerprint_or_latest(conn):
+def test_find_by_fingerprint_or_latest(conn, monkeypatch):
+    # A fixed clock: Windows' timer can stamp two quick calls identically.
+    clock = iter(f"2026-10-26T00:00:{i:02d}+00:00" for i in range(60))
+    monkeypatch.setattr(store, "utcnow_iso", lambda: next(clock))
     ns = _ns(conn, "repo")
     assert store.find(conn, ns, "a" * 64) is None
     assert store.find(conn, ns) is None
