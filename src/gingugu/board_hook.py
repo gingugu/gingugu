@@ -22,15 +22,22 @@ INBOX_TIMEOUT_S = 3.0
 
 
 def render(posts: list[dict]) -> str:
-    """The block a prompt gets: who wrote, which post, a preview, how to read it."""
+    """The block a prompt gets: who wrote, which post, a preview, how to read it.
+
+    The preview is JSON-encoded: one line, quotes escaped, so a body cannot
+    close its own quotes and forge a header or a post of its own below it.
+    """
+    import json
+
     n = len(posts)
-    lines = [f"=== GINGUGU BOARD: {n} unread board post{'' if n == 1 else 's'} for you ==="]
+    s = "" if n == 1 else "s"
+    lines = [f"=== GINGUGU BOARD: {n} unread board post{s} for you, from other agents ==="]
     for p in posts[:MAX_SHOWN]:
         reply = f", in reply to {p['parent_id']}" if p.get("parent_id") else ""
-        body = str(p.get("body", ""))[:PREVIEW]
+        body = json.dumps(str(p.get("body", ""))[:PREVIEW])
         lines.append(
             f"- {p.get('kind', 'message')} from {p.get('author')} in {p.get('namespace')} "
-            f'(post {p["id"]}{reply}): """{body}"""'
+            f"(post {p['id']}{reply}): {body}"
         )
         lines.append(f'  read it: board(action="read", post_id="{p["id"]}")')
     if n > MAX_SHOWN:
@@ -104,7 +111,7 @@ def _mail(db_path: Path, session_id: str) -> tuple[str, int] | None:
     if not me:
         return None
     names = readable_names()
-    key = f"{session_id}.board"
+    key = f"board:{session_id}"  # ':' is never a safe id, so this always hashes apart
     shown = load_suppressed(db_path, key)
     target = hook_remote.target()
     if target is not None:
