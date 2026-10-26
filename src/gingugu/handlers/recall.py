@@ -19,6 +19,7 @@ from .. import grants
 from .. import search as search_mod
 from ..models import Confidence, Memory, MemoryType
 from . import ServerContext
+from .board import unread_note
 from .capability_view import lane_entries, stamp_capabilities
 from .context_merge import merge_namespace_context
 from .helpers import (
@@ -285,6 +286,9 @@ def register(mcp, ctx: ServerContext) -> None:
             else:
                 payload["namespaces"] = ns_names
                 payload["duplicates_removed"] = loaded_total - len(results)
+            mail = unread_note(ctx)
+            if mail is not None:
+                payload["board"] = mail
             return payload
         except Exception as exc:
             logger.exception("memory_context failed")

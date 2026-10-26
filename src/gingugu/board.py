@@ -76,6 +76,20 @@ def _require(conn: sqlite3.Connection, post_id: str) -> dict:
     return found
 
 
+def _reply_to(conn: sqlite3.Connection, parent: dict, root_id: str, author: str) -> str:
+    """Who a reply is for: the post's author, unless that is me - then whoever spoke last."""
+    if parent["author"] != author:
+        return parent["author"]
+    row = conn.execute(
+        "SELECT author FROM board_posts WHERE (id = ? OR parent_id = ?) AND author != ? "
+        "ORDER BY created_at DESC, rowid DESC LIMIT 1",
+        (root_id, root_id, author),
+    ).fetchone()
+    if row is not None:
+        return row["author"]
+    return _require(conn, root_id)["recipient"]  # nobody has answered: nudge whoever I asked
+
+
 def post(
     conn: sqlite3.Connection,
     *,
@@ -98,7 +112,7 @@ def post(
         parent = _require(conn, parent_id)
         parent_id = parent["parent_id"] or parent["id"]  # threads are one level deep
         namespace_id = parent["namespace_id"]
-        recipient = recipient or parent["author"]
+        recipient = recipient or _reply_to(conn, parent, parent_id, author)
     recipient = recipient or BROADCAST
     if not is_persona(recipient):
         raise BoardError(f"recipient {recipient!r} is not a persona name or '*'")

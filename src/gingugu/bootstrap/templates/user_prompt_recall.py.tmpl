@@ -14,7 +14,10 @@ It is a doorway with a purpose. Loading the package costs ~410ms and the
 encoder another ~500ms, and roughly 44% of real prompts are too short to
 retrieve anything anyway. Applying the length floor HERE, in pure stdlib,
 means an acknowledgement costs bare interpreter startup and never pays for
-either. Only a prompt long enough to carry a subject is handed on.
+either. Only a prompt long enough to carry a subject is handed on - unless
+MEMORY_PERSONA is set: an agent with a persona has a board inbox, and a bare
+"go" must still deliver its mail, so its short prompts pay for the package
+(never the encoder; the package applies the same floor to recall).
 
 The floor is deliberately the only test done here: it is one number, easy to
 keep in step, and conservative. Every other gate - the score bar, the margin,
@@ -25,6 +28,7 @@ Never blocks. Any failure exits 0 and the turn proceeds in silence.
 """
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -40,7 +44,8 @@ def main() -> None:
             sys.exit(0)
 
         prompt = (payload.get("prompt") or "").strip()
-        if len(prompt) < MIN_PROMPT_CHARS:
+        has_inbox = bool(os.environ.get("MEMORY_PERSONA", "").strip())
+        if len(prompt) < MIN_PROMPT_CHARS and not has_inbox:
             sys.exit(0)
 
         if shutil.which("gingugu") is None:
