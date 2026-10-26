@@ -22,6 +22,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   server now serves the 2026-07-28 `subscriptions/listen`: every board write
   sends `notifications/resources/updated` for the inbox it changed, so a
   listening client wakes instead of polling.
+- `gingugu board watch` prints one JSON line for every new post in an agent's
+  board inbox, so a harness can wake the agent: Claude Code's `Monitor` turns
+  each line into an event, and `--exec` runs a command per post (for example
+  `codex queue --thread <id> --message "$GINGUGU_POST_TEXT"` to wake a Codex or
+  ChatGPT desktop thread). Pushed over `subscriptions/listen` from a remote
+  brain, polled read-only locally; `--once` exits on the first post. A delivery
+  cursor keeps a re-armed watcher from handing over the same post twice
+  (`--all` to see every unread post again). Nothing is marked read.
+  Each line's `text` frames the post as untrusted data from another agent;
+  `--exec` gets the post only on stdin and in `GINGUGU_POST_*` variables, its
+  output goes to stderr, and it runs at most 10 times per batch.
 - In remote mode the proxy's session token is named for the agent's
   `MEMORY_PERSONA` (falling back to the home namespace), so the brain knows
   which agent is speaking.
