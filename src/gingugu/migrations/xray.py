@@ -14,6 +14,12 @@ snapshot wherever it came from, and two worktrees with different edits are two.
 
 ``namespace_id`` cascades as ``memories`` does, and files and edges cascade
 from their snapshot, so retention is one ``DELETE`` on ``xray_snapshots``.
+An edge's ends are foreign keys into its snapshot's files, so the invariant ingest
+validates is also one the schema keeps. ``graph_digest`` hashes the validated
+graph: the fingerprint is the client's claim about its checkout and cannot be
+checked here, so an explicit refresh replaces a stored snapshot whose graph
+differs - the repair path if a writer ever stored a wrong one. ``skipped`` is
+JSON ``[{path, reason}]``: sources the client did not read, and why.
 Rank is computed once at ingest and stored on ``xray_files``; the graph of a
 snapshot never changes, so neither does its rank. ``kind`` is plain TEXT
 validated in Python, like the board's, so a new kind needs no table rebuild.
@@ -28,6 +34,7 @@ CREATE TABLE xray_snapshots (
     id                TEXT PRIMARY KEY,
     namespace_id      TEXT NOT NULL REFERENCES namespaces(id) ON DELETE CASCADE,
     fingerprint       TEXT NOT NULL,
+    graph_digest      TEXT NOT NULL,
     extractor_version INTEGER NOT NULL,
     commit_sha        TEXT,
     file_count        INTEGER NOT NULL,
@@ -36,7 +43,7 @@ CREATE TABLE xray_snapshots (
     dynamic           INTEGER NOT NULL,
     external          INTEGER NOT NULL,
     parse_errors      TEXT NOT NULL,
-    skipped_symlinks  TEXT NOT NULL,
+    skipped           TEXT NOT NULL,
     created_at        TEXT NOT NULL,
     last_used_at      TEXT NOT NULL,
     UNIQUE (namespace_id, fingerprint)
@@ -60,7 +67,9 @@ CREATE TABLE xray_edges (
     kind        TEXT NOT NULL,
     certain     INTEGER NOT NULL,
     implicit    INTEGER NOT NULL,
-    PRIMARY KEY (snapshot_id, src, dst)
+    PRIMARY KEY (snapshot_id, src, dst),
+    FOREIGN KEY (snapshot_id, src) REFERENCES xray_files(snapshot_id, path) ON DELETE CASCADE,
+    FOREIGN KEY (snapshot_id, dst) REFERENCES xray_files(snapshot_id, path) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_xray_edges_dst ON xray_edges(snapshot_id, dst);

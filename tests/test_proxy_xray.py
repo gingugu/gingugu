@@ -105,3 +105,21 @@ async def test_a_local_failure_is_a_structured_error(brain, tmp_path):
             )
     assert out["ok"] is False
     assert "git" in out["error"]
+
+
+async def test_the_proxy_marks_its_own_check_current_and_keeps_paths_home(brain, tmp_path):
+    repo = _repo(tmp_path)
+    async with serving(brain.app()) as served:
+        async with through_proxy(served.url, brain.machine, home="proj") as (session, _):
+            await session.initialize()
+            out = payload(
+                await session.call_tool("code_xray", {"action": "overview", "path": str(repo)})
+            )
+            outside = payload(
+                await session.call_tool(
+                    "code_xray",
+                    {"action": "blast", "files": str(tmp_path / "x.py"), "path": str(repo)},
+                )
+            )
+    assert out["freshness"] == "current"
+    assert outside["ok"] is False and "outside" in outside["error"]

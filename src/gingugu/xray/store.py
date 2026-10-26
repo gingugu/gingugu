@@ -1,9 +1,7 @@
 """X-ray snapshots on the brain: ingest what a client extracted, answer from it.
 
-Nothing here reads a file. A payload is data - paths are names inside a
-snapshot, never opened - so it is validated as data: every path relative and
-plain, every edge between files the payload lists, every count a count. A bad
-payload is refused whole, before anything is written.
+Nothing here reads a file. A payload is data, validated as data before any of
+it is written (``validate``).
 
 The fence is the namespace's, through the same grant chokepoints as memories:
 write to ingest, read to query. A snapshot the caller cannot read is reported
@@ -18,115 +16,22 @@ times. Old graphs are cheap to rebuild from git, so ``KEEP`` is small.
 from __future__ import annotations
 
 import json
-import re
 import sqlite3
 import uuid
 
 from .. import grants
 from ..models import utcnow_iso
-from . import rank
+from . import rank, validate
+from .validate import DELIBERATE, XrayStoreError
+
+__all__ = ["KEEP", "XrayStoreError", "blast", "find", "ingest", "overview"]
 
 KEEP = 5
-KINDS = ("module", "conditional", "lazy", "type_checking")
-MAX_FILES = 200_000
-MAX_EDGES = 2_000_000
-_MAX_PATH = 1024
-_FINGERPRINT = re.compile(r"^[0-9a-f]{64}$")
-_COUNTS = ("unresolved", "dynamic", "external")
-
-
-class XrayStoreError(ValueError):
-    pass
-
-
-def _path(value) -> str:
-    ok = (
-        isinstance(value, str)
-        and 0 < len(value) <= _MAX_PATH
-        and not value.startswith("/")
-        and "\\" not in value
-        and "\x00" not in value
-        and all(part not in ("", ".", "..") for part in value.split("/"))
-    )
-    if not ok:
-        raise XrayStoreError(f"invalid path {value!r}: must be relative, '/'-separated, no '..'")
-    return value
-
-
-def _paths(payload: dict, key: str, known: set[str] | None = None) -> list[str]:
-    value = payload.get(key, [])
-    if not isinstance(value, list):
-        raise XrayStoreError(f"{key} must be a list")
-    out = [_path(p) for p in value]
-    if known is not None and any(p not in known for p in out):
-        raise XrayStoreError(f"{key} names a file the payload does not list")
-    return sorted(set(out))
-
-
-def _validate(payload) -> dict:
-    if not isinstance(payload, dict):
-        raise XrayStoreError("payload must be an object")
-    fp = payload.get("fingerprint")
-    if not isinstance(fp, str) or not _FINGERPRINT.fullmatch(fp):
-        raise XrayStoreError("fingerprint must be 64 lowercase hex characters")
-    version = payload.get("extractor_version")
-    if isinstance(version, bool) or not isinstance(version, int) or version < 1:
-        raise XrayStoreError("extractor_version must be a positive integer")
-    commit = payload.get("commit")
-    if commit is not None and not (
-        isinstance(commit, str) and re.fullmatch(r"[0-9a-f]{4,64}", commit)
-    ):
-        raise XrayStoreError("commit must be a hex sha or null")
-    counts = {}
-    for key in _COUNTS:
-        n = payload.get(key)
-        if isinstance(n, bool) or not isinstance(n, int) or n < 0:
-            raise XrayStoreError(f"{key} must be a non-negative integer")
-        counts[key] = n
-
-    raw_files = payload.get("files")
-    if not isinstance(raw_files, list) or len(raw_files) > MAX_FILES:
-        raise XrayStoreError(f"files must be a list of at most {MAX_FILES}")
-    files: dict[str, tuple[bool, bool]] = {}
-    for f in raw_files:
-        if not isinstance(f, dict) or not all(
-            isinstance(f.get(k), bool) for k in ("is_test", "is_entry")
-        ):
-            raise XrayStoreError("each file needs path, is_test and is_entry")
-        files[_path(f.get("path"))] = (f["is_test"], f["is_entry"])
-
-    raw_edges = payload.get("edges")
-    if not isinstance(raw_edges, list) or len(raw_edges) > MAX_EDGES:
-        raise XrayStoreError(f"edges must be a list of at most {MAX_EDGES}")
-    edges: dict[tuple[str, str], tuple[str, bool, bool]] = {}
-    for e in raw_edges:
-        if not isinstance(e, dict):
-            raise XrayStoreError("each edge must be an object")
-        src, dst = _path(e.get("src")), _path(e.get("dst"))
-        if src not in files or dst not in files:
-            raise XrayStoreError(f"edge {src} -> {dst} names a file the payload does not list")
-        flags = (e.get("certain"), e.get("implicit"))
-        if e.get("kind") not in KINDS or not all(isinstance(f, bool) for f in flags):
-            raise XrayStoreError(
-                f"edge {src} -> {dst}: kind must be one of {KINDS}, certain a bool"
-            )
-        if src != dst:
-            edges[(src, dst)] = (e["kind"], e["certain"], e["implicit"])
-
-    return {
-        "fingerprint": fp,
-        "extractor_version": version,
-        "commit": commit,
-        "files": files,
-        "edges": edges,
-        "parse_errors": _paths(payload, "parse_errors", set(files)),
-        "skipped_symlinks": _paths(payload, "skipped_symlinks"),
-        **counts,
-    }
 
 
 def _meta(row: sqlite3.Row) -> dict:
-    parse_errors = json.loads(row["parse_errors"])
+    parse_errors, skipped = json.loads(row["parse_errors"]), json.loads(row["skipped"])
+    missing = [s for s in skipped if s["reason"] not in DELIBERATE]
     return {
         "snapshot_id": row["id"],
         "fingerprint": row["fingerprint"],
@@ -136,8 +41,11 @@ def _meta(row: sqlite3.Row) -> dict:
         "edges": row["edge_count"],
         "created_at": row["created_at"],
         "coverage": {
-            "complete": not parse_errors,
+            # Complete = every Python source the client meant to read was read and
+            # parsed. A deliberate exclusion (a symlink) does not count against it.
+            "complete": not parse_errors and not missing,
             "parse_errors": parse_errors,
+            "skipped": skipped,
             "unresolved": row["unresolved"],
             "dynamic": row["dynamic"],
             "external": row["external"],
@@ -172,12 +80,16 @@ def _prune(conn, namespace_id: str) -> None:
     )
 
 
-def ingest(conn: sqlite3.Connection, namespace_id: str, payload) -> dict:
-    """Store a snapshot, or touch the identical one already stored. Atomic."""
+def ingest(conn: sqlite3.Connection, namespace_id: str, payload, *, replace: bool = False) -> dict:
+    """Store a snapshot, or touch the one already stored for that fingerprint. Atomic.
+
+    ``replace`` (an explicit refresh) swaps a stored snapshot whose graph differs
+    from this one: the fingerprint is the client's claim, the graph digest is not.
+    """
     grants.require_write_id(namespace_id, "this namespace's X-ray")
-    v = _validate(payload)
+    v = validate.payload(payload)
     found = _row(conn, namespace_id, v["fingerprint"])
-    if found is not None:
+    if found is not None and not (replace and found["graph_digest"] != v["graph_digest"]):
         _touch(conn, found["id"])
         return {"snapshot_id": found["id"], "fingerprint": v["fingerprint"], "created": False}
 
@@ -185,15 +97,18 @@ def ingest(conn: sqlite3.Connection, namespace_id: str, payload) -> dict:
     ranks = rank.pagerank(sorted(v["files"]), links)
     sid, now = str(uuid.uuid4()), utcnow_iso()
     with conn:  # one transaction: a snapshot is all there or not at all
+        if found is not None:
+            conn.execute("DELETE FROM xray_snapshots WHERE id = ?", (found["id"],))
         conn.execute(
-            "INSERT INTO xray_snapshots(id, namespace_id, fingerprint, extractor_version, "
-            "commit_sha, file_count, edge_count, unresolved, dynamic, external, parse_errors, "
-            "skipped_symlinks, created_at, last_used_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO xray_snapshots(id, namespace_id, fingerprint, graph_digest, "
+            "extractor_version, commit_sha, file_count, edge_count, unresolved, dynamic, "
+            "external, parse_errors, skipped, created_at, last_used_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 sid,
                 namespace_id,
                 v["fingerprint"],
+                v["graph_digest"],
                 v["extractor_version"],
                 v["commit"],
                 len(v["files"]),
@@ -202,7 +117,7 @@ def ingest(conn: sqlite3.Connection, namespace_id: str, payload) -> dict:
                 v["dynamic"],
                 v["external"],
                 json.dumps(v["parse_errors"]),
-                json.dumps(v["skipped_symlinks"]),
+                json.dumps(v["skipped"]),
                 now,
                 now,
             ),
@@ -266,8 +181,8 @@ def blast(conn, snapshot_id: str, seeds: list[str], *, limit=None, offset: int =
     return {**out, "snapshot": _meta(row)}
 
 
-def overview(conn, snapshot_id: str, *, top: int = 20) -> dict:
-    """The most load-bearing files, and the files no root reaches."""
+def overview(conn, snapshot_id: str, *, top: int = 20, limit=None, offset: int = 0) -> dict:
+    """The most load-bearing files, and the files no root reaches (paged)."""
     row = _snapshot(conn, snapshot_id)
     files, entries, ranks, links = _graph(conn, snapshot_id)
     imported_by: dict[str, int] = {}
@@ -277,6 +192,8 @@ def overview(conn, snapshot_id: str, *, top: int = 20) -> dict:
     n = len(files) or 1
     ordered = sorted(ranks, key=lambda p: (-ranks[p], p))[: max(0, top)]
     tests = {p for p, is_test in files.items() if is_test}
+    dead = rank.unreachable(files, links, roots=tests | entries)
+    end = None if limit is None else offset + limit
     return {
         "snapshot": _meta(row),
         "top": [
@@ -288,6 +205,7 @@ def overview(conn, snapshot_id: str, *, top: int = 20) -> dict:
             }
             for p in ordered
         ],
-        "unreachable": rank.unreachable(files, links, roots=tests | entries),
+        "unreachable": None if dead is None else dead[offset:end],
+        "unreachable_total": None if dead is None else len(dead),
         "roots": {"tests": len(tests), "entries": len(entries)},
     }

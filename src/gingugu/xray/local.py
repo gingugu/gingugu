@@ -34,8 +34,9 @@ def file_list(files) -> list[str]:
 
 
 def seeds(files: list[str], repo: Path) -> list[str]:
-    """Repo-relative POSIX paths. An absolute path outside the repo is kept as
-    given, so the snapshot reports it as unknown rather than guessing."""
+    """Repo-relative POSIX paths. A file outside the checkout - an absolute path
+    elsewhere, or one climbing out with ``..`` - is refused here, so a path from
+    this machine never travels to the brain."""
     out = []
     for f in files:
         p = Path(f)
@@ -43,8 +44,9 @@ def seeds(files: list[str], repo: Path) -> list[str]:
             try:
                 p = p.resolve().relative_to(repo.resolve())
             except ValueError:
-                out.append(f)
-                continue
-        rel = PurePosixPath(*p.parts).as_posix()
-        out.append(rel[2:] if rel.startswith("./") else rel)
+                raise ValueError(f"{f} is outside the checkout at {repo}") from None
+        parts = PurePosixPath(*p.parts).parts
+        if ".." in parts:
+            raise ValueError(f"{f} is outside the checkout at {repo}")
+        out.append("/".join(part for part in parts if part != "."))
     return out

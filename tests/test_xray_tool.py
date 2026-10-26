@@ -123,3 +123,32 @@ async def test_errors_are_structured(server, tmp_path):
     assert (await _x(server, action="blast", path=str(_repo(tmp_path))))["ok"] is False
     assert (await _x(server, action="overview", path=str(tmp_path / "not-a-repo")))["ok"] is False
     assert (await _x(server, action="ingest", payload={"fingerprint": "x"}))["ok"] is False
+
+
+async def test_a_supplied_fingerprint_is_exact_not_current(server, tmp_path):
+    from gingugu.xray import extract
+
+    repo = _repo(tmp_path)
+    fp = extract.fingerprint(repo)
+    await _x(server, action="refresh", path=str(repo))
+    out = await _x(server, action="overview", fingerprint=fp)
+    assert out["freshness"] == "exact"  # nothing compared it with a working tree
+
+
+async def test_a_file_outside_the_checkout_is_refused_not_forwarded(server, tmp_path):
+    repo = _repo(tmp_path)
+    outside = await _x(server, action="blast", files=str(tmp_path / "elsewhere.py"), path=str(repo))
+    assert outside["ok"] is False and "outside" in outside["error"]
+    dotdot = await _x(server, action="blast", files="../up.py", path=str(repo))
+    assert dotdot["ok"] is False
+
+
+async def test_refresh_replaces_a_snapshot_whose_graph_differs(server, tmp_path):
+    from gingugu.xray import extract
+
+    repo = _repo(tmp_path)
+    body = extract.extract(repo).payload()
+    planted = await _x(server, action="ingest", payload={**body, "edges": []})
+    fixed = await _x(server, action="refresh", path=str(repo))
+    assert fixed["created"] is True
+    assert fixed["snapshot_id"] != planted["snapshot_id"]

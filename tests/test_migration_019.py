@@ -51,3 +51,34 @@ def test_the_xray_tables_carry_no_fts_triggers():
         r[0] or "" for r in conn.execute("SELECT sql FROM sqlite_master WHERE type='trigger'")
     )
     assert "xray" not in sql
+
+
+def test_namespace_delete_cascades_to_files_and_edges_and_edges_need_files():
+    import pytest
+
+    conn = _conn()
+    migrate(conn)
+    now, ns = utcnow_iso(), str(uuid.uuid4())
+    conn.execute(
+        "INSERT INTO namespaces(id, name, created_at, updated_at) VALUES (?, 'n', ?, ?)",
+        (ns, now, now),
+    )
+    conn.execute(
+        "INSERT INTO xray_snapshots(id, namespace_id, fingerprint, graph_digest, "
+        "extractor_version, commit_sha, file_count, edge_count, unresolved, dynamic, external, "
+        "parse_errors, skipped, created_at, last_used_at) "
+        "VALUES ('s', ?, 'f', 'g', 1, NULL, 2, 1, 0, 0, 0, '[]', '[]', ?, ?)",
+        (ns, now, now),
+    )
+    for path in ("a.py", "b.py"):
+        conn.execute(
+            "INSERT INTO xray_files(snapshot_id, path, is_test, is_entry, rank) "
+            "VALUES ('s', ?, 0, 0, 0.5)",
+            (path,),
+        )
+    conn.execute("INSERT INTO xray_edges VALUES ('s', 'a.py', 'b.py', 'module', 1, 0)")
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute("INSERT INTO xray_edges VALUES ('s', 'a.py', 'ghost.py', 'module', 1, 0)")
+    conn.execute("DELETE FROM namespaces WHERE id = ?", (ns,))
+    for table in ("xray_snapshots", "xray_files", "xray_edges"):
+        assert conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
