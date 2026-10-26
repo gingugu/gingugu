@@ -95,7 +95,12 @@
 | `migrations/queries.py` | Migration 015: `query_log`, the questions asked of the store. Its own module because it is neither structure, re-derivation, coordination state, nor a declared field - and because `access_log` cannot hold it: that table has one row per *returned memory*, so it never sees the question or a miss |
 | `migrations/board.py` | Migrations 017 and 018. 017: `board_posts` (id, namespace_id cascade, parent_id cascade, author, author_session, recipient = persona or `*`, kind message\|task, status open\|claimed\|done, claimed_by, body, timestamps; indexes `idx_board_posts_inbox(namespace_id, recipient, status)`, `idx_board_posts_parent`) and `board_reads` (post_id cascade, reader, read_at; PK `(post_id, reader)`). Own tables so posts stay out of the graph and the ranking; `kind`/`status` validated in Python, not `CHECK`. Never pruned. 018 `_migration_018_author_origin`: `ALTER TABLE board_posts ADD COLUMN author_origin TEXT`, nullable, never backfilled (an old post's machine is unknown, and unknown keeps the old rule). Does not touch `memories` or `memories_fts` |
 | `migrations/tripwires.py` | Migration 016: `tripwires`, explicit per-memory triggers (tool-name regex + input regex) for the `PreToolUse` hook. Its own table because one memory can guard several calls and a trigger has its own lifecycle; `ON DELETE CASCADE` so a hard-deleted memory takes its tripwires with it. Does not touch `memories` or `memories_fts` |
+| `migrations/xray.py` | Migration 019: `xray_snapshots` (namespace cascade, `UNIQUE(namespace_id, fingerprint)`, `graph_digest`, commit, counts, coverage JSON, `last_used_at`; index on `(namespace_id, last_used_at)`), `xray_files` (PK `(snapshot_id, path)`, `is_test`, `is_entry`, `rank`), `xray_edges` (PK `(snapshot_id, src, dst)`, `kind`, `certain`, `implicit`; `(snapshot_id, src)` and `(snapshot_id, dst)` FKs into `xray_files`; index on `(snapshot_id, dst)`). Does not touch `memories` or `memories_fts` |
+| `xray/` | Codebase X-ray. Client side (never run by the brain): `scan.py` (git with `core.fsmonitor=false` + `GIT_OPTIONAL_LOCKS=0`, `ls-files --cached --others --exclude-standard`; every source not read is a skip with a reason: symlink, outside, unreadable, too_large, malformed pyproject), `extract.py` (bytes hashed and parsed once, content fingerprint incl. `EXTRACTOR_VERSION` + `pyproject.toml`, test/entry roots incl. `[project.scripts]`/`gui-scripts`/`entry-points`, `payload()` without the local root), `resolve.py` (module index over repo root + `src/`, PEP 420, certain vs candidate edges, `implicit` parent initializers, kinds module/conditional/lazy/type_checking, one real occurrence per pair), `local.py` (root, file list, repo-relative seeds). Brain side: `rank.py` (directed PageRank skipping implicit edges; blast = reverse BFS, min hops, certain only via certain chains, paged; unreachable from roots), `validate.py` (payload as data: plain relative paths, no duplicates, edges between listed files, 50k-file / 500k-edge CPU caps, `graph_digest`), `store.py` (atomic idempotent ingest; `replace` swaps a snapshot whose graph differs; complete = no parse errors and no non-deliberate skips; KEEP=5 by last use; fenced find/blast/overview, unreachable paged) |
+| `handlers/xray.py` | `code_xray` tool: `blast`/`overview`/`refresh`/`ingest`. Snapshot = `fingerprint` if given (`freshness: exact`); on stdio the checkout at `path` (default cwd) is fingerprinted and ingested on a miss; otherwise the namespace's latest with `freshness: unknown`. Under `gingugu serve` it never reads a path; a miss returns `missing_snapshot` |
+| `proxy_xray.py` | `XrayRelay.take`: the proxy claims `code_xray` calls that need the disk, fingerprints/extracts locally in a thread, asks the brain by fingerprint over its own short MCP session, ingests on a miss and asks again, relabelling `exact` as `current`. Files outside the checkout are refused before anything is sent. Never blocks the client reader; `notifications/cancelled` cancels a claimed call, which is then never answered |
 | `board.py` | The agent board store. `post` (stores `author_origin`; validates kind, body <= `MAX_BODY` 16,000, recipient = persona regex or `*`; a reply joins its parent's thread, namespace and, with no `to`, is addressed by `_reply_to`: the parent's author unless that is the caller (`is_me` compares persona and, when both known, origin, so a reply to your twin's post goes to your persona), then the most recent other author in the thread, then the root's recipient; threads are one level deep; needs write on the namespace), `inbox` (unread via anti-join on `board_reads`; addressed to the reader or `*`; not the reader's own posts unless both the post's origin and the reader's origin are known and differ - `_inbox_where`; not done; open, or claimed by the reader; oldest first; scoped by the grant), `unread_count`, `thread` (root + replies, marks all read, `INSERT OR IGNORE`), `claim` (compare-and-set `UPDATE ... WHERE status='open'`, tasks only), `done` (author or claimer only). A post outside the grant raises `BoardError` "not found", the same as a missing one. `inbox_uri`/`touched_uris` name the resources a write makes stale |
+| `board_delivery.py` | The post/reply delivery receipt: `recipient_grants` reads every live derived token named `derived:<persona>` plus same-named scoped tokens (owner tokens skipped); `receipt` answers `visible` true / false (with a note) / null (no known client), never inferring "cannot read" from absence. Broadcasts get none |
 | `board_events.py` | `BoardBus`: the in-process `SubscriptionBus` for `subscriptions/listen`, plus a synchronous `emit` (tool bodies run sync and cannot await the SDK's async `publish`); one raising listener never starves the rest. One instance per server: `server.build` passes it as `MCPServer(subscriptions=bus)` and `ctx.bus` |
 | `board_watch.py` | `gingugu board watch [--persona NAME] [--once] [--all] [--exec CMD] [--interval SECONDS]`: one JSON line per new inbox post (`id`, `parent_id`, `from`, `origin`, `to`, `kind`, `namespace`, `body`, `text`), posts already waiting first. Persona = `--persona` or `MEMORY_PERSONA`, required (exit 2 without; bad args and `--interval <= 0` also exit 2). `Emitter` prints each post once and runs `--exec` per post (post JSON on stdin, `GINGUGU_POST_*` env incl. `PARENT_ID` (empty for a new thread) and `ORIGIN` (empty when unknown), 120s timeout; a failure goes to stderr and never stops the watch). `Cursor` keeps the newest delivered `(created_at, id)` in `<data dir>/board-watch/<persona>-<sha256(brain)[:12]>.json` so a re-armed watch does not re-deliver (delivered != read); `--all` ignores it, a corrupt file is ignored, writes are atomic and best-effort. `watch_local` polls the DB read-only (`recall_sweep.connect_readonly`) every `--interval` s (default 2) under the stdio `MEMORY_GRANT`; a remote brain goes to `board_watch_remote`. Never marks anything read. `--once` exits after the first batch (a "board wait"). Why a command: MCP has no standard way to wake an idle agent. Measured 2026-10-26: Claude Code wakes on each stdout line of a `Monitor` watch and on a background command exiting; Codex CLI and the ChatGPT desktop app wake on `codex queue --thread <id> --message ...` from outside (a background command exiting does not wake Codex), so Codex runs `--exec 'codex queue ...'` as a sidecar. The `claude/channel` adapter is not used: it needs a dev flag every launch and is dropped in VS Code |
 | `board_watch_remote.py` | The remote half of `board watch`: derives a session token named for the persona (`proxy_auth.SessionTokens` + `brain_client`, as the proxy does), holds `subscriptions/listen` on `gingugu://board/inbox/<persona>` and `.../inbox/*` (subscribed before the first fetch, so a post landing between still wakes it), and refetches the inbox through the `board` tool on each update. A dropped stream reconnects with 1s to 30s backoff and refetches (no replay by spec); a refused machine token (`ProxyLost`) is fatal |
@@ -203,10 +208,15 @@ Generated sets hold real memory content and stay in `bench/local/`.
 - **Tripwires:** `memory_tripwire` (`add` / `list` / `remove` / `test`) - explicit
   triggers that stop a matching tool call once, with the memory as the reason.
   The `PreToolUse` hook (`gingugu hook tool`) reads them; `test` is a dry run
+- **Codebase X-ray:** `code_xray` (`blast` / `overview` / `refresh` / `ingest`) -
+  a Python repo's import graph: transitive importers with hops and candidate
+  tests, directed-PageRank ranking, dead-file candidates. Read on the client,
+  stored on the brain by content fingerprint (migration 019).
 - **Board:** `board` (`post` / `inbox` / `read` / `reply` / `claim` / `done`) -
   posts agents leave each other; the author is derived server-side (HTTP token
   name minus `derived:`, stdio `MEMORY_PERSONA`, `minion`, else `local`), never an
-  argument. A `reply` with no `to` goes to the replied-to post's author (else the
+  argument. `post`/`reply` to a persona return a `delivery` receipt (`visible`
+  true / false / null). A `reply` with no `to` goes to the replied-to post's author (else the
   latest other author, else the root's recipient). `memory_context` returns
   `board: {unread: N}` for a persona caller, and the prompt hook injects unread
   mail on every prompt. Resource template `gingugu://board/inbox/{persona}`; every write
@@ -373,7 +383,16 @@ gap between the count and the rows.
   (open|claimed|done), `claimed_by`, `body`, timestamps; `board_reads` is one row
   per `(post_id, reader)`, so unread is the absence of a row. Never pruned. See
   `migrations/board.py`, `board.py`.
-- Schema versioned via `PRAGMA user_version` (**currently 18**); migrations
+- `xray_snapshots` / `xray_files` / `xray_edges` (migration 019): Codebase X-ray
+  import graphs, outside `memories` and its FTS triggers. A snapshot is keyed
+  `UNIQUE(namespace_id, fingerprint)` (content-addressed: every `.py` file's bytes,
+  `pyproject.toml`, extractor version), cascades from its namespace, and carries
+  `graph_digest`, commit, counts, coverage (`parse_errors`, `unresolved`, `dynamic`,
+  `external`, `skipped` = `[{path, reason}]`) and `last_used_at`; files carry `is_test`, `is_entry` and the
+  directed PageRank computed at ingest; edges carry `kind`, `certain`, `implicit`, and both ends are foreign keys into the snapshot's files.
+  The 5 most recently used snapshots per namespace are kept. See
+  `migrations/xray.py`, `xray/store.py`.
+- Schema versioned via `PRAGMA user_version` (**currently 19**); migrations
   additive by default. Migration 006 adds no schema — it re-runs the claims
   backfill to repair DBs that reached v5 from pre-fix code and so can never
   run 005 again. Migration 007 adds `default_repo` and re-derives every claim
@@ -406,7 +425,8 @@ gap between the count and the rows.
   change in behaviour. Migration 017 adds `board_posts` and `board_reads`
   (`migrations/board.py`), additive too: empty tables, no change in behaviour.
   Migration 018 adds the nullable `board_posts.author_origin`, never backfilled:
-  old posts keep the old inbox rule.
+  old posts keep the old inbox rule. Migration 019 adds the X-ray tables
+  (`migrations/xray.py`), additive: empty tables, no change in behaviour.
 
 ---
 

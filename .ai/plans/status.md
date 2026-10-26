@@ -1,12 +1,28 @@
 # Project Status
 
-_Last updated: 2026-10-26 (board housekeeping: the shared board is done)_
+_Last updated: 2026-10-26 (X-ray X1 blast radius built; board delivery receipt)_
 
 ## In Flight
 
-Board #5, Codebase X-ray: X1 (blast radius) is in design review. Client-side
-extraction (proxy or local stdio), brain-side snapshots and directed PageRank,
-auto-refresh, 5 snapshots kept per namespace, dead-file candidates in scope.
+**Board #5 Codebase X-ray - X1 blast radius built (feature/xray-blast-radius),
+stacked on fix/board-delivery.** `code_xray` (`blast`/`overview`/`refresh`/
+`ingest`), migration 019, `xray/` package, `proxy_xray`. Design and spec were
+reviewed over the agent board before build; extractor built tests-first by a
+minion. Measured on this repo: 347 files, fingerprint 0.07s, extract 0.41s,
+ingest 0.01s; top ranks `models`, `grants`, `config`, `server`, `embeddings`;
+dead-file candidates `hatch_build.py` and two `ui/demo_*` scripts. A second
+review round (security reviewer + agent-board code review) added honest
+coverage (every unread source is a skip with a reason), safe git
+(`core.fsmonitor=false`), refusal of files outside the checkout before
+anything is sent, `exact` vs `current` freshness, edge foreign keys and
+`graph_digest` in migration 019, and cancellation in the proxy.
+
+X1 follow-ups (not built): `TYPE_CHECKING` imported under an alias; a module
+present under both the repo root and `src/` (reported, not guessed); git
+submodules, linked worktrees, unusual filenames; a test for a file changing
+mid-capture; `overview.top` and the payload's `skipped` are bounded but not
+paged; a git `core.fsmonitor`-style check for other config that runs code.
+Next sub-item: X2, a tripwire on edit.
 
 ## Recently Completed
 
@@ -1308,7 +1324,7 @@ every row moved up one.
 | 2 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
 | 3 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
 | 4 | **A referee for rival memory tools** | 17 | Only a fair comparison once 3 exists |
-| 5 | **Codebase X-ray, as an MCP tool** - NEXT, starting with X1 blast radius | 19 | Standalone; picked 2026-10-26. A 13-part roadmap (X1-X13) in its section below |
+| 5 | **Codebase X-ray, as an MCP tool** - X1 blast radius BUILT (unreleased); X2 next | 19 | Standalone; picked 2026-10-26. A 13-part roadmap (X1-X13) in its section below |
 | 6 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
 | 7 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
 | 8 | Session flight recorder (low priority) | 18 | Check prior art first |
@@ -1954,24 +1970,23 @@ do, and files nothing imports. No file is added to the target repository.
 
 **An MCP tool, not a CLI command** - the user's call, and the right one: the
 agent is the one that needs the answer before a change, and it should be able
-to run or refresh the X-ray itself rather than ask for it. Open:
+to run or refresh the X-ray itself rather than ask for it. Decided in X1:
 
-- **Transport.** A tool that reads a path reads the server's disk. Over stdio
-  that is the caller's machine; under `gingugu serve` it is the host's, the
-  same reason `credential_get(into=...)` is refused over HTTP. Refuse it
-  there, or accept the edge list from the client instead of a path.
-- **Persistence.** Whether a result is kept (keyed by repo and commit) so a
-  later session can query it without re-parsing, and where - not as memories,
-  which would flood the store's own graph.
-- **Languages.** Python imports via `ast` first; others later.
+- **Transport.** The brain never reads a path. The local stdio server or the
+  proxy reads the caller's checkout and sends names and edges; under
+  `gingugu serve` a path is refused.
+- **Persistence.** Own tables (migration 019), not memories, keyed by namespace
+  and a content fingerprint; the 5 most recently used snapshots are kept.
+- **Languages.** Python via `ast`; others later.
 
 **The vision (2026-10-26).** X-ray is not one tool but the repurposing of
 everything gingugu already does - rank a graph, wake what a node touches,
 speak up at the moment of action, search by meaning, queue proposals - onto
 code instead of memories. It is dual-use by nature: the same map that tells a
-defender where to look first tells an attacker where to aim. It stays local
-and owner-only - it reads the caller's disk under the caller's token - and is
-never run on someone else's behalf.
+defender where to look first tells an attacker where to aim. It stays local:
+only the caller's own checkout is ever read, on the caller's machine, and the
+brain never reads a path. Snapshots are fenced by namespace grants like
+memories, so a read-only minion can ask for a blast radius but not store one.
 
 **Measured 2026-10-26 on this repo (150 modules, 470 import edges):**
 
@@ -1991,7 +2006,7 @@ never run on someone else's behalf.
 
 | # | Sub-item | Reuses | Notes |
 |---|---|---|---|
-| X1 | **Blast radius** - persisted import graph keyed by repo + commit; the agent builds or refreshes it when missing or stale; spreading activation over reverse imports, ranked by directed PageRank | dream graph math, spreading activation | The foundation. Persist outside `memories` so the store's own graph is not flooded |
+| X1 | **Blast radius** (BUILT, unreleased) - persisted import graph keyed by repo + commit; the agent builds or refreshes it when missing or stale; spreading activation over reverse imports, ranked by directed PageRank | dream graph math, spreading activation | The foundation. Persist outside `memories` so the store's own graph is not flooded |
 | X2 | **Tripwire on edit** - a hook that names a file's dependents, top ranked first, before the edit lands | tripwires, hooks | Involuntary, like memory tripwires: the agent is told without asking |
 | X3 | **Scar tissue** - link memories (bugs, decisions, gotchas) to the files they are about; an edit surfaces both what depends on the file and what it has cost before | memory store, relations, recall | The part no code-analysis tool can have, because none holds the history |
 | X4 | **History as a second graph** - co-change coupling (files that change together without importing each other), churn x centrality x authors as hotspots, per-commit X-ray diffs as architectural drift | git log, dream proposal queue | Drift can run in the nightly dream pass and stage proposals |

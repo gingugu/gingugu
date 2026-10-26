@@ -42,7 +42,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `hints`, `recall` (+ `context_merge`, the pure merge of per-namespace context
    loads: pins first, then ranked tails interleaved by rank), `search`, `stats`,
    `excerpt`, `relations` (+ `relation_ops`),
-   `consolidate`, `dream`, `admin`, `credentials`, `tripwires`, `board`, `capability_view`, `fence`
+   `consolidate`, `dream`, `admin`, `xray`, `credentials`, `tripwires`, `board`, `capability_view`, `fence`
    (the scoped-token policy and the stdio `MEMORY_GRANT` policy, `stdio_grant`; see Scoped tokens and Warm minions), plus `summaries` (payload
    shapes: full summary, compact summary, the picker between them), `choices`
    (enum argument parsing shared by every write-surface field with a controlled
@@ -56,6 +56,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
    Key Decisions), `board` + `board_events` (the agent board store and its
    `subscriptions/listen` bus; see Key Decisions), `board_delivery` (the post/reply
    delivery receipt: can the recipient persona's known clients read the namespace),
+   `xray/` (Codebase X-ray: `scan` + `extract` + `resolve` + `local` on the client, `validate` +
+   `rank` + `store` on the brain; see Key Decisions), `proxy_xray` (the proxy's local half of `code_xray`),
    `board_watch` +
    `board_watch_remote`, `board_watch_emit` (the `gingugu board watch` wake-up command; see Key
    Decisions), `board_hook` (board mail for the prompt hook; see Key Decisions), `cli_usage` (the top-level help text), `minion_fence`, `subagent_hook` and `subagent_warmup` (see Warm minions),
@@ -90,7 +92,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
    record (`provenance`, `about`) and the FTS5 rebuild that indexes them,
    `queries.py` for the query log (`query_log`, migration 015),
    `tripwires.py` for the tripwire triggers (`tripwires`, migration 016),
-   `board.py` for the agent board (`board_posts`, `board_reads`, migrations 017-018), and
+   `board.py` for the agent board (`board_posts`, `board_reads`, migrations 017-018),
+   `xray.py` for Codebase X-ray (`xray_snapshots`, `xray_files`, `xray_edges`, migration 019), and
    `__init__.py` for the ordered registry and the runner. `config.py` resolves
    the DB path.
 
@@ -676,6 +679,29 @@ A subagent gets its own fenced brain and arrives already knowing the task.
 ---
 
 ## Key Decisions
+- **Codebase X-ray: the client reads the checkout, the brain keeps the graph
+  (X1, unreleased).** `code_xray` maps a Python repo's import graph. A brain
+  under `gingugu serve` may be another host, so it never reads a path: the
+  local stdio server or the proxy (`proxy_xray`, like the vault) runs
+  `xray.extract` on this machine and sends a payload of repo-relative names
+  and edges. *Content-addressed snapshots*: the fingerprint covers every `.py`
+  file's bytes, `pyproject.toml` and `EXTRACTOR_VERSION`, so two worktrees with
+  different edits are two snapshots and nothing needs compare-and-set; every
+  query fingerprints first (0.07s on this repo) and extracts + ingests only on
+  a miss, so results match the working tree without the agent asking. *Full
+  ingest, no deltas*: an unchanged file can resolve differently when another
+  file appears. *Directed PageRank*, unlike `dream.centrality`: rank flows
+  importer -> imported (undirected ranked `server` second). *Implicit edges*
+  (parent initializers, and the package in `from pkg import submodule`) count
+  for blast radius but not rank; without that an empty `__init__.py` ranked
+  first. *Blast radius is never capped* (reverse BFS, paged response). Rank
+  orders it but never filters it. Answers say "estimate" and "candidates". Own tables
+  (migration 019), never memories; 5 most recently used snapshots kept per
+  namespace. *Trust*: the fingerprint is the client's claim and cannot be
+  checked; a namespace writer is trusted with its graph as with its memories,
+  and an explicit `refresh` replaces a snapshot whose `graph_digest` differs.
+  *Coverage is honest*: every source not read is a skip with a reason, and
+  only a deliberate one (a symlink) leaves the graph `complete`.
 - **Destructive tools ask the user, not the model (unreleased).** Five paths
   confirm through MCP elicitation (SDK 2.x `Resolve` + `Elicit`): a hard
   `memory_forget`, a cascading `memory_namespaces` delete of a non-empty

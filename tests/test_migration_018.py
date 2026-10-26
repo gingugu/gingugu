@@ -35,10 +35,9 @@ def _columns(conn: sqlite3.Connection) -> set[str]:
     return {row[1] for row in conn.execute("PRAGMA table_info(board_posts)")}
 
 
-def test_018_is_the_latest_and_registered_once():
+def test_018_is_registered_once():
     targets = [t for t, _ in MIGRATIONS]
     assert targets.count(18) == 1
-    assert LATEST_SCHEMA_VERSION == 18
 
 
 def test_fresh_db_has_author_origin():
@@ -63,7 +62,7 @@ def test_upgrade_from_17_keeps_posts_with_an_unknown_origin():
         (ns_id, now, now),
     )
     conn.commit()
-    assert migrate(conn) == 18
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
     row = conn.execute("SELECT body, author_origin FROM board_posts WHERE id = 'p1'").fetchone()
     assert row["body"] == "ahoy" and row["author_origin"] is None
 
@@ -71,4 +70,4 @@ def test_upgrade_from_17_keeps_posts_with_an_unknown_origin():
 def test_018_is_idempotent_through_migrate():
     conn = _conn()
     migrate(conn)
-    assert migrate(conn) == 18
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
