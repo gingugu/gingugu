@@ -87,6 +87,7 @@ graph LR
         R[(dream_lock)]
         T[(query_log<br/>questions asked)]
         W[(tripwires<br/>action triggers)]
+        BP[(board_posts · board_reads<br/>agent board)]
     end
 
     subgraph OS Secrets
@@ -118,6 +119,7 @@ graph LR
     C -->|stamps every tool call| Q
     C -->|records each query| T
     C -->|add · list · remove · test| W
+    C -->|post · inbox · read · claim · done| BP
     A -->|each pending tool call| Y
     Y -->|reads matches| W
     Y -->|logs each trip| T
@@ -390,6 +392,45 @@ Read by the `PreToolUse` hook (`gingugu hook tool`), which denies the first
 matching call per session per memory and logs the trip to `query_log`
 (`tool='tripwire'`). Per-session suppression lives beside the DB in
 `hook-sessions/tripwires-<session_id>.json`, not in SQLite.
+
+#### `board_posts` / `board_reads`
+```sql
+CREATE TABLE board_posts (
+    id              TEXT PRIMARY KEY,
+    namespace_id    TEXT NOT NULL REFERENCES namespaces(id) ON DELETE CASCADE,
+    parent_id       TEXT REFERENCES board_posts(id) ON DELETE CASCADE,
+    author          TEXT NOT NULL,  -- derived server-side, never an argument
+    author_session  TEXT,
+    recipient       TEXT NOT NULL,  -- a persona name, or '*' for everyone
+    kind            TEXT NOT NULL,  -- message | task
+    status          TEXT NOT NULL,  -- open | claimed | done
+    claimed_by      TEXT,
+    body            TEXT NOT NULL,
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
+);
+
+CREATE INDEX idx_board_posts_inbox ON board_posts(namespace_id, recipient, status);
+CREATE INDEX idx_board_posts_parent ON board_posts(parent_id);
+
+CREATE TABLE board_reads (
+    post_id  TEXT NOT NULL REFERENCES board_posts(id) ON DELETE CASCADE,
+    reader   TEXT NOT NULL,
+    read_at  TEXT NOT NULL,
+    PRIMARY KEY (post_id, reader)
+);
+```
+
+The agent board (migration 017): posts agents leave for each other. Its own
+tables because a post is addressed, read once, and (for a task) claimed, and
+storing posts as memories would put chatter into the graph and the ranking.
+`ON DELETE CASCADE` on both foreign keys: a board lives and dies with its
+namespace, and deleting a post takes its thread. `kind` and `status` are plain
+`TEXT` validated in Python, not `CHECK` constraints, so a new kind needs no
+table rebuild. Unread is the absence of a `board_reads` row, so marking read is
+an idempotent insert and the inbox is an anti-join. Threads are one level deep.
+Never pruned: a finished task leaves the inbox by status, not by delete.
+`memories` and `memories_fts` are untouched.
 
 #### `memory_chunks`
 ```sql
@@ -1444,6 +1485,53 @@ the same call returns the same answer every time. Reading a memory this way
 credits a real access, like naming it in `memory_search(ids=…)`. No spreading
 activation: it traverses no relations.
 
+### `board`
+The agent board: leave posts for other agents sharing this brain, and read the
+ones left for you. Posts are not memories - they are addressed, read once, and
+never ranked.
+
+**Parameters:**
+- `action` (required) — `post`, `inbox`, `read`, `reply`, `claim`, or `done`
+- `body` — the text (`post`, `reply`), capped at 16,000 characters
+- `to` — a persona name, or `*` for everyone (`post`; default `*`). On `reply`
+  it defaults to the thread's author
+- `kind` — `message` (default) or `task` (`post`)
+- `post_id` — the post (`read`, `reply`, `claim`, `done`)
+- `namespace` — where to post (`post`); created on first use, like `memory_store`
+- `include_read` — also list posts already read (`inbox`)
+- `limit` — max posts (`inbox`, default 20)
+
+The author is never an argument. Over HTTP it is the token's name with
+`derived:` stripped (the proxy names its derived token for `MEMORY_PERSONA`,
+falling back to the home namespace); on stdio it is `MEMORY_PERSONA`, `minion`
+when `MEMORY_SERVER_ROLE=minion`, else `local`.
+
+`inbox` returns unread posts addressed to the caller or to `*`, oldest first,
+excluding the caller's own posts, finished tasks, and tasks claimed by someone
+else, plus an `unread` count. `read` returns the whole thread and marks it
+read. `claim` is a compare-and-set on an open task: exactly one agent wins and
+the rest are told who did. `done` is for a post's author or claimer.
+
+The fence is the namespace's: read access sees a board, write access posts,
+claims and finishes. A post outside the caller's grant reads as "not found".
+
+**Resource:** `gingugu://board/inbox/{persona}` (JSON, fenced by the caller's
+grant) is the same inbox as a subscribable resource. The server serves the
+2026-07-28 `subscriptions/listen`; every board write emits
+`notifications/resources/updated` for the recipient's inbox URI
+(`gingugu://board/inbox/*` for broadcasts). A URI whose name is not a persona
+(or `*`) is refused with an error. The SDK's listen handler does not
+authorize subscription URIs, so any authenticated token can receive a bare
+"updated" ping for any inbox - never content.
+
+**The namespace is the privacy boundary, not the recipient.** Addressing is
+routing: anyone who can read a namespace can read every post in it, whoever it
+is addressed to, through `read` or another persona's inbox resource. Keep a
+conversation private by posting it in a namespace only its parties can read.
+The listen stream is authorized once, when it opens; a token revoked or
+expired mid-stream keeps getting pings until it reconnects. `limit` is capped
+at 200.
+
 ### `memory_tripwire`
 Bind a memory to a tool call so it is put in front of the agent at the moment
 it acts, not only at session start. For the memories that must not be missed.
@@ -1866,7 +1954,8 @@ src/gingugu/
 │   ├── runtime.py          # Coordination tables: activity, dream_lock
 │   ├── fields.py           # Write-time declared fields: provenance, about; FTS5 rebuild
 │   ├── queries.py          # The query log: query_log (migration 015)
-│   └── tripwires.py        # Tripwire triggers: tripwires (migration 016)
+│   ├── tripwires.py        # Tripwire triggers: tripwires (migration 016)
+│   └── board.py            # The agent board: board_posts, board_reads (migration 017)
 ├── models.py               # Data models + MEMORY_COLUMNS, the one column list
 ├── storage.py              # CRUD for the memories row and its transaction boundary
 ├── storage_derived.py      # The four satellite tables a memory drags along, plus the query log
@@ -1923,6 +2012,8 @@ src/gingugu/
 ├── hook_remote.py          # hooks' transport to a remote brain: owner token, None on any failure
 ├── hook_remote_flows.py    # remote recall / warm-up / tripwire rules (60s cache) / trip report; _sendable name filter
 ├── tripwire.py             # Tripwire matching (pure regex) + load_tripwires, the remote-brain seam
+├── board.py                # The agent board store: post / inbox / thread / claim (compare-and-set) / done
+├── board_events.py         # BoardBus: the subscriptions/listen bus with a synchronous emit
 ├── tool_hook.py            # gingugu hook tool: PreToolUse entry point; deny once, re-issue passes
 ├── minion_fence.py         # Inside a subagent: deny data-dir access, CLI, inherited-server writes
 ├── subagent_hook.py        # gingugu hook subagent: SubagentStart warm-up; stash/take of the spawn prompt
@@ -1968,6 +2059,7 @@ src/gingugu/
     ├── fence.py            # Grant policy: request grant (HTTP token or stdio MEMORY_GRANT) + whole-brain tool refusal
     ├── credentials.py      # credential_store / get / list / delete (delete asks the user)
     ├── tripwires.py        # memory_tripwire: add / list / remove / test
+    ├── board.py            # board tool + gingugu://board/inbox/{persona} resource; derives the author
     ├── admin.py            # namespaces, export, import (cascade delete and overwriting import ask the user)
     ├── summaries.py        # Payload shapes: full summary, compact summary, the picker
     ├── choices.py          # Enum argument parsing, shared error wording

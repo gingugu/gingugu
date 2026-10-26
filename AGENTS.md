@@ -136,6 +136,7 @@ src/gingugu/
   database.py        → SQLite connection, schema, WAL, migrations (PRAGMA user_version), FTS5 triggers
   migrations/queries.py → migration 015: the query_log table
   migrations/tripwires.py → migration 016: the tripwires table (triggers for the PreToolUse hook)
+  migrations/board.py → migration 017: board_posts + board_reads (the agent board)
   models.py          → memory/namespace/relation data models
   query_log.py       → record(): one query_log row per recall/search/context/hook query;
                        best-effort, never prunes
@@ -143,6 +144,8 @@ src/gingugu/
   recall_sweep.py    → involuntary recall, I/O half: read-only cosine sweep + BM25
   prompt_hook.py     → `gingugu hook prompt` (UserPromptSubmit): involuntary recall entry point
   tripwire.py        → tripwire matching (pure regex) + load_tripwires, the seam a remote brain would replace
+  board.py           → agent board store: post / inbox / thread / claim (compare-and-set) / done, namespace-fenced
+  board_events.py    → BoardBus: the subscriptions/listen bus with a synchronous emit (board writes wake subscribers)
   tool_hook.py       → `gingugu hook tool` (PreToolUse): denies the first matching call per session; re-issue passes
   storage.py         → memory CRUD (store/update/forget)
   search.py          → hybrid BM25 (FTS5) + semantic ranking
@@ -163,7 +166,8 @@ src/gingugu/
                        recall.py, search.py, stats.py, scope.py, excerpt.py,
                        context_merge.py, relations.py, relation_ops.py,
                        consolidate.py, dream.py, admin.py, credentials.py,
-                       tripwires.py, helpers.py
+                       tripwires.py, board.py (the `board` tool + inbox resource;
+                       derives the author server-side), helpers.py
                        (forget, consolidate, admin and credentials ask the user
                        to confirm destructive calls; see confirm.py)
 ui/                  → Memory Explorer (React/Vite 3D frontend + vitest; api.py dev shim over webui; dump_static.py builds the static demo data)
