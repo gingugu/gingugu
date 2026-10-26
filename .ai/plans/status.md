@@ -26,6 +26,13 @@ Next sub-item: X2, a tripwire on edit.
 
 ## Recently Completed
 
+**Skinny CI (chore/skinny-ci).** Windows test cells were near the 15-minute
+cap (pytest alone ~11.5 min; one #139 cell was cancelled at 94% with no
+failures). The suite now runs in parallel (`pytest -n auto`, pytest-xdist):
+200s -> 55s locally on 4 workers. The matrix goes from 9 cells to 5 (every
+Python on Ubuntu, 3.13 on macOS, 3.11 on Windows), lint runs once instead of in
+every cell, and timeouts drop to 10 minutes so a slowing suite shows early.
+
 **Board delivery receipt (fix/board-delivery).** A post addressed to a persona
 whose clients cannot read its namespace was stored, returned `ok`, and never
 showed in their inbox. `post` and `reply` now return `delivery` for a
