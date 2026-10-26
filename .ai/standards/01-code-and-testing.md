@@ -62,7 +62,12 @@
   backend otherwise downloads an ~80MB model on a cold cache, untimed). A test
   needing a real external dependency must opt in explicitly. `timeout = 60`
   (pytest-timeout) makes a hung test fail as a test rather than as a stalled
-  CI job, and CI carries `timeout-minutes: 15` as the outer guard.
+  CI job, and CI carries `timeout-minutes: 10` as the outer guard.
+- **CI stays fast.** The suite runs in parallel (`pytest -n auto`, pytest-xdist),
+  so every test must be independent of the others: its own `tmp_path`, ports
+  from `free_port()`, no shared files. Keep tests cheap - a subprocess, git
+  call or network round trip per test adds up fastest on Windows. A CI cell
+  nearing its timeout means the tests got slow; fix them, don't raise the cap.
 - **The suite never sees the developer's own machine state.** Autouse fixtures
   sandbox `~/.claude/settings.json`, the global `CLAUDE.md`, `MEMORY_PERSONA`
   and the remote-brain setting (`remote.settings_path` plus
@@ -82,7 +87,7 @@
 - **Unit tests** for storage, search, relations, context, decay, consolidation.
 - **Integration tests** for end-to-end MCP flows (store → recall → context;
   store → relate → recall include_related).
-- Run `uv run pytest -v` green before opening a PR.
+- Run `uv run pytest -n auto` green before opening a PR.
 - CI matrix: ubuntu/macos/windows × Python 3.11–3.13 — cross-platform claims must
   be backed by green CI on all three OSes, not just local.
 - **A test asserting current behavior is not evidence the behavior is right.**

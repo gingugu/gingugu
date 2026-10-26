@@ -33,7 +33,7 @@
 
 ## Tech Stack
 
-- **Python** `>=3.11`; CI matrix ubuntu/macos/windows × 3.11–3.13
+- **Python** `>=3.11`; CI: lint once; tests in parallel (`-n auto`) on ubuntu × 3.11/3.12/3.13, macos × 3.13, windows × 3.11
 - **MCP** Python SDK 2.x (`mcp>=2.3,<3`, `MCPServer`); **stdio** (default) + **streamable HTTP**
   (`gingugu serve`, via `starlette` + `uvicorn`); **httpx2** (the SDK only takes httpx2
   clients and auth) + **anyio** for the remote-mode proxy and the hooks; **psutil** for
