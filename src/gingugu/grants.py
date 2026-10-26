@@ -50,6 +50,10 @@ class Grant:
     # Minted at /token/derive. Never reaches the credential vault, even when
     # full: the vault belongs to a machine's keychain, not a remote session.
     derived: bool = False
+    # A derived token's machine: the name of the owner token that derived it,
+    # stamped by the server, never claimed. The board tells one persona's
+    # machines apart by it.
+    origin: str | None = None
 
     def __post_init__(self) -> None:
         for ns, level in self.namespaces.items():

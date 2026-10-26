@@ -42,10 +42,26 @@ def author_for(transport: str, grant: Grant | None) -> str:
     return name.removeprefix(_DERIVED) or "unknown"
 
 
+def origin_for(transport: str, grant: Grant | None) -> str | None:
+    """Which machine is speaking: a derived token's stamped origin, an owner
+    token's own name. None on stdio and for a scoped token - unknown."""
+    if transport == "stdio" or grant is None:
+        return None
+    if grant.derived:
+        return grant.origin
+    return (grant.name or None) if grant.is_full else None
+
+
 def _caller(ctx: ServerContext) -> str:
     from .fence import request_grant
 
     return author_for(ctx.transport, request_grant(ctx.transport, ctx.stdio_grant))
+
+
+def _origin(ctx: ServerContext) -> str | None:
+    from .fence import request_grant
+
+    return origin_for(ctx.transport, request_grant(ctx.transport, ctx.stdio_grant))
 
 
 def unread_note(ctx: ServerContext) -> dict | None:
@@ -54,7 +70,7 @@ def unread_note(ctx: ServerContext) -> dict | None:
     if me in ("local", "unknown", "minion", board.BROADCAST) or not board.is_persona(me):
         return None
     try:
-        return {"unread": board.unread_count(ctx.conn, me)}
+        return {"unread": board.unread_count(ctx.conn, me, _origin(ctx))}
     except Exception:  # noqa: BLE001 - a count must never cost the session its context
         logger.exception("board unread count failed")
         return None
@@ -96,13 +112,15 @@ def register(mcp, ctx: ServerContext) -> None:
         Your inbox is also the subscribable resource gingugu://board/inbox/<you>
         (gingugu://board/inbox/* for broadcasts)."""
         try:
-            me = _caller(ctx)
+            me, origin = _caller(ctx), _origin(ctx)
             if action == "inbox":
-                posts = board.inbox(ctx.conn, me, include_read=include_read, limit=limit)
+                posts = board.inbox(
+                    ctx.conn, me, include_read=include_read, limit=limit, origin=origin
+                )
                 return {
                     "ok": True,
                     "me": me,
-                    "unread": board.unread_count(ctx.conn, me),
+                    "unread": board.unread_count(ctx.conn, me, origin),
                     "posts": posts,
                 }
             if action in ("read", "reply", "claim", "done") and not post_id:
@@ -128,6 +146,7 @@ def register(mcp, ctx: ServerContext) -> None:
                     kind=kind if action == "post" else "message",
                     parent_id=post_id if action == "reply" else None,
                     author_session=current_session_id(),
+                    author_origin=origin,
                 )
             elif action == "claim":
                 made = board.claim(ctx.conn, post_id, me)
@@ -157,5 +176,5 @@ def register(mcp, ctx: ServerContext) -> None:
         if grant is None:
             return json.dumps({"error": "unauthorized"})
         with grants.bind(grant, ctx.conn):
-            posts = board.inbox(ctx.conn, persona)
+            posts = board.inbox(ctx.conn, persona, origin=origin_for(ctx.transport, grant))
         return json.dumps({"persona": persona, "posts": posts})
