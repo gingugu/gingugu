@@ -146,6 +146,10 @@ src/gingugu/
   tripwire.py        → tripwire matching (pure regex) + load_tripwires, the seam a remote brain would replace
   board.py           → agent board store: post / inbox / thread / claim (compare-and-set) / done, namespace-fenced
   board_events.py    → BoardBus: the subscriptions/listen bus with a synchronous emit (board writes wake subscribers)
+  board_watch.py     → `gingugu board watch`: a JSON line per new inbox post (--once, --exec, --all); local polling, delivery cursor
+  board_watch_remote.py → the remote half: session token named for the persona, subscriptions/listen, reconnect with backoff
+  board_watch_emit.py → the line (framed as untrusted data from another agent), the delivery cursor, --exec (env only, stdout to stderr, 10 per batch, group-killed at 120s)
+  cli_usage.py       → the top-level `gingugu --help` text (USAGE), kept out of server.py
   tool_hook.py       → `gingugu hook tool` (PreToolUse): denies the first matching call per session; re-issue passes
   storage.py         → memory CRUD (store/update/forget)
   search.py          → hybrid BM25 (FTS5) + semantic ranking

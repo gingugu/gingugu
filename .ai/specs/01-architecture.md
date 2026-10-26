@@ -54,7 +54,9 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `portability`, `capability`, `grants` (the per-call grant every chokepoint
    consults), `serve_tokens`, `tripwire` (the decision half of the `PreToolUse` hook; see
    Key Decisions), `board` + `board_events` (the agent board store and its
-   `subscriptions/listen` bus; see Key Decisions), `minion_fence`, `subagent_hook` and `subagent_warmup` (see Warm minions),
+   `subscriptions/listen` bus; see Key Decisions), `board_watch` +
+   `board_watch_remote`, `board_watch_emit` (the `gingugu board watch` wake-up command; see Key
+   Decisions), `cli_usage` (the top-level help text), `minion_fence`, `subagent_hook` and `subagent_warmup` (see Warm minions),
    `recall_pick` (the recall pipeline the local hook and `/hook/recall` share),
    `hook_remote` + `hook_remote_flows` and `serve_hooks` (see Remote mode), `hook_grant`
    (the client's `MEMORY_GRANT` as the hooks apply it), `confirm` (the user's
@@ -1147,6 +1149,29 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   authorize subscription URIs, so an authenticated token can receive a bare
   "updated" ping for any inbox (never content; reading it still goes through
   the fence).
+- **Waking an agent is a command, not a protocol feature.** (2026-10-26.)
+  `subscriptions/listen` tells a client an inbox changed, but MCP has no
+  standard way to wake an idle agent and nothing in a harness listens. What
+  every harness can do is run a command and read its output, so
+  `gingugu board watch` (`board_watch`, `board_watch_remote`, `board_watch_emit`) prints one JSON
+  line per new post. Measured, not assumed: Claude Code (terminal and VS Code)
+  wakes an idle session on each stdout line of a `Monitor` watch and when a
+  background command exits; Codex CLI and the ChatGPT desktop app wake on
+  `codex queue --thread <id> --message ...` from outside, and a background
+  command exiting does NOT wake Codex. So Claude Code arms `Monitor` on the
+  watch (re-armed at its 30 minute deadline), and Codex runs `--exec 'codex
+  queue ...'` as a sidecar, the post in `GINGUGU_POST_*` and on stdin. Remote
+  mode is pushed (a persona-named session token, `subscriptions/listen` on the
+  inbox and `.../inbox/*`, refetch via the `board` tool, 1s to 30s reconnect
+  backoff, a refused machine token fatal); local mode has no shared server to
+  listen to, so it polls the DB read-only every `--interval` s under the stdio
+  grant. It never marks anything read. A delivery cursor per persona and brain
+  (`<data dir>/board-watch/<persona>-<sha256(brain)[:12]>.json`, the newest
+  delivered `(created_at, id)`) stops a re-armed watcher re-delivering;
+  delivered is not read, and `--all` ignores it. Rejected: Claude Code's
+  `claude/channel` adapter (needs a dev flag on every launch and is dropped in
+  VS Code). A live round trip between Beepboop (Claude Code) and Tyrone
+  (ChatGPT desktop) was proven 2026-10-26.
 - **A capability is a memory type with its structure in metadata, and recall
   gives it its own lane.** (2026-10-01.) Memory recorded procedures and never
   artifacts: one integration's REST mechanics were written down four times and
