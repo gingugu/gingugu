@@ -65,25 +65,37 @@ class ModuleIndex:
             return name
         return name.rpartition(".")[0]
 
-    def prefixes(self, name: str) -> list[str]:
+    def prefixes(self, name: str) -> list[tuple[str, bool]]:
+        """Existing files for ``name`` and its parents, flagged True for ``name`` itself."""
         parts = name.split(".")
-        found = (self.names.get(".".join(parts[: i + 1])) for i in range(len(parts)))
-        return [p for p in found if p is not None]
+        out = []
+        for i in range(len(parts)):
+            path = self.names.get(".".join(parts[: i + 1]))
+            if path is not None:
+                out.append((path, i == len(parts) - 1))
+        return out
 
 
 @dataclass
 class FileResult:
-    edges: dict[str, tuple[str, bool]] = field(default_factory=dict)  # dst -> (kind, certain)
+    edges: dict[str, tuple[str, bool, bool]] = field(
+        default_factory=dict
+    )  # dst -> (kind, certain, implicit)
     unresolved: int = 0
     dynamic: int = 0
     external: int = 0
 
-    def add(self, dst: str, kind: str, certain: bool) -> None:
+    def add(self, dst: str, kind: str, certain: bool, implicit: bool = False) -> None:
         # Keep one real occurrence, never fields mixed from two: certain beats
-        # candidate, then the most binding kind.
+        # candidate, then explicit beats implicit, then the most binding kind.
         old = self.edges.get(dst)
-        if old is None or (not certain, KIND_RANK[kind]) < (not old[1], KIND_RANK[old[0]]):
-            self.edges[dst] = (kind, certain)
+        new = (kind, certain, implicit)
+        if old is None or self._key(new) < self._key(old):
+            self.edges[dst] = new
+
+    @staticmethod
+    def _key(e: tuple[str, bool, bool]) -> tuple[bool, bool, int]:
+        return (not e[1], e[2], KIND_RANK[e[0]])
 
 
 def _is_type_checking(test: ast.expr) -> bool:
@@ -115,8 +127,8 @@ def _absolute(name: str, idx: ModuleIndex, kind: str, res: FileResult) -> None:
     if name.split(".")[0] not in idx.tops:
         res.external += 1
         return
-    for dst in idx.prefixes(name):
-        res.add(dst, kind, True)
+    for dst, explicit in idx.prefixes(name):
+        res.add(dst, kind, True, not explicit)
     if name not in idx.names:
         res.unresolved += 1
 
@@ -145,8 +157,8 @@ def _resolve_from(
         res.external += 1
         return
     if base:
-        for dst in idx.prefixes(base):
-            res.add(dst, kind, True)
+        for dst, explicit in idx.prefixes(base):
+            res.add(dst, kind, True, not explicit)
         if base not in idx.names:
             res.unresolved += 1
     for alias in node.names:
