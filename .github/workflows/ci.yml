@@ -32,7 +32,7 @@ jobs:
     # The suite runs in parallel (-n auto); the slowest cell, Windows, should
     # finish in a few minutes. A cell near this cap means the suite has grown
     # slow - fix the tests, don't raise the number.
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 20 || 10 }}
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -45,9 +45,6 @@ jobs:
           - { os: ubuntu-latest, python-version: "3.13" }
           - { os: macos-latest, python-version: "3.13" }
           - { os: windows-latest, python-version: "3.11" }
-          # DIAGNOSTIC (temporary): isolate what makes Windows slow.
-          - { os: windows-latest, python-version: "3.11", probe: defender-off }
-          - { os: windows-latest, python-version: "3.11", probe: temp-on-d }
     steps:
       - uses: actions/checkout@v6
 
@@ -62,12 +59,10 @@ jobs:
       - name: Sync dependencies
         run: uv sync --extra dev --python ${{ matrix.python-version }}
 
-      - name: Probe - Defender real-time off
-        if: matrix.probe == 'defender-off'
-        run: Set-MpPreference -DisableRealtimeMonitoring $true
-
-      - name: Probe - temp on D
-        if: matrix.probe == 'temp-on-d'
+      - name: Temp on D (Windows)
+        # The runner's C: temp drive is the bottleneck: measured 720s for the
+        # suite with temp on C:, 209s with it on D: (Defender off: 792s, no help).
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path D:\tmp | Out-Null
@@ -75,7 +70,7 @@ jobs:
           "TEMP=D:\tmp" >> $env:GITHUB_ENV
 
       - name: Pytest
-        run: uv run pytest -m "not bench_embeddings" -n auto --durations=40
+        run: uv run pytest -m "not bench_embeddings" -n auto
 
   ui:
     runs-on: ubuntu-latest
