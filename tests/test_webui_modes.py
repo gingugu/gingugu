@@ -71,6 +71,12 @@ def test_local_mode_answers_from_the_local_db(tmp_path, monkeypatch):
         assert info["brain"] == "local"
 
 
+def test_the_full_brain_dump_is_gone(tmp_path, monkeypatch):
+    seed(tmp_path, monkeypatch)
+    with UiServer() as ui:
+        assert ui.get("/api/export").status_code == 404
+
+
 # --- remote --------------------------------------------------------------------
 
 
@@ -239,3 +245,27 @@ def test_no_origin_is_granted_cross_origin_reads(tmp_path, monkeypatch, origin):
             f"http://127.0.0.1:{ui.port}/api/graph", headers={"Origin": origin}, timeout=10
         )
     assert "access-control-allow-origin" not in response.headers
+
+
+# --- persona -------------------------------------------------------------------
+# Lobe placement wants the VIEWER's persona, which only this process knows -
+# a remote brain serves every persona at once.
+
+
+@pytest.mark.parametrize("persona", ["beepboop", None])
+def test_info_carries_the_viewers_persona(tmp_path, monkeypatch, persona):
+    seed(tmp_path, monkeypatch)
+    if persona:
+        monkeypatch.setenv("MEMORY_PERSONA", persona)
+    else:
+        monkeypatch.delenv("MEMORY_PERSONA", raising=False)
+    with UiServer() as ui:
+        assert ui.get("/api/info").json()["persona"] == persona
+
+
+async def test_remote_info_carries_the_local_persona(served, brain, tmp_path, monkeypatch):
+    _go_remote(monkeypatch, tmp_path, served.url, brain.machine)
+    monkeypatch.setenv("MEMORY_PERSONA", "beepboop")
+    with UiServer() as ui:
+        info = await anyio.to_thread.run_sync(ui.get, "/api/info")
+    assert info.json()["persona"] == "beepboop"

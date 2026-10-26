@@ -1,10 +1,10 @@
 import { Brain, Layers, Tags, Link } from 'lucide-react'
-import { Memory, MemoryNamespace, Relation } from '../types'
+import { MemoryLite, NamespaceRef } from '../types'
 
 interface Props {
-  memories: Memory[]
-  namespaces: MemoryNamespace[]
-  relations: Relation[]
+  memories: MemoryLite[]
+  namespaces: NamespaceRef[]
+  relationCount: number
 }
 
 interface CardProps {
@@ -30,7 +30,7 @@ function Card({ icon, label, value, sub, color }: CardProps) {
   )
 }
 
-export default function StatsCards({ memories, namespaces, relations }: Props) {
+export default function StatsCards({ memories, namespaces, relationCount }: Props) {
   const uniqueTags = new Set(memories.flatMap((m) => m.tags))
   const verified = memories.filter((m) => m.confidence === 'verified').length
 
@@ -59,8 +59,8 @@ export default function StatsCards({ memories, namespaces, relations }: Props) {
       <Card
         icon={<Link size={22} />}
         label="Relations"
-        value={relations.length}
-        sub={relations.length === 0 ? 'None yet' : undefined}
+        value={relationCount}
+        sub={relationCount === 0 ? 'None yet' : undefined}
         color="#14b8a6"
       />
     </div>

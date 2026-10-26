@@ -1,11 +1,17 @@
-"""Dump the live Gingugu DB as JSON for the UI's static mode.
+"""Dump a Gingugu DB as the Explorer's static-mode data (the GitHub Pages demo).
 
-Writes ``ui/src/data/sample.json`` so the React app has fresh data to render
-without running the API server (also used by the GitHub Pages build).
+Writes three files under ``ui/src/data/static/`` by running the real read API
+(``gingugu.ui_api.dispatch``) against the DB you name, so the static demo is
+exactly what a live brain would have answered:
 
-Run from the repo root:
-    uv run python ui/dump_static.py
-    uv run python ui/dump_static.py --out ui/src/data/sample.json
+* ``graph.json``   - the ``/graph`` payload
+* ``info.json``    - the ``/info`` payload plus ``mode``/``brain``/``persona``
+* ``details.json`` - ``{memory id: /memory/<id> payload}`` for every node
+
+The output is committed and published, so ``--db`` is required: point it at a
+fictional demo DB, never at a real brain.
+
+    uv run python ui/dump_static.py --db /path/to/demo.db
 """
 
 from __future__ import annotations
@@ -16,42 +22,42 @@ import logging
 import sys
 from pathlib import Path
 
-from gingugu.config import load_config
-from gingugu.database import Database
-from gingugu.portability import export_data
+from gingugu.ui_api import UiEnv, dispatch
 
 logging.basicConfig(level=logging.INFO, stream=sys.stderr, format="%(message)s")
 logger = logging.getLogger(__name__)
 
-DEFAULT_OUT = Path(__file__).resolve().parent / "src" / "data" / "sample.json"
+DEFAULT_OUT = Path(__file__).resolve().parent / "src" / "data" / "static"
+
+
+def _get(env: UiEnv, path: str) -> dict:
+    status, body = dispatch(path, {}, env)
+    if status != 200:
+        raise SystemExit(f"{path} answered {status}: {body}")
+    return body
+
+
+def build(db_path: Path) -> dict[str, dict]:
+    env = UiEnv(db_path=db_path, embedder=lambda: None)
+    graph = _get(env, "/graph")
+    info = {**_get(env, "/info"), "mode": "static", "brain": "demo", "persona": None}
+    details = {n["id"]: _get(env, f"/memory/{n['id']}") for n in graph["nodes"]}
+    return {"graph": graph, "info": info, "details": details}
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Dump Gingugu DB to a static JSON file for the UI."
-    )
-    parser.add_argument(
-        "--out",
-        type=Path,
-        default=DEFAULT_OUT,
-        help=f"Output path (default: {DEFAULT_OUT})",
-    )
+    parser = argparse.ArgumentParser(description="Dump a Gingugu DB for the UI's static mode.")
+    parser.add_argument("--db", type=Path, required=True, help="SQLite DB to dump (use a demo DB).")
+    parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help=f"Output dir ({DEFAULT_OUT})")
     args = parser.parse_args()
+    if not args.db.is_file():
+        raise SystemExit(f"no such DB: {args.db}")
 
-    config = load_config()
-    db = Database(config.db_path)
-    conn = db.connect()
-    payload = export_data(conn)
-
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(payload, indent=2))
-
-    logger.info(
-        "Wrote %d memories across %d namespaces to %s",
-        len(payload.get("memories", [])),
-        len(payload.get("namespaces", [])),
-        args.out,
-    )
+    payloads = build(args.db)
+    args.out.mkdir(parents=True, exist_ok=True)
+    for name, payload in payloads.items():
+        (args.out / f"{name}.json").write_text(json.dumps(payload, indent=1, sort_keys=True) + "\n")
+    logger.info("Wrote %d memories to %s", len(payloads["details"]), args.out)
     return 0
 
 
