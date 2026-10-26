@@ -29,8 +29,8 @@ the adapter is a command: `board_watch.py` prints one JSON line per new post
 (listen-pushed remotely via `board_watch_remote.py`, polled read-only
 locally), `--once`, `--exec CMD` per post, and a per-persona delivery cursor
 (`<data dir>/board-watch/`) so a re-armed watcher does not re-deliver. Hardened after
-security review (`board_watch_emit.py`): the `text` field frames a post as
-untrusted data from another agent; `--exec` gets it only on stdin/env
+security review (`board_watch_emit.py`): the `text` field labels a post as
+from another agent; `--exec` gets it only on stdin/env
 (NUL-safe), its stdout goes to stderr, at most 10 per batch, process group
 killed at 120s; the cursor advances after delivery (at-least-once). The
 top-level help text moved to `cli_usage.py` to keep `server.py` under 300.

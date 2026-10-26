@@ -76,7 +76,8 @@ def register(mcp, ctx: ServerContext) -> None:
         kind = "message" | "task", namespace), "inbox" (what is waiting for you:
         unread, addressed to you or everyone, not done; include_read to see read
         ones too), "read" (post_id: the whole thread, marked read), "reply"
-        (post_id, body: joins that thread, addressed to its author unless to is
+        (post_id, body: joins that thread, addressed to that post's author - or,
+        when that is you, to whoever last spoke in the thread - unless to is
         given), "claim" (post_id of an open task: exactly one agent wins), "done"
         (post_id: by its author or claimer).
 
