@@ -37,7 +37,7 @@ from mcp.client.streamable_http import streamable_http_client
 from mcp.shared.message import SessionMessage
 from mcp.types import METHOD_NOT_FOUND, JSONRPCRequest
 
-from .proxy_auth import SessionTokens, brain_client
+from .proxy_auth import SessionTokens, brain_client, derive_name
 from .proxy_preflight import ProxyRefused, preflight
 from .proxy_session import (
     CLIENT_GONE,
@@ -241,7 +241,7 @@ async def run(
 
     ``vault_db`` is this machine's DB; given, ``credential_*`` is served from it.
     """
-    derive_args = {"grant": grant, "home": home, "ttl": ttl, "name": name}
+    derive_args = {"grant": grant, "home": home, "ttl": ttl, "name": name or derive_name(home)}
     vault = await open_vault(vault_db)
     try:
         async with anyio.create_task_group() as tg:
@@ -283,9 +283,7 @@ async def serve(
             # The SDK's stdout writer runs until this stream closes; left open,
             # the process outlives its client.
             async with write:
-                await run(
-                    url, token, read, write, grant=grant, home=home, name=home, vault_db=vault_db
-                )
+                await run(url, token, read, write, grant=grant, home=home, vault_db=vault_db)
     except BaseExceptionGroup as group:
         fatal = fatal_in(group)
         if fatal is None:

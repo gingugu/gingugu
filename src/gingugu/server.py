@@ -79,13 +79,16 @@ def build(transport: str = "stdio") -> tuple[MCPServer, ServerContext]:
             logger.info("stdio fenced by MEMORY_GRANT: %s", dict(grant.namespaces))
 
     from . import __version__
+    from .board_events import BoardBus
     from .inbound import middleware
 
     # ``inbound.middleware`` gives the fence and the access log the request
-    # and session each tool call arrived on. Subscriptions are off: nothing
-    # here publishes change notifications, so no client should hold a
-    # ``subscriptions/listen`` stream open waiting for one.
-    mcp = MCPServer("gingugu", version=__version__, subscriptions=False, middleware=[middleware])
+    # and session each tool call arrived on. ``subscriptions/listen`` streams
+    # are served from ``bus``: the board emits a resource-updated event into it
+    # for every inbox a write changes.
+    bus = BoardBus()
+    ctx.bus = bus
+    mcp = MCPServer("gingugu", version=__version__, subscriptions=bus, middleware=[middleware])
     register_all(mcp, ctx)
     return mcp, ctx
 

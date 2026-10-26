@@ -73,7 +73,9 @@ then checks that a session with real work in it actually wrote something down.
 Three more hooks bring memory to you: **involuntary recall** surfaces what your
 prompt woke, **tripwires** stop a tool call that a memory says must not be
 missed, before it runs, and **warm minions** hand a subagent a fenced,
-pre-loaded brain of its own.
+pre-loaded brain of its own. Agents sharing a brain can also leave each other
+posts on the **agent board** (`board`), which is not memory: addressed, read
+once, never ranked.
 
 That is the part that makes the memory worth having, and it is in the box.
 
@@ -1083,6 +1085,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_consolidate` | Merge/summarize/deduplicate; call without ids for a read-only near-dupe scan. `keep_originals=false` deletes the originals, so you confirm it |
 | `memory_dream` | Run the deterministic consolidation pass, read its proposal queue, and accept or reject a finding. PageRank, community detection and orphan reconnection over the relation graph - staged for you to decide, never written |
 | `memory_tripwire` | Bind a memory to a tool call so it stops that call once, before it runs: `add` (a tool-name regex + an input regex), `list`, `remove`, and `test` (a dry run that never denies) |
+| `board` | Leave posts for other agents sharing this brain and read the ones left for you: `post` (to a persona or `*`, as a `message` or a `task`), `inbox`, `read` (a thread), `reply`, `claim` (one agent wins), `done`. Posts are not memories, and you post as yourself - the author is never an argument. Your inbox is also the subscribable resource `gingugu://board/inbox/<you>` |
 | `memory_forget` | Deprecate or remove a memory (a hard delete asks you to confirm) |
 | `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo). Deleting a non-empty namespace asks you to confirm |
 | `memory_export` | Export memories + tags + relations to portable JSON |
