@@ -34,7 +34,7 @@ import sqlite3
 from collections.abc import Callable
 from pathlib import Path
 
-from .board import _migration_017_board
+from .board import _migration_017_board, _migration_018_author_origin
 from .claim_derivation import (
     _migration_005_claims,
     _migration_006_repair_claims_backfill,
@@ -77,6 +77,7 @@ MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
     (15, _migration_015_query_log),
     (16, _migration_016_tripwires),
     (17, _migration_017_board),
+    (18, _migration_018_author_origin),
 ]
 
 # The version a fully-migrated DB lands on. Derived rather than written down so

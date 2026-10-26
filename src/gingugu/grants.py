@@ -15,6 +15,7 @@ so a scoped token cannot probe for what else lives in the brain.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
@@ -50,6 +51,10 @@ class Grant:
     # Minted at /token/derive. Never reaches the credential vault, even when
     # full: the vault belongs to a machine's keychain, not a remote session.
     derived: bool = False
+    # A derived token's machine: the name of the owner token that derived it,
+    # stamped by the server, never claimed. The board tells one persona's
+    # machines apart by it.
+    origin: str | None = None
 
     def __post_init__(self) -> None:
         for ns, level in self.namespaces.items():
@@ -77,6 +82,20 @@ class Grant:
 
 
 FULL = Grant("full", {WILDCARD: WRITE})
+
+_ORIGIN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+
+
+def origin_name(name: str | None) -> str | None:
+    """A token name fit to name a machine, or None.
+
+    It lands in other agents' prompts and in an ``--exec`` environment, so only
+    a plain name passes. ``full`` is the shared serve token's grant - every
+    machine on it, not one - so it names no machine either.
+    """
+    if not name or name == FULL.name or not _ORIGIN_RE.fullmatch(name):
+        return None
+    return name
 
 
 @dataclass(frozen=True)
