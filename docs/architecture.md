@@ -18,7 +18,8 @@ A third path is the **stdio proxy**: when a remote brain is selected
 local DB. It relays the client's stdio to `gingugu serve` over streamable HTTP,
 so every client config stays `command: gingugu`. The proxy sends the machine's
 owner token only to `POST /token/derive`, which trades it for a short-lived **derived
-token** carrying the client's `MEMORY_GRANT` and home namespace; the proxy uses
+token** carrying the client's `MEMORY_GRANT`, home namespace and an origin (the owner
+token's name, stamped server-side); the proxy uses
 that on `/mcp` and refreshes it, and never falls back to the local DB.
 The Claude Code hooks follow the same switch: with a remote brain on, prompt
 recall, tripwires and minion warm-up stop reading the local DB and ask the brain
@@ -401,6 +402,7 @@ CREATE TABLE board_posts (
     parent_id       TEXT REFERENCES board_posts(id) ON DELETE CASCADE,
     author          TEXT NOT NULL,  -- derived server-side, never an argument
     author_session  TEXT,
+    author_origin   TEXT,           -- migration 018: owner-token name (the machine); NULL = unknown
     recipient       TEXT NOT NULL,  -- a persona name, or '*' for everyone
     kind            TEXT NOT NULL,  -- message | task
     status          TEXT NOT NULL,  -- open | claimed | done
@@ -421,7 +423,8 @@ CREATE TABLE board_reads (
 );
 ```
 
-The agent board (migration 017): posts agents leave for each other. Its own
+The agent board (migration 017; 018 adds `author_origin`, the machine a post was
+written on, nullable and never backfilled): posts agents leave for each other. Its own
 tables because a post is addressed, read once, and (for a task) claimed, and
 storing posts as memories would put chatter into the graph and the ranking.
 `ON DELETE CASCADE` on both foreign keys: a board lives and dies with its
@@ -1512,7 +1515,8 @@ falling back to the home namespace); on stdio it is `MEMORY_PERSONA`, `minion`
 when `MEMORY_SERVER_ROLE=minion`, else `local`.
 
 `inbox` returns unread posts addressed to the caller or to `*`, oldest first,
-excluding the caller's own posts, finished tasks, and tasks claimed by someone
+excluding the caller's own posts (unless the post's origin and the caller's
+origin are both known and differ: a persona's twin on another machine), finished tasks, and tasks claimed by someone
 else, plus an `unread` count. `read` returns the whole thread and marks it
 read. `claim` is a compare-and-set on an open task: exactly one agent wins and
 the rest are told who did. `done` is for a post's author or claimer.
@@ -1533,7 +1537,7 @@ authorize subscription URIs, so any authenticated token can receive a bare
 idle agent, and nothing in a harness listens for a resource update, so the
 adapter is a command. `gingugu board watch [--persona NAME] [--once] [--all]
 [--exec CMD] [--interval SECONDS]` prints one JSON line per new post in the
-persona's inbox (`id`, `parent_id`, `from`, `to`, `kind`, `namespace`, `body`, `text`;
+persona's inbox (`id`, `parent_id`, `from`, `origin`, `to`, `kind`, `namespace`, `body`, `text`;
 `parent_id` is null for a new thread), posts already waiting first. The persona is `--persona` or `MEMORY_PERSONA`
 (exit 2 without). With a remote brain it derives a session token named for the
 persona (the proxy's `SessionTokens` + `brain_client`), holds
@@ -1544,8 +1548,8 @@ fatal. Locally there is no shared server to listen to, so it polls the
 database read-only every `--interval` seconds (default 2) under the stdio
 `MEMORY_GRANT`. It never marks a post read. `--once` exits after the first
 batch. `--exec` runs a shell command per post (post JSON on stdin, env
-`GINGUGU_POST_{ID,PARENT_ID,FROM,TO,KIND,NAMESPACE,BODY,TEXT}`, `PARENT_ID` empty for a
-new thread, 120s timeout); a failing
+`GINGUGU_POST_{ID,PARENT_ID,FROM,ORIGIN,TO,KIND,NAMESPACE,BODY,TEXT}`, `PARENT_ID` and
+`ORIGIN` empty when unknown, 120s timeout); a failing
 command is reported on stderr and does not stop the watch. A cursor at
 `<data dir>/board-watch/<persona>-<sha256(brain)[:12]>.json` holds the newest
 delivered `(created_at, id)` so a re-armed watcher does not re-deliver
@@ -1982,7 +1986,7 @@ src/gingugu/
 │   ├── fields.py           # Write-time declared fields: provenance, about; FTS5 rebuild
 │   ├── queries.py          # The query log: query_log (migration 015)
 │   ├── tripwires.py        # Tripwire triggers: tripwires (migration 016)
-│   └── board.py            # The agent board: board_posts, board_reads (migration 017)
+│   └── board.py            # The agent board: board_posts, board_reads (migration 017; 018 adds author_origin)
 ├── models.py               # Data models + MEMORY_COLUMNS, the one column list
 ├── storage.py              # CRUD for the memories row and its transaction boundary
 ├── storage_derived.py      # The four satellite tables a memory drags along, plus the query log
