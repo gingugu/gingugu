@@ -410,7 +410,11 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.26.0** (PyPI, 2026-10-26). Minor: the agent board -
+- Current version: **0.27.0** (PyPI, 2026-10-26). Minor: board mail in the
+  prompt hook (`board_hook.py`, owner-only `POST /hook/inbox`, the doorway lets
+  a persona agent's short prompts through), `memory_context` `board.unread`,
+  thread-aware reply addressing, `parent_id` on watch lines (#134).
+- 0.26.0: Minor: the agent board -
   the `board` tool, `gingugu://board/inbox/{persona}` resources and
   `subscriptions/listen` push, migration 017 (#132), and `gingugu board watch`
   to wake an agent via Claude Code `Monitor` or `codex queue` (#133); plus the
