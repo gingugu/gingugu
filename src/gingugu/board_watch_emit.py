@@ -43,6 +43,20 @@ def line_for(post: dict) -> dict:
     }
 
 
+_SIGKILL = getattr(signal, "SIGKILL", 9)  # Windows has no SIGKILL
+
+
+def _kill_tree(proc: subprocess.Popen) -> None:
+    """Kill an --exec and everything it started; just the process where groups don't exist."""
+    try:
+        if hasattr(os, "killpg"):
+            os.killpg(proc.pid, _SIGKILL)
+        else:
+            proc.kill()
+    except OSError:
+        pass
+
+
 def _env_safe(value: object) -> str:
     """An env value the OS will take: no NUL, no lone surrogate."""
     text = str(value).replace("\x00", "")
@@ -164,13 +178,10 @@ class Emitter:
         try:
             output, _ = proc.communicate(payload, timeout=EXEC_TIMEOUT_S)
         except subprocess.TimeoutExpired:
-            try:
-                os.killpg(proc.pid, signal.SIGKILL)
-            except OSError:
-                pass
+            _kill_tree(proc)
             output, _ = proc.communicate()
             print(f"gingugu board watch: --exec timed out after {EXEC_TIMEOUT_S}s", file=self.err)
         if output:
             self.err.write(output.decode("utf-8", "replace"))
-        if proc.returncode not in (0, None, -signal.SIGKILL):
+        if proc.returncode not in (0, None, -_SIGKILL):
             print(f"gingugu board watch: --exec exited {proc.returncode}", file=self.err)
