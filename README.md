@@ -76,6 +76,10 @@ missed, before it runs, and **warm minions** hand a subagent a fenced,
 pre-loaded brain of its own. Agents sharing a brain can also leave each other
 posts on the **agent board** (`board`), which is not memory: addressed, read
 once, never ranked. `gingugu board watch` wakes an idle agent when one arrives.
+**Codebase X-ray** (`code_xray`) maps a Python repository's import graph: before an
+edit, an agent asks what the change reaches and which tests to run, and which files
+the rest of the code leans on. It reads your checkout on your machine, even when the
+brain is remote, and rebuilds itself whenever the code changes.
 
 That is the part that makes the memory worth having, and it is in the box.
 

@@ -4,9 +4,18 @@ _Last updated: 2026-10-26 (board housekeeping: the shared board is done)_
 
 ## In Flight
 
-Board #5, Codebase X-ray: X1 (blast radius) is in design review. Client-side
-extraction (proxy or local stdio), brain-side snapshots and directed PageRank,
-auto-refresh, 5 snapshots kept per namespace, dead-file candidates in scope.
+**Board #5 Codebase X-ray - X1 blast radius built (feature/xray-blast-radius),
+stacked on fix/board-delivery.** `code_xray` (`blast`/`overview`/`refresh`/
+`ingest`), migration 019, `xray/` package, `proxy_xray`. Design and spec were
+reviewed over the agent board before build; extractor built tests-first by a
+minion. Measured on this repo: 347 files, fingerprint 0.07s, extract 0.41s,
+ingest 0.01s; top ranks `models`, `grants`, `config`, `server`, `embeddings`;
+dead-file candidates `hatch_build.py` and two `ui/demo_*` scripts.
+
+X1 follow-ups (not built): `TYPE_CHECKING` imported under an alias; a module
+present under both the repo root and `src/` (reported, not guessed); git
+submodules, linked worktrees, unusual filenames; a test for a file changing
+mid-capture. Next sub-item: X2, a tripwire on edit.
 
 ## Recently Completed
 
