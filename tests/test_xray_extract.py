@@ -135,6 +135,39 @@ def test_dotted_import_depends_on_every_package_initializer(tmp_path):
         "a/b/c.py",
     }
     assert all(e.certain for e in x.edges if e.src == "main.py")
+    # The parents run because the target does; only the target was asked for.
+    assert {e.dst: e.implicit for e in x.edges if e.src == "main.py"} == {
+        "a/__init__.py": True,
+        "a/b/__init__.py": True,
+        "a/b/c.py": False,
+    }
+
+
+def test_implicit_marks_parent_initializers_of_from_imports(tmp_path):
+    repo = _repo(
+        tmp_path,
+        {
+            "pkg/__init__.py": "",
+            "pkg/sub/__init__.py": "",
+            "pkg/sub/mod.py": "",
+            "main.py": "from pkg.sub import mod\nfrom pkg import sub\n",
+        },
+    )
+    x = extract.extract(repo)
+    # pkg/__init__ is a parent of pkg.sub (implicit) AND the target of
+    # `from pkg import sub` (explicit): the explicit occurrence is kept.
+    assert _edge(x, "main.py", "pkg/__init__.py").implicit is False
+    assert _edge(x, "main.py", "pkg/sub/__init__.py").implicit is False
+    assert _edge(x, "main.py", "pkg/sub/mod.py").implicit is False
+
+
+def test_an_implicit_parent_alone_stays_implicit(tmp_path):
+    repo = _repo(
+        tmp_path, {"pkg/__init__.py": "", "pkg/mod.py": "", "main.py": "from pkg.mod import f\n"}
+    )
+    x = extract.extract(repo)
+    assert _edge(x, "main.py", "pkg/__init__.py").implicit is True
+    assert _edge(x, "main.py", "pkg/mod.py").implicit is False
 
 
 def test_namespace_package_without_init_resolves(tmp_path):
@@ -430,7 +463,13 @@ def test_payload_is_plain_json_without_the_local_root(tmp_path):
     assert body["fingerprint"] == x.fingerprint
     assert body["extractor_version"] == extract.EXTRACTOR_VERSION
     assert {"path": "tests/test_a.py", "is_test": True, "is_entry": False} in body["files"]
-    assert {"src": "a.py", "dst": "b.py", "kind": "module", "certain": True} in body["edges"]
+    assert {
+        "src": "a.py",
+        "dst": "b.py",
+        "kind": "module",
+        "certain": True,
+        "implicit": False,
+    } in body["edges"]
     assert set(body) >= {
         "commit",
         "unresolved",
