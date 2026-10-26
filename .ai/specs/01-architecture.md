@@ -88,7 +88,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    record (`provenance`, `about`) and the FTS5 rebuild that indexes them,
    `queries.py` for the query log (`query_log`, migration 015),
    `tripwires.py` for the tripwire triggers (`tripwires`, migration 016),
-   `board.py` for the agent board (`board_posts`, `board_reads`, migration 017), and
+   `board.py` for the agent board (`board_posts`, `board_reads`, migrations 017-018), and
    `__init__.py` for the ordered registry and the runner. `config.py` resolves
    the DB path.
 
@@ -469,7 +469,8 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   may derive (others get 403). `DerivedTokens` (`derived_tokens.py`) keeps
   SHA-256 -> (grant, expiry) in memory: TTL up to 1h, at most 256 live (429
   past it), nothing on disk, so a server restart drops them all. The owner token
-  never goes on `/mcp`.
+  never goes on `/mcp`. The derived grant's `origin` is stamped from the
+  calling owner token's name (`grants.origin_name`); a caller cannot claim one.
 - **Grant additions** (`grants.py`): `Grant.home` is the namespace a call that
   names none defaults to, in place of the server's configured one
   (`grants.home()`, read by `NamespaceManager.resolve_name` and
@@ -1131,7 +1132,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   memory and hoping the other recalled it. A post is not a memory: it is
   addressed, read once, and a task on it is claimed and finished, so storing
   posts as memories would put chatter into the graph and the ranking.
-  `board_posts` and `board_reads` (migration 017) are separate tables; unread is
+  `board_posts` and `board_reads` (migration 017; 018 adds `author_origin`) are separate tables; unread is
   the absence of a `board_reads` row, so marking read is an idempotent insert
   and the inbox an anti-join. `kind` and `status` are validated in Python, not
   `CHECK` constraints, so a new kind needs no table rebuild. Threads are one
@@ -1196,6 +1197,24 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   where a short prompt goes through to the hook (the package load, never the
   encoder). `memory_context` also returns `board: {unread: N}` for a persona
   caller.
+- **Board identity is persona + machine (2026-10-26).** The inbox hid every
+  post by the reader's own persona, so one persona on two machines (each with
+  its own owner token on the brain) could never post to itself. A reader is
+  now persona + origin, the NAME of the owner token the session was derived
+  from: `/token/derive` stamps `Grant.origin` (a caller cannot claim it), a
+  direct owner-token call uses that token's own name, `/hook/inbox` takes it
+  from the calling owner token, and stdio and scoped tokens have none.
+  `board_posts.author_origin` (migration 018, nullable, never backfilled)
+  records it per post. Rule (`board._inbox_where`): a post by your own persona
+  is mail only when both origins are known and differ; unknown on either side
+  keeps the old rule, so pre-018 posts and local stdio callers behave as
+  before. Reply routing (`is_me`/`_reply_to`) compares machine too. Labels and
+  watch lines show it ("from beepboop on macbookpro", `origin`,
+  `GINGUGU_POST_ORIGIN`). Why machine and not session: the brain-side
+  `Mcp-Session-Id` changes on every reconnect and a watcher holds a different
+  one than its agent, so session-based filtering would echo an agent's own
+  posts back through its own watcher. Limit: two sessions of one persona on the
+  same machine still read as one agent.
 - **A capability is a memory type with its structure in metadata, and recall
   gives it its own lane.** (2026-10-01.) Memory recorded procedures and never
   artifacts: one integration's REST mechanics were written down four times and

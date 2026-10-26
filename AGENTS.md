@@ -136,14 +136,14 @@ src/gingugu/
   database.py        → SQLite connection, schema, WAL, migrations (PRAGMA user_version), FTS5 triggers
   migrations/queries.py → migration 015: the query_log table
   migrations/tripwires.py → migration 016: the tripwires table (triggers for the PreToolUse hook)
-  migrations/board.py → migration 017: board_posts + board_reads (the agent board)
+  migrations/board.py → migrations 017-018: board_posts (+ author_origin) + board_reads (the agent board)
   models.py          → memory/namespace/relation data models
   query_log.py       → record(): one query_log row per recall/search/context/hook query;
                        best-effort, never prunes
   recall_gate.py     → involuntary recall, decision half: pure arithmetic, no I/O
   recall_sweep.py    → involuntary recall, I/O half: read-only cosine sweep + BM25
   prompt_hook.py     → `gingugu hook prompt` (UserPromptSubmit): involuntary recall entry point; also injects board mail on every prompt for persona agents
-  board_hook.py      → board mail for the prompt hook: unread posts (max 5), fenced by the client's grant, local or POST /hook/inbox, nothing marked read
+  board_hook.py      → board mail for the prompt hook: unread posts (max 5, labelled with the author's machine when known), fenced by the client's grant, local or POST /hook/inbox, nothing marked read
   tripwire.py        → tripwire matching (pure regex) + load_tripwires, the seam a remote brain would replace
   board.py           → agent board store: post / inbox / thread / claim (compare-and-set) / done, namespace-fenced
   board_events.py    → BoardBus: the subscriptions/listen bus with a synchronous emit (board writes wake subscribers)

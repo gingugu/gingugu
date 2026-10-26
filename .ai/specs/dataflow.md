@@ -610,8 +610,9 @@ a 400, and an unexpected failure a 500.
 UserPromptSubmit → `gingugu hook prompt`
   → board mail (persona agents, every prompt, before the gate):
     POST /hook/inbox {persona, namespaces (grant names, null = unfenced),
-    shown} -> {posts}; 3s timeout; brain: read-only grant-bound inbox query,
-    minus the shown ids; shown ids stay in local hook-sessions/ under
+    shown} -> {posts}; 3s timeout; brain: read-only grant-bound inbox query
+    for persona + origin (the calling owner token's name, never the body; a
+    twin persona on another machine's posts count as mail), minus the shown ids; shown ids stay in local hook-sessions/ under
     board:<session>. A persona agent's one-liner therefore makes this request
   → length gate (local; no recall request for a one-liner)
   → namespaces_for(cwd), narrowed by the client's grant ([] → exit), then _sendable
