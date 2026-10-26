@@ -54,7 +54,9 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `portability`, `capability`, `grants` (the per-call grant every chokepoint
    consults), `serve_tokens`, `tripwire` (the decision half of the `PreToolUse` hook; see
    Key Decisions), `board` + `board_events` (the agent board store and its
-   `subscriptions/listen` bus; see Key Decisions), `board_watch` +
+   `subscriptions/listen` bus; see Key Decisions), `board_delivery` (the post/reply
+   delivery receipt: can the recipient persona's known clients read the namespace),
+   `board_watch` +
    `board_watch_remote`, `board_watch_emit` (the `gingugu board watch` wake-up command; see Key
    Decisions), `board_hook` (board mail for the prompt hook; see Key Decisions), `cli_usage` (the top-level help text), `minion_fence`, `subagent_hook` and `subagent_warmup` (see Warm minions),
    `recall_pick` (the recall pipeline the local hook and `/hook/recall` share),
