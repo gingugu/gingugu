@@ -73,3 +73,9 @@ class DerivedTokens:
         with self._lock:
             self._prune(self._clock())
             return len(self._entries)
+
+    def live_grants(self) -> list[Grant]:
+        """The grant of every unexpired token. Never the tokens themselves."""
+        with self._lock:
+            self._prune(self._clock())
+            return [grant for grant, _ in self._entries.values()]

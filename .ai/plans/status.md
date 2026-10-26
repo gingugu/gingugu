@@ -4,10 +4,22 @@ _Last updated: 2026-10-26 (board housekeeping: the shared board is done)_
 
 ## In Flight
 
-Nothing. Next up: board #5, Codebase X-ray - roadmap X1-X13 boarded, design
-of X1 (blast radius) first.
+Board #5, Codebase X-ray: X1 (blast radius) is in design review. Client-side
+extraction (proxy or local stdio), brain-side snapshots and directed PageRank,
+auto-refresh, 5 snapshots kept per namespace, dead-file candidates in scope.
 
 ## Recently Completed
+
+**Board delivery receipt (fix/board-delivery).** A post addressed to a persona
+whose clients cannot read its namespace was stored, returned `ok`, and never
+showed in their inbox. `post` and `reply` now return `delivery` for a
+persona recipient: `visible` true, false (with a note naming the namespace),
+or null when the brain knows no client of that persona. A persona is not a
+token, so `board_delivery.recipient_grants` reads every live derived token
+named `derived:<persona>` plus scoped tokens of that name (owner tokens name
+machines and are skipped); `serve.build_app` hands the derived-token and token
+stores to the context. The post is stored either way - grants change, and the
+fence is unchanged. stdio answers unverified.
 
 **Board: one persona on two machines - MERGED (#136), released in 0.28.0.**
 Verified live: Beepboop on two Macs exchanged posts both ways. The

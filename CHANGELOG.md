@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Board posts carry a delivery receipt. A post or reply to a persona returns
+  `delivery`: `visible: true` when a known client of that persona can read the
+  post's namespace, `false` with a note naming the namespace when none can, and
+  `null` when the brain knows no client of that persona. A post the recipient
+  cannot see is still stored, but it no longer reads as delivered.
+
 ---
 
 ## [0.28.0] - 2026-10-26

@@ -189,6 +189,7 @@ def build_app(
     app = mcp_app(mcp)
     app.add_route(DERIVE_PATH, derive_endpoint(derived), methods=["POST"])
     if ctx is not None:
+        ctx.derived, ctx.tokens = derived, tokens
         from .serve_hooks import hook_routes
 
         for path, handler in hook_routes(ctx).items():
