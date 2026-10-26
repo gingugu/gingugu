@@ -29,7 +29,7 @@ from anyio.abc import ObjectSendStream, TaskGroup
 from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
 from mcp.shared.message import SessionMessage
-from mcp.types import CallToolResult, JSONRPCRequest
+from mcp.types import CallToolResult, JSONRPCNotification, JSONRPCRequest, TextContent
 
 from .proxy_auth import SessionTokens, brain_client
 from .proxy_session import CLIENT_GONE
@@ -61,8 +61,34 @@ def _data(result: CallToolResult) -> dict:
         return {}
 
 
+def _checked(result: CallToolResult) -> CallToolResult:
+    """The brain answers a fingerprint ``exact``; this proxy just compared that
+    fingerprint with the checkout, so the answer is ``current``."""
+    data = _data(result)
+    if data.get("freshness") != "exact":
+        return result
+    data["freshness"] = "current"
+    content = [TextContent(type="text", text=json.dumps(data, indent=2))]
+    structured = result.structured_content
+    if isinstance(structured, dict) and structured.get("freshness") == "exact":
+        structured = {**structured, "freshness": "current"}
+    return result.model_copy(update={"content": content, "structured_content": structured})
+
+
+def _cancelled_id(msg):
+    if isinstance(msg, JSONRPCNotification) and msg.method == "notifications/cancelled":
+        return (msg.params or {}).get("requestId")
+    return None
+
+
+async def _thread(fn, *args):
+    # Abandoned on cancel: git and ast cannot be interrupted, and a cancelled
+    # call's result is discarded, never ingested or answered.
+    return await anyio.to_thread.run_sync(fn, *args, abandon_on_cancel=True)
+
+
 class XrayRelay:
-    """Answers claimed ``code_xray`` calls, each in its own task."""
+    """Answers claimed ``code_xray`` calls, each in its own cancellable task."""
 
     def __init__(
         self, url: str, tokens: SessionTokens, client_write: ObjectSendStream, tg: TaskGroup
@@ -71,9 +97,18 @@ class XrayRelay:
         self._tokens = tokens
         self._client_write = client_write
         self._tg = tg
+        self._scopes: dict = {}  # request id -> the cancel scope of its task
+
+    @property
+    def running(self) -> bool:
+        return bool(self._scopes)
 
     def take(self, item: SessionMessage) -> bool:
-        """Claim ``item`` if it needs this machine's disk; answered from its own task."""
+        """Claim ``item`` if it needs this machine's disk, or cancels a call that does."""
+        req_id = _cancelled_id(item.message)
+        if req_id is not None and req_id in self._scopes:
+            self._scopes[req_id].cancel()  # MCP: a cancelled request gets no response
+            return True
         if not claims(item.message):
             return False
         self._tg.start_soon(self._run, item)
@@ -82,16 +117,20 @@ class XrayRelay:
     async def _run(self, item: SessionMessage) -> None:
         msg = item.message
         args = dict((msg.params or {}).get("arguments") or {})
-        try:
-            result = await self._answer(args)
-        except extract.XrayError as exc:
-            result = _refused(str(exc))
-        except Exception as exc:  # noqa: BLE001 - one call fails, never the proxy
-            result = _refused(f"code_xray failed on this machine: {type(exc).__name__}: {exc}")
-        try:
-            await self._client_write.send(_reply(msg.id, result))
-        except CLIENT_GONE:
-            pass
+        with anyio.CancelScope() as scope:
+            self._scopes[msg.id] = scope
+            try:
+                result = await self._answer(args)
+            except (extract.XrayError, ValueError) as exc:
+                result = _refused(str(exc))
+            except Exception as exc:  # noqa: BLE001 - one call fails, never the proxy
+                result = _refused(f"code_xray failed on this machine: {type(exc).__name__}: {exc}")
+            finally:
+                self._scopes.pop(msg.id, None)
+            try:
+                await self._client_write.send(_reply(msg.id, result))
+            except CLIENT_GONE:
+                pass
 
     async def _call(self, args: dict) -> CallToolResult:
         http = brain_client(self._url, self._tokens)
@@ -99,25 +138,25 @@ class XrayRelay:
         async with http, Client(transport) as client:
             return await client.call_tool(NAME, args)
 
-    async def _ingest(self, repo, namespace) -> tuple[CallToolResult, str]:
-        x = await anyio.to_thread.run_sync(extract.extract, repo)
-        sent = {"action": "ingest", "payload": x.payload()}
+    async def _ingest(self, repo, namespace, *, replace: bool) -> tuple[CallToolResult, str]:
+        x = await _thread(extract.extract, repo)
+        sent = {"action": "ingest", "payload": x.payload(), "replace": replace}
         if namespace is not None:
             sent["namespace"] = namespace
         return await self._call(sent), x.fingerprint
 
     async def _answer(self, args: dict) -> CallToolResult:
-        repo = await anyio.to_thread.run_sync(local.root, args.pop("path", None))
+        repo = await _thread(local.root, args.pop("path", None))
         namespace = args.get("namespace")
         if args["action"] == "refresh":
-            return (await self._ingest(repo, namespace))[0]
+            return (await self._ingest(repo, namespace, replace=True))[0]
         if "files" in args:
             args["files"] = local.seeds(local.file_list(args["files"]), repo)
-        args["fingerprint"] = await anyio.to_thread.run_sync(extract.fingerprint, repo)
+        args["fingerprint"] = await _thread(extract.fingerprint, repo)
         result = await self._call(args)
         if not _data(result).get("missing_snapshot"):
-            return result
-        ingested, args["fingerprint"] = await self._ingest(repo, namespace)
+            return _checked(result)
+        ingested, args["fingerprint"] = await self._ingest(repo, namespace, replace=False)
         if _data(ingested).get("ok") is False:
             return ingested
-        return await self._call(args)
+        return _checked(await self._call(args))
