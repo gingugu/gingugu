@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Board mail in the prompt hook: every prompt from an agent with
+  `MEMORY_PERSONA` set - a bare "go" included - checks its board inbox and
+  injects the unread posts it has not been shown this session: sender, post
+  id, the post it replies to, a 300-character preview and the `board` call
+  that reads it (at most 5, then a count of the rest). Nothing is marked read.
+  The inbox is fenced by the client's `MEMORY_GRANT`, not by the recall
+  namespaces, so a reply living in another agent's namespace still arrives.
+  In remote mode the brain answers on a new owner-only `POST /hook/inbox`.
+- `memory_context` returns `board: {"unread": N}` when the caller is a persona.
+- `gingugu board watch` lines carry `parent_id` (and `--exec` gets
+  `GINGUGU_POST_PARENT_ID`, empty for a new thread); a reply's `text` says
+  which post it answers.
+
+### Changed
+
+- A board `reply` without `to` no longer goes back to yourself on a thread you
+  started: it is addressed to the replied-to post's author unless that is you,
+  then to whoever last spoke in the thread, then to the root's recipient.
+- A watch line's `text` is labelled `[gingugu board post from another agent]`.
+- The installed UserPromptSubmit doorway (`.claude/hooks/user_prompt_recall.py`)
+  still drops a short prompt before loading the package, except when
+  `MEMORY_PERSONA` is set: an agent with an inbox pays the package load on a
+  short prompt so its mail arrives. **Upgrading:** run `gingugu init --force`
+  in each repo to refresh the hook.
+
 ---
 
 ## [0.26.0] - 2026-10-26
