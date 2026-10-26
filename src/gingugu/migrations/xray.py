@@ -59,6 +59,7 @@ CREATE TABLE xray_edges (
     dst         TEXT NOT NULL,
     kind        TEXT NOT NULL,
     certain     INTEGER NOT NULL,
+    implicit    INTEGER NOT NULL,
     PRIMARY KEY (snapshot_id, src, dst)
 );
 

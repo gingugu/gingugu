@@ -62,6 +62,21 @@ def test_rank_ignores_edges_to_unknown_nodes_and_self_loops():
     assert sum(r.values()) == pytest.approx(1.0)
 
 
+def test_implicit_edges_are_ignored_by_rank_but_kept_by_blast():
+    files = {"pkg/__init__.py": False, "pkg/mod.py": False, "a.py": False, "b.py": False}
+    links = [
+        rank.Link("a.py", "pkg/__init__.py", True, implicit=True),
+        rank.Link("a.py", "pkg/mod.py", True),
+        rank.Link("b.py", "pkg/__init__.py", True, implicit=True),
+        rank.Link("b.py", "pkg/mod.py", True),
+    ]
+    r = rank.pagerank(list(files), links)
+    assert r["pkg/mod.py"] > r["pkg/__init__.py"]
+    assert r["pkg/__init__.py"] == pytest.approx(r["a.py"])
+    out = rank.blast(["pkg/__init__.py"], files, links, r)
+    assert {d["path"] for d in out["code"]} == {"a.py", "b.py"}
+
+
 # --- blast radius ---------------------------------------------------------------
 
 

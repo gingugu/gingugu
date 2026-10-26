@@ -41,6 +41,9 @@ class Link:
     src: str
     dst: str
     certain: bool = True
+    # A parent package initializer that runs because a submodule was imported.
+    # Reached by a change (blast keeps it), but not leaned on (rank skips it).
+    implicit: bool = False
 
 
 def _clean(nodes: Iterable[str], links: Iterable[Link]) -> list[Link]:
@@ -59,7 +62,8 @@ def pagerank(nodes: list[str], links: Iterable[Link]) -> dict[str, float]:
         return {}
     out: dict[str, set[str]] = {node: set() for node in nodes}
     for ln in _clean(nodes, links):
-        out[ln.src].add(ln.dst)
+        if not ln.implicit:
+            out[ln.src].add(ln.dst)
     inbound: dict[str, list[str]] = {node: [] for node in nodes}
     for src, dsts in out.items():
         for dst in dsts:
