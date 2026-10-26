@@ -56,8 +56,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
    Key Decisions), `board` + `board_events` (the agent board store and its
    `subscriptions/listen` bus; see Key Decisions), `board_delivery` (the post/reply
    delivery receipt: can the recipient persona's known clients read the namespace),
-   `xray/` (Codebase X-ray: `extract` + `resolve` + `local` on the client, `rank` + `store` on
-   the brain; see Key Decisions), `proxy_xray` (the proxy's local half of `code_xray`),
+   `xray/` (Codebase X-ray: `scan` + `extract` + `resolve` + `local` on the client, `validate` +
+   `rank` + `store` on the brain; see Key Decisions), `proxy_xray` (the proxy's local half of `code_xray`),
    `board_watch` +
    `board_watch_remote`, `board_watch_emit` (the `gingugu board watch` wake-up command; see Key
    Decisions), `board_hook` (board mail for the prompt hook; see Key Decisions), `cli_usage` (the top-level help text), `minion_fence`, `subagent_hook` and `subagent_warmup` (see Warm minions),
@@ -92,7 +92,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
    record (`provenance`, `about`) and the FTS5 rebuild that indexes them,
    `queries.py` for the query log (`query_log`, migration 015),
    `tripwires.py` for the tripwire triggers (`tripwires`, migration 016),
-   `board.py` for the agent board (`board_posts`, `board_reads`, migrations 017-018), and
+   `board.py` for the agent board (`board_posts`, `board_reads`, migrations 017-018),
+   `xray.py` for Codebase X-ray (`xray_snapshots`, `xray_files`, `xray_edges`, migration 019), and
    `__init__.py` for the ordered registry and the runner. `config.py` resolves
    the DB path.
 

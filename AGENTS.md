@@ -137,12 +137,16 @@ src/gingugu/
   migrations/queries.py → migration 015: the query_log table
   migrations/tripwires.py → migration 016: the tripwires table (triggers for the PreToolUse hook)
   migrations/board.py → migrations 017-018: board_posts (+ author_origin) + board_reads (the agent board)
+  migrations/xray.py → migration 019: xray_snapshots, xray_files, xray_edges (Codebase X-ray)
   models.py          → memory/namespace/relation data models
   query_log.py       → record(): one query_log row per recall/search/context/hook query;
                        best-effort, never prunes
   recall_gate.py     → involuntary recall, decision half: pure arithmetic, no I/O
   recall_sweep.py    → involuntary recall, I/O half: read-only cosine sweep + BM25
   prompt_hook.py     → `gingugu hook prompt` (UserPromptSubmit): involuntary recall entry point; also injects board mail on every prompt for persona agents
+  board_delivery.py  → the board post/reply delivery receipt (visible true/false/null)
+  xray/              → Codebase X-ray: scan/extract/resolve/local (client), validate/rank/store (brain)
+  proxy_xray.py      → the proxy reads the checkout for code_xray, asks the brain by fingerprint
   board_hook.py      → board mail for the prompt hook: unread posts (max 5, labelled with the author's machine when known), fenced by the client's grant, local or POST /hook/inbox, nothing marked read
   tripwire.py        → tripwire matching (pure regex) + load_tripwires, the seam a remote brain would replace
   board.py           → agent board store: post / inbox / thread / claim (compare-and-set) / done, namespace-fenced
@@ -172,7 +176,8 @@ src/gingugu/
                        context_merge.py, relations.py, relation_ops.py,
                        consolidate.py, dream.py, admin.py, credentials.py,
                        tripwires.py, board.py (the `board` tool + inbox resource;
-                       derives the author server-side), helpers.py
+                       derives the author server-side), xray.py (`code_xray`),
+                       helpers.py
                        (forget, consolidate, admin and credentials ask the user
                        to confirm destructive calls; see confirm.py)
 ui/                  → Memory Explorer (React/Vite 3D frontend + vitest; api.py dev shim over webui; dump_static.py builds the static demo data)

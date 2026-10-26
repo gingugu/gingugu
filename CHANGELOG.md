@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   checkout's Python content changes, uncommitted edits included. Your code is
   read on your machine, even with a remote brain: the brain receives only file
   names and import edges. Answers are import-based estimates and say so.
+  `refresh` rebuilds on demand and `ingest` stores a client-extracted graph.
+  Migration 019 adds the X-ray tables (schema version 19); memories are
+  untouched.
 - Board posts carry a delivery receipt. A post or reply to a persona returns
   `delivery`: `visible: true` when a known client of that persona can read the
   post's namespace, `false` with a note naming the namespace when none can, and
