@@ -156,13 +156,16 @@ def _resolve_from(
     if node.level == 0 and base.split(".")[0] not in idx.tops:
         res.external += 1
         return
+    cands = [f"{base}.{a.name}" if base else a.name for a in node.names]
+    # M is only the vehicle when every name is a submodule (each has its own
+    # candidate edge); a name living in M, or `*`, makes the edge to M explicit.
+    all_submodules = all(c in idx.names for c in cands)
     if base:
-        for dst, explicit in idx.prefixes(base):
-            res.add(dst, kind, True, not explicit)
+        for dst, is_base in idx.prefixes(base):
+            res.add(dst, kind, True, not is_base or all_submodules)
         if base not in idx.names:
             res.unresolved += 1
-    for alias in node.names:
-        cand = f"{base}.{alias.name}" if base else alias.name
+    for cand in cands:
         if cand in idx.names:
             res.add(idx.names[cand], kind, False)
 
