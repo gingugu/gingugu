@@ -9,8 +9,9 @@ delivered.
 short-lived token named for its persona, and one persona may run several, each
 with its own grant. So the receipt answers from every client the brain knows
 for that persona - live derived tokens and scoped tokens of that name - and has
-three answers: visible (one of them can read the namespace), not visible (none
-can), or unverified (none is known). Absence of a connected client is not
+three answers: visible (one of them can currently read the namespace - access,
+not confirmation that anyone read it), not visible (none can), or unverified
+(none is known). Absence of a connected client is not
 evidence the persona cannot read; it is no evidence at all.
 
 The post is stored either way. Grants change, and refusing a post on what the
@@ -61,7 +62,7 @@ def receipt(recipient: str, namespace: str, grants: Iterable[Grant]) -> dict | N
     return {
         "recipient": recipient,
         "visible": False,
-        "note": f"stored, but no known client of {recipient!r} can read namespace "
-        f"{namespace!r} - they will not see it. Post in a namespace they read, or "
-        "reply on one of their threads.",
+        "note": f"stored, but no known client of {recipient!r} can currently read "
+        f"namespace {namespace!r}. Post in a namespace they read, or reply on one of "
+        "their threads.",
     }
