@@ -87,7 +87,7 @@ graph LR
         R[(dream_lock)]
         T[(query_log<br/>questions asked)]
         W[(tripwires<br/>action triggers)]
-        B[(board_posts<br/>agent board)]
+        BP[(board_posts · board_reads<br/>agent board)]
     end
 
     subgraph OS Secrets
@@ -119,6 +119,7 @@ graph LR
     C -->|stamps every tool call| Q
     C -->|records each query| T
     C -->|add · list · remove · test| W
+    C -->|post · inbox · read · claim · done| BP
     A -->|each pending tool call| Y
     Y -->|reads matches| W
     Y -->|logs each trip| T
@@ -1518,7 +1519,8 @@ claims and finishes. A post outside the caller's grant reads as "not found".
 grant) is the same inbox as a subscribable resource. The server serves the
 2026-07-28 `subscriptions/listen`; every board write emits
 `notifications/resources/updated` for the recipient's inbox URI
-(`gingugu://board/inbox/*` for broadcasts). The SDK's listen handler does not
+(`gingugu://board/inbox/*` for broadcasts). A URI whose name is not a persona
+(or `*`) is refused with an error. The SDK's listen handler does not
 authorize subscription URIs, so any authenticated token can receive a bare
 "updated" ping for any inbox - never content.
 
