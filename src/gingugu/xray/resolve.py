@@ -79,11 +79,11 @@ class FileResult:
     external: int = 0
 
     def add(self, dst: str, kind: str, certain: bool) -> None:
+        # Keep one real occurrence, never fields mixed from two: certain beats
+        # candidate, then the most binding kind.
         old = self.edges.get(dst)
-        if old is not None:
-            kind = min(kind, old[0], key=KIND_RANK.__getitem__)
-            certain = certain or old[1]
-        self.edges[dst] = (kind, certain)
+        if old is None or (not certain, KIND_RANK[kind]) < (not old[1], KIND_RANK[old[0]]):
+            self.edges[dst] = (kind, certain)
 
 
 def _is_type_checking(test: ast.expr) -> bool:
@@ -94,17 +94,18 @@ def _is_type_checking(test: ast.expr) -> bool:
 
 def _child_ctx(node: ast.AST, ctx: str) -> list[tuple[ast.AST, str]]:
     """Children of ``node`` paired with the context they execute in."""
-    if isinstance(node, _FUNCTIONS):
-        return [(c, "lazy") for c in ast.iter_child_nodes(node)]
-    if ctx == "lazy":
-        return [(c, ctx) for c in ast.iter_child_nodes(node)]
     if isinstance(node, ast.If) and _is_type_checking(node.test):
-        # The else branch runs exactly when TYPE_CHECKING is false: a real import.
-        outer = "type_checking" if ctx == "type_checking" else "conditional"
+        # Typing-only wins even inside a def. The else branch runs exactly when
+        # TYPE_CHECKING is false, so it is a real import (or stays lazy/typing-only).
+        outer = ctx if ctx in ("type_checking", "lazy") else "conditional"
         out: list[tuple[ast.AST, str]] = [(node.test, ctx)]
         out += [(c, "type_checking") for c in node.body]
         out += [(c, outer) for c in node.orelse]
         return out
+    if isinstance(node, _FUNCTIONS) and ctx != "type_checking":
+        return [(c, "lazy") for c in ast.iter_child_nodes(node)]
+    if ctx in ("lazy", "type_checking"):
+        return [(c, ctx) for c in ast.iter_child_nodes(node)]
     if isinstance(node, _BRANCHING) and ctx == "module":
         ctx = "conditional"
     return [(c, ctx) for c in ast.iter_child_nodes(node)]

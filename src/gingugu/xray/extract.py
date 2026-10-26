@@ -56,6 +56,7 @@ class Extraction:
     dynamic: int = 0
     external: int = 0
     parse_errors: list[str] = field(default_factory=list)
+    skipped_symlinks: list[str] = field(default_factory=list)
 
     def payload(self) -> dict:
         """JSON-safe wire form. Omits ``root``: a client path never leaves the client."""
@@ -74,6 +75,7 @@ class Extraction:
             "dynamic": self.dynamic,
             "external": self.external,
             "parse_errors": list(self.parse_errors),
+            "skipped_symlinks": list(self.skipped_symlinks),
         }
 
 
@@ -98,20 +100,24 @@ def _commit(root: Path) -> str | None:
     return proc.stdout.decode().strip() or None
 
 
-def _read_sources(root: Path) -> dict[str, bytes]:
+def _read_sources(root: Path) -> tuple[dict[str, bytes], list[str]]:
     proc = _git(root, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.py")
     if proc.returncode != 0:
         raise XrayError(f"git ls-files failed: {proc.stderr.decode().strip()}")
     sources: dict[str, bytes] = {}
+    symlinks: list[str] = []
     for rel in sorted({p for p in proc.stdout.decode().split("\0") if p}):
         full = root / rel
+        if full.is_symlink():  # may point outside the repo: never follow
+            symlinks.append(rel)
+            continue
         if not full.is_file():  # --cached still lists a deleted tracked file
             continue
         try:
             sources[rel] = full.read_bytes()
         except OSError:
             continue
-    return sources
+    return sources, symlinks
 
 
 def _pyproject_bytes(root: Path) -> bytes | None:
@@ -121,10 +127,12 @@ def _pyproject_bytes(root: Path) -> bytes | None:
         return None
 
 
-def _fingerprint(sources: dict[str, bytes], pyproject: bytes | None) -> str:
+def _fingerprint(sources: dict[str, bytes], symlinks: list[str], pyproject: bytes | None) -> str:
     h = hashlib.sha256(f"xray-v{EXTRACTOR_VERSION}\n".encode())
     for path in sorted(sources):
         h.update(f"{path}\0{hashlib.sha256(sources[path]).hexdigest()}\n".encode())
+    for path in sorted(symlinks):
+        h.update(f"symlink\0{path}\n".encode())
     pyp = hashlib.sha256(pyproject).hexdigest() if pyproject is not None else "-"
     h.update(f"pyproject\0{pyp}\n".encode())
     return h.hexdigest()
@@ -133,7 +141,8 @@ def _fingerprint(sources: dict[str, bytes], pyproject: bytes | None) -> str:
 def fingerprint(path: str | Path) -> str:
     """Cheap cache key for a repo: reads and hashes bytes, parses nothing."""
     root = _toplevel(path)
-    return _fingerprint(_read_sources(root), _pyproject_bytes(root))
+    sources, symlinks = _read_sources(root)
+    return _fingerprint(sources, symlinks, _pyproject_bytes(root))
 
 
 def _is_test(path: str) -> bool:
@@ -153,8 +162,16 @@ def _script_modules(pyproject: bytes | None) -> set[str]:
         data = tomllib.loads(pyproject.decode("utf-8"))
     except (tomllib.TOMLDecodeError, UnicodeDecodeError):
         return set()
-    scripts = data.get("project", {}).get("scripts", {})
-    return {str(v).split(":")[0].strip() for v in scripts.values()}
+    project = data.get("project", {})
+    targets: list[object] = []
+    if isinstance(project, dict):
+        for table in ("scripts", "gui-scripts"):
+            group = project.get(table, {})
+            targets += list(group.values()) if isinstance(group, dict) else []
+        groups = project.get("entry-points", {})
+        for group in groups.values() if isinstance(groups, dict) else []:
+            targets += list(group.values()) if isinstance(group, dict) else []
+    return {t.split(":")[0].strip() for t in targets if isinstance(t, str)}
 
 
 def _is_main_guard(tree: ast.Module) -> bool:
@@ -175,13 +192,13 @@ def _is_main_guard(tree: ast.Module) -> bool:
 def extract(path: str | Path) -> Extraction:
     """Build the import graph for the git repo containing ``path``."""
     root = _toplevel(path)
-    sources = _read_sources(root)
+    sources, symlinks = _read_sources(root)
     pyproject = _pyproject_bytes(root)
     idx = ModuleIndex(list(sources))
     script_files = {idx.names[m] for m in _script_modules(pyproject) if m in idx.names}
 
     out = Extraction(
-        root=str(root), commit=_commit(root), fingerprint=_fingerprint(sources, pyproject)
+        root=str(root), commit=_commit(root), fingerprint=_fingerprint(sources, symlinks, pyproject)
     )
     for rel, data in sources.items():
         is_entry = rel in script_files or PurePosixPath(rel).name == "__main__.py"
@@ -200,4 +217,5 @@ def extract(path: str | Path) -> Extraction:
 
     out.edges.sort(key=lambda e: (e.src, e.dst))
     out.parse_errors.sort()
+    out.skipped_symlinks = sorted(symlinks)
     return out
