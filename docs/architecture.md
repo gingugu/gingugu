@@ -89,6 +89,7 @@ graph LR
         T[(query_log<br/>questions asked)]
         W[(tripwires<br/>action triggers)]
         BP[(board_posts · board_reads<br/>agent board)]
+        XR[(xray_snapshots · files · edges<br/>codebase X-ray)]
     end
 
     subgraph OS Secrets
@@ -121,6 +122,7 @@ graph LR
     C -->|records each query| T
     C -->|add · list · remove · test| W
     C -->|post · inbox · read · claim · done| BP
+    C -->|ingest · blast · overview| XR
     A -->|each pending tool call| Y
     Y -->|reads matches| W
     Y -->|logs each trip| T
