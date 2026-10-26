@@ -10,12 +10,19 @@ stacked on fix/board-delivery.** `code_xray` (`blast`/`overview`/`refresh`/
 reviewed over the agent board before build; extractor built tests-first by a
 minion. Measured on this repo: 347 files, fingerprint 0.07s, extract 0.41s,
 ingest 0.01s; top ranks `models`, `grants`, `config`, `server`, `embeddings`;
-dead-file candidates `hatch_build.py` and two `ui/demo_*` scripts.
+dead-file candidates `hatch_build.py` and two `ui/demo_*` scripts. A second
+review round (security reviewer + agent-board code review) added honest
+coverage (every unread source is a skip with a reason), safe git
+(`core.fsmonitor=false`), refusal of files outside the checkout before
+anything is sent, `exact` vs `current` freshness, edge foreign keys and
+`graph_digest` in migration 019, and cancellation in the proxy.
 
 X1 follow-ups (not built): `TYPE_CHECKING` imported under an alias; a module
 present under both the repo root and `src/` (reported, not guessed); git
 submodules, linked worktrees, unusual filenames; a test for a file changing
-mid-capture. Next sub-item: X2, a tripwire on edit.
+mid-capture; `overview.top` and the payload's `skipped` are bounded but not
+paged; a git `core.fsmonitor`-style check for other config that runs code.
+Next sub-item: X2, a tripwire on edit.
 
 ## Recently Completed
 
