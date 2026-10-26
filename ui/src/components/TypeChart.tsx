@@ -1,10 +1,10 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { Memory } from '../types'
+import { MemoryLite } from '../types'
 import { TYPE_COLORS } from '../lib/colors'
 import { getTypeDistribution } from '../lib/graph'
 
 interface Props {
-  memories: Memory[]
+  memories: MemoryLite[]
 }
 
 export default function TypeChart({ memories }: Props) {

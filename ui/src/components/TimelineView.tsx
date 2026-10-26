@@ -2,14 +2,14 @@ import { useMemo, useState } from 'react'
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid,
 } from 'recharts'
-import { Memory, MemoryNamespace, MemoryType } from '../types'
+import { MemoryLite, NamespaceRef, MemoryType } from '../types'
 import { TYPE_COLORS } from '../lib/colors'
 
 type Granularity = 'day' | 'week' | 'month'
 
 interface Props {
-  memories: Memory[]
-  namespaces: MemoryNamespace[]
+  memories: MemoryLite[]
+  namespaces: NamespaceRef[]
 }
 
 const ALL_TYPES: MemoryType[] = [

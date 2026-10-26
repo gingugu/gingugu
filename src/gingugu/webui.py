@@ -14,7 +14,7 @@ Two modes, one command:
 Either way ``/api/*`` is answered per request by whichever brain is in force
 (``remote.active()``): the local DB through ``ui_api.dispatch``, or a forward
 to the remote brain's ``/ui/api/*`` with the keychain token. Every JSON body
-carries ``mode``. ``/api/export`` is the legacy full dump, local mode only.
+carries ``mode``.
 
 The API is the whole brain and has no auth of its own, so ``main`` refuses to
 bind anything but a loopback address, every request must carry a loopback
@@ -37,8 +37,7 @@ from urllib.parse import parse_qsl
 
 from . import remote, webui_remote
 from .config import load_config
-from .database import Database
-from .portability import export_data
+from .prompt_hook import persona
 from .ui_api import UiEnv, dispatch, known_route
 
 logger = logging.getLogger(__name__)
@@ -92,14 +91,8 @@ def resolve_static_path(dist: Path, url_path: str) -> Path | None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    db: Database | None = None
     dist_dir: Path | None = None
     serve_static: bool = False
-
-    def _get_conn(self):
-        if Handler.db is None:
-            Handler.db = Database(load_config().db_path)
-        return Handler.db.connect()
 
     def _send_json(self, status: int, obj: dict) -> None:
         body = json.dumps(obj).encode()
@@ -138,29 +131,10 @@ class Handler(BaseHTTPRequestHandler):
             status, body = webui_remote.forward(target, rest, query)
             mode, brain = "remote", webui_remote.netloc(target)
         body["mode"] = mode
-        if rest == "info":
+        if rest == "info" and body.get("ok"):
             body["brain"] = brain
+            body["persona"] = persona()
         self._send_json(status, body)
-
-    def _serve_export(self) -> None:
-        try:
-            payload = export_data(self._get_conn())
-        except Exception as exc:
-            logger.exception("Export failed")
-            self._send_json(500, {"error": str(exc)})
-            return
-        self._send_json(200, payload)
-
-    def _serve_export_for_mode(self) -> None:
-        """The legacy dump reads the local DB; with a remote brain there is none."""
-        try:
-            remote_on = remote.active() is not None
-        except ValueError:
-            remote_on = True
-        if remote_on:
-            self._send_json(404, {"ok": False, "error": "export is local only", "mode": "remote"})
-        else:
-            self._serve_export()
 
     def _serve_static(self) -> None:
         target = resolve_static_path(Handler.dist_dir, self.path) if Handler.dist_dir else None
@@ -187,9 +161,7 @@ class Handler(BaseHTTPRequestHandler):
         if self._foreign_host():
             return
         route, _, query = self.path.partition("?")
-        if route == "/api/export":
-            self._serve_export_for_mode()
-        elif route.startswith("/api/"):
+        if route.startswith("/api/"):
             self._serve_api(route[len("/api/") :], query)
         elif Handler.serve_static:
             self._serve_static()

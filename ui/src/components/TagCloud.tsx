@@ -1,8 +1,8 @@
-import { Memory } from '../types'
+import { MemoryLite } from '../types'
 import { getTagFrequencies } from '../lib/graph'
 
 interface Props {
-  memories: Memory[]
+  memories: MemoryLite[]
 }
 
 function sizeForCount(count: number, max: number): string {

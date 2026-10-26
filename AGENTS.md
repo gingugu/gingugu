@@ -121,7 +121,7 @@ your own session, on the `gingugu` namespace.
 - **SQLite** + **FTS5** for full-text; semantic embeddings for hybrid retrieval
 - **platformdirs** for the cross-platform DB path
 - **uv**-managed; `ruff` + `black` formatting; `pytest` + `pytest-asyncio`
-- **UI:** Node/React/Vite + Tailwind under `ui/` (FastAPI-style `ui/api.py` backend)
+- **UI:** Node 22 + React/Vite + Tailwind under `ui/`, with `react-force-graph-3d`/`three` (3D brain) and `vitest`. Served by `gingugu ui` (`webui.py`, stdlib `http.server`); `ui/api.py` is a dev shim over `gingugu.webui`, not a separate backend. Tests: `cd ui && npm test`, `npm run typecheck`; build: `cd ui && npm run build`
 - Released via **Trusted Publishing (OIDC)** to PyPI on tag
 
 ---
@@ -166,7 +166,7 @@ src/gingugu/
                        tripwires.py, helpers.py
                        (forget, consolidate, admin and credentials ask the user
                        to confirm destructive calls; see confirm.py)
-ui/                  → Memory Explorer (api.py backend + React/Vite frontend)
+ui/                  → Memory Explorer (React/Vite 3D frontend + vitest; api.py dev shim over webui; dump_static.py builds the static demo data)
 docs/                → architecture.md (mermaids = source of truth), roadmap.md, future-architecture.md
 tests/               → pytest suites (unit + integration MCP flows)
 ```

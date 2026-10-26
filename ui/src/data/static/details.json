@@ -1,0 +1,470 @@
+{
+ "b0000000-0000-4000-8000-000000000001": {
+  "accesses": [],
+  "claims": [],
+  "memory": {
+   "about": null,
+   "access_count": 14,
+   "confidence": "verified",
+   "content": "Telemetry ingestion uses a queue-backed worker pool instead of synchronous HTTP handlers. Bursts of satellite passes were dropping packets under load; the queue decouples receive from process and lets us replay on failure.",
+   "created_at": "2026-04-02T10:15:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000001",
+   "last_accessed": "2026-05-28T16:40:00+00:00",
+   "last_confirmed": "2026-05-20T11:00:00+00:00",
+   "metadata": null,
+   "namespace": "orbit-tracker",
+   "namespace_id": "08888dd8-dcdc-4f3f-ade5-8f84749a7719",
+   "pinned": false,
+   "provenance": null,
+   "source": "design review",
+   "tags": [
+    "ingestion",
+    "pipeline",
+    "queue"
+   ],
+   "title": "Event-driven ingestion pipeline",
+   "type": "architecture",
+   "updated_at": "2026-04-02T10:15:00+00:00"
+  },
+  "ok": true,
+  "relations": {
+   "in": [],
+   "out": [
+    {
+     "id": "b0000000-0000-4000-8000-000000000003",
+     "title": "Postgres over TimescaleDB for v1",
+     "type": "related_to"
+    }
+   ]
+  },
+  "tripwires": []
+ },
+ "b0000000-0000-4000-8000-000000000002": {
+  "accesses": [],
+  "claims": [],
+  "memory": {
+   "about": null,
+   "access_count": 7,
+   "confidence": "verified",
+   "content": "Two-line element sets fetched from the mirror include a leading space on line 2 for some satellites. The checksum validator rejected them. FIXED: strip lines before checksum, added regression test with the malformed fixture.",
+   "created_at": "2026-04-10T08:05:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000002",
+   "last_accessed": "2026-05-15T10:00:00+00:00",
+   "last_confirmed": "2026-04-11T09:30:00+00:00",
+   "metadata": null,
+   "namespace": "orbit-tracker",
+   "namespace_id": "08888dd8-dcdc-4f3f-ade5-8f84749a7719",
+   "pinned": false,
+   "provenance": null,
+   "source": "issue #42",
+   "tags": [
+    "fixed",
+    "parser",
+    "tle"
+   ],
+   "title": "TLE parser chokes on leading whitespace",
+   "type": "bug",
+   "updated_at": "2026-04-11T09:30:00+00:00"
+  },
+  "ok": true,
+  "relations": {
+   "in": [],
+   "out": [
+    {
+     "id": "b0000000-0000-4000-8000-000000000004",
+     "title": "Retry with jitter on upstream fetches",
+     "type": "caused_by"
+    }
+   ]
+  },
+  "tripwires": []
+ },
+ "b0000000-0000-4000-8000-000000000003": {
+  "accesses": [],
+  "claims": [],
+  "memory": {
+   "about": null,
+   "access_count": 11,
+   "confidence": "verified",
+   "content": "Decision: plain Postgres with a BRIN index on observed_at is enough for v1 volumes (~2M rows/month). TimescaleDB adds an extension dependency our managed host bills extra for. Revisit if retention grows past 12 months.",
+   "created_at": "2026-04-05T15:00:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000003",
+   "last_accessed": "2026-05-30T09:10:00+00:00",
+   "last_confirmed": "2026-05-01T12:00:00+00:00",
+   "metadata": null,
+   "namespace": "orbit-tracker",
+   "namespace_id": "08888dd8-dcdc-4f3f-ade5-8f84749a7719",
+   "pinned": false,
+   "provenance": null,
+   "source": null,
+   "tags": [
+    "database",
+    "postgres",
+    "v1-scope"
+   ],
+   "title": "Postgres over TimescaleDB for v1",
+   "type": "decision",
+   "updated_at": "2026-04-05T15:00:00+00:00"
+  },
+  "ok": true,
+  "relations": {
+   "in": [
+    {
+     "id": "b0000000-0000-4000-8000-000000000001",
+     "title": "Event-driven ingestion pipeline",
+     "type": "related_to"
+    }
+   ],
+   "out": []
+  },
+  "tripwires": []
+ },
+ "b0000000-0000-4000-8000-000000000004": {
+  "accesses": [],
+  "claims": [],
+  "memory": {
+   "about": null,
+   "access_count": 19,
+   "confidence": "verified",
+   "content": "All upstream API fetches use exponential backoff with full jitter (cap 60s, max 5 attempts). The TLE mirror rate-limits aggressively at the top of each hour; synchronized retries from multiple workers made it worse until jitter was added.",
+   "created_at": "2026-04-08T11:20:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000004",
+   "last_accessed": "2026-05-25T14:00:00+00:00",
+   "last_confirmed": "2026-05-25T14:00:00+00:00",
+   "metadata": null,
+   "namespace": "orbit-tracker",
+   "namespace_id": "08888dd8-dcdc-4f3f-ade5-8f84749a7719",
+   "pinned": false,
+   "provenance": null,
+   "source": null,
+   "tags": [
+    "backoff",
+    "resilience",
+    "retry"
+   ],
+   "title": "Retry with jitter on upstream fetches",
+   "type": "pattern",
+   "updated_at": "2026-04-08T11:20:00+00:00"
+  },
+  "ok": true,
+  "relations": {
+   "in": [
+    {
+     "id": "b0000000-0000-4000-8000-000000000002",
+     "title": "TLE parser chokes on leading whitespace",
+     "type": "caused_by"
+    }
+   ],
+   "out": [
+    {
+     "id": "b0000000-0000-4000-8000-000000000005",
+     "title": "Ground station API caps at 100 req/min",
+     "type": "related_to"
+    }
+   ]
+  },
+  "tripwires": []
+ },
+ "b0000000-0000-4000-8000-000000000005": {
+  "accesses": [],
+  "claims": [],
+  "memory": {
+   "about": null,
+   "access_count": 4,
+   "confidence": "inferred",
+   "content": "The ground station partner API enforces 100 requests/minute per key. Exceeding it returns 429 with no Retry-After header. Budget calls accordingly in the scheduler.",
+   "created_at": "2026-04-20T13:45:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000005",
+   "last_accessed": "2026-05-10T08:30:00+00:00",
+   "last_confirmed": null,
+   "metadata": null,
+   "namespace": "orbit-tracker",
+   "namespace_id": "08888dd8-dcdc-4f3f-ade5-8f84749a7719",
+   "pinned": false,
+   "provenance": null,
+   "source": "observed behavior",
+   "tags": [
+    "api",
+    "rate-limit",
+    "scheduler"
+   ],
+   "title": "Ground station API caps at 100 req/min",
+   "type": "fact",
+   "updated_at": "2026-04-20T13:45:00+00:00"
+  },
+  "ok": true,
+  "relations": {
+   "in": [
+    {
+     "id": "b0000000-0000-4000-8000-000000000004",
+     "title": "Retry with jitter on upstream fetches",
+     "type": "related_to"
+    }
+   ],
+   "out": []
+  },
+  "tripwires": []
+ },
+ "b0000000-0000-4000-8000-000000000006": {
+  "accesses": [],
+  "claims": [],
+  "memory": {
+   "about": null,
+   "access_count": 2,
+   "confidence": "stale",
+   "content": "The Leaflet-based renderer is still in the repo under web/legacy/ for visual regression comparison against the new WebGL globe. Planned for removal once the globe ships.",
+   "created_at": "2026-04-03T09:00:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000006",
+   "last_accessed": "2026-04-12T10:00:00+00:00",
+   "last_confirmed": null,
+   "metadata": null,
+   "namespace": "orbit-tracker",
+   "namespace_id": "08888dd8-dcdc-4f3f-ade5-8f84749a7719",
+   "pinned": false,
+   "provenance": null,
+   "source": null,
+   "tags": [
+    "cleanup",
+    "legacy",
+    "renderer"
+   ],
+   "title": "Old map renderer kept for comparison",
+   "type": "context",
+   "updated_at": "2026-04-03T09:00:00+00:00"
+  },
+  "ok": true,
+  "relations": {
+   "in": [],
+   "out": []
+  },
+  "tripwires": []
+ },
+ "b0000000-0000-4000-8000-000000000007": {
+  "accesses": [],
+  "claims": [],
+  "memory": {
+   "about": null,
+   "access_count": 9,
+   "confidence": "verified",
+   "content": "Recipe-bot responds exclusively to slash commands. Reading channel messages requires privileged intents, a verification process, and privacy review \u2014 not worth it for a hobby bot. Slash commands cover every planned feature.",
+   "created_at": "2026-04-16T19:00:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000007",
+   "last_accessed": "2026-05-22T20:15:00+00:00",
+   "last_confirmed": "2026-05-22T20:15:00+00:00",
+   "metadata": null,
+   "namespace": "recipe-bot",
+   "namespace_id": "45ae2b79-e77c-4fb9-adfa-d32512c13b10",
+   "pinned": false,
+   "provenance": null,
+   "source": null,
+   "tags": [
+    "discord",
+    "privacy",
+    "scope"
+   ],
+   "title": "Slash commands only, no message scraping",
+   "type": "decision",
+   "updated_at": "2026-04-16T19:00:00+00:00"
+  },
+  "ok": true,
+  "relations": {
+   "in": [],
+   "out": []
+  },
+  "tripwires": []
+ },
+ "b0000000-0000-4000-8000-000000000008": {
+  "accesses": [],
+  "claims": [],
+  "memory": {
+   "about": null,
+   "access_count": 6,
+   "confidence": "verified",
+   "content": "Ingredient quantities like \u00bd and \u00be parsed as zero. FIXED: normalize unicode vulgar fractions to decimals before the quantity regex. Added fixtures for all common fraction codepoints.",
+   "created_at": "2026-04-25T17:30:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000008",
+   "last_accessed": "2026-05-18T12:00:00+00:00",
+   "last_confirmed": "2026-04-26T10:00:00+00:00",
+   "metadata": null,
+   "namespace": "recipe-bot",
+   "namespace_id": "45ae2b79-e77c-4fb9-adfa-d32512c13b10",
+   "pinned": false,
+   "provenance": null,
+   "source": "user report",
+   "tags": [
+    "fixed",
+    "parser",
+    "unicode"
+   ],
+   "title": "Unicode fractions break ingredient parsing",
+   "type": "bug",
+   "updated_at": "2026-04-26T10:00:00+00:00"
+  },
+  "ok": true,
+  "relations": {
+   "in": [],
+   "out": [
+    {
+     "id": "b0000000-0000-4000-8000-000000000010",
+     "title": "Metric units in all stored recipes",
+     "type": "supersedes"
+    }
+   ]
+  },
+  "tripwires": []
+ },
+ "b0000000-0000-4000-8000-000000000009": {
+  "accesses": [],
+  "claims": [],
+  "memory": {
+   "about": null,
+   "access_count": 12,
+   "confidence": "verified",
+   "content": "Recipe embeds are expensive to build (image fetch + nutrition lookup). Cache the rendered embed keyed by recipe hash; invalidate only when the source recipe edits. Cut median response time from 2.1s to 180ms.",
+   "created_at": "2026-05-02T16:00:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000009",
+   "last_accessed": "2026-05-29T18:45:00+00:00",
+   "last_confirmed": "2026-05-29T18:45:00+00:00",
+   "metadata": null,
+   "namespace": "recipe-bot",
+   "namespace_id": "45ae2b79-e77c-4fb9-adfa-d32512c13b10",
+   "pinned": false,
+   "provenance": null,
+   "source": null,
+   "tags": [
+    "cache",
+    "embeds",
+    "performance"
+   ],
+   "title": "Cache embeds, regenerate on edit only",
+   "type": "pattern",
+   "updated_at": "2026-05-02T16:00:00+00:00"
+  },
+  "ok": true,
+  "relations": {
+   "in": [],
+   "out": [
+    {
+     "id": "b0000000-0000-4000-8000-000000000012",
+     "title": "Nutrition API free tier: 500 calls/day",
+     "type": "supersedes"
+    }
+   ]
+  },
+  "tripwires": []
+ },
+ "b0000000-0000-4000-8000-000000000010": {
+  "accesses": [],
+  "claims": [],
+  "memory": {
+   "about": null,
+   "access_count": 8,
+   "confidence": "verified",
+   "content": "Store all recipe quantities in metric; convert to imperial at render time based on the server locale setting. Mixed-unit storage caused double-conversion bugs twice.",
+   "created_at": "2026-04-18T12:00:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000010",
+   "last_accessed": "2026-05-27T13:20:00+00:00",
+   "last_confirmed": "2026-05-27T13:20:00+00:00",
+   "metadata": null,
+   "namespace": "recipe-bot",
+   "namespace_id": "45ae2b79-e77c-4fb9-adfa-d32512c13b10",
+   "pinned": false,
+   "provenance": null,
+   "source": null,
+   "tags": [
+    "conventions",
+    "storage",
+    "units"
+   ],
+   "title": "Metric units in all stored recipes",
+   "type": "preference",
+   "updated_at": "2026-04-18T12:00:00+00:00"
+  },
+  "ok": true,
+  "relations": {
+   "in": [
+    {
+     "id": "b0000000-0000-4000-8000-000000000008",
+     "title": "Unicode fractions break ingredient parsing",
+     "type": "supersedes"
+    }
+   ],
+   "out": []
+  },
+  "tripwires": []
+ },
+ "b0000000-0000-4000-8000-000000000011": {
+  "accesses": [],
+  "claims": [],
+  "memory": {
+   "about": null,
+   "access_count": 3,
+   "confidence": "inferred",
+   "content": "Releases are cut by pushing a v* tag. CI builds the container, runs the smoke suite against a staging guild, then promotes to production on green. Never deploy from a laptop.",
+   "created_at": "2026-05-05T09:30:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000011",
+   "last_accessed": "2026-05-20T11:00:00+00:00",
+   "last_confirmed": null,
+   "metadata": null,
+   "namespace": "recipe-bot",
+   "namespace_id": "45ae2b79-e77c-4fb9-adfa-d32512c13b10",
+   "pinned": false,
+   "provenance": null,
+   "source": null,
+   "tags": [
+    "ci",
+    "deploy",
+    "release"
+   ],
+   "title": "Release: tag, changelog, deploy via CI",
+   "type": "workflow",
+   "updated_at": "2026-05-05T09:30:00+00:00"
+  },
+  "ok": true,
+  "relations": {
+   "in": [],
+   "out": []
+  },
+  "tripwires": []
+ },
+ "b0000000-0000-4000-8000-000000000012": {
+  "accesses": [],
+  "claims": [],
+  "memory": {
+   "about": null,
+   "access_count": 5,
+   "confidence": "deprecated",
+   "content": "The nutrition lookup API allows 500 calls/day on the free tier, resetting at 00:00 UTC. The embed cache keeps usage around 60/day. Deprecated: superseded by the self-hosted nutrition dataset.",
+   "created_at": "2026-04-17T10:00:00+00:00",
+   "id": "b0000000-0000-4000-8000-000000000012",
+   "last_accessed": "2026-05-25T15:00:00+00:00",
+   "last_confirmed": null,
+   "metadata": null,
+   "namespace": "recipe-bot",
+   "namespace_id": "45ae2b79-e77c-4fb9-adfa-d32512c13b10",
+   "pinned": false,
+   "provenance": null,
+   "source": null,
+   "tags": [
+    "api",
+    "nutrition",
+    "quota"
+   ],
+   "title": "Nutrition API free tier: 500 calls/day",
+   "type": "fact",
+   "updated_at": "2026-05-25T15:00:00+00:00"
+  },
+  "ok": true,
+  "relations": {
+   "in": [
+    {
+     "id": "b0000000-0000-4000-8000-000000000009",
+     "title": "Cache embeds, regenerate on edit only",
+     "type": "supersedes"
+    }
+   ],
+   "out": []
+  },
+  "tripwires": []
+ }
+}

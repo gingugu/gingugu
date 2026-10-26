@@ -31,6 +31,18 @@ export interface Relation {
   created_at: string
 }
 
+// A memory without its body: what the graph payload carries and every chart
+// needs. Content is fetched per memory (detail drawer), never in bulk.
+export interface MemoryLite extends Omit<Memory, 'content' | 'source' | 'metadata'> {
+  pinned: boolean
+}
+
+// Just enough of a namespace for grouping and naming.
+export interface NamespaceRef {
+  id: string
+  name: string
+}
+
 export interface MemoryExport {
   format_version: number
   exported_at: string
@@ -63,47 +75,10 @@ export type RelationType =
   | 'parent_of'
   | 'child_of'
 
-export interface GraphNode {
-  id: string
-  name: string
-  type: MemoryType
-  confidence: string
-  namespace: string
-  tags: string[]
-  val: number
-  color: string
-}
+export type ViewTab = 'brain' | 'list' | 'dashboard' | 'timeline' | 'heatmap'
 
-export interface GraphLink {
-  source: string
-  target: string
-  type: 'relation' | 'shared_tags'
-  label?: string
-  color: string
-}
-
-export interface GraphData {
-  nodes: GraphNode[]
-  links: GraphLink[]
-}
-
-export type ViewTab = 'graph' | 'dashboard' | 'timeline' | 'heatmap'
-
-export interface GraphFilters {
-  text: string
-  types: Set<MemoryType>
-  namespaces: Set<string>
-  confidences: Set<Confidence>
-}
-
-export interface GraphLayoutSettings {
-  nodeSizeMultiplier: number
-  linkDistance: number
-  chargeStrength: number
-}
-
-export interface DecayScored {
-  memory: Memory
+export interface DecayScored<M = MemoryLite> {
+  memory: M
   health: number
   freshness: number
   access: number

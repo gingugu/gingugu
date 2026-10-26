@@ -1,7 +1,13 @@
 // Mirrors src/gingugu/decay.py for UI-side scoring without round-tripping
 // the API. Keep weights/lambda/floor in sync with config + decay defaults.
 
-import { Memory, DecayScored } from '../types'
+import { DecayScored, Memory } from '../types'
+
+// Only the fields scoring reads, so lite (body-less) memories score too.
+export type Scorable = Pick<
+  Memory,
+  'last_confirmed' | 'updated_at' | 'created_at' | 'last_accessed' | 'access_count' | 'confidence'
+>
 
 const DEFAULT_LAMBDA = 0.01
 const ACCESS_SATURATION = 50
@@ -46,7 +52,7 @@ function confidenceScore(confidence: string): number {
   return CONFIDENCE_WEIGHT[confidence] ?? 0
 }
 
-export function scoreMemory(m: Memory, now: Date = new Date()): DecayScored {
+export function scoreMemory<M extends Scorable>(m: M, now: Date = new Date()): DecayScored<M> {
   const anchor = m.last_confirmed || m.updated_at || m.created_at
   const days = daysBetween(anchor, now)
   const daysAccessed = daysBetween(m.last_accessed || m.updated_at || m.created_at, now)
@@ -66,7 +72,7 @@ export function scoreMemory(m: Memory, now: Date = new Date()): DecayScored {
   }
 }
 
-export function scoreAll(memories: Memory[], now: Date = new Date()): DecayScored[] {
+export function scoreAll<M extends Scorable>(memories: M[], now: Date = new Date()): DecayScored<M>[] {
   return memories.map((m) => scoreMemory(m, now))
 }
 

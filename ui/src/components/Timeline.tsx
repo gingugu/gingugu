@@ -1,9 +1,9 @@
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { Memory } from '../types'
+import { MemoryLite } from '../types'
 import { getTimeline } from '../lib/graph'
 
 interface Props {
-  memories: Memory[]
+  memories: MemoryLite[]
 }
 
 export default function Timeline({ memories }: Props) {
