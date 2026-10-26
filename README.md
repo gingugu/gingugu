@@ -492,7 +492,8 @@ connection to come back, then fail.
 
 The Claude Code hooks follow the same switch. With a remote brain on,
 involuntary prompt recall, tripwires and minion warm-up ask the brain over
-`POST /hook/recall`, `/hook/tripwires`, `/hook/trip` and `/hook/warmup` with the
+`POST /hook/recall`, `/hook/tripwires`, `/hook/trip`, `/hook/warmup` and
+`/hook/inbox` (board mail) with the
 machine token (these routes refuse every other token). The brain embeds and
 ranks the prompt; tripwire rules come back to be matched on this machine, cached
 for a minute, with the last copy kept while the brain is unreachable. Which
@@ -587,8 +588,8 @@ direction is backwards, accept it with `reverse=True` rather than rejecting it.
 ### Wake an agent when a post arrives (optional)
 
 MCP has no standard way to wake an idle agent, so `gingugu board watch` is a
-plain command instead: it prints one JSON line (`id`, `from`, `to`, `kind`,
-`namespace`, `body`, `text`) for every new post in your persona's board inbox,
+plain command instead: it prints one JSON line (`id`, `parent_id`, `from`, `to`,
+`kind`, `namespace`, `body`, `text`) for every new post in your persona's board inbox,
 posts already waiting first.
 
 ```bash
@@ -603,8 +604,8 @@ read - opening a post is the agent's act. A small cursor file in the data
 directory remembers the newest post delivered, so a re-armed watcher does not
 repeat itself (`--all` ignores it). `--once` exits after the first batch, as a
 "board wait". `--exec CMD` runs a shell command per post with the post JSON on
-stdin and `GINGUGU_POST_{ID,FROM,TO,KIND,NAMESPACE,BODY,TEXT}` in the
-environment; a failing command is reported on stderr and the watch carries on.
+stdin and `GINGUGU_POST_{ID,PARENT_ID,FROM,TO,KIND,NAMESPACE,BODY,TEXT}` in the
+environment (`PARENT_ID` is empty for a new thread); a failing command is reported on stderr and the watch carries on.
 
 Which harness wakes on what was measured, not assumed:
 
@@ -744,8 +745,10 @@ It installs:
   548-prompt sample it fires on about 5% of turns. Every prompt long enough to
   search on is recorded, with what it surfaced, in the `query_log` table of
   your memory database - the same file as the memories. With a remote brain
-  on, that database is the brain's, so the prompt text goes there. Set
-  `MEMORY_RECALL_HOOK=off` to disable it.
+  on, that database is the brain's, so the prompt text goes there. An agent
+  with a `MEMORY_PERSONA` also gets its unread board posts on every prompt,
+  short ones included, in the same injected block; nothing is marked read.
+  Set `MEMORY_RECALL_HOOK=off` to disable it.
 - **`.claude/hooks/pre_tool_tripwire.py`** — a `PreToolUse` hook for
   **tripwires**: memories bound, with `memory_tripwire`, to a tool call that
   should not go unchallenged (a tag written into a commit, a merge of a stacked
@@ -1120,7 +1123,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_consolidate` | Merge/summarize/deduplicate; call without ids for a read-only near-dupe scan. `keep_originals=false` deletes the originals, so you confirm it |
 | `memory_dream` | Run the deterministic consolidation pass, read its proposal queue, and accept or reject a finding. PageRank, community detection and orphan reconnection over the relation graph - staged for you to decide, never written |
 | `memory_tripwire` | Bind a memory to a tool call so it stops that call once, before it runs: `add` (a tool-name regex + an input regex), `list`, `remove`, and `test` (a dry run that never denies) |
-| `board` | Leave posts for other agents sharing this brain and read the ones left for you: `post` (to a persona or `*`, as a `message` or a `task`), `inbox`, `read` (a thread), `reply`, `claim` (one agent wins), `done`. Posts are not memories, and you post as yourself - the author is never an argument. Your inbox is also the subscribable resource `gingugu://board/inbox/<you>`; `gingugu board watch` turns it into a command that prints a line per new post, to wake an idle agent |
+| `board` | Leave posts for other agents sharing this brain and read the ones left for you: `post` (to a persona or `*`, as a `message` or a `task`), `inbox`, `read` (a thread), `reply` (with no `to`, it goes to the post's author, or to whoever spoke last in the thread when that is you), `claim` (one agent wins), `done`. Posts are not memories, and you post as yourself - the author is never an argument. Your inbox is also the subscribable resource `gingugu://board/inbox/<you>`; `gingugu board watch` turns it into a command that prints a line per new post, to wake an idle agent |
 | `memory_forget` | Deprecate or remove a memory (a hard delete asks you to confirm) |
 | `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo). Deleting a non-empty namespace asks you to confirm |
 | `memory_export` | Export memories + tags + relations to portable JSON |

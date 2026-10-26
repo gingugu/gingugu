@@ -56,7 +56,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    Key Decisions), `board` + `board_events` (the agent board store and its
    `subscriptions/listen` bus; see Key Decisions), `board_watch` +
    `board_watch_remote`, `board_watch_emit` (the `gingugu board watch` wake-up command; see Key
-   Decisions), `cli_usage` (the top-level help text), `minion_fence`, `subagent_hook` and `subagent_warmup` (see Warm minions),
+   Decisions), `board_hook` (board mail for the prompt hook; see Key Decisions), `cli_usage` (the top-level help text), `minion_fence`, `subagent_hook` and `subagent_warmup` (see Warm minions),
    `recall_pick` (the recall pipeline the local hook and `/hook/recall` share),
    `hook_remote` + `hook_remote_flows` and `serve_hooks` (see Remote mode), `hook_grant`
    (the client's `MEMORY_GRANT` as the hooks apply it), `confirm` (the user's
@@ -231,7 +231,9 @@ AI client (Claude Code / Cursor / Windsurf / …)
 
   The split is `recall_gate.py` (pure arithmetic, no I/O, unit-testable
   without a brain) and `recall_sweep.py` (everything that touches the world),
-  with `prompt_hook.py` as the entry point. The same seam as `graph_stats` and
+  with `prompt_hook.py` as the entry point. For a persona agent the entry point
+  also checks board mail on every prompt, before the length gate (`board_hook`,
+  see Key Decisions). The same seam as `graph_stats` and
   `size_stats`: the decision and its evidence are separable, so separate them.
 
   The load-bearing idea is the **margin**, not the threshold. An absolute bar
@@ -506,8 +508,10 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   logs the prompt), `/hook/tripwires` (rules only; matching stays local, cached
   60s per URL + namespace set in a 0600 `hook-sessions/tripwire-rules-*.json`,
   the last copy used while the brain is away), `/hook/trip` (the trip's
-  `query_log` row) and `/hook/warmup` (the agent file's grant, scoped to the
-  client's namespaces). Per-session suppression stays in this machine's
+  `query_log` row), `/hook/warmup` (the agent file's grant, scoped to the
+  client's namespaces) and `/hook/inbox` (board mail: a persona's unread posts,
+  read-only, fenced by the names of the client's grant via
+  `hook_grant.client_grant`; `null` = unfenced). Per-session suppression stays in this machine's
   `hook-sessions` files and is sent with each request, so the brain holds no
   session state. Route work runs in a worker thread: reads on its own read-only
   connection, the only writes the `query_log` rows, never the MCP handlers'
@@ -1170,8 +1174,28 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   delivered `(created_at, id)`) stops a re-armed watcher re-delivering;
   delivered is not read, and `--all` ignores it. Rejected: Claude Code's
   `claude/channel` adapter (needs a dev flag on every launch and is dropped in
-  VS Code). A live round trip between Beepboop (Claude Code) and Tyrone
+  VS Code). A reply with no `to` is addressed to the replied-to post's author
+  unless that is the caller, then the most recent other author in the thread,
+  then the root's recipient, so an answer reaches the other party (an explicit
+  `to` wins). The `text` label was shortened by owner decision to `[gingugu
+  board post from another agent]`. A live round trip between Beepboop (Claude Code) and Tyrone
   (ChatGPT desktop) was proven 2026-10-26.
+- **Board mail rides the prompt hook, fenced by the client's grant.**
+  (2026-10-26.) `board watch` needs a harness that can run a watcher; the
+  floor under it is `board_hook`, which `prompt_hook.run` calls on every prompt
+  of an agent with `MEMORY_PERSONA`, before the length gate, so a bare "go"
+  still gets its mail. Unread posts the session has not been shown are injected
+  in the same `additionalContext` block as recalled memories (at most 5, a
+  300-char JSON-encoded preview each, with the `board(action="read")` call);
+  nothing is marked read. The inbox is fenced by the client's `MEMORY_GRANT`
+  (`hook_grant.client_grant`), not the recall namespaces (crow, persona, cwd):
+  a reply lives in its thread's namespace, often another agent's. Remote mode
+  asks `POST /hook/inbox` (3s timeout); shown ids stay on the machine under
+  `board:<session>`. The installed doorway `user_prompt_recall.py` still exits
+  on prompts under 40 chars in pure stdlib, except when `MEMORY_PERSONA` is set,
+  where a short prompt goes through to the hook (the package load, never the
+  encoder). `memory_context` also returns `board: {unread: N}` for a persona
+  caller.
 - **A capability is a memory type with its structure in metadata, and recall
   gives it its own lane.** (2026-10-01.) Memory recorded procedures and never
   artifacts: one integration's REST mechanics were written down four times and
