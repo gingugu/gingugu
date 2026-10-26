@@ -31,7 +31,7 @@ jobs:
         run: uv sync --extra dev --python 3.12
 
       - name: Test (gate release on green)
-        run: uv run pytest
+        run: uv run pytest -n auto
 
       - name: Verify tag matches package version
         run: |

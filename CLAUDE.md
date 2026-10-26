@@ -6,7 +6,7 @@
 
 - **Install (dev):** `uv sync`
 - **Run the server:** `uv run gingugu` (MCP stdio transport)
-- **Run tests:** `uv run pytest -v`
+- **Run tests:** `uv run pytest -n auto` (parallel; `-v` for detail)
 - **UI tests:** `cd ui && npm test` (also `npm run typecheck`)
 - **Format + lint:** `uv run ruff check . && uv run black .`
 - **Memory Explorer UI:** backend `uv run python ui/api.py`; frontend `cd ui && npm install && npm run dev`

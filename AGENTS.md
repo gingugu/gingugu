@@ -239,7 +239,7 @@ watch item (see `.ai/plans/status.md`).
 ## Quality Assurance
 
 - Define clear acceptance criteria before starting work
-- `uv run pytest -v` green before opening a PR
+- `uv run pytest -n auto` green before opening a PR
 - `ruff` + `black` clean
 - Surface performance characteristics (DB size, query latency) when relevant
 - Surface uncertainties — never guess

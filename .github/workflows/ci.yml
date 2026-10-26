@@ -6,16 +6,48 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    # Once, not per test cell: ruff and black give the same answer on every OS.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --extra dev --python 3.13
+
+      - name: Ruff (lint)
+        run: uv run ruff check .
+
+      - name: Black (format check)
+        run: uv run black --check .
+
   test:
     runs-on: ${{ matrix.os }}
-    # Without this a stalled step runs to GitHub's 6-hour default. Every cell
-    # finishes in under 90s, so this only ever fires on a genuine hang.
-    timeout-minutes: 15
+    # The suite runs in parallel (-n auto); the slowest cell, Windows, should
+    # finish in a few minutes. A cell near this cap means the suite has grown
+    # slow - fix the tests, don't raise the number.
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 20 || 10 }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.11", "3.12", "3.13"]
+        # Every Python on Linux, where a version difference shows up first and
+        # cheapest; one each on the slow OSes, oldest and newest between them,
+        # since an OS difference rarely depends on the interpreter version.
+        include:
+          - { os: ubuntu-latest, python-version: "3.11" }
+          - { os: ubuntu-latest, python-version: "3.12" }
+          - { os: ubuntu-latest, python-version: "3.13" }
+          - { os: macos-latest, python-version: "3.13" }
+          - { os: windows-latest, python-version: "3.11" }
+          # DIAGNOSTIC (temporary): isolate what makes Windows slow.
+          - { os: windows-latest, python-version: "3.11", probe: defender-off }
+          - { os: windows-latest, python-version: "3.11", probe: temp-on-d }
     steps:
       - uses: actions/checkout@v6
 
@@ -30,18 +62,24 @@ jobs:
       - name: Sync dependencies
         run: uv sync --extra dev --python ${{ matrix.python-version }}
 
-      - name: Ruff (lint)
-        run: uv run ruff check .
+      - name: Probe - Defender real-time off
+        if: matrix.probe == 'defender-off'
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
 
-      - name: Black (format check)
-        run: uv run black --check .
+      - name: Probe - temp on D
+        if: matrix.probe == 'temp-on-d'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path D:\tmp | Out-Null
+          "TMP=D:\tmp" >> $env:GITHUB_ENV
+          "TEMP=D:\tmp" >> $env:GITHUB_ENV
 
       - name: Pytest
-        run: uv run pytest -m "not bench_embeddings"
+        run: uv run pytest -m "not bench_embeddings" -n auto --durations=40
 
   ui:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: ui
@@ -72,7 +110,7 @@ jobs:
     # interpreter-specific, so this runs once rather than across the test
     # matrix - the matrix's job already covers whether fastembed installs
     # and imports cleanly on every OS/Python cell.
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
 
