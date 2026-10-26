@@ -696,7 +696,11 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   first. *Blast radius is never capped* (reverse BFS, paged response). Rank
   orders it but never filters it. Answers say "estimate" and "candidates". Own tables
   (migration 019), never memories; 5 most recently used snapshots kept per
-  namespace.
+  namespace. *Trust*: the fingerprint is the client's claim and cannot be
+  checked; a namespace writer is trusted with its graph as with its memories,
+  and an explicit `refresh` replaces a snapshot whose `graph_digest` differs.
+  *Coverage is honest*: every source not read is a skip with a reason, and
+  only a deliberate one (a symlink) leaves the graph `complete`.
 - **Destructive tools ask the user, not the model (unreleased).** Five paths
   confirm through MCP elicitation (SDK 2.x `Resolve` + `Elicit`): a hard
   `memory_forget`, a cascading `memory_namespaces` delete of a non-empty
