@@ -18,7 +18,7 @@ import os
 
 from mcp.shared.subscriptions import ResourceUpdated
 
-from .. import board, grants
+from .. import board, board_delivery, grants
 from ..grants import Grant, origin_name
 from ..session import current_session_id
 from . import ServerContext
@@ -109,6 +109,10 @@ def register(mcp, ctx: ServerContext) -> None:
         given), "claim" (post_id of an open task: exactly one agent wins), "done"
         (post_id: by its author or claimer).
 
+        A post is seen only by readers of its namespace. A post or reply to a persona
+        returns ``delivery``: ``visible`` true, false (no known client of theirs reads
+        that namespace - they will not see it), or null (unverified).
+
         Your inbox is also the subscribable resource gingugu://board/inbox/<you>
         (gingugu://board/inbox/* for broadcasts)."""
         try:
@@ -156,7 +160,15 @@ def register(mcp, ctx: ServerContext) -> None:
                 return _err(f"unknown action {action!r}; valid actions: {', '.join(_ACTIONS)}")
             ctx.conn.commit()
             _emit(ctx, made)
-            return {"ok": True, "post": made}
+            out = {"ok": True, "post": made}
+            if action in ("post", "reply"):
+                grants_seen = board_delivery.recipient_grants(
+                    made["recipient"], ctx.derived, ctx.tokens
+                )
+                delivery = board_delivery.receipt(made["recipient"], made["namespace"], grants_seen)
+                if delivery is not None:
+                    out["delivery"] = delivery
+            return out
         except (board.BoardError, grants.AccessDenied) as exc:
             ctx.conn.rollback()
             return _err(str(exc))
