@@ -366,7 +366,9 @@ deletes rows past `ACCESS_LOG_RETENTION_DAYS` (90), so anything built on
 co-access must accumulate its own durable aggregate rather than expecting to
 re-derive the full history from the log later. `query_log` is the opposite: it
 is **never pruned**, because nothing summarises it and its rows are the only
-copy of what was asked.
+copy of what was asked. The Explorer's `/stats` is the one reader that must
+not prune: it passes `prune=False` to `compute_stats`, so looking at the brain
+never deletes `access_log` rows.
 
 That refresh is also why the recency bucket must not be ordered by
 `last_accessed`. It was, until 2026-08-26, and the result was a feedback loop:
@@ -624,6 +626,31 @@ unreachable brain, no keychain token, a non-200, a reply of the wrong shape -
 is a quiet hook and never opens the local DB. Tripwires are the one exception
 to quiet: they keep matching the last rules they fetched, however old, until a
 fetch succeeds. A trip's text is cut to 2000 characters before it is sent.
+
+## Explorer read path (observer)
+
+```
+browser → gingugu ui (webui.py, loopback bind + loopback Host only)
+  → unknown /api route? 404 (allowlist, before anything is forwarded)
+  → remote.active() per request:
+      local : ui_api.dispatch(path, params, env)  on a mode=ro connection
+      remote: webui_remote.forward → GET <brain>/ui/api/*  (owner token, pinned TLS,
+              no redirects) → serve_ui (owner-only) → ui_api.dispatch on the brain
+  → JSON body stamped `mode`  (/api/info also names the brain)
+```
+
+Routes: `/info`, `/graph` (light nodes without bodies, relations, IDF tag
+edges), `/memory/<id>` (body, tags, relations in and out, claims, tripwires,
+access history), `/search` (`search.search()` with the score breakdown),
+`/stats`, `/events` (`access_log` and `query_log` merged, cursor `after`,
+replay by `from`/`to`; a page never splits a same-timestamp batch).
+
+The path is read-only end to end and **does not credit recall**: no
+`access.record` or `touch`, no `query_log` row, no spreading activation, and
+`/stats` skips the `access_log` prune. The connection is `mode=ro` and never
+migrates or creates a database, so opening the Explorer cannot change the brain
+it shows. The keychain token exists only in the forwarder's `Authorization`
+header.
 
 ## Relations + spreading activation
 

@@ -73,7 +73,7 @@ def _count(conn: sqlite3.Connection, sql: str, params: tuple = ()) -> int:
     return conn.execute(sql, params).fetchone()[0]
 
 
-def compute_global_stats(conn: sqlite3.Connection) -> dict:
+def compute_global_stats(conn: sqlite3.Connection, *, prune: bool = True) -> dict:
     """The namespace-independent fields: inventory, access-log and query-log
     volume, and credential health.
 
@@ -82,9 +82,11 @@ def compute_global_stats(conn: sqlite3.Connection) -> dict:
     of repeating a namespace-independent computation once per namespace.
     Prunes the access log as a side effect (throttled - see
     ``prune_access_log``), so a caller building several namespace blocks should
-    call this exactly once per ``memory_stats`` call.
+    call this exactly once per ``memory_stats`` call. ``prune=False`` is for
+    read-only observers (the Explorer API), whose connection cannot write.
     """
-    prune_access_log(conn)
+    if prune:
+        prune_access_log(conn)
     namespaces = [
         {"name": row["name"], "count": row["n"]}
         for row in conn.execute(
@@ -176,6 +178,7 @@ def compute_stats(
     *,
     namespace_id: str | None = None,
     review_limit: int | None = None,
+    prune: bool = True,
 ) -> dict:
     """Health overview: counts, staleness, and per-type/confidence breakdowns.
 
@@ -189,7 +192,7 @@ def compute_stats(
     recomputed once per namespace.
     """
     return {
-        **compute_global_stats(conn),
+        **compute_global_stats(conn, prune=prune),
         **_compute_namespace_stats(conn, namespace_id=namespace_id, review_limit=review_limit),
     }
 

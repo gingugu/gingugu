@@ -24,6 +24,10 @@ The Claude Code hooks follow the same switch: with a remote brain on, prompt
 recall, tripwires and minion warm-up stop reading the local DB and ask the brain
 over owner-token-only `POST /hook/*` routes, keeping per-session suppression on
 the machine (see **Hooks in remote mode** in `.ai/specs/dataflow.md`).
+`gingugu ui` (the Memory Explorer) follows the same switch: it is a read-only
+observer that answers from the local DB, or with a remote brain on forwards to
+the brain's owner-only `GET /ui/api/*` (see **Explorer read path** in
+`.ai/specs/dataflow.md`). It binds loopback only and credits no recall.
 The proxy also serves this machine's credential vault locally, so a
 `credential_delete` is confirmed with the user by the proxy, while the
 brain's own confirmations (a hard forget, say) relay through it unchanged.
@@ -46,6 +50,7 @@ graph LR
         B[Server Layer<br/>stdio · streamable HTTP]
         V[POST /token/derive<br/>derived tokens]
         U[POST /hook/*<br/>recall · tripwires · trip · warmup]
+        UI[GET /ui/api/*<br/>Explorer reads, owner token only]
         C[Tool Handlers]
         D[Search Engine]
         E[Decay Engine]
@@ -59,6 +64,10 @@ graph LR
         PH[UserPromptSubmit<br/>gingugu hook prompt]
         Y[PreToolUse<br/>gingugu hook tool<br/>tripwires · minion fence]
         Z[SubagentStart<br/>gingugu hook subagent]
+    end
+
+    subgraph Memory Explorer
+        EX[gingugu ui<br/>loopback only · read-only]
     end
 
     subgraph Subagent
@@ -126,6 +135,9 @@ graph LR
     Z -->|remote brain: warm-up| U
     U -->|reads read-only| H
     U -->|logs hook prompts and trips| T
+    EX -->|local: read-only| H
+    EX -->|remote brain: owner token| UI
+    UI -->|reads read-only| H
     S -->|run only if idle| Q
     S -->|one runner at a time| R
     S --> L
@@ -1815,7 +1827,18 @@ src/gingugu/
 ├── remote_tls.py           # Client TLS: pins, verify_for, downgrade refusal, login's live check, diagnose/speaks_tls
 ├── confirm.py              # Destructive tools ask the user (MCP elicitation); MEMORY_CONFIRM_DESTRUCTIVE opt-out
 ├── grants.py               # Per-namespace read/write grants plus a home namespace (derived tokens), bound per tool call
-├── webui.py                # gingugu ui: serves the built Memory Explorer bundle
+├── serve_ui.py             # GET /ui/api/*: the Explorer read API on a brain, owner tokens only
+├── webui_remote.py         # gingugu ui in remote mode: forwards /api/* to the brain's /ui/api/* (token in the header only), loopback checks
+├── webui.py                # gingugu ui: serves the built Memory Explorer bundle + /api/*, loopback-only, local DB or remote brain per request
+├── ui_api/                 # The Explorer's read-only observer API (no access credit, no query_log, no spreading)
+│   ├── __init__.py         # dispatch() + known_route allowlist
+│   ├── env.py              # UiEnv, ApiError
+│   ├── db.py               # open_readonly: mode=ro, never migrates or creates
+│   ├── graph.py            # /info, /graph: light nodes, relations, tag edges
+│   ├── tag_edges.py        # IDF-weighted shared-tag edges (top-k per node, max_df 200)
+│   ├── detail.py           # /memory/<id>: body, tags, relations, claims, tripwires, access history
+│   ├── lens.py             # /search (score breakdown) + /stats (prune=False)
+│   └── events.py           # /events: access_log + query_log feed, cursor + replay
 ├── promote.py              # gingugu promote: local "gold" -> a central brain
 ├── config.py               # Config + cross-platform DB path (platformdirs)
 │

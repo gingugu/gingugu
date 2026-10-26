@@ -3,13 +3,25 @@
 Two modes, one command:
 
 * **prod** (default): a single process serves the pre-built React bundle
-  *and* the ``/api/export`` endpoint on one port. The frontend fetches
-  ``/api/export`` relative, so serving both from one origin needs no CORS
-  and no Node at runtime. Assets are the ones bundled into the wheel
+  *and* the ``/api/*`` endpoints on one port. The frontend fetches ``/api``
+  relative, so serving both from one origin needs no CORS and no Node at
+  runtime. Assets are the ones bundled into the wheel
   (``gingugu/_ui_dist``); in a repo checkout we fall back to ``ui/dist``.
 * **dev** (``--dev``): runs the API backend and spawns the Vite dev server
   (hot reload) the way the two-terminal workflow used to. Repo checkout and
   Node required; Vite proxies ``/api`` to the backend on port 5174.
+
+Either way ``/api/*`` is answered per request by whichever brain is in force
+(``remote.active()``): the local DB through ``ui_api.dispatch``, or a forward
+to the remote brain's ``/ui/api/*`` with the keychain token. Every JSON body
+carries ``mode``. ``/api/export`` is the legacy full dump, local mode only.
+
+The API is the whole brain and has no auth of its own, so ``main`` refuses to
+bind anything but a loopback address, every request must carry a loopback
+``Host`` (DNS rebinding), and no origin is ever granted CORS: Vite proxies
+``/api`` in dev, so the browser is always same-origin with the page. Anything
+that can reach this port can still read the brain - in remote mode, the remote
+one - so it is a single-user-machine tool by design.
 """
 
 from __future__ import annotations
@@ -19,12 +31,15 @@ import logging
 import mimetypes
 import sys
 import webbrowser
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qsl
 
+from . import remote, webui_remote
 from .config import load_config
 from .database import Database
 from .portability import export_data
+from .ui_api import UiEnv, dispatch, known_route
 
 logger = logging.getLogger(__name__)
 
@@ -35,14 +50,6 @@ PORT = 5174
 # the backend on 5174 (see ui/vite.config.ts). --host/--port are prod-only.
 _DEV_FRONTEND_URL = "http://localhost:5173"
 _DEV_BACKEND_PORT = 5174
-
-# Only the Vite dev server may read the API cross-origin. In prod the UI is
-# same-origin so no Origin header ever matches - this matters for --dev only.
-# A wildcard would let any website in the browser exfiltrate the memory DB.
-ALLOWED_ORIGINS = {
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-}
 
 
 def _repo_ui_dir() -> Path | None:
@@ -94,20 +101,11 @@ class Handler(BaseHTTPRequestHandler):
             Handler.db = Database(load_config().db_path)
         return Handler.db.connect()
 
-    def _cors_headers(self) -> None:
-        origin = self.headers.get("Origin")
-        if origin in ALLOWED_ORIGINS:
-            self.send_header("Access-Control-Allow-Origin", origin)
-            self.send_header("Vary", "Origin")
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-
     def _send_json(self, status: int, obj: dict) -> None:
         body = json.dumps(obj).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
-        self._cors_headers()
         self.end_headers()
         self.wfile.write(body)
 
@@ -120,6 +118,30 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _serve_api(self, rest: str, query: str) -> None:
+        """Answer ``/api/<rest>`` from the local DB or the remote brain."""
+        if not known_route("/" + rest):
+            # Checked before any mode decision: in remote mode an unvetted path
+            # would be forwarded with the owner token (httpx2 resolves `..`).
+            self._send_json(404, {"ok": False, "error": "unknown route"})
+            return
+        try:
+            target = remote.active()
+        except ValueError as exc:
+            self._send_json(502, {"ok": False, "error": str(exc), "mode": "local"})
+            return
+        if target is None:
+            env = UiEnv(db_path=load_config().db_path, embedder=webui_remote.local_embedder)
+            status, body = dispatch("/" + rest, dict(parse_qsl(query)), env)
+            mode, brain = "local", "local"
+        else:
+            status, body = webui_remote.forward(target, rest, query)
+            mode, brain = "remote", webui_remote.netloc(target)
+        body["mode"] = mode
+        if rest == "info":
+            body["brain"] = brain
+        self._send_json(status, body)
+
     def _serve_export(self) -> None:
         try:
             payload = export_data(self._get_conn())
@@ -129,6 +151,17 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send_json(200, payload)
 
+    def _serve_export_for_mode(self) -> None:
+        """The legacy dump reads the local DB; with a remote brain there is none."""
+        try:
+            remote_on = remote.active() is not None
+        except ValueError:
+            remote_on = True
+        if remote_on:
+            self._send_json(404, {"ok": False, "error": "export is local only", "mode": "remote"})
+        else:
+            self._serve_export()
+
     def _serve_static(self) -> None:
         target = resolve_static_path(Handler.dist_dir, self.path) if Handler.dist_dir else None
         if target is None:
@@ -137,14 +170,27 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send_file(target)
 
+    def _foreign_host(self) -> bool:
+        """Refuse a rebound hostname (see ``webui_remote.host_header_is_loopback``)."""
+        if webui_remote.host_header_is_loopback(self.headers.get("Host")):
+            return False
+        self._send_json(403, {"ok": False, "error": "host not allowed"})
+        return True
+
     def do_OPTIONS(self) -> None:
+        if self._foreign_host():
+            return
         self.send_response(204)
-        self._cors_headers()
         self.end_headers()
 
     def do_GET(self) -> None:
-        if self.path.split("?", 1)[0] == "/api/export":
-            self._serve_export()
+        if self._foreign_host():
+            return
+        route, _, query = self.path.partition("?")
+        if route == "/api/export":
+            self._serve_export_for_mode()
+        elif route.startswith("/api/"):
+            self._serve_api(route[len("/api/") :], query)
         elif Handler.serve_static:
             self._serve_static()
         else:
@@ -158,7 +204,7 @@ class Handler(BaseHTTPRequestHandler):
 def _build_server(host: str, port: int, *, serve_static: bool, dist: Path | None) -> HTTPServer:
     Handler.dist_dir = dist
     Handler.serve_static = serve_static
-    return HTTPServer((host, port), Handler)
+    return ThreadingHTTPServer((host, port), Handler)
 
 
 def serve_prod(host: str, port: int, open_browser: bool) -> None:
@@ -230,6 +276,13 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--no-browser", action="store_true", help="Don't open a browser.")
     args = parser.parse_args(argv)
 
+    if not webui_remote.is_loopback(args.host):
+        print(
+            f"gingugu ui: refusing to bind {args.host!r}: only loopback addresses are allowed.\n"
+            "  The Explorer API serves the whole brain and has no auth of its own.",
+            file=sys.stderr,
+        )
+        return 2
     open_browser = not args.no_browser
     if args.dev:
         serve_dev(open_browser=open_browser)
