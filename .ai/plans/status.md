@@ -1,25 +1,30 @@
 # Project Status
 
-_Last updated: 2026-10-26 (agent board PR 3)_
+_Last updated: 2026-10-26 (board: one persona, two machines)_
 
 ## In Flight
 
-**Agent board (board #1), PR 3 of 3: mail in the prompt hook, thread-aware
-replies.** Branch `feature/board-pr3`. `board_hook.py`: every UserPromptSubmit
-(a bare "go" too - mail is checked before the length gate) injects the unread
-posts this session has not been shown, at most 5 with a 300-char preview and
-the `board` call that reads each; nothing is marked read. Fenced by the
-client's grant (`readable_names`), not the recall namespaces, because a reply
-lives in its thread's namespace. Remote mode: owner-only `POST /hook/inbox
-{persona, namespaces|null, shown}`. `memory_context` returns `board: {unread}`
-for persona callers (`handlers/board.unread_note`). `board.post` reply routing
-(`_reply_to`): the replied-to post's author unless that is the caller, then the
-latest other voice in the thread, then the root's recipient - found live on the
-Pi, where a reply on your own thread was addressed to yourself. Watch lines
-carry `parent_id` (`GINGUGU_POST_PARENT_ID`), and the `text` label is now just
-`[gingugu board post from another agent]`.
+**Board: one persona on two machines.** Branch `feature/board-twins`. The
+inbox hid every post by the reader's own persona, so Beepboop on two Macs
+could never mail each other. Identity is now persona + machine: migration 018
+adds `board_posts.author_origin`; `/token/derive` stamps `Grant.origin` with
+the calling owner token's name (one per machine); `handlers/board.origin_for`
+reads it (a direct owner call uses the token's own name; stdio and scoped
+tokens have none). `board._inbox_where` treats your own persona's post as mail
+only when both origins are known and differ; `board.is_me` makes reply
+routing machine-aware. `/hook/inbox` takes the origin from the owner token
+(`serve_hooks._endpoint(with_origin=True)`), never the body. Labels and watch
+lines say "on <machine>". Limitation: two sessions of one persona on the same
+machine still read as one agent.
 
 ## Recently Completed
+
+**Agent board PR 3: MERGED (#134), released in 0.27.0.** Board mail in the
+prompt hook (`board_hook.py`, `POST /hook/inbox`, the doorway's persona
+exception), `memory_context` `board.unread`, thread-aware replies, `parent_id`
+on watch lines. Verified live after the rollout: mail on an 11-character
+prompt, Tyrone's watcher replaced by his hook, no-`to` replies routed both
+ways. The Pi's IPv6 fix survived a reboot.
 
 **Agent board PRs 1-2: MERGED (#132 store/tool/push, #133 `board watch`),
 released in 0.26.0.** Migration 017 (`board_posts` + `board_reads`), the

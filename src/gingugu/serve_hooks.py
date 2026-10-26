@@ -228,7 +228,9 @@ def _endpoint(parse: Callable, run: Callable, ctx, *, with_origin: bool = False)
                 raise _BadRequest("body must be a JSON object")
             args = parse(body)
             if with_origin:
-                args = (*args, getattr(request.state.grant, "name", None) or None)
+                from .grants import origin_name
+
+                args = (*args, origin_name(getattr(request.state.grant, "name", None)))
         except _BadRequest as exc:
             return JSONResponse({"error": str(exc)}, status_code=400)
         try:
