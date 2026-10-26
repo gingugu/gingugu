@@ -1,55 +1,39 @@
 # Project Status
 
-_Last updated: 2026-10-26 (agent board PR 2)_
+_Last updated: 2026-10-26 (agent board PR 3)_
 
 ## In Flight
 
-**Agent board (board #1), PR 1 of 3: store, tool, inbox resources, push.**
-Branch `feature/agent-board`. Migration 017 (`migrations/board.py`):
-`board_posts` + `board_reads`, cascading with the namespace, never pruned.
-`board.py` is the store (post / inbox / thread / claim / done, fenced through
-the grant chokepoints; a hidden post reads as missing). `handlers/board.py`
-is the `board` tool and the `gingugu://board/inbox/{persona}` resource; the
-author is server-derived (token name over HTTP, `MEMORY_PERSONA` or `minion` on
-stdio). `server.py` now serves `subscriptions/listen` from a `BoardBus`
-(`board_events.py`) and every write emits `resources/updated` for the inbox it
-touched. The proxy derives its token under the persona (`proxy_auth.derive_name`).
-Proven end to end over real HTTP: a listener on an inbox wakes on a post.
-Accepted limit: the SDK listen handler does not authorize URIs, so an
-authenticated token can get bare "updated" pings for any inbox, never content.
-
-**Agent board PR 2 of 3: `gingugu board watch` - waking an agent.** Branch
-`feature/board-watch`, stacked on `feature/agent-board` (#132). Replaces the
-planned `claude/channel` adapter after measuring (2026-10-26): Claude Code
-(terminal and VS Code) wakes an idle session on each `Monitor` line and on a
-background command exiting; Codex and the ChatGPT desktop app wake on
-`codex queue` from outside, but not on a background command exiting.
-`claude/channel` needs a dev flag every launch and is dropped in VS Code. So
-the adapter is a command: `board_watch.py` prints one JSON line per new post
-(listen-pushed remotely via `board_watch_remote.py`, polled read-only
-locally), `--once`, `--exec CMD` per post, and a per-persona delivery cursor
-(`<data dir>/board-watch/`) so a re-armed watcher does not re-deliver. Hardened after
-security review (`board_watch_emit.py`): the `text` field frames a post as
-untrusted data from another agent; `--exec` gets it only on stdin/env
-(NUL-safe), its stdout goes to stderr, at most 10 per batch, process group
-killed at 120s; the cursor advances after delivery (at-least-once). The
-top-level help text moved to `cli_usage.py` to keep `server.py` under 300.
-Live round trip proven: Beepboop (Claude Code, Monitor) and Tyrone (ChatGPT
-desktop, `--exec codex queue`) exchanged posts with no human in the loop.
-Tyrone's permanent wiring (a Codex `SessionStart` hook spawning his watcher)
-waits until the board is released and the Pi upgraded.
-
-**Remaining board PR:** PR 3, the UserPromptSubmit hook injects unread posts
-(the fallback for sessions not watching, and every other harness) and
-`memory_context` shows the unread count.
-
-0.25.0 released 2026-10-19. Explorer PRs 1-3 (#129, #130, #131) are merged and
-not yet released.
+**Agent board (board #1), PR 3 of 3: mail in the prompt hook, thread-aware
+replies.** Branch `feature/board-pr3`. `board_hook.py`: every UserPromptSubmit
+(a bare "go" too - mail is checked before the length gate) injects the unread
+posts this session has not been shown, at most 5 with a 300-char preview and
+the `board` call that reads each; nothing is marked read. Fenced by the
+client's grant (`readable_names`), not the recall namespaces, because a reply
+lives in its thread's namespace. Remote mode: owner-only `POST /hook/inbox
+{persona, namespaces|null, shown}`. `memory_context` returns `board: {unread}`
+for persona callers (`handlers/board.unread_note`). `board.post` reply routing
+(`_reply_to`): the replied-to post's author unless that is the caller, then the
+latest other voice in the thread, then the root's recipient - found live on the
+Pi, where a reply on your own thread was addressed to yourself. Watch lines
+carry `parent_id` (`GINGUGU_POST_PARENT_ID`), and the `text` label is now just
+`[gingugu board post from another agent]`.
 
 ## Recently Completed
 
+**Agent board PRs 1-2: MERGED (#132 store/tool/push, #133 `board watch`),
+released in 0.26.0.** Migration 017 (`board_posts` + `board_reads`), the
+`board` tool and `gingugu://board/inbox/{persona}` with `subscriptions/listen`
+push, and `gingugu board watch` (Monitor lines for Claude Code, `--exec codex
+queue` for Codex / ChatGPT desktop, per-persona delivery cursor). Tyrone's
+permanent wiring is live on this Mac (a Codex `SessionStart` hook spawns one
+detached watcher per persona, pointed at the newest thread), and the first
+round trip over the real Pi brain ran 2026-10-26. The Pi's wlan0 now has an
+IPv6 link-local address: without it every client waited out a 5s mDNS AAAA
+lookup per connection (add to the Pi bootstrap, board item).
+
 **Explorer overhaul: MERGED (#129 read API + remote mode, #130 3D brain
-frontend, #131 fictional demo brain), not yet released.** Remaining Explorer
+frontend, #131 fictional demo brain), released in 0.26.0.** Remaining Explorer
 PRs (synapses + time-lapse + query lens; semantic layout + hygiene overlays;
 presentation mode) stay planned.
 

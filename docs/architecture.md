@@ -49,7 +49,7 @@ graph LR
     subgraph MCP Server Process
         B[Server Layer<br/>stdio · streamable HTTP]
         V[POST /token/derive<br/>derived tokens]
-        U[POST /hook/*<br/>recall · tripwires · trip · warmup]
+        U[POST /hook/*<br/>recall · tripwires · trip · warmup · inbox]
         UI[GET /ui/api/*<br/>Explorer reads, owner token only]
         C[Tool Handlers]
         D[Search Engine]
@@ -1007,6 +1007,10 @@ ranks higher still). The `task_hint` is the one thing a context load does
 record - a question is not an access - and it goes to `query_log`, which does
 not feed ranking.
 
+When the caller is a persona (not a no-persona stdio caller, `unknown`, or a
+warm `minion`), the payload also carries `board: {"unread": N}`, the size of
+its board inbox.
+
 **Pinned memories load first, unconditionally.** A pin
 (`memory_update(pinned=True)`) removes a memory from the ranking contest
 entirely: ranking answers *"what is most relevant to this task?"* and cannot
@@ -1494,7 +1498,8 @@ never ranked.
 - `action` (required) — `post`, `inbox`, `read`, `reply`, `claim`, or `done`
 - `body` — the text (`post`, `reply`), capped at 16,000 characters
 - `to` — a persona name, or `*` for everyone (`post`; default `*`). On `reply`
-  it defaults to the thread's author
+  it defaults to the replied-to post's author, unless that is the caller; then the
+  most recent other author in the thread; then the root's recipient
 - `kind` — `message` (default) or `task` (`post`)
 - `post_id` — the post (`read`, `reply`, `claim`, `done`)
 - `namespace` — where to post (`post`); created on first use, like `memory_store`
@@ -1528,8 +1533,8 @@ authorize subscription URIs, so any authenticated token can receive a bare
 idle agent, and nothing in a harness listens for a resource update, so the
 adapter is a command. `gingugu board watch [--persona NAME] [--once] [--all]
 [--exec CMD] [--interval SECONDS]` prints one JSON line per new post in the
-persona's inbox (`id`, `from`, `to`, `kind`, `namespace`, `body`, `text`),
-posts already waiting first. The persona is `--persona` or `MEMORY_PERSONA`
+persona's inbox (`id`, `parent_id`, `from`, `to`, `kind`, `namespace`, `body`, `text`;
+`parent_id` is null for a new thread), posts already waiting first. The persona is `--persona` or `MEMORY_PERSONA`
 (exit 2 without). With a remote brain it derives a session token named for the
 persona (the proxy's `SessionTokens` + `brain_client`), holds
 `subscriptions/listen` on `gingugu://board/inbox/<persona>` and `.../inbox/*`,
@@ -1539,7 +1544,8 @@ fatal. Locally there is no shared server to listen to, so it polls the
 database read-only every `--interval` seconds (default 2) under the stdio
 `MEMORY_GRANT`. It never marks a post read. `--once` exits after the first
 batch. `--exec` runs a shell command per post (post JSON on stdin, env
-`GINGUGU_POST_{ID,FROM,TO,KIND,NAMESPACE,BODY,TEXT}`, 120s timeout); a failing
+`GINGUGU_POST_{ID,PARENT_ID,FROM,TO,KIND,NAMESPACE,BODY,TEXT}`, `PARENT_ID` empty for a
+new thread, 120s timeout); a failing
 command is reported on stderr and does not stop the watch. A cursor at
 `<data dir>/board-watch/<persona>-<sha256(brain)[:12]>.json` holds the newest
 delivered `(created_at, id)` so a re-armed watcher does not re-deliver
@@ -1922,7 +1928,7 @@ src/gingugu/
 ├── serve_tls.py            # serve's TLS: auto (https off loopback) / on / off, generated self-signed leaf or your own
 ├── serve_tokens.py         # Serve tokens: hashed store, scoped + per-machine owner tokens
 ├── serve_derive.py         # POST /token/derive: owner token -> short-lived derived token
-├── serve_hooks.py          # POST /hook/recall|tripwires|trip|warmup: the brain's side of remote-mode hooks
+├── serve_hooks.py          # POST /hook/recall|tripwires|trip|warmup|inbox: the brain's side of remote-mode hooks
 ├── derived_tokens.py       # Derived tokens: in-memory, hashed, TTL-bound; never on disk
 ├── proxy.py                # Remote mode: stdio <-> streamable-HTTP relay, reconnect, refresh
 ├── proxy_auth.py           # Proxy's /mcp auth: per-request token, renew + retry once on 401
@@ -2025,7 +2031,7 @@ src/gingugu/
 │   # ── Involuntary recall (UserPromptSubmit) + tripwires (PreToolUse) ──
 ├── recall_gate.py          # Decision half: pure arithmetic, built around refusing
 ├── recall_sweep.py         # I/O half: read-only cosine sweep + BM25 lexical matches; sqlite_uri()
-├── prompt_hook.py          # gingugu hook prompt: the entry point; log_prompt() is its one write
+├── prompt_hook.py          # gingugu hook prompt: the entry point; board mail on every prompt, then recall; log_prompt() is its one write
 ├── hook_grant.py           # the client's grant (its servers' publications + MEMORY_GRANT) applied to hook namespaces and warm-up
 ├── client_grants.py        # each server publishes its grant + ancestor chain; hooks read the ones meeting them
 ├── claude_trust.py         # whether Claude Code trusts a folder (untrusted-minion warning)
@@ -2037,7 +2043,8 @@ src/gingugu/
 ├── board_events.py         # BoardBus: the subscriptions/listen bus with a synchronous emit
 ├── board_watch.py          # gingugu board watch: a JSON line per new inbox post (--once / --exec / --all), local polling, delivery cursor
 ├── board_watch_remote.py   # the remote watch: persona-named session token, subscriptions/listen, 1s-30s reconnect backoff
-├── board_watch_emit.py     # the line (framed as untrusted), the delivery cursor, --exec hardening
+├── board_watch_emit.py     # the line (labelled as from another agent), the delivery cursor, --exec hardening
+├── board_hook.py           # board mail for the prompt hook: unread posts, grant-fenced, per-session shown ids, local or POST /hook/inbox
 ├── cli_usage.py            # the top-level `gingugu --help` text (USAGE)
 ├── tool_hook.py            # gingugu hook tool: PreToolUse entry point; deny once, re-issue passes
 ├── minion_fence.py         # Inside a subagent: deny data-dir access, CLI, inherited-server writes

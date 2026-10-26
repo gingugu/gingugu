@@ -142,13 +142,14 @@ src/gingugu/
                        best-effort, never prunes
   recall_gate.py     → involuntary recall, decision half: pure arithmetic, no I/O
   recall_sweep.py    → involuntary recall, I/O half: read-only cosine sweep + BM25
-  prompt_hook.py     → `gingugu hook prompt` (UserPromptSubmit): involuntary recall entry point
+  prompt_hook.py     → `gingugu hook prompt` (UserPromptSubmit): involuntary recall entry point; also injects board mail on every prompt for persona agents
+  board_hook.py      → board mail for the prompt hook: unread posts (max 5), fenced by the client's grant, local or POST /hook/inbox, nothing marked read
   tripwire.py        → tripwire matching (pure regex) + load_tripwires, the seam a remote brain would replace
   board.py           → agent board store: post / inbox / thread / claim (compare-and-set) / done, namespace-fenced
   board_events.py    → BoardBus: the subscriptions/listen bus with a synchronous emit (board writes wake subscribers)
   board_watch.py     → `gingugu board watch`: a JSON line per new inbox post (--once, --exec, --all); local polling, delivery cursor
   board_watch_remote.py → the remote half: session token named for the persona, subscriptions/listen, reconnect with backoff
-  board_watch_emit.py → the line (framed as untrusted data from another agent), the delivery cursor, --exec (env only, stdout to stderr, 10 per batch, group-killed at 120s)
+  board_watch_emit.py → the line (labelled as from another agent), the delivery cursor, --exec (env only, stdout to stderr, 10 per batch, group-killed at 120s)
   cli_usage.py       → the top-level `gingugu --help` text (USAGE), kept out of server.py
   tool_hook.py       → `gingugu hook tool` (PreToolUse): denies the first matching call per session; re-issue passes
   storage.py         → memory CRUD (store/update/forget)

@@ -6,8 +6,9 @@ for it. Two consequences shape the whole module:
 - It must never break a session. Every failure path exits 0 with no output, so
   the worst outcome of any bug in here is that memory stays quiet.
 - It must be cheap on the common turn. The length gate runs before the encoder
-  is imported, so an acknowledgement costs a process spawn and nothing else -
-  roughly 44% of real prompts never pay for the model at all.
+  is imported, so an acknowledgement never pays for the model - roughly 44% of
+  real prompts. What every prompt does pay for is the board mail check
+  (``board_hook``): one read-only inbox query, or one request to a remote brain.
 """
 
 from __future__ import annotations
@@ -148,16 +149,17 @@ def namespaces_for(cwd: str) -> list[str]:
     return names if grant is None else [n for n in names if grant.can_read(n)]
 
 
-def _emit(context: str, count: int) -> None:
+def _emit(context: str, count: int, posts: int = 0) -> None:
+    said = [f"{count} memor" + ("y" if count == 1 else "ies") + " surfaced"] if count else []
+    if posts:
+        said.append(f"{posts} board post" + ("" if posts == 1 else "s"))
     print(
         json.dumps(
             {
                 "hookSpecificOutput": {
                     "hookEventName": "UserPromptSubmit",
                     "additionalContext": context,
-                    "systemMessage": f"gingugu: {count} memor"
-                    + ("y" if count == 1 else "ies")
-                    + " surfaced",
+                    "systemMessage": "gingugu: " + ", ".join(said),
                 }
             }
         )
@@ -212,18 +214,32 @@ def run(payload: dict) -> int:
     prompt = payload.get("prompt") or ""
     session_id = payload.get("session_id") or "unknown"
     cwd = payload.get("cwd") or os.getcwd()
-    cfg = config_from_env()
 
-    # Stage one, before any expensive import.
-    if not is_worth_embedding(prompt, min_chars=cfg.min_chars):
-        return 0
-
+    from .board_hook import mail
     from .config import load_config
 
     app = load_config()
+    letters = mail(app.db_path, session_id)  # every prompt: a bare "go" still gets its mail
+    try:
+        found = _recall(prompt, session_id, cwd, app)
+    except Exception:  # noqa: BLE001 - a recall bug must not swallow the mail too
+        found = None
+    blocks = [part[0] for part in (letters, found) if part]
+    if blocks:
+        _emit("\n\n".join(blocks), found[1] if found else 0, letters[1] if letters else 0)
+    return 0
+
+
+def _recall(prompt: str, session_id: str, cwd: str, app) -> tuple[str, int] | None:
+    """The memories this prompt woke, as ``(block, count)``, or None."""
+    cfg = config_from_env()
+    # Stage one, before any expensive import.
+    if not is_worth_embedding(prompt, min_chars=cfg.min_chars):
+        return None
+
     namespaces = namespaces_for(cwd)
     if not namespaces:
-        return 0
+        return None
 
     from . import hook_remote
 
@@ -235,17 +251,17 @@ def run(payload: dict) -> int:
 
         suppressed = load_suppressed(app.db_path, session_id)
         found = remote_recall(target, prompt, session_id, namespaces, suppressed, cfg)
-        if found is not None:
-            context, ids = found
-            _emit(context, len(ids))
-            save_suppressed(app.db_path, session_id, suppressed | set(ids))
-        return 0
+        if found is None:
+            return None
+        context, ids = found
+        save_suppressed(app.db_path, session_id, suppressed | set(ids))
+        return context, len(ids)
 
     from .embeddings import build_provider
     from .recall_pick import pick
 
     if not app.embeddings_enabled or not app.db_path.exists():
-        return 0
+        return None
 
     provider = build_provider(
         app.embeddings_enabled,
@@ -258,11 +274,9 @@ def run(payload: dict) -> int:
     suppressed = load_suppressed(app.db_path, session_id)
     picked = pick(app.db_path, provider, cleaned, namespaces, cfg, suppressed, session_id)
     if not picked:
-        return 0
-
-    _emit(render(picked), len(picked))
+        return None
     save_suppressed(app.db_path, session_id, suppressed | {c.id for c in picked})
-    return 0
+    return render(picked), len(picked)
 
 
 def main() -> int:

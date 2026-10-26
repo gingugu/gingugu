@@ -55,7 +55,8 @@ def test_recall_persona_rides_along(remote, monkeypatch):
     monkeypatch.setenv("MEMORY_PERSONA", "research")
     brain = install({"/hook/recall": {"context": None, "ids": []}})
     prompt_hook.run(_prompt())
-    assert brain.calls[0][1]["namespaces"] == ["crow", "research", "gingugu"]
+    recall = next(body for path, body in brain.calls if path == "/hook/recall")
+    assert recall["namespaces"] == ["crow", "research", "gingugu"]
 
 
 def test_a_short_prompt_never_reaches_the_network(remote):
