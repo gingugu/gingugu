@@ -48,6 +48,18 @@ def _caller(ctx: ServerContext) -> str:
     return author_for(ctx.transport, request_grant(ctx.transport, ctx.stdio_grant))
 
 
+def unread_note(ctx: ServerContext) -> dict | None:
+    """``{"unread": n}`` for ``memory_context`` when the caller is a persona, else None."""
+    me = _caller(ctx)
+    if me in ("local", "unknown", "minion", board.BROADCAST) or not board.is_persona(me):
+        return None
+    try:
+        return {"unread": board.unread_count(ctx.conn, me)}
+    except Exception:  # noqa: BLE001 - a count must never cost the session its context
+        logger.exception("board unread count failed")
+        return None
+
+
 def _emit(ctx: ServerContext, post: dict) -> None:
     bus = getattr(ctx, "bus", None)
     if bus is None:
