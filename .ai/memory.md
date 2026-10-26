@@ -412,7 +412,11 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.27.0** (PyPI, 2026-10-26). Minor: board mail in the
+- Current version: **0.28.0** (PyPI, 2026-10-26). Minor: one persona on two
+  machines can talk over the board - board identity is persona + machine
+  (the owner token's name, stamped at `/token/derive`), migration 018
+  `board_posts.author_origin` (#136).
+- 0.27.0: Minor: board mail in the
   prompt hook (`board_hook.py`, owner-only `POST /hook/inbox`, the doorway lets
   a persona agent's short prompts through), `memory_context` `board.unread`,
   thread-aware reply addressing, `parent_id` on watch lines (#134).
