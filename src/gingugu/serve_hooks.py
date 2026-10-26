@@ -1,5 +1,5 @@
-"""Remote-mode hook routes: ``/hook/recall``, ``/hook/tripwires``, ``/hook/trip``
-and ``/hook/warmup`` (all POST, JSON object in, JSON object out).
+"""Remote-mode hook routes: ``/hook/recall``, ``/hook/tripwires``, ``/hook/trip``,
+``/hook/warmup`` and ``/hook/inbox`` (all POST, JSON object in, JSON object out).
 
 They serve the machine's own hooks, which run with the main thread's full view,
 so only an owner token may call them (403 otherwise, like ``/token/derive``).
@@ -166,6 +166,25 @@ def _run_trip(ctx, args: tuple) -> dict:
     return {"ok": True}
 
 
+# --- board mail --------------------------------------------------------------
+
+
+def _parse_inbox(body: dict) -> tuple:
+    from . import board
+
+    persona = body.get("persona")
+    if not isinstance(persona, str) or persona == board.BROADCAST or not board.is_persona(persona):
+        raise _BadRequest("persona must be a persona name")
+    names = None if body.get("namespaces") is None else _names(body)
+    return persona, names, set(_ids(body, "shown"))
+
+
+def _run_inbox(ctx, args: tuple) -> dict:
+    from .board_hook import unread_local
+
+    return {"posts": unread_local(ctx.config.db_path, *args)}
+
+
 # --- warm-up -----------------------------------------------------------------
 
 
@@ -222,4 +241,5 @@ def hook_routes(ctx) -> dict[str, Callable]:
         "/hook/tripwires": _endpoint(_parse_tripwires, _run_tripwires, ctx),
         "/hook/trip": _endpoint(_parse_trip, _run_trip, ctx),
         "/hook/warmup": _endpoint(_parse_warmup, _run_warmup, ctx),
+        "/hook/inbox": _endpoint(_parse_inbox, _run_inbox, ctx),
     }
