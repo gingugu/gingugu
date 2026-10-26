@@ -1,10 +1,15 @@
 # Project Status
 
-_Last updated: 2026-10-26 (board: one persona, two machines)_
+_Last updated: 2026-10-26 (board housekeeping: the shared board is done)_
 
 ## In Flight
 
-**Board: one persona on two machines.** Branch `feature/board-twins`. The
+Nothing. Next up: board #5, Codebase X-ray.
+
+## Recently Completed
+
+**Board: one persona on two machines - MERGED (#136), released in 0.28.0.**
+Verified live: Beepboop on two Macs exchanged posts both ways. The
 inbox hid every post by the reader's own persona, so Beepboop on two Macs
 could never mail each other. Identity is now persona + machine: migration 018
 adds `board_posts.author_origin`; `/token/derive` stamps `Grant.origin` with
@@ -15,9 +20,8 @@ only when both origins are known and differ; `board.is_me` makes reply
 routing machine-aware. `/hook/inbox` takes the origin from the owner token
 (`serve_hooks._endpoint(with_origin=True)`), never the body. Labels and watch
 lines say "on <machine>". Limitation: two sessions of one persona on the same
-machine still read as one agent.
-
-## Recently Completed
+machine still read as one agent. A machine's name is its owner token's name,
+set at `gingugu remote login --name` (default: the short hostname at login).
 
 **Agent board PR 3: MERGED (#134), released in 0.27.0.** Board mail in the
 prompt hook (`board_hook.py`, `POST /hook/inbox`, the doorway's persona
@@ -1231,7 +1235,7 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-## The Board (current: 2026-10-18)
+## The Board (current: 2026-10-26)
 
 **Resequenced 2026-09-29 into build order.** The table below is the order the
 work gets done in, top first; `#` is that position. Item numbers used to be
@@ -1281,17 +1285,20 @@ turn a silent outage into a named one.
 
 **2026-10-19 (release):** the TLS-mismatch hint and `fleet.py status` (#124) and destructive-tool confirmations (#125) shipped in 0.25.0 and came off; every row moved up three.
 
+**2026-10-26:** the shared board (old #15) is done - PRs #132/#133 (0.26.0),
+#134 (0.27.0) and #136 (0.28.0, one persona on two machines) - and came off;
+every row moved up one.
+
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **A shared board between agents** - IN FLIGHT (PR 1 #132 open, PR 2 built) | 15 | Unblocked: the central brain is done, and every machine is on SDK 2.x (0.24.0); `subscriptions/listen` proven against the real brain over HTTP and now the push transport |
-| 2 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
-| 3 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
-| 4 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
-| 5 | **A referee for rival memory tools** | 17 | Only a fair comparison once 4 exists |
-| 6 | **Codebase X-ray, as an MCP tool** | 19 | Standalone |
-| 7 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
-| 8 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
-| 9 | Session flight recorder (low priority) | 18 | Check prior art first |
+| 1 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
+| 2 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
+| 3 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
+| 4 | **A referee for rival memory tools** | 17 | Only a fair comparison once 3 exists |
+| 5 | **Codebase X-ray, as an MCP tool** - NEXT | 19 | Standalone; picked 2026-10-26 |
+| 6 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
+| 7 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
+| 8 | Session flight recorder (low priority) | 18 | Check prior art first |
 | - | **Template/sibling noise in retrieval - PARKED** | 1 | Ten dead fixes and no live hypothesis; see below |
 
 ### Previous board (2026-09-28), kept for its numbering
@@ -1886,7 +1893,10 @@ main thread.
 A second set from the same sitting: what the existing parts can do outside
 memory. Approved as directions, not designed.
 
-### 15. A shared board between agents
+### 15. A shared board between agents - SHIPPED 2026-10-26, off the board
+
+Shipped as #132, #133, #134 and #136 (0.26.0-0.28.0). The claim question below
+was settled with a real single-winner `claim` action.
 
 Once several agents share one brain (11), a namespace can carry work rather
 than knowledge: tasks posted, claimed, and answered, with "working on X"
