@@ -14,12 +14,12 @@ from __future__ import annotations
 import os
 from pathlib import Path, PurePosixPath
 
-from . import extract
+from .scan import toplevel
 
 
 def root(path: str | None) -> Path:
     """The git toplevel that ``path`` (or the working directory) belongs to."""
-    return extract._toplevel(path or os.getcwd())
+    return toplevel(path or os.getcwd())
 
 
 def file_list(files) -> list[str]:

@@ -48,6 +48,11 @@ class ModuleIndex:
                     continue
                 self.names.setdefault(name, path)
                 self._primary.setdefault(path, name)
+        # Directories holding modules are packages even with no __init__.py
+        # (PEP 420). They have no file, so they are known names but never edges.
+        self.packages = {
+            ".".join(n.split(".")[:i]) for n in self.names for i in range(1, n.count(".") + 1)
+        }
         self.tops = {n.split(".")[0] for n in self.names}
 
     @staticmethod
@@ -129,7 +134,7 @@ def _absolute(name: str, idx: ModuleIndex, kind: str, res: FileResult) -> None:
         return
     for dst, explicit in idx.prefixes(name):
         res.add(dst, kind, True, not explicit)
-    if name not in idx.names:
+    if name not in idx.names and name not in idx.packages:
         res.unresolved += 1
 
 
@@ -140,7 +145,7 @@ def _from_base(node: ast.ImportFrom, src: str, idx: ModuleIndex) -> str | None:
     pkg = idx.package_of(src)
     parts = pkg.split(".") if pkg else []
     up = node.level - 1
-    if up > len(parts):
+    if up >= len(parts):  # no package at all, or climbing past the top one
         return None
     parts = parts[: len(parts) - up] + (node.module.split(".") if node.module else [])
     return ".".join(parts)
@@ -163,7 +168,7 @@ def _resolve_from(
     if base:
         for dst, is_base in idx.prefixes(base):
             res.add(dst, kind, True, not is_base or all_submodules)
-        if base not in idx.names:
+        if base not in idx.names and base not in idx.packages:
             res.unresolved += 1
     for cand in cands:
         if cand in idx.names:
