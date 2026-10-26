@@ -22,25 +22,28 @@ from typing import TextIO
 
 MAX_EXEC_PER_BATCH = 10
 EXEC_TIMEOUT_S = 120
-_FIELDS = ("id", "parent_id", "from", "to", "kind", "namespace", "body", "text")
+_FIELDS = ("id", "parent_id", "from", "origin", "to", "kind", "namespace", "body", "text")
 
 
 def line_for(post: dict) -> dict:
     """The line a post becomes: what an agent needs to decide whether to read it."""
     parent = post.get("parent_id")
+    origin = post.get("author_origin")
     what = "reply" if parent else post["kind"]
     where = f"post {post['id']}, in reply to {parent}" if parent else f"post {post['id']}"
+    on = f" on {origin}" if origin else ""
     return {
         "id": post["id"],
         "parent_id": parent,
         "from": post["author"],
+        "origin": origin,
         "to": post["recipient"],
         "kind": post["kind"],
         "namespace": post["namespace"],
         "body": post["body"],
         "text": (
             "[gingugu board post from another agent] "
-            f"{what} from {post['author']} in {post['namespace']} ({where}): "
+            f"{what} from {post['author']}{on} in {post['namespace']} ({where}): "
             '"""' + str(post["body"]) + '"""'
         ),
     }

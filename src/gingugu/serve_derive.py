@@ -15,6 +15,7 @@ can call this.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import re
 
@@ -88,6 +89,8 @@ def derive_endpoint(derived: DerivedTokens):
             if not isinstance(body, dict):
                 raise _BadRequest("body must be a JSON object")
             grant, ttl = _grant_from(body), _ttl_from(body)
+            owner = getattr(request.state, "grant", None)
+            grant = dataclasses.replace(grant, origin=(owner.name or None) if owner else None)
             token = derived.mint(grant, ttl)
         except ValueError as exc:  # _BadRequest, or mint's ttl bounds
             return JSONResponse({"error": str(exc)}, status_code=400)

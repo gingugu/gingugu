@@ -182,7 +182,8 @@ def _parse_inbox(body: dict) -> tuple:
 def _run_inbox(ctx, args: tuple) -> dict:
     from .board_hook import unread_local
 
-    return {"posts": unread_local(ctx.config.db_path, *args)}
+    persona, names, shown, origin = args
+    return {"posts": unread_local(ctx.config.db_path, persona, names, shown, origin=origin)}
 
 
 # --- warm-up -----------------------------------------------------------------
@@ -211,7 +212,10 @@ def _run_warmup(ctx, args: tuple) -> dict:
 # --- routing -----------------------------------------------------------------
 
 
-def _endpoint(parse: Callable, run: Callable, ctx):
+def _endpoint(parse: Callable, run: Callable, ctx, *, with_origin: bool = False):
+    """``with_origin`` appends the calling owner token's name - the machine - to
+    the parsed args, so a route can know who asked without the body saying."""
+
     async def handle(request: Request) -> JSONResponse:
         if getattr(request.state, "token_kind", None) != OWNER:
             return JSONResponse({"error": "only an owner token may use the hook routes"}, 403)
@@ -223,6 +227,8 @@ def _endpoint(parse: Callable, run: Callable, ctx):
             if not isinstance(body, dict):
                 raise _BadRequest("body must be a JSON object")
             args = parse(body)
+            if with_origin:
+                args = (*args, getattr(request.state.grant, "name", None) or None)
         except _BadRequest as exc:
             return JSONResponse({"error": str(exc)}, status_code=400)
         try:
@@ -241,5 +247,5 @@ def hook_routes(ctx) -> dict[str, Callable]:
         "/hook/tripwires": _endpoint(_parse_tripwires, _run_tripwires, ctx),
         "/hook/trip": _endpoint(_parse_trip, _run_trip, ctx),
         "/hook/warmup": _endpoint(_parse_warmup, _run_warmup, ctx),
-        "/hook/inbox": _endpoint(_parse_inbox, _run_inbox, ctx),
+        "/hook/inbox": _endpoint(_parse_inbox, _run_inbox, ctx, with_origin=True),
     }
