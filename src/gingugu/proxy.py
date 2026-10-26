@@ -20,11 +20,9 @@ forgotten session - is sent again, once. A request whose fate is unknown is
 failed, never replayed. New requests wait briefly for the next link, then are
 refused. Only a rejected owner token ends the proxy.
 
-The credential vault is handled here rather than relayed: it is this machine's
-keychain and a remote brain cannot serve it. With credentials enabled, the
-brain's `credential_*` tools are swapped in ``tools/list`` for this machine's
-(``proxy_vault``) and each ``tools/call`` for one goes to the vault's own session
-(``proxy_vault_link``). With them disabled, `credential_*` is hidden and refused.
+Handled here, not relayed, because the brain cannot reach this machine: the keychain
+behind `credential_*` (``proxy_vault``, ``proxy_vault_link``; hidden and refused when
+credentials are off), and the checkout `code_xray` reads (``proxy_xray``).
 """
 
 from __future__ import annotations
@@ -53,6 +51,7 @@ from .proxy_session import (
 )
 from .proxy_vault import open_vault
 from .proxy_vault_link import NO_VAULT, VaultLink
+from .proxy_xray import XrayRelay
 
 __all__ = ["ProxyLost", "ProxyRefused", "preflight", "run", "serve_stdio"]
 
@@ -72,13 +71,13 @@ class _Lost(Exception):
 class _Session:
     """State shared by the client reader and the connection loop."""
 
-    def __init__(self, url, owner_token, client_write, derive_args, scope, vault=None) -> None:
+    def __init__(self, url, owner_token, client_write, derive_args, tg, vault=None) -> None:
         self.vault: VaultLink | None = vault
         self.url = url
         self.owner_token = owner_token
         self.client_write: ObjectSendStream = client_write
         self.derive_args: dict = derive_args
-        self.scope: anyio.CancelScope = scope
+        self.scope: anyio.CancelScope = tg.cancel_scope
         self.link: Link | None = None
         self.init_params: dict | None = None
         self.initialized = False
@@ -87,6 +86,7 @@ class _Session:
         # Reused across reconnects: deriving per attempt would fill the brain's
         # live-token cap and lock every machine out.
         self.tokens = SessionTokens(url, owner_token, derive_args)
+        self.xray = XrayRelay(url, self.tokens, client_write, tg)
         self.lost_at = float("-inf")  # when the last live link dropped
         # Refused unrun by the last link, with when: sent on the next, if fresh.
         self.replay: list[tuple[float, SessionMessage]] = []
@@ -119,6 +119,8 @@ class _Session:
                     await self.vault.answer(item)  # the person answered the vault's question
                     continue
                 if isinstance(msg, JSONRPCRequest):
+                    if self.xray.take(item):  # reads the disk here, off this reader
+                        continue
                     called = str((msg.params or {}).get("name", ""))
                     if msg.method == "tools/call" and called.startswith(CRED_PREFIX):
                         if self.vault is not None:  # never awaits the vault's answer
@@ -248,7 +250,7 @@ async def run(
             link = VaultLink(vault, client_write) if vault is not None else None
             if link is not None:
                 await tg.start(link.run)
-            session = _Session(url, owner_token, client_write, derive_args, tg.cancel_scope, link)
+            session = _Session(url, owner_token, client_write, derive_args, tg, link)
             tg.start_soon(session.read_client, client_read)
             tg.start_soon(session.connect_loop)
     except BaseExceptionGroup as group:
