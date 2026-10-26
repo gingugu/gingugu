@@ -19,7 +19,7 @@ import os
 from mcp.shared.subscriptions import ResourceUpdated
 
 from .. import board, grants
-from ..grants import Grant
+from ..grants import Grant, origin_name
 from ..session import current_session_id
 from . import ServerContext
 from .helpers import _err
@@ -48,8 +48,8 @@ def origin_for(transport: str, grant: Grant | None) -> str | None:
     if transport == "stdio" or grant is None:
         return None
     if grant.derived:
-        return grant.origin
-    return (grant.name or None) if grant.is_full else None
+        return origin_name(grant.origin)
+    return origin_name(grant.name) if grant.is_full else None
 
 
 def _caller(ctx: ServerContext) -> str:
