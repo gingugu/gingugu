@@ -345,7 +345,7 @@ def test_tracked_symlinks_are_skipped(tmp_path):
     _git(repo, "commit", "-q", "-m", "init")
     x = extract.extract(repo)
     assert [f.path for f in x.files] == ["a.py"]
-    assert x.skipped_symlinks == ["link.py"]
+    assert x.skipped == [("link.py", "symlink")]
 
 
 # --- coverage -------------------------------------------------------------------
@@ -490,5 +490,129 @@ def test_payload_is_plain_json_without_the_local_root(tmp_path):
         "dynamic",
         "external",
         "parse_errors",
-        "skipped_symlinks",
+        "skipped",
     }
+
+
+# --- skipped sources, with a reason -----------------------------------------------
+
+
+def test_an_unreadable_file_is_skipped_and_named(tmp_path):
+    import os
+
+    if os.geteuid() == 0:
+        pytest.skip("root reads everything")
+    repo = _repo(tmp_path, {"a.py": "", "b.py": "import a\n"})
+    (repo / "b.py").chmod(0)
+    try:
+        x = extract.extract(repo)
+    finally:
+        (repo / "b.py").chmod(0o644)
+    assert [f.path for f in x.files] == ["a.py"]
+    assert x.skipped == [("b.py", "unreadable")]
+
+
+def test_a_file_reached_through_a_symlinked_directory_is_outside(tmp_path):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "b.py").write_text("")
+    repo = _repo(tmp_path, {"a/b.py": "", "c.py": ""})
+    import shutil
+
+    shutil.rmtree(repo / "a")
+    (repo / "a").symlink_to(elsewhere, target_is_directory=True)
+    x = extract.extract(repo)
+    assert [f.path for f in x.files] == ["c.py"]
+    assert x.skipped == [("a/b.py", "outside")]
+
+
+def test_a_file_over_the_size_cap_is_skipped(tmp_path, monkeypatch):
+    repo = _repo(tmp_path, {"big.py": "x = 1\n" * 100, "a.py": ""})
+    monkeypatch.setattr(extract, "MAX_FILE_BYTES", 50)
+    x = extract.extract(repo)
+    assert [f.path for f in x.files] == ["a.py"]
+    assert x.skipped == [("big.py", "too_large")]
+
+
+def test_a_symlinked_pyproject_is_not_followed(tmp_path):
+    outside = tmp_path / "pyproject.toml"
+    outside.write_text('[project]\nname="x"\n[project.scripts]\nx = "a:main"\n')
+    repo = _repo(tmp_path, {"a.py": ""})
+    (repo / "pyproject.toml").symlink_to(outside)
+    x = extract.extract(repo)
+    assert not any(f.is_entry for f in x.files)
+    assert ("pyproject.toml", "symlink") in x.skipped
+
+
+def test_a_malformed_pyproject_is_named_not_silent(tmp_path):
+    repo = _repo(tmp_path, {"a.py": "", "pyproject.toml": "[project\nbroken"})
+    x = extract.extract(repo)
+    assert ("pyproject.toml", "malformed") in x.skipped
+
+
+def test_a_deleted_tracked_file_is_not_a_skip(tmp_path):
+    repo = _repo(tmp_path, {"a.py": "", "b.py": ""})
+    (repo / "b.py").unlink()
+    assert extract.extract(repo).skipped == []
+
+
+def test_skips_change_the_fingerprint(tmp_path):
+    repo = _repo(tmp_path, {"a.py": "", "b.py": ""})
+    before = extract.fingerprint(repo)
+    (repo / "b.py").chmod(0)
+    try:
+        assert extract.fingerprint(repo) != before
+    finally:
+        (repo / "b.py").chmod(0o644)
+
+
+def test_payload_carries_skips_with_reasons(tmp_path):
+    repo = _repo(tmp_path, {"a.py": ""}, commit=False)
+    (repo / "link.py").symlink_to(repo / "a.py")
+    body = extract.extract(repo).payload()
+    assert body["skipped"] == [{"path": "link.py", "reason": "symlink"}]
+
+
+# --- relative and namespace edge cases ---------------------------------------------
+
+
+def test_a_relative_import_beyond_the_top_package_is_unresolved(tmp_path):
+    repo = _repo(
+        tmp_path, {"pkg/__init__.py": "", "pkg/a.py": "from ..other import x\n", "other.py": ""}
+    )
+    x = extract.extract(repo)
+    assert ("pkg/a.py", "other.py") not in _edges(x)
+    assert x.unresolved == 1
+
+
+def test_a_relative_import_from_a_top_level_module_is_unresolved(tmp_path):
+    repo = _repo(tmp_path, {"a.py": "from . import b\n", "b.py": ""})
+    x = extract.extract(repo)
+    assert _edges(x) == set()
+    assert x.unresolved == 1
+
+
+def test_namespace_package_imports_are_not_unresolved(tmp_path):
+    repo = _repo(
+        tmp_path,
+        {"ns/mod.py": "", "a.py": "from ns import mod\n", "b.py": "import ns.mod\n"},
+    )
+    x = extract.extract(repo)
+    assert ("a.py", "ns/mod.py") in _edges(x)
+    assert ("b.py", "ns/mod.py") in _edges(x)
+    assert x.unresolved == 0
+
+
+# --- git hygiene -----------------------------------------------------------------
+
+
+def test_repo_git_config_cannot_run_commands(tmp_path):
+    marker = tmp_path / "ran"
+    repo = _repo(tmp_path, {"a.py": ""})
+    hook = repo / "fsmon.sh"
+    hook.write_text(f"#!/bin/sh\ntouch {marker}\n")
+    hook.chmod(0o755)
+    _git(repo, "config", "core.fsmonitor", str(hook))
+    extract.extract(repo)
+    extract.fingerprint(repo)
+    assert not marker.exists()
