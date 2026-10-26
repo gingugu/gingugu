@@ -35,8 +35,9 @@ def render(posts: list[dict]) -> str:
     for p in posts[:MAX_SHOWN]:
         reply = f", in reply to {p['parent_id']}" if p.get("parent_id") else ""
         body = json.dumps(str(p.get("body", ""))[:PREVIEW])
+        on = f" on {p['author_origin']}" if p.get("author_origin") else ""
         lines.append(
-            f"- {p.get('kind', 'message')} from {p.get('author')} in {p.get('namespace')} "
+            f"- {p.get('kind', 'message')} from {p.get('author')}{on} in {p.get('namespace')} "
             f"(post {p['id']}{reply}): {body}"
         )
         lines.append(f'  read it: board(action="read", post_id="{p["id"]}")')
@@ -58,9 +59,15 @@ def readable_names() -> list[str] | None:
 
 
 def unread_local(
-    db_path: Path, persona: str, names: list[str] | None, shown: set[str]
+    db_path: Path,
+    persona: str,
+    names: list[str] | None,
+    shown: set[str],
+    *,
+    origin: str | None = None,
 ) -> list[dict]:
-    """``persona``'s unread inbox in the local brain, fenced to ``names``, read-only."""
+    """``persona``'s unread inbox in the brain at ``db_path``, fenced to ``names``,
+    read-only. ``origin`` is the reader's machine, when the brain knows it."""
     import sqlite3
 
     from . import board, grants
@@ -74,7 +81,7 @@ def unread_local(
     grant = FULL if names is None else Grant("hook", {n: READ for n in names})
     try:
         with grants.bind(grant, conn):
-            posts = board.inbox(conn, persona, limit=board.MAX_LIMIT)
+            posts = board.inbox(conn, persona, limit=board.MAX_LIMIT, origin=origin)
     finally:
         conn.close()
     return [p for p in posts if p["id"] not in shown]

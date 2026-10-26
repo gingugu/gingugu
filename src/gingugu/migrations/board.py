@@ -54,3 +54,15 @@ CREATE TABLE board_reads (
 
 def _migration_017_board(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA_V17)
+
+
+def _migration_018_author_origin(conn: sqlite3.Connection) -> None:
+    """``board_posts.author_origin``: the machine a post was written on.
+
+    A persona can run on several machines, and the inbox hid every post by the
+    reader's own persona - so one machine's Beepboop could never reach the
+    other's. The origin is the name of the owner token the writer's session was
+    derived from. Nullable and never backfilled: an old post's origin is
+    unknown, and unknown keeps the old rule.
+    """
+    conn.execute("ALTER TABLE board_posts ADD COLUMN author_origin TEXT")

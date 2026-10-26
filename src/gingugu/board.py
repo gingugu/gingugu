@@ -32,7 +32,8 @@ _URI_PREFIX = "gingugu://board/inbox/"
 
 _SELECT = (
     "SELECT p.id, p.parent_id, n.name AS namespace, p.namespace_id, p.author, p.author_session, "
-    "p.recipient, p.kind, p.status, p.claimed_by, p.body, p.created_at, p.updated_at "
+    "p.author_origin, p.recipient, p.kind, p.status, p.claimed_by, p.body, p.created_at, "
+    "p.updated_at "
     "FROM board_posts p JOIN namespaces n ON n.id = p.namespace_id"
 )
 
@@ -76,17 +77,31 @@ def _require(conn: sqlite3.Connection, post_id: str) -> dict:
     return found
 
 
-def _reply_to(conn: sqlite3.Connection, parent: dict, root_id: str, author: str) -> str:
+def is_me(author: str, origin: str | None, me: str, my_origin: str | None) -> bool:
+    """Whether a post by ``author`` on ``origin`` is the caller's own.
+
+    Same persona on a different machine is a twin, not me - but only when both
+    machines are known; an unknown origin keeps the persona as the identity.
+    """
+    if author != me:
+        return False
+    return origin is None or my_origin is None or origin == my_origin
+
+
+def _reply_to(
+    conn: sqlite3.Connection, parent: dict, root_id: str, author: str, origin: str | None
+) -> str:
     """Who a reply is for: the post's author, unless that is me - then whoever spoke last."""
-    if parent["author"] != author:
+    if not is_me(parent["author"], parent["author_origin"], author, origin):
         return parent["author"]
-    row = conn.execute(
-        "SELECT author FROM board_posts WHERE (id = ? OR parent_id = ?) AND author != ? "
-        "ORDER BY created_at DESC, rowid DESC LIMIT 1",
-        (root_id, root_id, author),
-    ).fetchone()
-    if row is not None:
-        return row["author"]
+    rows = conn.execute(
+        "SELECT author, author_origin FROM board_posts WHERE id = ? OR parent_id = ? "
+        "ORDER BY created_at DESC, rowid DESC",
+        (root_id, root_id),
+    ).fetchall()
+    for row in rows:
+        if not is_me(row["author"], row["author_origin"], author, origin):
+            return row["author"]
     return _require(conn, root_id)["recipient"]  # nobody has answered: nudge whoever I asked
 
 
@@ -100,6 +115,7 @@ def post(
     kind: str = "message",
     parent_id: str | None = None,
     author_session: str | None = None,
+    author_origin: str | None = None,
 ) -> dict:
     """Leave a post; a reply joins its parent's thread, namespace and author."""
     if kind not in KINDS:
@@ -112,7 +128,7 @@ def post(
         parent = _require(conn, parent_id)
         parent_id = parent["parent_id"] or parent["id"]  # threads are one level deep
         namespace_id = parent["namespace_id"]
-        recipient = recipient or _reply_to(conn, parent, parent_id, author)
+        recipient = recipient or _reply_to(conn, parent, parent_id, author, author_origin)
     recipient = recipient or BROADCAST
     if not is_persona(recipient):
         raise BoardError(f"recipient {recipient!r} is not a persona name or '*'")
@@ -120,22 +136,38 @@ def post(
     now = utcnow_iso()
     post_id = str(uuid.uuid4())
     conn.execute(
-        "INSERT INTO board_posts(id, namespace_id, parent_id, author, author_session, recipient, "
-        "kind, status, claimed_by, body, created_at, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, 'open', NULL, ?, ?, ?)",
-        (post_id, namespace_id, parent_id, author, author_session, recipient, kind, body, now, now),
+        "INSERT INTO board_posts(id, namespace_id, parent_id, author, author_session, "
+        "author_origin, recipient, kind, status, claimed_by, body, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', NULL, ?, ?, ?)",
+        (
+            post_id,
+            namespace_id,
+            parent_id,
+            author,
+            author_session,
+            author_origin,
+            recipient,
+            kind,
+            body,
+            now,
+            now,
+        ),
     )
     return _row(_require(conn, post_id))
 
 
-def _inbox_where(reader: str, include_read: bool) -> tuple[str, list[object]]:
+def _inbox_where(
+    reader: str, include_read: bool, origin: str | None = None
+) -> tuple[str, list[object]]:
+    # My own persona's post is mail only from a twin: both machines known, and not mine.
     clauses = [
         "p.recipient IN (?, ?)",
-        "p.author != ?",
+        "(p.author != ? OR (? IS NOT NULL AND p.author_origin IS NOT NULL "
+        "AND p.author_origin != ?))",
         "p.status != 'done'",
         "(p.status = 'open' OR p.claimed_by = ?)",
     ]
-    params: list[object] = [reader, BROADCAST, reader, reader]
+    params: list[object] = [reader, BROADCAST, reader, origin, origin, reader]
     if not include_read:
         clauses.append(
             "NOT EXISTS (SELECT 1 FROM board_reads r WHERE r.post_id = p.id AND r.reader = ?)"
@@ -149,10 +181,15 @@ def _inbox_where(reader: str, include_read: bool) -> tuple[str, list[object]]:
 
 
 def inbox(
-    conn: sqlite3.Connection, reader: str, *, include_read: bool = False, limit: int = 50
+    conn: sqlite3.Connection,
+    reader: str,
+    *,
+    include_read: bool = False,
+    limit: int = 50,
+    origin: str | None = None,
 ) -> list[dict]:
-    """What is waiting for ``reader``, oldest first."""
-    where, params = _inbox_where(reader, include_read)
+    """What is waiting for ``reader`` (on machine ``origin``, if known), oldest first."""
+    where, params = _inbox_where(reader, include_read, origin)
     rows = conn.execute(
         f"{_SELECT} WHERE {where} ORDER BY p.created_at, p.rowid LIMIT ?",
         [*params, min(max(1, int(limit)), MAX_LIMIT)],
@@ -160,8 +197,8 @@ def inbox(
     return [_row(r) for r in rows]
 
 
-def unread_count(conn: sqlite3.Connection, reader: str) -> int:
-    where, params = _inbox_where(reader, include_read=False)
+def unread_count(conn: sqlite3.Connection, reader: str, origin: str | None = None) -> int:
+    where, params = _inbox_where(reader, False, origin)
     return conn.execute(f"SELECT count(*) FROM board_posts p WHERE {where}", params).fetchone()[0]
 
 

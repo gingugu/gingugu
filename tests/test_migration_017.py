@@ -68,15 +68,15 @@ def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
     return {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
 
 
-def test_017_is_the_latest_and_registered_once():
+def test_017_is_registered_once():
     targets = [t for t, _ in MIGRATIONS]
     assert targets.count(17) == 1
-    assert LATEST_SCHEMA_VERSION == 17
+    assert LATEST_SCHEMA_VERSION >= 17
 
 
-def test_fresh_db_gets_board_tables():
+def test_017_creates_the_board_tables():
     conn = _conn()
-    migrate(conn)
+    _apply_through(conn, 17)
     assert _columns(conn, "board_posts") == POST_COLUMNS
     assert _columns(conn, "board_reads") == {"post_id", "reader", "read_at"}
 
@@ -93,7 +93,7 @@ def test_upgrade_from_16_keeps_memories_and_adds_board():
         (ns_id, now, now, now),
     )
     conn.commit()
-    assert migrate(conn) == 17
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
     assert conn.execute("SELECT count(*) FROM memories").fetchone()[0] == 1
     _post(conn, ns_id)
     assert conn.execute("SELECT count(*) FROM board_posts").fetchone()[0] == 1
