@@ -43,6 +43,7 @@ class Edge:
     dst: str
     kind: str
     certain: bool
+    implicit: bool = False
 
 
 @dataclass
@@ -68,7 +69,13 @@ class Extraction:
                 {"path": f.path, "is_test": f.is_test, "is_entry": f.is_entry} for f in self.files
             ],
             "edges": [
-                {"src": e.src, "dst": e.dst, "kind": e.kind, "certain": e.certain}
+                {
+                    "src": e.src,
+                    "dst": e.dst,
+                    "kind": e.kind,
+                    "certain": e.certain,
+                    "implicit": e.implicit,
+                }
                 for e in self.edges
             ],
             "unresolved": self.unresolved,
@@ -212,7 +219,7 @@ def extract(path: str | Path) -> Extraction:
         out.unresolved += res.unresolved
         out.dynamic += res.dynamic
         out.external += res.external
-        out.edges.extend(Edge(rel, dst, k, c) for dst, (k, c) in res.edges.items())
+        out.edges.extend(Edge(rel, dst, k, c, i) for dst, (k, c, i) in res.edges.items())
         out.files.append(FileInfo(rel, _is_test(rel), is_entry or _is_main_guard(tree)))
 
     out.edges.sort(key=lambda e: (e.src, e.dst))
