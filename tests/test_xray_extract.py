@@ -7,6 +7,7 @@ it reads the caller's disk. Nothing here imports or executes repo code.
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -497,6 +498,10 @@ def test_payload_is_plain_json_without_the_local_root(tmp_path):
 # --- skipped sources, with a reason -----------------------------------------------
 
 
+_POSIX = pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
+
+
+@_POSIX
 def test_an_unreadable_file_is_skipped_and_named(tmp_path):
     import os
 
@@ -556,6 +561,7 @@ def test_a_deleted_tracked_file_is_not_a_skip(tmp_path):
     assert extract.extract(repo).skipped == []
 
 
+@_POSIX
 def test_skips_change_the_fingerprint(tmp_path):
     repo = _repo(tmp_path, {"a.py": "", "b.py": ""})
     before = extract.fingerprint(repo)
