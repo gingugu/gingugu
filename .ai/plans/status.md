@@ -4,7 +4,8 @@ _Last updated: 2026-10-26 (board housekeeping: the shared board is done)_
 
 ## In Flight
 
-Nothing. Next up: board #5, Codebase X-ray.
+Nothing. Next up: board #5, Codebase X-ray - roadmap X1-X13 boarded, design
+of X1 (blast radius) first.
 
 ## Recently Completed
 
@@ -1295,7 +1296,7 @@ every row moved up one.
 | 2 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
 | 3 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
 | 4 | **A referee for rival memory tools** | 17 | Only a fair comparison once 3 exists |
-| 5 | **Codebase X-ray, as an MCP tool** - NEXT | 19 | Standalone; picked 2026-10-26 |
+| 5 | **Codebase X-ray, as an MCP tool** - NEXT, starting with X1 blast radius | 19 | Standalone; picked 2026-10-26. A 13-part roadmap (X1-X13) in its section below |
 | 6 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
 | 7 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
 | 8 | Session flight recorder (low priority) | 18 | Check prior art first |
@@ -1951,6 +1952,46 @@ to run or refresh the X-ray itself rather than ask for it. Open:
   later session can query it without re-parsing, and where - not as memories,
   which would flood the store's own graph.
 - **Languages.** Python imports via `ast` first; others later.
+
+**The vision (2026-10-26).** X-ray is not one tool but the repurposing of
+everything gingugu already does - rank a graph, wake what a node touches,
+speak up at the moment of action, search by meaning, queue proposals - onto
+code instead of memories. It is dual-use by nature: the same map that tells a
+defender where to look first tells an attacker where to aim. It stays local
+and owner-only - it reads the caller's disk under the caller's token - and is
+never run on someone else's behalf.
+
+**Measured 2026-10-26 on this repo (150 modules, 470 import edges):**
+
+- `dream.centrality.pagerank` is undirected and wrong for imports: it ranks
+  `server` second (imported by 1 module, imports 26). Rank must flow from
+  importer to imported; a directed PageRank puts `models`, `grants`, `config`
+  and `embeddings` on top, which is the right answer. New ranking math, so it
+  stays on the main thread.
+- `dream.clusters.propagate` returns one 133-module blob. It only splits after
+  dropping the 10+ most-imported modules, which is a tuned knob - the thing
+  `clusters.py` rejects. Module boundaries need their own approach (X5).
+- Nothing in this repo is never imported (`handlers/__init__` imports every
+  handler), so dead-file detection has to know entry points and tests to say
+  anything.
+
+**Roadmap.** Sub-items, in build order:
+
+| # | Sub-item | Reuses | Notes |
+|---|---|---|---|
+| X1 | **Blast radius** - persisted import graph keyed by repo + commit; the agent builds or refreshes it when missing or stale; spreading activation over reverse imports, ranked by directed PageRank | dream graph math, spreading activation | The foundation. Persist outside `memories` so the store's own graph is not flooded |
+| X2 | **Tripwire on edit** - a hook that names a file's dependents, top ranked first, before the edit lands | tripwires, hooks | Involuntary, like memory tripwires: the agent is told without asking |
+| X3 | **Scar tissue** - link memories (bugs, decisions, gotchas) to the files they are about; an edit surfaces both what depends on the file and what it has cost before | memory store, relations, recall | The part no code-analysis tool can have, because none holds the history |
+| X4 | **History as a second graph** - co-change coupling (files that change together without importing each other), churn x centrality x authors as hotspots, per-commit X-ray diffs as architectural drift | git log, dream proposal queue | Drift can run in the nightly dream pass and stage proposals |
+| X5 | **Module boundaries** - communities that hold up on import graphs | dream clusters | Label propagation fails as-is (see above); needs a decided approach, not a knob |
+| X6 | **Blind-spot map** - centrality x low churn x no tests x single author: where a change would reach furthest with the least review | X1, X4 | The attacker's target list, run first by the defender |
+| X7 | **Edges beyond imports** - env vars, config keys, HTTP routes, DB tables, IaC resources, MCP tool names; entry-point-to-sensitive-sink paths as an attack-surface map | X1 | Where it becomes a security instrument; the largest piece of work |
+| X8 | **Dependency X-ray** - third-party packages on the graph: which are load-bearing, how deep, what a compromised package could reach | X1, X7 | Upgrade priority, pinning, incident-day exposure |
+| X9 | **Fleet X-ray** - every repo into one central brain; cross-repo callers and cross-repo blast radius | central brain, scoped tokens | |
+| X10 | **Graph-aware fences** - approval scales with blast radius: leaf edits free, edits reaching top-ranked files need the user's go | X1, hooks, minion grants | |
+| X11 | **Predict, then score** - the agent predicts failing tests and broken files before a change; the calibration ledger scores it after | X1, calibration ledger (#2) | |
+| X12 | **Board-driven upkeep** - the nightly X-ray posts findings (dead files, new cycles, drift) to the agent board for agents to claim | X4, agent board | |
+| X13 | **Code fingerprints** - embed code units; near-duplicate logic across repos, and provenance of copied code | embeddings, hybrid search | |
 
 ### Standing rules
 
