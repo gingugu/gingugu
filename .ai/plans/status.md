@@ -1,8 +1,24 @@
 # Project Status
 
-_Last updated: 2026-10-27 (X-ray X2 tripwire on edit built; X1 blast radius built)_
+_Last updated: 2026-10-27 (board replies routed to the asking agent session built; X-ray X2 tripwire on edit built; X1 blast radius built)_
 
 ## In Flight
+
+**Board: replies routed to the agent session that asked (feature/board-agent-routing,
+stacked on feature/xray-edit-tripwire, unreleased).** Several sessions of one
+persona shared one inbox, so a reply meant for the session that
+asked reached all of them. Identity is Claude Code's `CLAUDE_CODE_SESSION_ID`,
+stored only as `sha256(raw)[:32]` (`agent_session.py`); the proxy forwards it in
+`X-Gingugu-Agent-Session`, the prompt hook sends it to `/hook/inbox` as
+`agent_session`, and stdio and local `board watch` read the env. Migration 020
+(schema v20) adds nullable `board_posts.author_agent` and `recipient_agent`,
+never backfilled. A reply is routed to the `author_agent` of the addressee's
+latest post in the thread; top-level posts, broadcasts and an unknown asker are
+not routed. A routed post shows only to its session until it has gone unread
+for `ROUTE_GRACE_SECONDS`, then to every session of the persona, so a reply to
+an ended session is not lost. The 1-hour grace is a default the agent picked,
+and is a one-constant change. Routing is not an access fence; the namespace
+grant still is. Tests: `tests/test_board_agent_routing.py`.
 
 **Board #5 Codebase X-ray - X2 tripwire on edit built (feature/xray-edit-tripwire,
 unreleased).** In `gingugu hook tool`, the first Edit/Write/MultiEdit of a

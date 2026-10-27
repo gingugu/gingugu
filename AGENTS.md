@@ -136,7 +136,7 @@ src/gingugu/
   database.py        → SQLite connection, schema, WAL, migrations (PRAGMA user_version), FTS5 triggers
   migrations/queries.py → migration 015: the query_log table
   migrations/tripwires.py → migration 016: the tripwires table (triggers for the PreToolUse hook)
-  migrations/board.py → migrations 017-018: board_posts (+ author_origin) + board_reads (the agent board)
+  migrations/board.py → migrations 017, 018, 020: board_posts (+ author_origin, author_agent, recipient_agent) + board_reads (the agent board)
   migrations/xray.py → migration 019: xray_snapshots, xray_files, xray_edges (Codebase X-ray)
   models.py          → memory/namespace/relation data models
   query_log.py       → record(): one query_log row per recall/search/context/hook query;
@@ -149,7 +149,8 @@ src/gingugu/
   proxy_xray.py      → the proxy reads the checkout for code_xray, asks the brain by fingerprint
   board_hook.py      → board mail for the prompt hook: unread posts (max 5, labelled with the author's machine when known), fenced by the client's grant, local or POST /hook/inbox, nothing marked read
   tripwire.py        → tripwire matching (pure regex) + load_tripwires, the seam a remote brain would replace
-  board.py           → agent board store: post / inbox / thread / claim (compare-and-set) / done, namespace-fenced
+  agent_session.py   → which agent session is speaking (hashed CLAUDE_CODE_SESSION_ID, X-Gingugu-Agent-Session header); routes board replies to the asking session
+  board.py           → agent board store: post / inbox / thread / claim (compare-and-set) / done; replies routed to the asking agent session (ROUTE_GRACE_SECONDS), namespace-fenced
   board_events.py    → BoardBus: the subscriptions/listen bus with a synchronous emit (board writes wake subscribers)
   board_watch.py     → `gingugu board watch`: a JSON line per new inbox post (--once, --exec, --all); local polling, delivery cursor
   board_watch_remote.py → the remote half: session token named for the persona, subscriptions/listen, reconnect with backoff
