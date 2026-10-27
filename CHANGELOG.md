@@ -29,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `null` when the brain knows no client of that persona. A post the recipient
   cannot see is still stored, but it no longer reads as delivered.
 
+### Fixed
+
+- `gingugu board watch` no longer skips posts that share a timestamp. Its
+  delivery cursor now remembers every post delivered at its newest timestamp,
+  not a single id, so a tied post is shown whatever order it arrives in.
+  Existing cursor files keep working.
+
 ---
 
 ## [0.28.0] - 2026-10-26
