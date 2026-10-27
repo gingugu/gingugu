@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import time
 from pathlib import Path
 
 from . import extract, local, rank
@@ -22,24 +23,46 @@ from .scan import XrayError
 
 TOP_N = 5
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit"}
+_STATE_TTL_SECONDS = 7 * 24 * 3600
 
 
 def enabled() -> bool:
     return os.environ.get("MEMORY_XRAY_TRIPWIRE", "on").lower() not in ("0", "off", "false")
 
 
-def _write_json(path: Path, data: object) -> None:
-    """Owner-only, no symlink following; the files are optimisations, so a
-    failed write is swallowed (same pattern as ``hook_remote_flows``)."""
+def _write_json(path: Path, data: object) -> bool:
+    """Owner-only, written whole to a fresh temp file and renamed into place,
+    so a parallel hook never reads half a file and a link planted at the temp
+    name is refused. False when it could not be written."""
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     try:
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
-        fd = os.open(path, flags, 0o600)
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(tmp, flags, 0o600)
         with os.fdopen(fd, "w") as handle:
             handle.write(json.dumps(data))
-        os.chmod(path, 0o600)  # an older, looser file keeps its mode on O_CREAT
+        os.replace(tmp, path)
+        return True
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        return False
+
+
+def _sweep(state_dir: Path) -> None:
+    """Drop X-ray state untouched for a week, as ``tool_hook`` does for tripwires."""
+    cutoff = time.time() - _STATE_TTL_SECONDS
+    try:
+        for entry in state_dir.glob("xray-*.json"):
+            if entry.stat().st_mtime < cutoff:
+                entry.unlink(missing_ok=True)
     except OSError:
         pass
+
+
+def _show(path: str) -> str:
+    """A repo path as the agent reads it. Git allows newlines and control
+    characters in names; quoted, a planted name cannot start a line of its own."""
+    return path if path.isprintable() else json.dumps(path)
 
 
 def _read_json(path: Path) -> object:
@@ -119,14 +142,14 @@ def _render(rel: str, blast: dict) -> str:
     n_files = code_total + tests_total
     noun = "candidate test" if tests_total == 1 else "candidate tests"
     lines = [
-        f"GINGUGU X-RAY: {rel} is imported by {n_files} file{'' if n_files == 1 else 's'} "
+        f"GINGUGU X-RAY: {_show(rel)} is imported by {n_files} file{'' if n_files == 1 else 's'} "
         f"({tests_total} {noun})."
     ]
     if code:
         lines.append("Top dependents by rank:")
         for row in code[:TOP_N]:
             hop = row["hops"]
-            lines.append(f"- {row['path']} ({hop} hop{'' if hop == 1 else 's'})")
+            lines.append(f"- {_show(row['path'])} ({hop} hop{'' if hop == 1 else 's'})")
         if code_total > TOP_N:
             lines.append(f"... and {code_total - TOP_N} more")
     if tests:
@@ -140,7 +163,7 @@ def _render(rel: str, blast: dict) -> str:
                 r["path"],
             ),
         )
-        listed = ", ".join(row["path"] for row in tests[:TOP_N])
+        listed = ", ".join(_show(row["path"]) for row in tests[:TOP_N])
         more = f" (+{tests_total - TOP_N} more)" if tests_total > TOP_N else ""
         lines.append(f"Candidate tests: {listed}{more}")
     lines.append(
@@ -157,8 +180,11 @@ def check(payload: dict, state_dir: Path) -> str | None:
         target = _target(payload)
         if target is None:
             return None
+        session_id = payload.get("session_id")
+        if not isinstance(session_id, str) or not session_id:
+            return None  # a shared "unknown" would let one session silence another
         root, rel = target
-        tripped_file = _tripped_path(state_dir, payload.get("session_id"))
+        tripped_file = _tripped_path(state_dir, session_id)
         key = f"{root}\0{rel}"
         tripped = _load_tripped(tripped_file)
         if key in tripped:
@@ -169,7 +195,11 @@ def check(payload: dict, state_dir: Path) -> str | None:
         blast = rank.blast([rel], files, links, ranks)
         if blast["code_total"] + blast["tests_total"] == 0:
             return None
-        _write_json(tripped_file, [*tripped, key])
+        # Deny only once "shown" is on disk: otherwise every retry is denied
+        # again and the file can never be edited.
+        if not _write_json(tripped_file, [*tripped, key]):
+            return None
+        _sweep(state_dir)
         return _render(rel, blast)
     except (XrayError, ValueError, OSError):
         return None
