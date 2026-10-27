@@ -6,7 +6,7 @@ _Last updated: 2026-10-27 (board replies routed to the asking agent session buil
 
 **Board: replies routed to the agent session that asked (feature/board-agent-routing,
 stacked on feature/xray-edit-tripwire, unreleased).** Several sessions of one
-persona on one machine shared one inbox, so a reply meant for the session that
+persona shared one inbox, so a reply meant for the session that
 asked reached all of them. Identity is Claude Code's `CLAUDE_CODE_SESSION_ID`,
 stored only as `sha256(raw)[:32]` (`agent_session.py`); the proxy forwards it in
 `X-Gingugu-Agent-Session`, the prompt hook sends it to `/hook/inbox` as
