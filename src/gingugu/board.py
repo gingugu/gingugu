@@ -19,6 +19,7 @@ from __future__ import annotations
 import re
 import sqlite3
 import uuid
+from datetime import UTC, datetime, timedelta
 
 from . import grants
 from .models import utcnow_iso
@@ -27,13 +28,14 @@ BROADCAST = "*"
 KINDS = ("message", "task")
 MAX_BODY = 16_000
 MAX_LIMIT = 200
+ROUTE_GRACE_SECONDS = 3600  # a routed reply reaches every session after this long
 _PERSONA_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 _URI_PREFIX = "gingugu://board/inbox/"
 
 _SELECT = (
     "SELECT p.id, p.parent_id, n.name AS namespace, p.namespace_id, p.author, p.author_session, "
-    "p.author_origin, p.recipient, p.kind, p.status, p.claimed_by, p.body, p.created_at, "
-    "p.updated_at "
+    "p.author_origin, p.author_agent, p.recipient, p.recipient_agent, p.kind, p.status, "
+    "p.claimed_by, p.body, p.created_at, p.updated_at "
     "FROM board_posts p JOIN namespaces n ON n.id = p.namespace_id"
 )
 
@@ -105,6 +107,19 @@ def _reply_to(
     return _require(conn, root_id)["recipient"]  # nobody has answered: nudge whoever I asked
 
 
+def _route(conn: sqlite3.Connection, root_id: str, recipient: str) -> str | None:
+    """The agent session a reply to ``recipient`` is for: the session behind their
+    latest post in the thread. None for a broadcast or an unknown session."""
+    if recipient == BROADCAST:
+        return None
+    row = conn.execute(
+        "SELECT author_agent FROM board_posts WHERE author = ? AND (id = ? OR parent_id = ?) "
+        "ORDER BY created_at DESC, rowid DESC LIMIT 1",
+        (recipient, root_id, root_id),
+    ).fetchone()
+    return row["author_agent"] if row else None
+
+
 def post(
     conn: sqlite3.Connection,
     *,
@@ -116,6 +131,7 @@ def post(
     parent_id: str | None = None,
     author_session: str | None = None,
     author_origin: str | None = None,
+    author_agent: str | None = None,
 ) -> dict:
     """Leave a post; a reply joins its parent's thread, namespace and author."""
     if kind not in KINDS:
@@ -132,13 +148,15 @@ def post(
     recipient = recipient or BROADCAST
     if not is_persona(recipient):
         raise BoardError(f"recipient {recipient!r} is not a persona name or '*'")
+    route = _route(conn, parent_id, recipient) if parent_id else None
     grants.require_write_id(namespace_id, "this namespace's board")
     now = utcnow_iso()
     post_id = str(uuid.uuid4())
     conn.execute(
         "INSERT INTO board_posts(id, namespace_id, parent_id, author, author_session, "
-        "author_origin, recipient, kind, status, claimed_by, body, created_at, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', NULL, ?, ?, ?)",
+        "author_origin, author_agent, recipient, recipient_agent, kind, status, claimed_by, "
+        "body, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', NULL, ?, ?, ?)",
         (
             post_id,
             namespace_id,
@@ -146,7 +164,9 @@ def post(
             author,
             author_session,
             author_origin,
+            author_agent,
             recipient,
+            route,
             kind,
             body,
             now,
@@ -157,7 +177,7 @@ def post(
 
 
 def _inbox_where(
-    reader: str, include_read: bool, origin: str | None = None
+    reader: str, include_read: bool, origin: str | None = None, agent: str | None = None
 ) -> tuple[str, list[object]]:
     # My own persona's post is mail only from a twin: both machines known, and not mine.
     clauses = [
@@ -166,8 +186,11 @@ def _inbox_where(
         "AND p.author_origin != ?))",
         "p.status != 'done'",
         "(p.status = 'open' OR p.claimed_by = ?)",
+        # A routed reply is for one session until it has sat unread for the grace.
+        "(p.recipient_agent IS NULL OR ? IS NULL OR p.recipient_agent = ? OR p.created_at <= ?)",
     ]
-    params: list[object] = [reader, BROADCAST, reader, origin, origin, reader]
+    cutoff = (datetime.now(UTC) - timedelta(seconds=ROUTE_GRACE_SECONDS)).isoformat()
+    params: list[object] = [reader, BROADCAST, reader, origin, origin, reader, agent, agent, cutoff]
     if not include_read:
         clauses.append(
             "NOT EXISTS (SELECT 1 FROM board_reads r WHERE r.post_id = p.id AND r.reader = ?)"
@@ -187,9 +210,11 @@ def inbox(
     include_read: bool = False,
     limit: int = 50,
     origin: str | None = None,
+    agent: str | None = None,
 ) -> list[dict]:
-    """What is waiting for ``reader`` (on machine ``origin``, if known), oldest first."""
-    where, params = _inbox_where(reader, include_read, origin)
+    """What is waiting for ``reader`` (machine ``origin`` and agent session ``agent``,
+    if known), oldest first."""
+    where, params = _inbox_where(reader, include_read, origin, agent)
     rows = conn.execute(
         f"{_SELECT} WHERE {where} ORDER BY p.created_at, p.rowid LIMIT ?",
         [*params, min(max(1, int(limit)), MAX_LIMIT)],
@@ -197,8 +222,10 @@ def inbox(
     return [_row(r) for r in rows]
 
 
-def unread_count(conn: sqlite3.Connection, reader: str, origin: str | None = None) -> int:
-    where, params = _inbox_where(reader, False, origin)
+def unread_count(
+    conn: sqlite3.Connection, reader: str, origin: str | None = None, agent: str | None = None
+) -> int:
+    where, params = _inbox_where(reader, False, origin, agent)
     return conn.execute(f"SELECT count(*) FROM board_posts p WHERE {where}", params).fetchone()[0]
 
 

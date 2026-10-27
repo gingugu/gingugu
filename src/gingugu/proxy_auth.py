@@ -19,6 +19,7 @@ from collections.abc import AsyncGenerator
 import anyio
 import httpx2
 
+from . import agent_session
 from .proxy_session import derive
 from .remote_tls import verify_for
 
@@ -108,5 +109,8 @@ class SessionAuth(httpx2.Auth):
 def brain_client(url: str, tokens: SessionTokens) -> httpx2.AsyncClient:
     """The proxy's ``/mcp`` client: session auth, long reads, and the brain's TLS pin."""
     return httpx2.AsyncClient(
-        auth=SessionAuth(tokens), timeout=httpx2.Timeout(30, read=300), verify=verify_for(url)
+        auth=SessionAuth(tokens),
+        headers=agent_session.headers(),
+        timeout=httpx2.Timeout(30, read=300),
+        verify=verify_for(url),
     )
