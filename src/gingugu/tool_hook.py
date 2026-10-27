@@ -142,12 +142,12 @@ def _emit(reason: str, count: int) -> None:
 
 def _xray(payload: dict, tool_name: str) -> str | None:
     """The X-ray reason for an edit, or None. A bug in it never breaks the hook."""
-    from .xray import edit_hook
-
-    # Every tool call passes through here: rule out the non-edits before any I/O.
-    if tool_name not in edit_hook.EDIT_TOOLS or not edit_hook.enabled():
-        return None
     try:
+        from .xray import edit_hook
+
+        # Every tool call passes through here: rule out the non-edits before any I/O.
+        if tool_name not in edit_hook.EDIT_TOOLS or not edit_hook.enabled():
+            return None
         from .config import load_config
 
         return edit_hook.check(payload, load_config().db_path.parent / "hook-sessions")
