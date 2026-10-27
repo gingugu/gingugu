@@ -29,7 +29,7 @@ import threading
 from pathlib import Path
 from typing import TextIO
 
-from . import board, grants
+from . import agent_session, board, grants
 from .board_watch_emit import (  # noqa: F401 - re-exported
     MAX_EXEC_PER_BATCH,
     Cursor,
@@ -63,12 +63,13 @@ def watch_local(
     from .recall_sweep import connect_readonly
 
     stop = stop or threading.Event()
+    agent = agent_session.key(agent_session.local_raw())
     conn = connect_readonly(db_path)
     conn.row_factory = sqlite3.Row
     try:
         while not stop.is_set():
             with grants.bind(grant, conn):
-                posts = board.inbox(conn, me, limit=board.MAX_LIMIT)
+                posts = board.inbox(conn, me, limit=board.MAX_LIMIT, agent=agent)
             if emitter.emit(posts) and once:
                 return
             stop.wait(interval)

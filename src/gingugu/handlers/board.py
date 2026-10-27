@@ -18,7 +18,7 @@ import os
 
 from mcp.shared.subscriptions import ResourceUpdated
 
-from .. import board, board_delivery, grants
+from .. import agent_session, board, board_delivery, grants
 from ..grants import Grant, origin_name
 from ..session import current_session_id
 from . import ServerContext
@@ -70,7 +70,7 @@ def unread_note(ctx: ServerContext) -> dict | None:
     if me in ("local", "unknown", "minion", board.BROADCAST) or not board.is_persona(me):
         return None
     try:
-        return {"unread": board.unread_count(ctx.conn, me, _origin(ctx))}
+        return {"unread": board.unread_count(ctx.conn, me, _origin(ctx), agent_session.current())}
     except Exception:  # noqa: BLE001 - a count must never cost the session its context
         logger.exception("board unread count failed")
         return None
@@ -109,6 +109,9 @@ def register(mcp, ctx: ServerContext) -> None:
         given), "claim" (post_id of an open task: exactly one agent wins), "done"
         (post_id: by its author or claimer).
 
+        A reply goes to the session that asked; other sessions of that persona see it
+        once it has gone unread for an hour.
+
         A post is seen only by readers of its namespace. A post or reply to a persona
         returns ``delivery``: ``visible`` true (a known client of theirs can currently
         read that namespace - access, not a read receipt), false (none can), or null
@@ -119,13 +122,14 @@ def register(mcp, ctx: ServerContext) -> None:
         try:
             me, origin = _caller(ctx), _origin(ctx)
             if action == "inbox":
+                agent = agent_session.current()
                 posts = board.inbox(
-                    ctx.conn, me, include_read=include_read, limit=limit, origin=origin
+                    ctx.conn, me, include_read=include_read, limit=limit, origin=origin, agent=agent
                 )
                 return {
                     "ok": True,
                     "me": me,
-                    "unread": board.unread_count(ctx.conn, me, origin),
+                    "unread": board.unread_count(ctx.conn, me, origin, agent),
                     "posts": posts,
                 }
             if action in ("read", "reply", "claim", "done") and not post_id:
@@ -152,6 +156,7 @@ def register(mcp, ctx: ServerContext) -> None:
                     parent_id=post_id if action == "reply" else None,
                     author_session=current_session_id(),
                     author_origin=origin,
+                    author_agent=agent_session.current(),
                 )
             elif action == "claim":
                 made = board.claim(ctx.conn, post_id, me)
@@ -189,5 +194,10 @@ def register(mcp, ctx: ServerContext) -> None:
         if grant is None:
             return json.dumps({"error": "unauthorized"})
         with grants.bind(grant, ctx.conn):
-            posts = board.inbox(ctx.conn, persona, origin=origin_for(ctx.transport, grant))
+            posts = board.inbox(
+                ctx.conn,
+                persona,
+                origin=origin_for(ctx.transport, grant),
+                agent=agent_session.current(),
+            )
         return json.dumps({"persona": persona, "posts": posts})

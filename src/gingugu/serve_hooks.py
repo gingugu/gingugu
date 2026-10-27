@@ -170,20 +170,22 @@ def _run_trip(ctx, args: tuple) -> dict:
 
 
 def _parse_inbox(body: dict) -> tuple:
-    from . import board
+    from . import agent_session, board
 
     persona = body.get("persona")
     if not isinstance(persona, str) or persona == board.BROADCAST or not board.is_persona(persona):
         raise _BadRequest("persona must be a persona name")
     names = None if body.get("namespaces") is None else _names(body)
-    return persona, names, set(_ids(body, "shown"))
+    agent = agent_session.key(body.get("agent_session"))  # malformed reads as unknown
+    return persona, names, set(_ids(body, "shown")), agent
 
 
 def _run_inbox(ctx, args: tuple) -> dict:
     from .board_hook import unread_local
 
-    persona, names, shown, origin = args
-    return {"posts": unread_local(ctx.config.db_path, persona, names, shown, origin=origin)}
+    persona, names, shown, agent, origin = args
+    posts = unread_local(ctx.config.db_path, persona, names, shown, origin=origin, agent=agent)
+    return {"posts": posts}
 
 
 # --- warm-up -----------------------------------------------------------------
