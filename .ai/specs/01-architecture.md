@@ -52,12 +52,13 @@ AI client (Claude Code / Cursor / Windsurf / …)
 3. **Core** - `storage`, `search`, `embeddings`, `embedding_text`, `chunking`,
    `context`, `relations`, `consolidation`, `decay`, `stats`, `namespaces`,
    `portability`, `capability`, `grants` (the per-call grant every chokepoint
-   consults), `serve_tokens`, `tripwire` (the decision half of the `PreToolUse` hook; see
-   Key Decisions), `board` + `board_events` (the agent board store and its
+   consults), `serve_tokens`, `tripwire` (the memory-tripwire decision half of the `PreToolUse` hook; its other half is
+   `xray/edit_hook`; see Key Decisions), `board` + `board_events` (the agent board store and its
    `subscriptions/listen` bus; see Key Decisions), `board_delivery` (the post/reply
    delivery receipt: can the recipient persona's known clients read the namespace),
    `xray/` (Codebase X-ray: `scan` + `extract` + `resolve` + `local` on the client, `validate` +
-   `rank` + `store` on the brain; see Key Decisions), `proxy_xray` (the proxy's local half of `code_xray`),
+   `rank` + `store` on the brain, plus `edit_hook`, the hook side that builds the graph itself and never
+   touches the brain; see Key Decisions), `proxy_xray` (the proxy's local half of `code_xray`),
    `board_watch` +
    `board_watch_remote`, `board_watch_emit` (the `gingugu board watch` wake-up command; see Key
    Decisions), `board_hook` (board mail for the prompt hook; see Key Decisions), `cli_usage` (the top-level help text), `minion_fence`, `subagent_hook` and `subagent_warmup` (see Warm minions),
@@ -670,7 +671,8 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   gingugu CLI in command position (a speed bump), and the write and
   `credential_*` tools of the inherited `mcp__gingugu__` server (reads open),
   which also covers built-in agents such as Explore. Own switch
-  `MEMORY_MINION_FENCE=off`, independent of `MEMORY_TRIPWIRES`. The tripwire
+  `MEMORY_MINION_FENCE=off`, independent of `MEMORY_TRIPWIRES` and of
+  `MEMORY_XRAY_TRIPWIRE` (the X-ray edit check's switch). The tripwire
   doorway passes `mcp__gingugu__*` through when `agent_id` is set so the fence
   decides.
 - **Threat model:** prevents accidents, not a hostile same-user process. An OS
@@ -702,6 +704,31 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   and an explicit `refresh` replaces a snapshot whose `graph_digest` differs.
   *Coverage is honest*: every source not read is a skip with a reason, and
   only a deliberate one (a symlink) leaves the graph `complete`.
+- **Codebase X-ray: tripwire on edit (X2, unreleased).** The first
+  Edit/Write/MultiEdit of a `.py` file that other files import is denied once
+  per file per Claude Code session, in `gingugu hook tool`. The reason lists
+  how many files import it and how many candidate tests, the top 5 dependents
+  by rank with hop counts, up to 5 candidate tests (`test_*.py` first, nearest
+  first) and an "import-based estimate" caveat; the re-issued edit passes.
+  *Deny, not inform-after*, for the reason memory tripwires deny: a
+  `PreToolUse` `additionalContext` lands next to the tool result, after the
+  edit. *Local, no brain round trip*: the hook builds the graph itself from the
+  git checkout with the same extractor as `code_xray` and caches it per repo by
+  content fingerprint, so it works the same with a remote brain. Measured on
+  this repo (356 `.py` files): 1.46s for the whole hook process on the first
+  edit with a graph rebuild, 0.5s cached. State lives beside the DB in
+  `hook-sessions/`: `xray-graph-<sha16(root)>.json` (cache) and
+  `xray-tripped-<session>.json`; owner-only 0600, written to a temp file and
+  renamed, swept after 7 days untouched. *Silent by construction*: a file
+  nothing imports, a new file, a non-`.py` file, a path outside a git repo, a
+  missing session id or any failure passes; it denies only once its "shown"
+  state is saved, so a failed write can never block an edit forever. File
+  names with control characters are quoted in the deny text. Own switch
+  `MEMORY_XRAY_TRIPWIRE` (default on), independent of `MEMORY_TRIPWIRES` and
+  `MEMORY_MINION_FENCE`. Order in `tool_hook.run`: minion fence, X-ray, memory
+  tripwires; when a memory tripwire and the X-ray both fire on one call they
+  share one deny (tripwire reason, blank line, X-ray reason). X-ray denies are
+  not logged to `query_log`.
 - **Destructive tools ask the user, not the model (unreleased).** Five paths
   confirm through MCP elicitation (SDK 2.x `Resolve` + `Elicit`): a hard
   `memory_forget`, a cascading `memory_namespaces` delete of a non-empty
@@ -839,7 +866,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   a target repo: for Claude Code, a `SessionStart` hook that auto-injects the
   memory startup contract every session (a rules file is not guaranteed to load
   into context; a hook is), a `Stop` save-discipline hook, a `UserPromptSubmit` hook (involuntary
-  recall), a `PreToolUse` hook (tripwires, via the
+  recall), a `PreToolUse` hook (tripwires, the X-ray edit check, via the
   `.claude/hooks/pre_tool_tripwire.py` doorway), and the
   `/sink-the-ship` skill (`.claude/skills/sink-the-ship/SKILL.md`, the format
   Anthropic's docs steer new work to; the legacy `.claude/commands/` copy is
@@ -1154,7 +1181,9 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   failure exits 0 silently, which is the normal permission flow, and each trip
   is logged to `query_log` as `tool='tripwire'`. Accepted v1 limitation: after
   context compaction the memory may drop out of context while suppression still
-  counts it as shown.
+  counts it as shown. The same hook also carries the X-ray edit check, a
+  second deny on its own switch (see the Codebase X-ray: tripwire on edit
+  decision).
 - **The agent board is its own pair of tables, and the author is never an
   argument.** (2026-10.) Agents sharing a brain could only talk by writing a
   memory and hoping the other recalled it. A post is not a memory: it is

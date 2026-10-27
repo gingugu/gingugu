@@ -521,7 +521,19 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
   → survivors piped to `gingugu hook tool`
       → minion fence / spawn stash first (see "Warm minions"; independent of
         MEMORY_TRIPWIRES)
-      → MEMORY_TRIPWIRES=off: exit
+      → X-ray edit check (xray/edit_hook; its own switch, runs before the
+        MEMORY_TRIPWIRES check and does not exit the hook)
+          Edit/Write/MultiEdit of a .py file, else skip
+          MEMORY_XRAY_TRIPWIRE=off: skip
+          git root + content fingerprint of the checkout
+          graph cache hook-sessions/xray-graph-<sha16(root)>.json; rebuilt
+          locally with the code_xray extractor on a fingerprint miss
+          blast radius of the file (rank.blast); nothing imports it → skip
+          already in hook-sessions/xray-tripped-<session>.json → skip
+          save the file to that state (a failed write → skip), then the
+          X-ray reason: importer count, top 5 dependents with hops, up to 5
+          candidate tests, import-based-estimate caveat
+      → MEMORY_TRIPWIRES=off: skip memory tripwires (not the X-ray above)
       → namespaces_for(cwd) (narrowed by the client's grant; [] → exit before any lookup)
       → load_tripwires(crow + <persona> + <cwd-derived project>)   read-only SQLite
           skips deprecated and superseded memories; pinned ones DO trip
@@ -533,6 +545,8 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
       → drop memories already tripped this session
         (hook-sessions/tripwires-<session_id>.json, its own file beside the
         prompt hook's state)
+      → combined deny: if the X-ray also fired, its reason follows the
+        tripwire reason after a blank line, in ONE deny
       → first match: permissionDecision "deny", reason = title + summary +
         "re-issue unchanged to pass"; systemMessage tells the user a tripwire
         stopped a call; ids recorded in the state file; one query_log row
@@ -545,6 +559,7 @@ the tool *result*, after the call ran, so it cannot warn in time. Denying is the
 only way to speak first; the retry passing keeps the block to one interruption
 per memory per session. Misses are not logged (the hook runs on every tool
 call), and every failure exits 0 silently, which is the normal permission flow.
+X-ray denies are not logged to `query_log` (memory trips still are).
 In remote mode the brain runs `load_tripwires` and the client matches the
 rules it returns (see **Hooks in remote mode**).
 
@@ -624,6 +639,8 @@ UserPromptSubmit → `gingugu hook prompt`
 
 PreToolUse → `gingugu hook tool`
   → minion fence + spawn stash (local, unchanged)
+  → X-ray edit check: entirely local (checkout, graph cache, tripped state);
+    no request to the brain, so it is identical in remote mode
   → rules: hook-sessions/tripwire-rules-<sha(url, namespaces)>.json if < 60s old,
            else POST /hook/tripwires {namespaces}; on failure the stale copy
            (namespaces grant-narrowed and _sendable-filtered, as for recall)
