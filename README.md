@@ -79,7 +79,8 @@ once, never ranked. `gingugu board watch` wakes an idle agent when one arrives.
 **Codebase X-ray** (`code_xray`) maps a Python repository's import graph: before an
 edit, an agent asks what the change reaches and which tests to run, and which files
 the rest of the code leans on. It reads your checkout on your machine, even when the
-brain is remote, and rebuilds itself whenever the code changes.
+brain is remote, and rebuilds itself whenever the code changes. The tool hook also
+tells the agent on its first edit of an imported file what depends on it.
 
 That is the part that makes the memory worth having, and it is in the box.
 
@@ -768,7 +769,12 @@ It installs:
   with the memory as the reason; re-issue it unchanged and it passes. Your
   memory tools never trip, so a bad tripwire can always be fixed. (Inside a
   subagent the minion fence still denies their write tools - that is a separate
-  check, not a tripwire.) Each trip is recorded in `query_log`. Set `MEMORY_TRIPWIRES=off` to disable it.
+  check, not a tripwire.) Each trip is recorded in `query_log`. Set `MEMORY_TRIPWIRES=off` to disable memory tripwires.
+  The same hook also runs the **X-ray edit tripwire**: the first edit of a Python
+  file that other files import is denied once per file per session, with the
+  files that import it and the tests worth running; re-issue the edit and it
+  passes. It reads your checkout locally and never asks the brain. Set
+  `MEMORY_XRAY_TRIPWIRE=off` to disable it.
 - **`.claude/skills/sink-the-ship/SKILL.md`** — a `/sink-the-ship` skill to flush
   everything worth keeping before you close a session. If an older install left a
   `.claude/commands/sink-the-ship.md` behind, `gingugu init` retires it and keeps
@@ -1090,6 +1096,7 @@ Environment variables (all optional):
 | `MEMORY_GRANT` | *(unset)* | Fence a stdio server like a scoped token: `ns=read\|write,...` (e.g. `my-project=read,minions=write`). Unset is full access. A bad spec, an empty value, or `*=write` refuses to start. Used by a subagent's own `brain` server in its agent file. The client's hooks follow it too, whether it is set in the MCP server's `env` block (the server publishes it) or in the hooks' own environment: recall, tripwires and minion warm-up stay inside it, and an unusable value or a disagreement keeps them quiet |
 | `MEMORY_PERSONA` | *(unset)* | This agent's own namespace (e.g. `research`). Recall, tripwires and the SessionStart contract load `crow`, then the persona, then the repo (recall and tripwires narrowed by `MEMORY_GRANT` when set). A malformed value is ignored |
 | `MEMORY_REMOTE_URL` | *(unset)* | Use this remote brain for this client only (`off` forces local). A bare `gingugu` then relays to it; the credential vault stays local |
+| `MEMORY_XRAY_TRIPWIRE` | `on` | Set `off` to disable the X-ray edit tripwire in `gingugu hook tool` (the first edit of an imported `.py` file per session is denied with its dependents) |
 | `MEMORY_MINION_FENCE` | `on` | Set `off` to disable the subagent fence in `gingugu hook tool` (data-dir file/shell access and inherited-server writes) |
 | `MEMORY_SERVE_HOST` | `127.0.0.1` | Bind host for `gingugu serve` (set `0.0.0.0` to accept remote connections) |
 | `MEMORY_SERVE_PORT` | `8765` | Bind port for `gingugu serve` |
