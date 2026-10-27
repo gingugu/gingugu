@@ -144,7 +144,8 @@ def _xray(payload: dict, tool_name: str) -> str | None:
     """The X-ray reason for an edit, or None. A bug in it never breaks the hook."""
     from .xray import edit_hook
 
-    if not tool_name or tool_name.startswith(_SELF_PREFIX) or not edit_hook.enabled():
+    # Every tool call passes through here: rule out the non-edits before any I/O.
+    if tool_name not in edit_hook.EDIT_TOOLS or not edit_hook.enabled():
         return None
     try:
         from .config import load_config
@@ -155,7 +156,6 @@ def _xray(payload: dict, tool_name: str) -> str | None:
 
 
 def _emit_xray(reason: str) -> None:
-    count = reason.split(" is imported by ", 1)[-1].split(" ", 1)[0]
     print(
         json.dumps(
             {
@@ -164,7 +164,7 @@ def _emit_xray(reason: str) -> None:
                     "permissionDecision": "deny",
                     "permissionDecisionReason": reason,
                 },
-                "systemMessage": f"gingugu: X-ray stopped an edit ({count} dependents)",
+                "systemMessage": "gingugu: X-ray stopped an edit (it has dependents)",
             }
         )
     )
@@ -175,7 +175,12 @@ def run(payload: dict) -> int:
     if _minion_and_spawn(payload):
         return 0
     xray = _xray(payload, payload.get("tool_name") or "")
-    trip = _memory_trip(payload)
+    try:
+        trip = _memory_trip(payload)
+    except Exception:  # noqa: BLE001 - the X-ray already marked this file shown
+        if not xray:
+            raise
+        trip = None
     if trip is None:
         if xray:
             _emit_xray(xray)

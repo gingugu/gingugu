@@ -130,6 +130,16 @@ def _render(rel: str, blast: dict) -> str:
         if code_total > TOP_N:
             lines.append(f"... and {code_total - TOP_N} more")
     if tests:
+        # Rank says little about tests: fixtures and helpers outrank them. List
+        # what can be run, nearest the edit first.
+        tests = sorted(
+            tests,
+            key=lambda r: (
+                not r["path"].rsplit("/", 1)[-1].startswith("test_"),
+                r["hops"],
+                r["path"],
+            ),
+        )
         listed = ", ".join(row["path"] for row in tests[:TOP_N])
         more = f" (+{tests_total - TOP_N} more)" if tests_total > TOP_N else ""
         lines.append(f"Candidate tests: {listed}{more}")
