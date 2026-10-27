@@ -93,7 +93,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    record (`provenance`, `about`) and the FTS5 rebuild that indexes them,
    `queries.py` for the query log (`query_log`, migration 015),
    `tripwires.py` for the tripwire triggers (`tripwires`, migration 016),
-   `board.py` for the agent board (`board_posts`, `board_reads`, migrations 017-018),
+   `board.py` for the agent board (`board_posts`, `board_reads`, migrations 017, 018, 020),
    `xray.py` for Codebase X-ray (`xray_snapshots`, `xray_files`, `xray_edges`, migration 019), and
    `__init__.py` for the ordered registry and the runner. `config.py` resolves
    the DB path.
@@ -1190,7 +1190,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   memory and hoping the other recalled it. A post is not a memory: it is
   addressed, read once, and a task on it is claimed and finished, so storing
   posts as memories would put chatter into the graph and the ranking.
-  `board_posts` and `board_reads` (migration 017; 018 adds `author_origin`) are separate tables; unread is
+  `board_posts` and `board_reads` (migration 017; 018 adds `author_origin`; 020 adds `author_agent` and `recipient_agent`) are separate tables; unread is
   the absence of a `board_reads` row, so marking read is an idempotent insert
   and the inbox an anti-join. `kind` and `status` are validated in Python, not
   `CHECK` constraints, so a new kind needs no table rebuild. Threads are one
@@ -1271,8 +1271,22 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `GINGUGU_POST_ORIGIN`). Why machine and not session: the brain-side
   `Mcp-Session-Id` changes on every reconnect and a watcher holds a different
   one than its agent, so session-based filtering would echo an agent's own
-  posts back through its own watcher. Limit: two sessions of one persona on the
-  same machine still read as one agent.
+  posts back through its own watcher. Replies are routed per agent session
+  separately (below).
+- **Route replies by agent session, not just persona.** (2026-10.) Several
+  sessions of one persona on one machine share one inbox, so a reply meant for
+  the session that asked reached all of them. A post records `author_agent`
+  (migration 020), the hash of Claude Code's `CLAUDE_CODE_SESSION_ID`; a reply to
+  a persona stores `recipient_agent` = the `author_agent` of that persona's latest
+  post in the thread (`board._route`). Only the hash is stored because the raw
+  id is a live handle to a transcript. A routed post shows only to that session
+  until it has gone unread for `ROUTE_GRACE_SECONDS` (1 hour), then to every
+  session of the persona: exclusive delivery would lose a reply whose session
+  ended. Top-level posts, broadcasts and an unknown session are never routed,
+  and a reader with no known session sees everything, as before. Routing is not
+  an access fence - the namespace grant still is, and reading a post by id is
+  unchanged. The session travels as `X-Gingugu-Agent-Session` from the proxy,
+  as `agent_session` in `/hook/inbox`, and from the env over stdio.
 - **A capability is a memory type with its structure in metadata, and recall
   gives it its own lane.** (2026-10-01.) Memory recorded procedures and never
   artifacts: one integration's REST mechanics were written down four times and

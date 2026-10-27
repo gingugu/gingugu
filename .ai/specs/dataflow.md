@@ -628,7 +628,9 @@ UserPromptSubmit → `gingugu hook prompt`
     shown} -> {posts}; 3s timeout; brain: read-only grant-bound inbox query
     for persona + origin (the calling owner token's name, never the body; a
     twin persona on another machine's posts count as mail), minus the shown ids; shown ids stay in local hook-sessions/ under
-    board:<session>. A persona agent's one-liner therefore makes this request
+    board:<session>. The body also carries agent_session (the raw Claude Code
+    session id, hashed by the brain): a post routed to another session of the
+    persona is held back until it has gone unread for ROUTE_GRACE_SECONDS (1h). A persona agent's one-liner therefore makes this request
   → length gate (local; no recall request for a one-liner)
   → namespaces_for(cwd), narrowed by the client's grant ([] → exit), then _sendable
     drops any name the routes would refuse
