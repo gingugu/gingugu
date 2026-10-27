@@ -127,13 +127,68 @@ def test_an_asker_with_no_known_session_is_not_routed(conn, ns):
     assert _ids(board.inbox(conn, "beepboop", agent=B)) == [reply["id"]]
 
 
-def test_routing_follows_the_recipients_latest_post_in_the_thread(conn, ns):
+def test_a_reply_goes_to_the_session_of_the_post_it_answers(conn, ns):
+    # Review repro: routing by the recipient's LATEST post sent a reply to A's
+    # post to B, because B had spoken in the thread since.
     ask, _ = _thread(conn, ns, asker=A)
-    board.post(
+    more = board.post(
         conn, namespace_id=ns, author="beepboop", body="more", parent_id=ask["id"], author_agent=B
     )
-    again = board.post(conn, namespace_id=ns, author="tyrone", body="ok", parent_id=ask["id"])
-    assert again["recipient_agent"] == B
+    to_a = board.post(conn, namespace_id=ns, author="tyrone", body="ok", parent_id=ask["id"])
+    to_b = board.post(conn, namespace_id=ns, author="tyrone", body="ok", parent_id=more["id"])
+    assert to_a["recipient_agent"] == A
+    assert to_b["recipient_agent"] == B
+
+
+def test_a_twin_on_another_machine_answering_reaches_the_asker(conn, ns):
+    # Review repro: B (same persona, other machine) answering A's post was
+    # routed to B's own latest post, hiding the reply from A for the grace.
+    ask = board.post(
+        conn,
+        namespace_id=ns,
+        author="beepboop",
+        recipient="tyrone",
+        body="?",
+        author_agent=A,
+        author_origin="mac-a",
+    )
+    board.post(
+        conn,
+        namespace_id=ns,
+        author="beepboop",
+        body="me too",
+        parent_id=ask["id"],
+        author_agent=B,
+        author_origin="mac-b",
+    )
+    reply = board.post(
+        conn,
+        namespace_id=ns,
+        author="beepboop",
+        body="answer",
+        parent_id=ask["id"],
+        author_agent=B,
+        author_origin="mac-b",
+    )
+    assert reply["recipient"] == "beepboop"
+    assert reply["recipient_agent"] == A
+    inbox_a = [p["id"] for p in board.inbox(conn, "beepboop", origin="mac-a", agent=A)]
+    assert reply["id"] in inbox_a  # "me too" is a twin reply to A as well
+
+
+def test_an_asker_nudging_their_own_thread_routes_to_who_answered(conn, ns):
+    ask, answer = _thread(conn, ns, asker=A)
+    conn.execute("UPDATE board_posts SET author_agent = ? WHERE id = ?", (B, answer["id"]))
+    nudge = board.post(
+        conn,
+        namespace_id=ns,
+        author="beepboop",
+        body="any news?",
+        parent_id=ask["id"],
+        author_agent=A,
+    )
+    assert nudge["recipient"] == "tyrone"
+    assert nudge["recipient_agent"] == B
 
 
 def test_a_broadcast_reply_is_never_routed(conn, ns):
@@ -211,3 +266,15 @@ def test_the_proxy_sends_its_session_to_the_brain(monkeypatch):
     tokens = proxy_auth.SessionTokens("http://brain.test", "owner", {})
     client = proxy_auth.brain_client("http://brain.test", tokens)
     assert client.headers.get(agent_session.HEADER) == "11111111-aaaa-4aaa-8aaa-111111111111"
+
+
+def test_over_http_the_session_comes_from_the_request_header(monkeypatch):
+    from gingugu import inbound
+
+    raw = "11111111-aaaa-4aaa-8aaa-111111111111"
+    monkeypatch.setenv(agent_session.ENV, "22222222-bbbb-4bbb-8bbb-222222222222")  # the brain's own
+    request = type("R", (), {"headers": {agent_session.HEADER: raw}})()
+    monkeypatch.setattr(inbound, "current", lambda: inbound.Inbound(request, None))
+    assert agent_session.current() == A  # the caller's, never the server process's
+    request.headers = {}
+    assert agent_session.current() is None

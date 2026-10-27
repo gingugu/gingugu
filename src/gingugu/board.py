@@ -107,17 +107,31 @@ def _reply_to(
     return _require(conn, root_id)["recipient"]  # nobody has answered: nudge whoever I asked
 
 
-def _route(conn: sqlite3.Connection, root_id: str, recipient: str) -> str | None:
-    """The agent session a reply to ``recipient`` is for: the session behind their
-    latest post in the thread. None for a broadcast or an unknown session."""
+def _route(
+    conn: sqlite3.Connection, parent: dict, root_id: str, recipient: str, me: str, origin
+) -> str | None:
+    """The agent session a reply to ``recipient`` is for, or None (unrouted).
+
+    The post being answered, when the recipient wrote it - not their latest
+    post in the thread, which may be another session's. Otherwise (``to``
+    named someone else, or I am nudging my own thread) their latest post that
+    is not mine, the same row ``_reply_to`` picks.
+    """
     if recipient == BROADCAST:
         return None
-    row = conn.execute(
-        "SELECT author_agent FROM board_posts WHERE author = ? AND (id = ? OR parent_id = ?) "
-        "ORDER BY created_at DESC, rowid DESC LIMIT 1",
+    if parent["author"] == recipient and not is_me(
+        parent["author"], parent["author_origin"], me, origin
+    ):
+        return parent["author_agent"]
+    rows = conn.execute(
+        "SELECT author, author_origin, author_agent FROM board_posts "
+        "WHERE author = ? AND (id = ? OR parent_id = ?) ORDER BY created_at DESC, rowid DESC",
         (recipient, root_id, root_id),
-    ).fetchone()
-    return row["author_agent"] if row else None
+    ).fetchall()
+    for row in rows:
+        if not is_me(row["author"], row["author_origin"], me, origin):
+            return row["author_agent"]
+    return None
 
 
 def post(
@@ -140,6 +154,7 @@ def post(
         raise BoardError("body must not be empty")
     if len(body) > MAX_BODY:
         raise BoardError(f"body is over {MAX_BODY} characters")
+    parent = None
     if parent_id is not None:
         parent = _require(conn, parent_id)
         parent_id = parent["parent_id"] or parent["id"]  # threads are one level deep
@@ -148,7 +163,7 @@ def post(
     recipient = recipient or BROADCAST
     if not is_persona(recipient):
         raise BoardError(f"recipient {recipient!r} is not a persona name or '*'")
-    route = _route(conn, parent_id, recipient) if parent_id else None
+    route = _route(conn, parent, parent_id, recipient, author, author_origin) if parent else None
     grants.require_write_id(namespace_id, "this namespace's board")
     now = utcnow_iso()
     post_id = str(uuid.uuid4())

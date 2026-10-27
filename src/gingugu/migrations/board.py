@@ -78,6 +78,12 @@ def _migration_020_agent_sessions(conn: sqlite3.Connection) -> None:
     reply is routed to. ``author_session`` is left as it was: it names the MCP
     connection, a different thing that hooks cannot see. Both nullable and
     never backfilled - unknown keeps the old rule, every session sees it.
+
+    Resumable: each ALTER commits on its own, so a crash between them, or
+    before the version is stamped, leaves a column behind at version 19. A
+    column already present is skipped rather than failing every later start.
     """
-    conn.execute("ALTER TABLE board_posts ADD COLUMN author_agent TEXT")
-    conn.execute("ALTER TABLE board_posts ADD COLUMN recipient_agent TEXT")
+    have = {row[1] for row in conn.execute("PRAGMA table_info(board_posts)")}
+    for column in ("author_agent", "recipient_agent"):
+        if column not in have:
+            conn.execute(f"ALTER TABLE board_posts ADD COLUMN {column} TEXT")
