@@ -26,6 +26,11 @@ from .proxy_auth import SessionTokens, brain_client
 from .proxy_session import ProxyLost
 
 _BACKOFF_START, _BACKOFF_CAP = 1.0, 30.0
+# An idle watch re-reads the inbox this often. A routed reply becomes visible to
+# the persona's other sessions when its grace runs out, and nothing is written
+# then, so no update arrives: without a timer that mail would wait for some
+# unrelated post to wake the watch.
+REFRESH_S = 300.0
 
 
 async def _fetch(client, emitter, err: TextIO) -> int:
@@ -77,7 +82,13 @@ async def watch_remote(
                         if on_ready is not None:
                             on_ready()
                         delay = _BACKOFF_START
-                        async for _event in sub:
+                        events = sub.__aiter__()
+                        while True:
+                            with anyio.move_on_after(REFRESH_S):
+                                try:
+                                    await events.__anext__()
+                                except StopAsyncIteration:
+                                    break
                             if await _fetch(client, emitter, err) and once:
                                 return
         except ProxyLost:

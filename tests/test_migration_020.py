@@ -76,3 +76,25 @@ def test_020_is_idempotent_through_migrate():
     conn = _conn()
     migrate(conn)
     assert migrate(conn) == LATEST_SCHEMA_VERSION
+
+
+def _at_19_with(conn: sqlite3.Connection, *columns: str) -> None:
+    """A store a crash left at version 19 with some of 020's columns added."""
+    _apply_through(conn, 19)
+    for column in columns:
+        conn.execute(f"ALTER TABLE board_posts ADD COLUMN {column} TEXT")
+    conn.commit()
+
+
+def test_020_resumes_after_a_crash_between_its_two_alters():
+    # DDL autocommits: a failure after the first ALTER left the column and v19.
+    conn = _conn()
+    _at_19_with(conn, "author_agent")
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
+    assert {"author_agent", "recipient_agent"} <= _columns(conn)
+
+
+def test_020_resumes_after_a_crash_before_the_version_stamp():
+    conn = _conn()
+    _at_19_with(conn, "author_agent", "recipient_agent")
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
