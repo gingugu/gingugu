@@ -12,6 +12,9 @@ first matching call in a session is denied with the memory as the reason, and
 the agent either changes course or re-issues the call, which then passes. The
 memory is in context by then; firing again would only block the retry.
 
+The first edit of an imported ``.py`` file is denied the same way by the X-ray
+(``xray.edit_hook``), on its own switch, independent of memory tripwires.
+
 Like the prompt hook, it must never break a session. Every failure exits 0
 with no output, and no output means the normal permission flow applies.
 """
@@ -137,15 +140,74 @@ def _emit(reason: str, count: int) -> None:
     )
 
 
+def _xray(payload: dict, tool_name: str) -> str | None:
+    """The X-ray reason for an edit, or None. A bug in it never breaks the hook."""
+    from .xray import edit_hook
+
+    if not tool_name or tool_name.startswith(_SELF_PREFIX) or not edit_hook.enabled():
+        return None
+    try:
+        from .config import load_config
+
+        return edit_hook.check(payload, load_config().db_path.parent / "hook-sessions")
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _emit_xray(reason: str) -> None:
+    count = reason.split(" is imported by ", 1)[-1].split(" ", 1)[0]
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "deny",
+                    "permissionDecisionReason": reason,
+                },
+                "systemMessage": f"gingugu: X-ray stopped an edit ({count} dependents)",
+            }
+        )
+    )
+
+
 def run(payload: dict) -> int:
     """Decide and print. Returns the process exit code (always 0)."""
     if _minion_and_spawn(payload):
         return 0
-    if not enabled():
+    xray = _xray(payload, payload.get("tool_name") or "")
+    trip = _memory_trip(payload)
+    if trip is None:
+        if xray:
+            _emit_xray(xray)
         return 0
+    from .tripwire import render_reason
+
+    app, session_id, namespaces, target, hits, text = trip
+    ids = [h.memory_id for h in hits]
+    reason = render_reason(hits)
+    if xray:
+        reason = f"{reason}\n\n{xray}"
+    if target is None:
+        _log_trip(app.db_path, session_id, text, ids, namespaces)
+        _emit(reason, len(hits))
+        return 0
+    # The deny first, flushed: the trip report is a network round trip and must
+    # never be what the user waits on.
+    _emit(reason, len(hits))
+    sys.stdout.flush()
+    from .hook_remote_flows import report_trip
+
+    report_trip(target, session_id, text, ids, namespaces)
+    return 0
+
+
+def _memory_trip(payload: dict):
+    """Memory tripwire hits for this call, or None. Records the trip state."""
+    if not enabled():
+        return None
     tool_name = payload.get("tool_name") or ""
     if not tool_name or tool_name.startswith(_SELF_PREFIX):
-        return 0
+        return None
     tool_input = payload.get("tool_input")
     session_id = payload.get("session_id") or "unknown"
     cwd = payload.get("cwd") or os.getcwd()
@@ -153,12 +215,12 @@ def run(payload: dict) -> int:
     from . import hook_remote
     from .config import load_config
     from .recall_sweep import connect_readonly
-    from .tripwire import load_tripwires, match_text, matching, render_reason
+    from .tripwire import load_tripwires, match_text, matching
 
     app = load_config()
     namespaces = namespaces_for(cwd)
     if not namespaces:
-        return 0
+        return None
     target = hook_remote.target()
     if target is not None:
         # Rules come from the brain (cached); matching and trip state stay here.
@@ -167,12 +229,12 @@ def run(payload: dict) -> int:
         wires = remote_rules(target, namespaces, app.db_path.parent / "hook-sessions")
     else:
         if not app.db_path.exists():
-            return 0
+            return None
         conn = connect_readonly(app.db_path)
         try:
             wires = load_tripwires(conn, namespaces)
         except Exception:  # noqa: BLE001 - an unmigrated store has no table yet
-            return 0
+            return None
         finally:
             conn.close()
 
@@ -181,23 +243,11 @@ def run(payload: dict) -> int:
     live = [w for w in wires if w.memory_id not in tripped]
     hits = matching(live, tool_name, tool_input)
     if not hits:
-        return 0
+        return None
 
-    ids = [h.memory_id for h in hits]
     text = match_text(tool_name, tool_input)
-    save_tripped(app.db_path, session_id, tripped | set(ids))
-    if target is None:
-        _log_trip(app.db_path, session_id, text, ids, namespaces)
-        _emit(render_reason(hits), len(hits))
-        return 0
-    # The deny first, flushed: the trip report is a network round trip and must
-    # never be what the user waits on.
-    _emit(render_reason(hits), len(hits))
-    sys.stdout.flush()
-    from .hook_remote_flows import report_trip
-
-    report_trip(target, session_id, text, ids, namespaces)
-    return 0
+    save_tripped(app.db_path, session_id, tripped | {h.memory_id for h in hits})
+    return app, session_id, namespaces, target, hits, text
 
 
 def main() -> int:
