@@ -112,7 +112,7 @@ def main(argv: list[str], out: TextIO | None = None, err: TextIO | None = None) 
         brain = target.url if target is not None else str(Path(config.db_path).resolve())
         cursor = Cursor.for_brain(Path(config.db_path).parent, brain, me)
         if args.everything:
-            cursor.mark = ("", "")
+            cursor.reset()
         emitter = Emitter(out, err, args.exec_cmd, cursor)
         if target is not None:
             import anyio
