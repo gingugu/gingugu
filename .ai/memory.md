@@ -437,7 +437,12 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.28.0** (PyPI, 2026-10-26). Minor: one persona on two
+- Current version: **0.29.0** (PyPI, 2026-10-27). Minor: Codebase X-ray -
+  `code_xray` blast radius (migration 019) and the X-ray tripwire on edit;
+  board replies routed to the asking agent session (migration 020, schema
+  v20); the startup contract keeps a persona's board watcher running; board
+  delivery receipt; Windows CI on D: (#137-#144).
+- 0.28.0: Minor: one persona on two
   machines can talk over the board - board identity is persona + machine
   (the owner token's name, stamped at `/token/derive`), migration 018
   `board_posts.author_origin` (#136).
