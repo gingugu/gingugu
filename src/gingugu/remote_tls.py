@@ -207,6 +207,7 @@ def speaks_tls(url: str, *, timeout: float = 2) -> bool:
     # No verification is safe here: the probe only proves the port speaks TLS and
     # sends nothing but a ClientHello - no request, no token.
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
     try:

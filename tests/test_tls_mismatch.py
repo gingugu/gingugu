@@ -48,6 +48,7 @@ def tls_port(tmp_path) -> Iterator[int]:
     cert, key = tmp_path / "brain.pem", tmp_path / "brain.key"
     serve_tls.generate(cert, key, ["localhost", "127.0.0.1"])
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(cert, key)
     server = ThreadingHTTPServer(("127.0.0.1", 0), _Health)
     server.socket = context.wrap_socket(server.socket, server_side=True)
