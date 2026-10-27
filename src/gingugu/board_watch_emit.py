@@ -75,21 +75,38 @@ class Cursor:
     Delivered is not read: a post stays unread until the agent opens it, so
     without this a watcher re-armed after a delivery (``--once`` again, or a
     ``Monitor`` that expired) would hand the agent the same post again. The
-    cursor is per persona and per brain, a ``(created_at, id)`` pair; posts at
-    or before it are not re-emitted. A missing or unreadable file means
+    cursor is per persona and per brain: the newest ``created_at`` delivered,
+    plus every id delivered AT that timestamp. Posts before it, or at it and
+    already delivered, are not re-emitted. A missing or unreadable file means
     nothing has been delivered yet - a watch never fails over its bookkeeping.
+
+    Why a set of ids and not one: posts can share a timestamp (Windows' clock
+    is coarse), the inbox orders ties by insertion, and ids are random. A
+    single ``(created_at, id)`` mark would call a tied post with a smaller id
+    delivered, and it would never be shown.
     """
 
     def __init__(self, path: Path | None) -> None:
         self.path = path
-        self.mark: tuple[str, str] = ("", "")
+        self.reset()
         if path is None:
             return
         try:
             data = json.loads(path.read_text())
-            self.mark = (str(data["created_at"]), str(data["id"]))
-        except (OSError, ValueError, KeyError, TypeError):
+            at = str(data["created_at"])
+            ids = data.get("ids")
+            # A file from before the id set holds one id under "id".
+            ids = [data["id"]] if ids is None else ids
+            if not isinstance(ids, list):
+                return
+            self.at, self.ids = at, {str(i) for i in ids}
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
             pass
+
+    def reset(self) -> None:
+        """Forget every delivery: the next emit starts from the first post."""
+        self.at: str = ""
+        self.ids: set[str] = set()
 
     @classmethod
     def for_brain(cls, data_dir: Path, brain: str, persona: str) -> Cursor:
@@ -99,19 +116,22 @@ class Cursor:
         return cls(data_dir / "board-watch" / f"{persona}-{key}.json")
 
     def passed(self, post: dict) -> bool:
-        return (str(post.get("created_at", "")), post["id"]) <= self.mark
+        at = str(post.get("created_at", ""))
+        return at < self.at or (at == self.at and post["id"] in self.ids)
 
     def advance(self, post: dict) -> None:
-        mark = (str(post.get("created_at", "")), post["id"])
-        if mark <= self.mark:
+        at = str(post.get("created_at", ""))
+        if at < self.at or (at == self.at and post["id"] in self.ids):
             return
-        self.mark = mark
+        if at > self.at:
+            self.at, self.ids = at, set()
+        self.ids.add(post["id"])
         if self.path is None:
             return
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             tmp = self.path.with_name(f"{self.path.name}.{os.getpid()}.tmp")
-            tmp.write_text(json.dumps({"created_at": mark[0], "id": mark[1]}))
+            tmp.write_text(json.dumps({"created_at": self.at, "ids": sorted(self.ids)}))
             tmp.replace(self.path)
         except OSError:
             pass
