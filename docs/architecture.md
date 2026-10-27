@@ -400,8 +400,8 @@ matching call per session per memory and logs the trip to `query_log`
 (`tool='tripwire'`). Per-session suppression lives beside the DB in
 `hook-sessions/tripwires-<session_id>.json`, not in SQLite. The X-ray edit
 check keeps two more files there: `xray-graph-<sha16(root)>.json` (the import
-graph, cached per repo by fingerprint) and `xray-tripped-<session>.json`
-(files already shown this session); both owner-only, swept after 7 days.
+graph, cached per repo by fingerprint) and `xray-shown-<session>/`
+(one claim file per file already shown this session); both owner-only, swept after 7 days.
 
 #### `board_posts` / `board_reads`
 ```sql

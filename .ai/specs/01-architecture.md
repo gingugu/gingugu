@@ -718,8 +718,9 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   this repo (356 `.py` files): 1.46s for the whole hook process on the first
   edit with a graph rebuild, 0.5s cached. State lives beside the DB in
   `hook-sessions/`: `xray-graph-<sha16(root)>.json` (cache) and
-  `xray-tripped-<session>.json`; owner-only 0600, written to a temp file and
-  renamed, swept after 7 days untouched. *Silent by construction*: a file
+  `xray-shown-<session>/` (one claim file per shown file, created atomically
+  with `O_EXCL` so parallel hooks cannot lose a record); owner-only 0600,
+  swept after 7 days untouched. *Silent by construction*: a file
   nothing imports, a new file, a non-`.py` file, a path outside a git repo, a
   missing session id or any failure passes; it denies only once its "shown"
   state is saved, so a failed write can never block an edit forever. File

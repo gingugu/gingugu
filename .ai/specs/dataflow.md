@@ -529,8 +529,8 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
           graph cache hook-sessions/xray-graph-<sha16(root)>.json; rebuilt
           locally with the code_xray extractor on a fingerprint miss
           blast radius of the file (rank.blast); nothing imports it → skip
-          already in hook-sessions/xray-tripped-<session>.json → skip
-          save the file to that state (a failed write → skip), then the
+          already claimed in hook-sessions/xray-shown-<session>/ → skip
+          claim it atomically (O_EXCL; lost race or failed write → skip), then the
           X-ray reason: importer count, top 5 dependents with hops, up to 5
           candidate tests, import-based-estimate caveat
       → MEMORY_TRIPWIRES=off: skip memory tripwires (not the X-ray above)
