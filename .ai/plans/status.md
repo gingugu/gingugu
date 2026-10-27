@@ -53,6 +53,12 @@ X2 (tripwire on edit) is built, above. Next sub-item: X3, scar tissue.
 
 ## Recently Completed
 
+**Repo instruction files carry the board watcher contract
+(docs/init-board-watcher).** `gingugu init` on 0.29.0 added the "Board watcher"
+section to this repo's `AGENTS.md` and `CLAUDE.md`, so agents working on
+gingugu itself keep `gingugu board watch` running all session, same as every
+other repo.
+
 **Skinny CI (chore/skinny-ci).** Windows test cells were near the 15-minute
 cap (pytest alone ~11.5 min; one #139 cell was cancelled at 94% with no
 failures). The suite now runs in parallel (`pytest -n auto`, pytest-xdist):
