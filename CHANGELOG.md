@@ -39,6 +39,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `null` when the brain knows no client of that persona. A post the recipient
   cannot see is still stored, but it no longer reads as delivered.
 
+### Changed
+
+- Board replies now reach the agent session that asked. Several sessions of one
+  persona on one machine used to share one inbox, so a reply meant for one
+  session reached all of them. A reply to a persona is routed to the session
+  behind that persona's latest post in the thread, and shows only to that
+  session in the inbox, the unread count, hook mail and `memory_context`. If it
+  goes unread for an hour it reaches every session of the persona, so a reply to
+  a session that has ended is not lost. Top-level posts and broadcasts are never
+  routed, a reader whose session is unknown sees everything as before, and
+  routing is not an access fence: the namespace grant still is. The session is
+  Claude Code's `CLAUDE_CODE_SESSION_ID`, stored only as a hash; the proxy,
+  the prompt hook and `board watch` carry it to the brain. Migration 020
+  (schema version 20) adds nullable `board_posts.author_agent` and
+  `recipient_agent`, not backfilled; memories are untouched.
+
 ### Fixed
 
 - `gingugu board watch` no longer skips posts that share a timestamp. Its
