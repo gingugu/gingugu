@@ -53,6 +53,15 @@ X2 (tripwire on edit) is built, above. Next sub-item: X3, scar tissue.
 
 ## Recently Completed
 
+**Lockfile moves to Pillow 13 (fix/pillow-fastembed-lock).** All 41 open
+Dependabot alerts were Pillow 12.3.0, reached only through fastembed. Pillow
+13.0.0 fixes them; fastembed 0.8.0 capped Pillow below 13 and 0.9.1 allows it,
+so the lock moves fastembed 0.8.0 -> 0.9.1 and Pillow 12.3.0 -> 13.0.0.
+Installs from PyPI already resolved these versions under `fastembed>=0.4,<1`;
+this aligns dev and CI with them. The default model `BAAI/bge-small-en-v1.5`
+keeps the same weights; on case-sensitive filesystems fastembed re-downloads it
+once into a new cache dir. Suite and `bench_embeddings` green.
+
 **Repo instruction files carry the board watcher contract
 (docs/init-board-watcher).** `gingugu init` on 0.29.0 added the "Board watcher"
 section to this repo's `AGENTS.md` and `CLAUDE.md`, so agents working on
