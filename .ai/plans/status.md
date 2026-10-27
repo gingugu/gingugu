@@ -32,6 +32,10 @@ failures). The suite now runs in parallel (`pytest -n auto`, pytest-xdist):
 200s -> 55s locally on 4 workers. The matrix goes from 9 cells to 5 (every
 Python on Ubuntu, 3.13 on macOS, 3.11 on Windows), lint runs once instead of in
 every cell, and timeouts drop to 10 minutes so a slowing suite shows early.
+Windows then ran slower in parallel than serially, and three cells isolated
+why: the runner's C: temp drive (720s on C:, 209s with `TMP`/`TEMP` on D:,
+792s with Defender real-time off). Windows cells now put temp on D:
+(chore/revert-ci-probe).
 
 **Board delivery receipt (fix/board-delivery).** A post addressed to a persona
 whose clients cannot read its namespace was stored, returned `ok`, and never
