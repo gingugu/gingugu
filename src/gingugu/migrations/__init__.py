@@ -4,7 +4,7 @@ Migrations are hand-rolled and keyed off ``PRAGMA user_version`` (Alembic is
 overkill for a single-file DB). Each one is a ``(target_version, callable)``
 pair in ``MIGRATIONS``, applied in order whenever the stored version is lower.
 
-The migrations themselves live in seven modules, split by what they actually do:
+The migrations themselves live in eight modules, split by what they actually do:
 
 * ``schema`` - structural work. New tables, new columns, new indexes.
 * ``claim_derivation`` - row work. Re-reading prose that never changed,
@@ -19,6 +19,8 @@ The migrations themselves live in seven modules, split by what they actually do:
 * ``tripwires`` - memories bound to a tool call, fired before it runs.
 * ``board`` - what agents say to each other, kept out of the memories on
   purpose.
+* ``xray`` - a repository's import graph, stored beside the memories, never
+  in them.
 
 A migration is append-only once released. ``migrate()`` selects pending work
 with ``current < target``, so a DB already stamped at version N can never run
@@ -34,7 +36,11 @@ import sqlite3
 from collections.abc import Callable
 from pathlib import Path
 
-from .board import _migration_017_board, _migration_018_author_origin
+from .board import (
+    _migration_017_board,
+    _migration_018_author_origin,
+    _migration_020_agent_sessions,
+)
 from .claim_derivation import (
     _migration_005_claims,
     _migration_006_repair_claims_backfill,
@@ -80,6 +86,7 @@ MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
     (17, _migration_017_board),
     (18, _migration_018_author_origin),
     (19, _migration_019_xray),
+    (20, _migration_020_agent_sessions),
 ]
 
 # The version a fully-migrated DB lands on. Derived rather than written down so

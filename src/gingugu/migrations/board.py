@@ -66,3 +66,18 @@ def _migration_018_author_origin(conn: sqlite3.Connection) -> None:
     unknown, and unknown keeps the old rule.
     """
     conn.execute("ALTER TABLE board_posts ADD COLUMN author_origin TEXT")
+
+
+def _migration_020_agent_sessions(conn: sqlite3.Connection) -> None:
+    """``board_posts.author_agent`` and ``recipient_agent``: which agent session.
+
+    Several sessions of one persona can run on one machine, and the inbox is
+    per persona, so a reply meant for the session that asked reached all of
+    them. ``author_agent`` is a hash of the writer's agent session (Claude
+    Code's session id), never the raw id; ``recipient_agent`` is the session a
+    reply is routed to. ``author_session`` is left as it was: it names the MCP
+    connection, a different thing that hooks cannot see. Both nullable and
+    never backfilled - unknown keeps the old rule, every session sees it.
+    """
+    conn.execute("ALTER TABLE board_posts ADD COLUMN author_agent TEXT")
+    conn.execute("ALTER TABLE board_posts ADD COLUMN recipient_agent TEXT")
