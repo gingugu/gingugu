@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# No job writes to the repo; the token only needs to check it out.
+permissions:
+  contents: read
+
 jobs:
   lint:
     # Once, not per test cell: ruff and black give the same answer on every OS.

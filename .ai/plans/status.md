@@ -53,6 +53,14 @@ X2 (tripwire on edit) is built, above. Next sub-item: X3, scar tissue.
 
 ## Recently Completed
 
+**CodeQL hardening (fix/codeql-hardening).** CI's token is now read-only
+(`permissions: contents: read`), and the TLS probe in `remote_tls.py` plus the
+TLS test server pin `minimum_version` to TLS 1.2, which Python 3.10+ already
+defaulted to. The other six open CodeQL alerts were traced and dismissed as
+false positives: `webui.py` path injection (guarded by `resolve()` +
+`relative_to`), response splitting (MIME type from `mimetypes`), and the two
+clear-text-logging alerts (taint source is the constant `_HOME_NOTE`).
+
 **Lockfile moves to Pillow 13 (fix/pillow-fastembed-lock).** All 41 open
 Dependabot alerts were Pillow 12.3.0, reached only through fastembed. Pillow
 13.0.0 fixes them; fastembed 0.8.0 capped Pillow below 13 and 0.9.1 allows it,
