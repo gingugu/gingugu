@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Codebase X-ray, tripwire on edit.** The first time an agent edits a Python
+  file that other files import, `gingugu hook tool` stops the edit once per file
+  per session and says what depends on it: how many files import it, the top
+  five dependents by rank with hop counts, and up to five candidate tests to
+  run. Re-issue the edit and it goes through. It stays quiet for files nothing
+  imports, new files, non-Python files and anything outside a git repo. The
+  graph is built from your checkout on your machine and cached, so it never
+  needs the brain and works the same with a remote one. When a memory tripwire
+  fires on the same edit the two share one stop. Set `MEMORY_XRAY_TRIPWIRE=off`
+  to disable it; `MEMORY_TRIPWIRES=off` now turns off memory tripwires only.
 - **Codebase X-ray, blast radius (`code_xray`).** Map a Python repository's
   import graph and ask what a change reaches before you make it: `blast` returns
   every file that imports the ones you name, directly or not, with hop counts,
