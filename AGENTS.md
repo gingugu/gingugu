@@ -145,7 +145,7 @@ src/gingugu/
   recall_sweep.py    → involuntary recall, I/O half: read-only cosine sweep + BM25
   prompt_hook.py     → `gingugu hook prompt` (UserPromptSubmit): involuntary recall entry point; also injects board mail on every prompt for persona agents
   board_delivery.py  → the board post/reply delivery receipt (visible true/false/null)
-  xray/              → Codebase X-ray: scan/extract/resolve/local (client), validate/rank/store (brain)
+  xray/              → Codebase X-ray: scan/extract/resolve/local (client), validate/rank/store (brain), edit_hook (PreToolUse edit tripwire)
   proxy_xray.py      → the proxy reads the checkout for code_xray, asks the brain by fingerprint
   board_hook.py      → board mail for the prompt hook: unread posts (max 5, labelled with the author's machine when known), fenced by the client's grant, local or POST /hook/inbox, nothing marked read
   tripwire.py        → tripwire matching (pure regex) + load_tripwires, the seam a remote brain would replace
@@ -155,7 +155,7 @@ src/gingugu/
   board_watch_remote.py → the remote half: session token named for the persona, subscriptions/listen, reconnect with backoff
   board_watch_emit.py → the line (labelled as from another agent), the delivery cursor, --exec (env only, stdout to stderr, 10 per batch, group-killed at 120s)
   cli_usage.py       → the top-level `gingugu --help` text (USAGE), kept out of server.py
-  tool_hook.py       → `gingugu hook tool` (PreToolUse): denies the first matching call per session; re-issue passes
+  tool_hook.py       → `gingugu hook tool` (PreToolUse): denies the first matching call per session; re-issue passes; also the X-ray deny on the first edit of an imported `.py` file
   storage.py         → memory CRUD (store/update/forget)
   search.py          → hybrid BM25 (FTS5) + semantic ranking
   embeddings.py      → semantic vector generation

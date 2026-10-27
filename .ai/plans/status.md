@@ -1,8 +1,19 @@
 # Project Status
 
-_Last updated: 2026-10-26 (X-ray X1 blast radius built; board delivery receipt)_
+_Last updated: 2026-10-27 (X-ray X2 tripwire on edit built; X1 blast radius built)_
 
 ## In Flight
+
+**Board #5 Codebase X-ray - X2 tripwire on edit built (feature/xray-edit-tripwire,
+unreleased).** In `gingugu hook tool`, the first Edit/Write/MultiEdit of a
+`.py` file that other files import is denied once per file per session, with
+the dependent count, the top 5 dependents by rank with hop counts, up to 5
+candidate tests and an import-based-estimate caveat; the re-issued edit
+passes. The graph is built locally from the checkout (the `code_xray`
+extractor) and cached per repo by fingerprint, so it never touches the brain.
+Own switch `MEMORY_XRAY_TRIPWIRE`. Measured on this repo (356 `.py` files):
+first edit with a graph rebuild 1.46s for the whole hook process, cached 0.5s.
+Tests: `tests/test_xray_edit_hook.py`, `tests/test_xray_edit_hook_wiring.py`.
 
 **Board #5 Codebase X-ray - X1 blast radius built (feature/xray-blast-radius),
 stacked on fix/board-delivery.** `code_xray` (`blast`/`overview`/`refresh`/
@@ -22,7 +33,7 @@ present under both the repo root and `src/` (reported, not guessed); git
 submodules, linked worktrees, unusual filenames; a test for a file changing
 mid-capture; `overview.top` and the payload's `skipped` are bounded but not
 paged; a git `core.fsmonitor`-style check for other config that runs code.
-Next sub-item: X2, a tripwire on edit.
+X2 (tripwire on edit) is built, above. Next sub-item: X3, scar tissue.
 
 ## Recently Completed
 
@@ -625,7 +636,9 @@ and a harmless one can read alike to an encoder.
   user a tripwire stopped a call. The re-issued call passes (suppression lives
   in `hook-sessions/tripwires-<session_id>.json`, separate from the prompt
   hook's state). `mcp__gingugu__*` tools never trip, so a bad tripwire can
-  always be repaired. `MEMORY_TRIPWIRES=off` disables. Every failure exits 0
+  always be repaired. `MEMORY_TRIPWIRES=off` disables memory tripwires. The X-ray
+  edit check (`xray/edit_hook.py`) is a second deny in the same hook, on its
+  own switch `MEMORY_XRAY_TRIPWIRE`. Every failure exits 0
   silently, which is the normal permission flow. Each trip is logged to
   `query_log` as `tool='tripwire'`; misses are not (it runs on every tool
   call). Measured cost is about 150ms per tool call.
@@ -1338,7 +1351,7 @@ every row moved up one.
 | 2 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
 | 3 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
 | 4 | **A referee for rival memory tools** | 17 | Only a fair comparison once 3 exists |
-| 5 | **Codebase X-ray, as an MCP tool** - X1 blast radius BUILT (unreleased); X2 next | 19 | Standalone; picked 2026-10-26. A 13-part roadmap (X1-X13) in its section below |
+| 5 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit BUILT (unreleased); X3 next | 19 | Standalone; picked 2026-10-26. A 13-part roadmap (X1-X13) in its section below |
 | 6 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
 | 7 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
 | 8 | Session flight recorder (low priority) | 18 | Check prior art first |
@@ -2021,7 +2034,7 @@ memories, so a read-only minion can ask for a blast radius but not store one.
 | # | Sub-item | Reuses | Notes |
 |---|---|---|---|
 | X1 | **Blast radius** (BUILT, unreleased) - persisted import graph keyed by repo + commit; the agent builds or refreshes it when missing or stale; spreading activation over reverse imports, ranked by directed PageRank | dream graph math, spreading activation | The foundation. Persist outside `memories` so the store's own graph is not flooded |
-| X2 | **Tripwire on edit** - a hook that names a file's dependents, top ranked first, before the edit lands | tripwires, hooks | Involuntary, like memory tripwires: the agent is told without asking |
+| X2 | **Tripwire on edit (BUILT, unreleased)** - a hook that names a file's dependents, top ranked first, before the edit lands | tripwires, hooks | The first edit of an imported `.py` file is denied once per file per session with its blast radius; the re-issued edit passes. Own switch `MEMORY_XRAY_TRIPWIRE` |
 | X3 | **Scar tissue** - link memories (bugs, decisions, gotchas) to the files they are about; an edit surfaces both what depends on the file and what it has cost before | memory store, relations, recall | The part no code-analysis tool can have, because none holds the history |
 | X4 | **History as a second graph** - co-change coupling (files that change together without importing each other), churn x centrality x authors as hotspots, per-commit X-ray diffs as architectural drift | git log, dream proposal queue | Drift can run in the nightly dream pass and stage proposals |
 | X5 | **Module boundaries** - communities that hold up on import graphs | dream clusters | Label propagation fails as-is (see above); needs a decided approach, not a knob |

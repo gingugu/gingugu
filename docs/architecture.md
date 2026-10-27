@@ -63,7 +63,7 @@ graph LR
 
     subgraph Claude Code Hooks
         PH[UserPromptSubmit<br/>gingugu hook prompt]
-        Y[PreToolUse<br/>gingugu hook tool<br/>tripwires · minion fence]
+        Y[PreToolUse<br/>gingugu hook tool<br/>tripwires · X-ray · minion fence]
         Z[SubagentStart<br/>gingugu hook subagent]
     end
 
@@ -158,7 +158,11 @@ heartbeat, and the scheduler only ever *reads* it.
 The `PreToolUse` path is the other client-side entry: Claude Code runs
 `gingugu hook tool` before every tool call, it reads `tripwires` and, on a
 match, denies the call once with the memory as the reason and logs the trip to
-`query_log`. It never touches the MCP server process.
+`query_log`. It also denies the first edit of a `.py` file that other files
+import, once per file per session, with its blast radius (the X-ray): the graph
+is built locally from the checkout and never touches the brain, the deny is not
+logged, and when a tripwire fires on the same call the two share one deny. It
+never touches the MCP server process.
 
 `SubagentStart` is the third: `gingugu hook subagent` warms a minion whose agent
 file declares `MEMORY_GRANT`. The spawning `Agent` call's prompt is stashed by
@@ -394,7 +398,10 @@ at the moment it acts.
 Read by the `PreToolUse` hook (`gingugu hook tool`), which denies the first
 matching call per session per memory and logs the trip to `query_log`
 (`tool='tripwire'`). Per-session suppression lives beside the DB in
-`hook-sessions/tripwires-<session_id>.json`, not in SQLite.
+`hook-sessions/tripwires-<session_id>.json`, not in SQLite. The X-ray edit
+check keeps two more files there: `xray-graph-<sha16(root)>.json` (the import
+graph, cached per repo by fingerprint) and `xray-tripped-<session>.json`
+(files already shown this session); both owner-only, swept after 7 days.
 
 #### `board_posts` / `board_reads`
 ```sql
@@ -1597,6 +1604,10 @@ the local stdio server, or the proxy (`proxy_xray`), which asks the brain by
 fingerprint and ingests on a miss. Under `gingugu serve` a path is refused.
 Answers are import-based estimates and carry a `caveat`.
 
+The `PreToolUse` hook runs the same blast radius on the first edit of an
+imported `.py` file (see `memory_tripwire` below for the hook); it builds its
+own graph locally and does not call this tool.
+
 ### `memory_tripwire`
 Bind a memory to a tool call so it is put in front of the agent at the moment
 it acts, not only at session start. For the memories that must not be missed.
@@ -1621,7 +1632,9 @@ unchanged to pass"; the re-issued call passes. `mcp__gingugu__*` tools never
 trip, so a bad tripwire can always be repaired. Inside a subagent the same hook
 runs the minion fence first, which does deny the write tools of the inherited
 `mcp__gingugu__*` server (see warm minions). `MEMORY_TRIPWIRES=off` disables
-tripwires; the minion fence has its own switch, `MEMORY_MINION_FENCE`.
+memory tripwires only; the X-ray edit check has its own switch,
+`MEMORY_XRAY_TRIPWIRE` (default on), and the minion fence has
+`MEMORY_MINION_FENCE`.
 
 **Destructive calls ask the user, not the model.** A hard `memory_forget`, a
 cascading `memory_namespaces` delete, `memory_consolidate` with
@@ -1975,7 +1988,7 @@ src/gingugu/
 ├── proxy_vault.py          # Remote mode: the machine's credential vault, screened (reveal refused) and exposed as a server
 ├── proxy_vault_link.py     # Remote mode: runs that vault behind an in-memory MCP session so it can ask the user
 ├── proxy_xray.py           # Remote mode: code_xray reads the checkout here, asks the brain by fingerprint
-├── xray/                   # Codebase X-ray: scan, extract, resolve, local (client); validate, rank, store (brain)
+├── xray/                   # Codebase X-ray: scan, extract, resolve, local (client); validate, rank, store (brain); edit_hook (PreToolUse X-ray)
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine
 ├── remote_args.py          # usage text + argparse for `gingugu remote`, mint ssh argv
@@ -2088,7 +2101,7 @@ src/gingugu/
 ├── board_delivery.py       # board post/reply delivery receipt: can the recipient persona's known clients read it
 ├── board_hook.py           # board mail for the prompt hook: unread posts, grant-fenced, per-session shown ids, local or POST /hook/inbox
 ├── cli_usage.py            # the top-level `gingugu --help` text (USAGE)
-├── tool_hook.py            # gingugu hook tool: PreToolUse entry point; deny once, re-issue passes
+├── tool_hook.py            # gingugu hook tool: PreToolUse entry point (tripwires, X-ray, minion fence); deny once, re-issue passes
 ├── minion_fence.py         # Inside a subagent: deny data-dir access, CLI, inherited-server writes
 ├── subagent_hook.py        # gingugu hook subagent: SubagentStart warm-up; stash/take of the spawn prompt
 ├── subagent_warmup.py      # warmup(): the grant-bound ranking, shared with /hook/warmup
