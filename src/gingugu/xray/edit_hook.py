@@ -50,10 +50,16 @@ def _write_json(path: Path, data: object) -> bool:
 
 def _sweep(state_dir: Path) -> None:
     """Drop X-ray state untouched for a week, as ``tool_hook`` does for tripwires."""
+    import shutil
+
     cutoff = time.time() - _STATE_TTL_SECONDS
     try:
-        for entry in state_dir.glob("xray-*.json"):
-            if entry.stat().st_mtime < cutoff:
+        for entry in state_dir.glob("xray-*"):
+            if entry.stat().st_mtime >= cutoff:
+                continue
+            if entry.is_dir() and not entry.is_symlink():
+                shutil.rmtree(entry, ignore_errors=True)
+            else:
                 entry.unlink(missing_ok=True)
     except OSError:
         pass
@@ -94,16 +100,28 @@ def _target(payload: dict) -> tuple[Path, str] | None:
         return None
 
 
-def _tripped_path(state_dir: Path, session_id: object) -> Path:
+def _claim_path(state_dir: Path, session_id: str, root: Path, rel: str) -> Path:
+    """One file per (session, repo, file): its existence is "already shown".
+
+    A file per claim rather than one list per session, because hooks run in
+    parallel: two read-modify-writes of a shared list lose one record, and the
+    lost file is denied again on its retry."""
     from ..subagent_hook import safe_session
 
-    sid = safe_session(session_id if isinstance(session_id, str) else "")
-    return state_dir / f"xray-tripped-{sid}.json"
+    name = hashlib.sha256(f"{root}\0{rel}".encode()).hexdigest()[:32]
+    return state_dir / f"xray-shown-{safe_session(session_id)}" / name
 
 
-def _load_tripped(path: Path) -> list[str]:
-    data = _read_json(path)
-    return [k for k in data if isinstance(k, str)] if isinstance(data, list) else []
+def _claim(path: Path) -> bool:
+    """Create the claim atomically. False if another hook got there first, or
+    if it cannot be written - a deny that is not recorded would never lift."""
+    try:
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+        os.close(os.open(path, flags, 0o600))
+        return True
+    except OSError:
+        return False
 
 
 def _graph(root: Path, state_dir: Path):
@@ -174,6 +192,14 @@ def _render(rel: str, blast: dict) -> str:
     return "\n".join(lines)
 
 
+def _without_seed(blast: dict, rel: str) -> dict:
+    """``rank.blast`` lists a test seed as its own candidate (hops 0); for a
+    deny that is no dependent, and a lone test would warn about itself."""
+    tests = [r for r in blast["tests"] if r["path"] != rel]
+    dropped = len(blast["tests"]) - len(tests)
+    return {**blast, "tests": tests, "tests_total": blast["tests_total"] - dropped}
+
+
 def check(payload: dict, state_dir: Path) -> str | None:
     """A deny reason for the first edit of an imported file, else None."""
     try:
@@ -184,20 +210,17 @@ def check(payload: dict, state_dir: Path) -> str | None:
         if not isinstance(session_id, str) or not session_id:
             return None  # a shared "unknown" would let one session silence another
         root, rel = target
-        tripped_file = _tripped_path(state_dir, session_id)
-        key = f"{root}\0{rel}"
-        tripped = _load_tripped(tripped_file)
-        if key in tripped:
+        claim = _claim_path(state_dir, session_id, root, rel)
+        if claim.exists():
             return None
         files, links, ranks = _graph(root, state_dir)
         if rel not in files:
             return None
-        blast = rank.blast([rel], files, links, ranks)
+        blast = _without_seed(rank.blast([rel], files, links, ranks), rel)
         if blast["code_total"] + blast["tests_total"] == 0:
             return None
-        # Deny only once "shown" is on disk: otherwise every retry is denied
-        # again and the file can never be edited.
-        if not _write_json(tripped_file, [*tripped, key]):
+        # Deny only once the claim is on disk, and only for the hook that made it.
+        if not _claim(claim):
             return None
         _sweep(state_dir)
         return _render(rel, blast)
