@@ -20,10 +20,9 @@ def _tables(conn) -> set[str]:
     return {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
 
 
-def test_019_is_the_latest_and_registered_once():
+def test_019_is_registered_once():
     targets = [t for t, _ in MIGRATIONS]
     assert targets.count(19) == 1
-    assert LATEST_SCHEMA_VERSION == 19
 
 
 def test_upgrade_from_018_adds_the_tables_and_keeps_memories():
@@ -39,7 +38,7 @@ def test_upgrade_from_018_adds_the_tables_and_keeps_memories():
         (ns, now, now),
     )
     before = _tables(conn)
-    assert migrate(conn) == 19
+    assert migrate(conn) == LATEST_SCHEMA_VERSION
     assert _tables(conn) - before == {"xray_snapshots", "xray_files", "xray_edges"}
     assert conn.execute("SELECT COUNT(*) FROM namespaces").fetchone()[0] == 1
 
