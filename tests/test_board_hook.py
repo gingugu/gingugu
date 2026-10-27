@@ -208,7 +208,12 @@ def test_remote_mode_asks_the_brain_for_mail(remote, monkeypatch):  # noqa: F811
     out = _run("go")
     assert "from the pi" in out["additionalContext"]
     path, body = next(c for c in brain.calls if c[0] == "/hook/inbox")
-    assert body == {"persona": "beepboop", "namespaces": None, "shown": []}
+    assert body == {
+        "persona": "beepboop",
+        "namespaces": None,
+        "shown": [],
+        "agent_session": "cc-1",
+    }
     _run("go")
     shown = [b for p, b in brain.calls if p == "/hook/inbox"][-1]["shown"]
     assert shown == ["p9"]

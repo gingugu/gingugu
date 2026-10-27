@@ -412,6 +412,8 @@ CREATE TABLE board_posts (
     author          TEXT NOT NULL,  -- derived server-side, never an argument
     author_session  TEXT,
     author_origin   TEXT,           -- migration 018: owner-token name (the machine); NULL = unknown
+    author_agent    TEXT,           -- migration 020: hashed agent session of the author; NULL = unknown
+    recipient_agent TEXT,           -- migration 020: agent session a reply is routed to; NULL = not routed
     recipient       TEXT NOT NULL,  -- a persona name, or '*' for everyone
     kind            TEXT NOT NULL,  -- message | task
     status          TEXT NOT NULL,  -- open | claimed | done
@@ -433,7 +435,9 @@ CREATE TABLE board_reads (
 ```
 
 The agent board (migration 017; 018 adds `author_origin`, the machine a post was
-written on, nullable and never backfilled): posts agents leave for each other. Its own
+written on, nullable and never backfilled; 020 adds `author_agent`, the hashed
+agent session that wrote it, and `recipient_agent`, the session a reply is routed
+to, both nullable and never backfilled): posts agents leave for each other. Its own
 tables because a post is addressed, read once, and (for a task) claimed, and
 storing posts as memories would put chatter into the graph and the ranking.
 `ON DELETE CASCADE` on both foreign keys: a board lives and dies with its
@@ -443,6 +447,9 @@ table rebuild. Unread is the absence of a `board_reads` row, so marking read is
 an idempotent insert and the inbox is an anti-join. Threads are one level deep.
 Never pruned: a finished task leaves the inbox by status, not by delete.
 `memories` and `memories_fts` are untouched.
+
+Only a hash of the agent session is stored (`sha256(CLAUDE_CODE_SESSION_ID)[:32]`,
+`agent_session.py`): the raw id is a handle to a live transcript.
 
 #### `xray_snapshots` / `xray_files` / `xray_edges`
 Codebase X-ray import graphs (migration 019, `migrations/xray.py`). A snapshot
@@ -1538,7 +1545,14 @@ when `MEMORY_SERVER_ROLE=minion`, else `local`.
 `inbox` returns unread posts addressed to the caller or to `*`, oldest first,
 excluding the caller's own posts (unless the post's origin and the caller's
 origin are both known and differ: a persona's twin on another machine), finished tasks, and tasks claimed by someone
-else, plus an `unread` count. `read` returns the whole thread and marks it
+else, plus an `unread` count. A reply to a persona is routed to the agent session
+behind that persona's latest post in the thread (`recipient_agent`); a routed post
+shows only to that session - in the inbox, the unread count, hook mail and
+`memory_context`'s board unread - until it has gone unread for an hour, then to
+every session of the persona, so a reply to an ended session is not lost. Top-level
+posts, broadcasts and replies from an unknown session are never routed, and a
+reader with no known session sees everything. Routing is not an access fence: the
+namespace grant still is, and `read` by id is unchanged. `read` returns the whole thread and marks it
 read. `claim` is a compare-and-set on an open task: exactly one agent wins and
 the rest are told who did. `done` is for a post's author or claimer.
 
@@ -2035,7 +2049,7 @@ src/gingugu/
 │   ├── fields.py           # Write-time declared fields: provenance, about; FTS5 rebuild
 │   ├── queries.py          # The query log: query_log (migration 015)
 │   ├── tripwires.py        # Tripwire triggers: tripwires (migration 016)
-│   ├── board.py            # The agent board: board_posts, board_reads (migration 017; 018 adds author_origin)
+│   ├── board.py            # The agent board: board_posts, board_reads (migration 017; 018 adds author_origin; 020 adds author_agent, recipient_agent)
 │   └── xray.py             # Codebase X-ray: xray_snapshots, xray_files, xray_edges (migration 019)
 ├── models.py               # Data models + MEMORY_COLUMNS, the one column list
 ├── storage.py              # CRUD for the memories row and its transaction boundary
@@ -2124,6 +2138,7 @@ src/gingugu/
 ├── credentials.py          # OS-keychain credential vault
 ├── secret_file.py          # 0600 file write for credential_get(into=…)
 ├── inbound.py              # Per-message request + session scope (MCP middleware)
+├── agent_session.py        # Which agent session is speaking: hashed CLAUDE_CODE_SESSION_ID, X-Gingugu-Agent-Session, for routing board replies
 ├── session.py              # Per-session id for access_log's co-access key
 │
 │   # ── MCP tool handlers (split to honor the 300-line limit) ─────

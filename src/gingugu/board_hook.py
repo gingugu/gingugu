@@ -65,6 +65,7 @@ def unread_local(
     shown: set[str],
     *,
     origin: str | None = None,
+    agent: str | None = None,
 ) -> list[dict]:
     """``persona``'s unread inbox in the brain at ``db_path``, fenced to ``names``,
     read-only. ``origin`` is the reader's machine, when the brain knows it."""
@@ -81,19 +82,26 @@ def unread_local(
     grant = FULL if names is None else Grant("hook", {n: READ for n in names})
     try:
         with grants.bind(grant, conn):
-            posts = board.inbox(conn, persona, limit=board.MAX_LIMIT, origin=origin)
+            posts = board.inbox(conn, persona, limit=board.MAX_LIMIT, origin=origin, agent=agent)
     finally:
         conn.close()
     return [p for p in posts if p["id"] not in shown]
 
 
-def _remote(target, persona: str, names: list[str] | None, shown: set[str]) -> list[dict]:
+def _remote(
+    target, persona: str, names: list[str] | None, shown: set[str], session_id: str
+) -> list[dict]:
     from . import hook_remote
 
     reply = hook_remote.post(
         target,
         "/hook/inbox",
-        {"persona": persona, "namespaces": names, "shown": sorted(shown)},
+        {
+            "persona": persona,
+            "namespaces": names,
+            "shown": sorted(shown),
+            "agent_session": session_id,
+        },
         timeout=INBOX_TIMEOUT_S,
     )
     posts = reply.get("posts") if isinstance(reply, dict) else None
@@ -111,7 +119,7 @@ def mail(db_path: Path, session_id: str) -> tuple[str, int] | None:
 
 
 def _mail(db_path: Path, session_id: str) -> tuple[str, int] | None:
-    from . import hook_remote
+    from . import agent_session, hook_remote
     from .prompt_hook import load_suppressed, persona, save_suppressed
 
     me = persona()
@@ -122,9 +130,9 @@ def _mail(db_path: Path, session_id: str) -> tuple[str, int] | None:
     shown = load_suppressed(db_path, key)
     target = hook_remote.target()
     if target is not None:
-        posts = _remote(target, me, names, shown)
+        posts = _remote(target, me, names, shown, session_id)
     else:
-        posts = unread_local(db_path, me, names, shown)
+        posts = unread_local(db_path, me, names, shown, agent=agent_session.key(session_id))
     if not posts:
         return None
     save_suppressed(db_path, key, shown | {p["id"] for p in posts[:MAX_SHOWN]})
