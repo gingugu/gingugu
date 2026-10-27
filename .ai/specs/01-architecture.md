@@ -1274,7 +1274,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   posts back through its own watcher. Replies are routed per agent session
   separately (below).
 - **Route replies by agent session, not just persona.** (2026-10.) Several
-  sessions of one persona on one machine share one inbox, so a reply meant for
+  sessions of one persona share one inbox, so a reply meant for
   the session that asked reached all of them. A post records `author_agent`
   (migration 020), the hash of Claude Code's `CLAUDE_CODE_SESSION_ID`; a reply to
   a persona stores `recipient_agent` = the `author_agent` of that persona's latest
