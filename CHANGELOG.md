@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The README shows the current Memory Explorer (the 3D brain and the
   dashboard, on demo data) and links the live demo, in place of the GIF
   of the pre-0.26.0 UI.
+- The README matches gingugu.com and v0.29.0: the opening explains rather
+  than compares, a "How it is built" list states the design properties,
+  the features table adds the pinned tier, hooks, dream pass, agent board
+  and Codebase X-ray, the architecture diagram shows them, the test count
+  is current, and the site is linked.
 
 ---
 
