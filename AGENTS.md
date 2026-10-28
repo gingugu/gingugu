@@ -178,7 +178,10 @@ src/gingugu/
   hygiene_stats.py   → memory_stats' hygiene block (ghost namespaces, duplicate titles)
   namespaces.py      → namespace CRUD
   credentials.py     → OS-keychain credential vault
-  confirm.py         → destructive tools ask the user (MCP elicitation), not the model
+  credential_cli.py  → `gingugu credential list|delete`: the vault by hand, at a terminal
+  confirm.py         → destructive tools ask the user (MCP elicitation), not the model;
+                       a client known to show no dialog (Claude Code's VS Code
+                       extension) counts as unable to ask
   portability.py     → export / import a namespace
   handlers/          → MCP tool handlers: memory.py, forget.py, hints.py,
                        recall.py, search.py, stats.py, scope.py, excerpt.py,

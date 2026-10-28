@@ -7,6 +7,7 @@
 
 import json
 import logging
+import shlex
 from typing import Annotated
 
 from mcp.server.elicitation import ElicitationResult
@@ -19,6 +20,15 @@ from . import ServerContext
 from .helpers import _err
 
 logger = logging.getLogger(__name__)
+
+
+def _by_hand(service_name: str, field_name: str | None) -> str | None:
+    """The terminal command that deletes the same thing, for a client with no dialog.
+    None for a name that would not show as itself in that command."""
+    if not all(confirmation.plain(n) for n in (service_name, field_name or "")):
+        return None
+    field = f" --field {shlex.quote(field_name)}" if field_name else ""
+    return f"run `gingugu credential delete {shlex.quote(service_name)}{field}` in a terminal"
 
 
 def register(mcp, ctx: ServerContext) -> None:
@@ -50,6 +60,7 @@ def register(mcp, ctx: ServerContext) -> None:
             ctx_,
             f"Permanently delete credential {target} from this machine's keychain? "
             "This cannot be undone.",
+            ctx.transport,
         )
 
     def _write_into(service_name: str, field_list, into: str, reveal: bool) -> dict:
@@ -172,7 +183,9 @@ def register(mcp, ctx: ServerContext) -> None:
             target = field_name or service_name
             if not _exists(service_name, field_name):
                 return _err(f"nothing deleted; {target!r} not found")
-            refused = confirmation.refusal(answer, f"deleting credential {target!r}")
+            refused = confirmation.refusal(
+                answer, f"deleting credential {target!r}", _by_hand(service_name, field_name)
+            )
             if refused is not None:
                 return _err(refused)
             ok = vault.delete(service_name, field_name)

@@ -1,28 +1,26 @@
 """`gingugu` in remote mode: a stdio <-> streamable-HTTP relay to the brain.
 
-When a remote brain is active (`gingugu remote on` or MEMORY_REMOTE_URL), a
-bare `gingugu` does not open the local DB. It relays MCP JSON-RPC between its
-own stdio and `gingugu serve`, so every client config stays ``command: gingugu``
-and nothing about the client changes. It never falls back to the local DB: if
-the brain cannot be used, it refuses to start (`preflight`) or reports the loss
-(`ProxyLost`).
+When a remote brain is active (`gingugu remote on` or MEMORY_REMOTE_URL), a bare `gingugu`
+does not open the local DB. It relays MCP JSON-RPC between its own stdio and `gingugu serve`,
+so every client config stays ``command: gingugu`` and nothing about the client changes. It
+never falls back to the local DB: if the brain cannot be used, it refuses to start
+(`preflight`) or reports the loss (`ProxyLost`).
 
-The keychain holds the machine's owner token, which is only ever sent to
-``/token/derive``. The proxy trades it for a short-lived session token carrying
-the client's MEMORY_GRANT and home namespace, uses that on ``/mcp``, and
-refreshes it at half its TTL.
+The keychain holds the machine's owner token, which is only ever sent to ``/token/derive``.
+The proxy trades it for a short-lived session token carrying the client's MEMORY_GRANT and
+home namespace, uses that on ``/mcp``, and refreshes it at half its TTL.
 
-A client such as ChatGPT desktop keeps one process for days, so a lost
-connection is not the end: a background loop re-derives, reconnects and
-replays the client's ``initialize`` itself, and the client never re-handshakes.
-A request the brain refused unrun - a 401 for a forgotten token, a 404 for a
-forgotten session - is sent again, once. A request whose fate is unknown is
-failed, never replayed. New requests wait briefly for the next link, then are
-refused. Only a rejected owner token ends the proxy.
+A client such as ChatGPT desktop keeps one process for days, so a lost connection is not the
+end: a background loop re-derives, reconnects and replays the client's ``initialize`` itself,
+and the client never re-handshakes. A request the brain refused unrun - a 401 for a forgotten
+token, a 404 for a forgotten session - is sent again, once. A request whose fate is unknown is
+failed, never replayed. New requests wait briefly for the next link, then are refused. Only a
+rejected owner token ends the proxy.
 
 Handled here, not relayed, because the brain cannot reach this machine: the keychain
 behind `credential_*` (``proxy_vault``, ``proxy_vault_link``; hidden and refused when
-credentials are off), and the checkout `code_xray` reads (``proxy_xray``).
+credentials are off), the checkout `code_xray` reads (``proxy_xray``), and who launched
+this process - a client that shows no dialog loses elicitation (``confirm``).
 """
 
 from __future__ import annotations
@@ -35,6 +33,7 @@ from mcp.client.streamable_http import streamable_http_client
 from mcp.shared.message import SessionMessage
 from mcp.types import METHOD_NOT_FOUND, JSONRPCRequest
 
+from .confirm import withhold_dialogs
 from .proxy_auth import SessionTokens, brain_client, derive_name
 from .proxy_preflight import ProxyRefused, preflight
 from .proxy_session import (
@@ -144,7 +143,8 @@ class _Session:
                         )
                     continue  # a notification has nobody to tell
                 if isinstance(msg, JSONRPCRequest) and msg.method == "initialize":
-                    self.init_params = msg.params
+                    item = withhold_dialogs(item)  # also what the vault is handshaken with
+                    self.init_params = item.message.params
                 elif getattr(msg, "method", None) == "notifications/initialized":
                     self.initialized = True
                 await link.forward(item)

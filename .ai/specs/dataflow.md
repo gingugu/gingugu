@@ -120,7 +120,10 @@ defaults to that home rather than the server's configured namespace (read by
 `NamespaceManager.resolve_name` and `handlers/scope.read_scope`), and a derived
 grant never reaches `credential_*`. A destructive call over the proxy (a hard
 forget, say) is asked on the client exactly as locally: the brain's elicitation
-relays through the proxy unchanged and the user's answer relays back. The
+relays through the proxy unchanged and the user's answer relays back - except
+for a client known to show no dialog (Claude Code's VS Code extension), whose
+`initialize` the proxy forwards without `elicitation` (`confirm.withhold_dialogs`),
+so the brain refuses "cannot ask". The
 proxy's own `credential_delete` is asked by the local vault's in-memory MCP
 session (`proxy_vault_link.VaultLink`), whose requests go to the client as
 `vault-<nonce>:<id>` (a per-process nonce) so they never collide with the brain's.
@@ -901,10 +904,14 @@ credential_delete
     itself): not destructive, or nothing to lose (id absent or out of grant,
     namespace empty, no id overwritten) → no dialog
   → MEMORY_CONFIRM_DESTRUCTIVE=off on this server → no dialog, proceed
-  → client declared no elicitation → refuse
+  → client declared no elicitation, or is a stdio client known to show no
+    dialog (CLAUDE_CODE_ENTRYPOINT=claude-vscode; ignored over HTTP), or is the
+    proxy's brain behind a withheld `initialize` → refuse
   → else Elicit(Confirm): the client shows the user a dialog
-  → body: confirm.refusal(answer) → proceed only on accept with confirm=true;
-    decline, cancel (a headless client) and confirm=false are `ok: false`
+  → body: confirm.refusal(answer, what, by_hand) → proceed only on accept with
+    confirm=true; decline, cancel (a headless client) and confirm=false are
+    `ok: false`; a cannot-ask refusal appends by_hand (credential_delete:
+    run `gingugu credential delete NAME` in a terminal)
 ```
 
 The answer is a hidden parameter, not in the tool's input schema, so the model
@@ -965,7 +972,9 @@ backfill for DBs stamped v5 by a build whose 005 did not have one.
 ```
 credential_store / credential_list / credential_delete
   (credential_delete: asks the user; `confirm` is optional, default true, and
-   confirm=false refuses outright; on the remote proxy the local vault asks)
+   confirm=false refuses outright; on the remote proxy the local vault asks;
+   with no dialog available the person runs `gingugu credential list|delete NAME`
+   in a terminal - the same vault, secret values never printed)
   → credentials.py reads/writes secret values in the OS keychain
   → only non-secret metadata is listed; secret values never touch the DB or logs
 
