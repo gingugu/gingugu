@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.31.0] - 2026-10-28
+
 ### Added
 
 - **`gingugu credential list|delete`**: this machine's credential vault by hand,
