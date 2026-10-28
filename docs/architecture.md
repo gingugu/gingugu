@@ -158,8 +158,8 @@ heartbeat, and the scheduler only ever *reads* it.
 The `PreToolUse` path is the other client-side entry: Claude Code runs
 `gingugu hook tool` before every tool call, it reads `tripwires` and, on a
 match, denies the call once with the memory as the reason and logs the trip to
-`query_log`. It also denies the first edit of a `.py` file that other files
-import, once per file per session, with its blast radius (the X-ray): the graph
+`query_log`. It also denies the first edit of a source file (Python, TypeScript/JavaScript,
+Go) that other files import, once per file per session, with its blast radius (the X-ray): the graph
 is built locally from the checkout and never touches the brain, the deny is not
 logged, and when a tripwire fires on the same call the two share one deny. It
 never touches the MCP server process.
@@ -454,12 +454,16 @@ Only a hash of the agent session is stored (`sha256(CLAUDE_CODE_SESSION_ID)[:32]
 #### `xray_snapshots` / `xray_files` / `xray_edges`
 Codebase X-ray import graphs (migration 019, `migrations/xray.py`). A snapshot
 is keyed `UNIQUE(namespace_id, fingerprint)` - a content fingerprint over every
-Python file's bytes, `pyproject.toml`, skips and the extractor version - and
+source file's bytes, every manifest an adapter reads (`pyproject.toml`,
+`go.mod`, `tsconfig*.json`, `package.json`, `index.html`), skips and the
+extractor version - and
 cascades from its namespace; it carries `graph_digest`, the commit it was
 captured at, counts, coverage JSON (`parse_errors`, `skipped`) and
 `last_used_at` (the 5 most recently used per namespace are kept). Files carry
-`is_test`, `is_entry` and the directed PageRank computed at ingest. Edges carry
-`kind` (module, conditional, lazy, type_checking), `certain` and `implicit`, and
+`is_test`, `is_entry`, `lang`, `kind` (`file`, or `package` for a Go package
+node; migration 021) and the directed PageRank computed at ingest. Edges carry
+`kind` (module, conditional, lazy, type_checking, package, member), `certain`
+and `implicit`, and
 both ends are foreign keys into the snapshot's files. Outside `memories` and
 its FTS triggers.
 
@@ -1603,11 +1607,16 @@ expired mid-stream keeps getting pings until it reconnects. `limit` is capped
 at 200.
 
 ### `code_xray`
-Codebase X-ray for a Python repository. `blast` (`files`, `limit`, `offset`):
+Codebase X-ray for a Python, TypeScript/JavaScript or Go repository (one
+adapter per language in `xray/lang/`: Python on `ast`, the rest on tree-sitter
+from pinned grammar wheels; parsed, never run). A Go import names a package,
+so a package is its own node: blast radius walks through it and never lists
+it, and its rank is split across its files. `blast` (`files`, `limit`, `offset`):
 every transitive importer of the named files, split into code and candidate
 tests, each with minimum hops, rank and `certain`. `overview` (`top`, `limit`,
 `offset`): the most load-bearing files by directed PageRank with
-`imported_by`, and files no test or entry point reaches. `refresh` rebuilds
+`imported_by`, `lang` and `kind`, the file count per language (`languages`), and
+files no test or entry point reaches. `refresh` rebuilds
 (replacing a snapshot whose graph differs); `ingest` stores a `payload`.
 
 The snapshot is the checkout at `path` (default: the working directory),
@@ -1619,7 +1628,7 @@ fingerprint and ingests on a miss. Under `gingugu serve` a path is refused.
 Answers are import-based estimates and carry a `caveat`.
 
 The `PreToolUse` hook runs the same blast radius on the first edit of an
-imported `.py` file (see `memory_tripwire` below for the hook); it builds its
+imported source file (see `memory_tripwire` below for the hook); it builds its
 own graph locally and does not call this tool.
 
 ### `memory_tripwire`

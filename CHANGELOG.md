@@ -9,8 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Codebase X-ray reads TypeScript/JavaScript and Go**, not just Python.
+  `code_xray` and the edit tripwire now cover `.ts`/`.tsx`/`.mts`/`.cts`
+  and `.js`/`.jsx`/`.mjs`/`.cjs` (relative imports, `tsconfig`/`jsconfig`
+  `paths`, `baseUrl` and `extends`, in-repo workspace packages, entries from
+  `package.json` and `index.html`) and `.go` (resolved through every
+  `go.mod` in the repo, nested modules included). Each language is an
+  adapter in `xray/lang/`; Python stays on `ast`, the others parse with
+  tree-sitter from pinned grammar wheels - nothing is downloaded, compiled
+  or run. A Go import names a package, so a package is its own node:
+  blast radius walks through it, rank is split across its files, and it is
+  never listed as a dependent. `overview` reports `languages` and marks
+  each top row with `lang` and `kind`. Migration 021 adds
+  `xray_files.lang`/`kind`; older clients' payloads still ingest.
+
+### Fixed
+
+- A file name that is not UTF-8, or that holds a backslash, no longer fails
+  an X-ray scan or makes the brain refuse the whole snapshot; it is skipped
+  and named.
+
 ### Changed
 
+- `/creating-pr` and `CLAUDE.md` gain a gingugu.com step: when the README,
+  CHANGELOG, `docs/` or the product spec change, the site is checked and
+  gets its own PR in the same session, and the reverse.
 - The README shows the current Memory Explorer (the 3D brain and the
   dashboard, on demo data) and links the live demo, in place of the GIF
   of the pre-0.26.0 UI.
