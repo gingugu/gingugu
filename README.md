@@ -4,12 +4,15 @@
 
 # Gingugu
 
-**Your AI forgets everything between sessions. Gingugu fixes that.**
+**Long-term memory for AI coding agents.**
 
-Gingugu is a local MCP server that gives AI coding assistants a real long-term
-brain — persistent, structured, searchable memory that survives across
-sessions, repos, and projects. No cloud, no API keys, no telemetry. One SQLite
-file on your machine.
+Gingugu is an open-source MCP server. One SQLite file on your machine. It keeps
+what your agent learned — decisions, bugs, gotchas, the why behind the code —
+and brings it back at the moment it matters, across sessions, repos, and
+projects. No cloud, no API keys, no telemetry.
+
+🌐 **[gingugu.com](https://gingugu.com)** — the tour, with live demos of
+spreading activation and the Codebase X-ray.
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![MCP](https://img.shields.io/badge/protocol-MCP-green.svg)](https://modelcontextprotocol.io)
@@ -47,18 +50,47 @@ file on your machine.
 ## Why Gingugu
 
 Every session with an AI assistant starts from zero. The decisions you made
-yesterday, the bug you fixed last week, the architecture you settled on a
-month ago — gone. Existing memory tools dump observations into a flat pile
-with no structure, no staleness tracking, no relationships, and no sense of
-what's relevant *right now*.
+yesterday, the bug you fixed last week, the reason the auth code is shaped the
+way it is — gone. You explain it again, or the agent guesses.
 
-Gingugu is designed to be a **structured long-term brain** — not a junk drawer:
+Gingugu is a **structured long-term brain** the agent talks to over MCP:
 
 - **Remembers** across sessions, repos, and projects
-- **Organizes** knowledge by namespace, type, and relationships
-- **Ranks** memories by relevance, freshness, and confidence
-- **Auto-surfaces** relevant context when you start working
+- **Organizes** knowledge as typed memories in namespaces, linked by typed relations
+- **Ranks** memories by relevance, freshness, access, and confidence
+- **Surfaces** what matters at session start, on a prompt, or before a tool call
 - **Consolidates** duplicate and related knowledge on demand
+
+Memory comes in three layers, loaded in this order: **crow**, shared across
+every project (your rules, preferences, lessons); an optional **persona**, one
+agent's own reflections; and a **project** namespace per repo (decisions, bug
+history, deploy quirks).
+
+### How it is built
+
+The design calls behind it, each a property of the code:
+
+- **One file, your machine.** Memories, the full-text index and the embeddings
+  live in one SQLite file. Embeddings run locally (fastembed, or your own
+  Ollama). A shared brain is optional: `gingugu serve` behind your own scoped
+  tokens.
+- **No AI decides what is true.** Ranking is arithmetic you can read, with a
+  per-hit score breakdown on request. The dream pass is PageRank and label
+  propagation, and it only proposes — you accept or reject.
+- **Dormant, never deleted.** Untouched memories rest; recall wakes them. Only
+  an explicit forget removes anything, and a hard delete asks you first.
+- **Memory comes to the agent.** Hooks do the remembering: a session-start
+  contract, involuntary recall, tripwires, and a stop hook that checks real
+  work got written down.
+- **It knows when it might be stale.** State claims ("PR #10 open") are
+  tracked apart from the prose, point-in-time notes get review hints, and a
+  newer memory that resolves a claim names the ones it made wrong.
+- **Works where you work.** Any MCP client; `gingugu init` wires Claude Code,
+  Windsurf, Cursor, and Cline. Subagents get a fenced, pre-loaded slice of the
+  brain.
+- **Secrets stay out of the context.** The vault is your OS keychain, and
+  `credential_get` can write a secret into a 0600 file and hand the agent only
+  the path.
 
 ### The protocol ships with it
 
@@ -151,8 +183,9 @@ fall back to BM25-only.
 <details>
 <summary><strong>Is this ready to use?</strong></summary>
 
-Usable today for local personal workflows. 1560+ tests passing covering
-storage, search, migrations, concurrency, credentials, and edges.
+Usable today for local personal workflows. 2,500+ tests passing covering
+storage, search, migrations, concurrency, credentials, hooks, the board, and
+the X-ray.
 Hardened against adversarial input and write contention. WAL mode for
 concurrency. CI matrix across Python 3.11–3.13 on Linux/macOS/Windows.
 Dogfooded daily in this repo (the memories you see referenced in commits
@@ -203,7 +236,12 @@ or Rust toolchain required to use it. The MCP SDK is first-class in Python.
 | 🚀 **Auto-Context** | Surfaces relevant memories on session start - one call loads many namespaces deduped, with an optional compact mode for lighter payloads |
 | 📊 **Health Metrics** | Memory stats, dormancy reports, review sweep, namespace overviews |
 | 🔐 **Credential Vault** | Secure service-bundle storage for API keys/tokens via OS Keychain |
-| 🌐 **Memory Explorer UI** | 3D brain view, list, and dashboard for exploring memory data |
+| 📌 **Pinned Tier** | The handful of rules that must never be missed load first at every session start, exempt from ranking |
+| 🪝 **Hooks** | Session-start contract, involuntary recall on a prompt, tripwires that stop a tool call a memory forbids, warm minions for subagents, and a save-discipline stop hook — wired by `gingugu init` |
+| 🌙 **Dream Pass** | Deterministic consolidation over the relation graph (PageRank, label propagation, orphan reconnection), staged to a proposal queue you accept or reject - safe on a cron |
+| 📬 **Agent Board** | Agents sharing a brain leave each other addressed posts and claimable tasks; `gingugu board watch` wakes an idle agent, and a reply goes back to the session that asked |
+| 🩻 **Codebase X-ray** | `code_xray` maps a Python repo's import graph: blast radius before an edit (dependents by hop, candidate tests) and the files the code leans on, ranked by directed PageRank. The tool hook says it on the first edit of an imported file |
+| 🌐 **Memory Explorer UI** | 3D brain (one lobe per namespace), list, dashboard, timeline, and trust map — a read-only observer ([live demo](https://gingugu.github.io/gingugu/)) |
 | 📡 **Central Brain (optional)** | `gingugu serve` runs the same server over HTTP behind Bearer tokens, each client scoped to its own namespaces; `gingugu promote` harvests a local brain's durable knowledge up to it with provenance stamps |
 
 ---
@@ -213,16 +251,24 @@ or Rust toolchain required to use it. The MCP SDK is first-class in Python.
 ```mermaid
 graph TD
     A[AI Assistant<br/>any MCP client] -->|MCP Protocol| B[Gingugu Server]
-    B --> C[Search Engine<br/>FTS5 + BM25]
+    HK[Harness Hooks<br/>session start · prompt recall<br/>tripwires · warm minions · stop] -->|reads| D
+    HK -.->|injects context| A
+    B --> C[Search Engine<br/>FTS5 BM25 + embeddings, RRF]
     B --> D[Storage Layer<br/>SQLite + WAL]
     B --> E[Decay Engine<br/>Scoring + Dormancy]
-    B --> F[Context Engine<br/>Auto-Retrieval]
+    B --> F[Context Engine<br/>Pinned tier + spreading activation]
     B --> H[Consolidation Engine<br/>Merge + Dedupe]
+    B --> L[Dream Pass<br/>PageRank · clusters → proposals]
+    B --> M[Agent Board<br/>posts · tasks · replies]
+    B --> X[Codebase X-ray<br/>import graph · blast radius]
     B --> K[Credential Vault]
     C --> D
     E --> D
     F --> D
     H --> D
+    L --> D
+    M --> D
+    X --> D
     K --> D
     K --> J[OS Keychain<br/>via keyring]
     D --> G[(~/.local/share/gingugu/memories.db)]
