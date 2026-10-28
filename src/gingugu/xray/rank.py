@@ -107,13 +107,15 @@ def blast(
     *,
     limit: int | None = None,
     offset: int = 0,
+    hidden: set[str] | frozenset[str] = frozenset(),
 ) -> dict:
     """Every transitive importer of ``seeds``, split into code and candidate tests.
 
     ``files`` maps path -> is_test. Seeds are excluded from the result, even
     when a cycle leads back to them - except a test seed, which is itself a
     test to run (hops 0). ``limit``/``offset`` page each list; totals are
-    always the whole set.
+    always the whole set. ``hidden`` nodes (packages) carry the walk but are
+    never listed: a change reaches a Go package's importers through it.
     """
     known = [s for s in dict.fromkeys(seeds) if s in files]
     unknown = [s for s in dict.fromkeys(seeds) if s not in files]
@@ -133,7 +135,7 @@ def blast(
             "certain": path in certain,
         }
 
-    reached = [p for p in hops if p not in seed_set or files[p]]
+    reached = [p for p in hops if (p not in seed_set or files[p]) and p not in hidden]
     reached.sort(key=lambda p: (-ranks.get(p, 0.0), p))
     code = [p for p in reached if not files[p]]
     tests = [p for p in reached if files[p]]

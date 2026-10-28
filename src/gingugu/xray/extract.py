@@ -1,46 +1,35 @@
-"""Extract a repo's Python import graph from its git working tree.
+"""Extract a repo's import graph from its git working tree, in every language we parse.
 
 Runs on the client, because it reads the caller's disk: the brain never sees a
 path, only the :meth:`Extraction.payload`. Nothing here imports or executes the
-repo being analysed - files are read as bytes and parsed with ``ast``.
+repo being analysed - files are read as bytes, once, and each language adapter
+(``lang/``) parses its share.
 
 **Why the fingerprint hashes content, not git state.** ``git status`` reads
 " M" for a file whether it was edited once or ten times, and an empty commit
 moves HEAD without changing a line of code. Neither is a usable cache key. The
-fingerprint is a hash of every ``.py`` file's bytes (plus ``pyproject.toml`` and
-the extractor version), so it changes exactly when the answer could, and bumping
+fingerprint is a hash of every source file's bytes, every manifest an adapter
+reads (``pyproject.toml``, ``go.mod``, ``tsconfig.json``...) and the extractor
+version, so it changes exactly when the answer could, and bumping
 ``EXTRACTOR_VERSION`` invalidates graphs built by older logic.
 """
 
 from __future__ import annotations
 
-import ast
 import hashlib
 from dataclasses import dataclass, field
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
-from .resolve import ModuleIndex, file_edges
+from . import lang
+from .model import Edge, FileInfo
 from .scan import XrayError as XrayError
-from .scan import commit, load_pyproject, read_sources, toplevel
+from .scan import commit, is_manifest, read_sources, toplevel
 
-EXTRACTOR_VERSION: int = 1
+__all__ = ["EXTRACTOR_VERSION", "Edge", "Extraction", "FileInfo", "XrayError", "extract"]
+
+# 2: every language in ``lang/``, nodes carry lang + kind, package nodes.
+EXTRACTOR_VERSION: int = 2
 MAX_FILE_BYTES: int = 2_000_000  # real source is far smaller; read at call time
-
-
-@dataclass
-class FileInfo:
-    path: str
-    is_test: bool
-    is_entry: bool
-
-
-@dataclass
-class Edge:
-    src: str
-    dst: str
-    kind: str
-    certain: bool
-    implicit: bool = False
 
 
 @dataclass
@@ -63,7 +52,14 @@ class Extraction:
             "extractor_version": EXTRACTOR_VERSION,
             "commit": self.commit,
             "files": [
-                {"path": f.path, "is_test": f.is_test, "is_entry": f.is_entry} for f in self.files
+                {
+                    "path": f.path,
+                    "is_test": f.is_test,
+                    "is_entry": f.is_entry,
+                    "lang": f.lang,
+                    "kind": f.kind,
+                }
+                for f in self.files
             ],
             "edges": [
                 {
@@ -83,86 +79,66 @@ class Extraction:
         }
 
 
-def _scan(root: Path) -> tuple[dict[str, bytes], list[tuple[str, str]], bytes | None, set[str]]:
-    sources, skipped = read_sources(root, MAX_FILE_BYTES)
-    pyproject, reason, scripts = load_pyproject(root)
-    if reason:
-        skipped.append(("pyproject.toml", reason))
-    return sources, sorted(skipped), pyproject, scripts
+def _scan(root: Path):
+    return read_sources(root, MAX_FILE_BYTES, lang.extensions(), lang.manifests())
 
 
 def _fingerprint(
-    sources: dict[str, bytes], skipped: list[tuple[str, str]], pyproject: bytes | None
+    sources: dict[str, bytes], manifests: dict[str, bytes], skipped: list[tuple[str, str]]
 ) -> str:
     h = hashlib.sha256(f"xray-v{EXTRACTOR_VERSION}\n".encode())
     for path in sorted(sources):
         h.update(f"{path}\0{hashlib.sha256(sources[path]).hexdigest()}\n".encode())
-    for path, reason in skipped:
+    for path in sorted(manifests):
+        h.update(f"manifest\0{path}\0{hashlib.sha256(manifests[path]).hexdigest()}\n".encode())
+    for path, reason in sorted(skipped):
         h.update(f"skip\0{path}\0{reason}\n".encode())
-    pyp = hashlib.sha256(pyproject).hexdigest() if pyproject is not None else "-"
-    h.update(f"pyproject\0{pyp}\n".encode())
     return h.hexdigest()
 
 
 def fingerprint(path: str | Path) -> str:
-    """Cheap cache key for a repo: reads and hashes bytes, parses no Python."""
-    sources, skipped, pyproject, _ = _scan(toplevel(path))
-    return _fingerprint(sources, skipped, pyproject)
-
-
-def _is_test(path: str) -> bool:
-    p = PurePosixPath(path)
-    return (
-        any(part in ("tests", "test") for part in p.parts)
-        or (p.name.startswith("test_") and p.name.endswith(".py"))
-        or p.name.endswith("_test.py")
-        or p.name == "conftest.py"
-    )
-
-
-def _is_main_guard(tree: ast.Module) -> bool:
-    for node in tree.body:
-        if not (isinstance(node, ast.If) and isinstance(node.test, ast.Compare)):
-            continue
-        t = node.test
-        if len(t.ops) != 1 or not isinstance(t.ops[0], ast.Eq):
-            continue
-        sides = [t.left, t.comparators[0]]
-        has_name = any(isinstance(s, ast.Name) and s.id == "__name__" for s in sides)
-        has_main = any(isinstance(s, ast.Constant) and s.value == "__main__" for s in sides)
-        if has_name and has_main:
-            return True
-    return False
+    """Cheap cache key for a repo: reads and hashes bytes, parses nothing."""
+    return _fingerprint(*_scan(toplevel(path)))
 
 
 def extract(path: str | Path) -> Extraction:
     """Build the import graph for the git repo containing ``path``."""
     root = toplevel(path)
-    sources, skipped, pyproject, scripts = _scan(root)
-    idx = ModuleIndex(list(sources))
-    script_files = {idx.names[m] for m in scripts if m in idx.names}
-
+    sources, manifests, skipped = _scan(root)
     out = Extraction(
         root=str(root),
         commit=commit(root),
-        fingerprint=_fingerprint(sources, skipped, pyproject),
-        skipped=skipped,
+        fingerprint=_fingerprint(sources, manifests, skipped),
     )
-    for rel, data in sources.items():
-        is_entry = rel in script_files or PurePosixPath(rel).name == "__main__.py"
-        try:
-            tree = ast.parse(data, filename=rel)
-        except (SyntaxError, ValueError, UnicodeDecodeError, RecursionError):
-            out.parse_errors.append(rel)
-            out.files.append(FileInfo(rel, _is_test(rel), is_entry))
+    seen: set[str] = set()
+    for adapter in lang.ADAPTERS:
+        mine = {p: b for p, b in sources.items() if lang.for_path(p) is adapter}
+        wanted = {p: b for p, b in manifests.items() if is_manifest(p, adapter.manifests)}
+        if not mine:
             continue
-        res = file_edges(tree, rel, idx)
+        res = adapter.extract(mine, wanted)
+        for f in res.files:
+            # A synthetic node (a package) never shadows a real file.
+            if f.path not in seen:
+                seen.add(f.path)
+                out.files.append(f)
+        out.edges.extend(res.edges)
         out.unresolved += res.unresolved
         out.dynamic += res.dynamic
         out.external += res.external
-        out.edges.extend(Edge(rel, dst, k, c, i) for dst, (k, c, i) in res.edges.items())
-        out.files.append(FileInfo(rel, _is_test(rel), is_entry or _is_main_guard(tree)))
+        out.parse_errors.extend(res.parse_errors)
+        skipped.extend(res.skipped)
 
-    out.edges.sort(key=lambda e: (e.src, e.dst))
+    # The brain refuses a payload whole over one dangling or repeated edge, so an
+    # adapter's mistake is contained here: such an edge is counted, not shipped.
+    edges: dict[tuple[str, str], Edge] = {}
+    for e in out.edges:
+        if e.src not in seen or e.dst not in seen or e.src == e.dst:
+            out.unresolved += e.src != e.dst
+            continue
+        edges.setdefault((e.src, e.dst), e)
+    out.files.sort(key=lambda f: f.path)
+    out.edges = sorted(edges.values(), key=lambda e: (e.src, e.dst))
     out.parse_errors.sort()
+    out.skipped = sorted(set(skipped))
     return out

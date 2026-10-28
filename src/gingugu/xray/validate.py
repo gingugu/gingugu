@@ -21,7 +21,10 @@ import hashlib
 import json
 import re
 
-KINDS = ("module", "conditional", "lazy", "type_checking")
+# ``package``: a file leaning on a package node; ``member``: a package node
+# reaching one of its files. Both only appear where a language imports packages.
+KINDS = ("module", "conditional", "lazy", "type_checking", "package", "member")
+NODE_KINDS = ("file", "package")
 REASONS = ("symlink", "outside", "unreadable", "too_large", "malformed")
 # Sources left out on purpose: they never make a graph incomplete.
 DELIBERATE = ("symlink",)
@@ -32,6 +35,8 @@ _MAX_PATH = 1024
 _FINGERPRINT = re.compile(r"^[0-9a-f]{64}$")
 _COMMIT = re.compile(r"^[0-9a-f]{4,64}$")
 _COUNTS = ("unresolved", "dynamic", "external")
+# A name, not a list: a client that learns a language must not need a new brain.
+_LANG = re.compile(r"^[a-z][a-z0-9_+-]{0,31}$")
 
 
 class XrayStoreError(ValueError):
@@ -66,8 +71,10 @@ def _count(payload: dict, key: str) -> int:
     return n
 
 
-def _files(payload: dict) -> dict[str, tuple[bool, bool]]:
-    files: dict[str, tuple[bool, bool]] = {}
+def _files(payload: dict) -> dict[str, tuple[bool, bool, str, str]]:
+    """path -> (is_test, is_entry, lang, kind). ``lang``/``kind`` default to what
+    every payload before them was - Python files - so an older client still ingests."""
+    files: dict[str, tuple[bool, bool, str, str]] = {}
     for f in _list(payload, "files", MAX_FILES):
         if not isinstance(f, dict) or not all(
             isinstance(f.get(k), bool) for k in ("is_test", "is_entry")
@@ -76,7 +83,14 @@ def _files(payload: dict) -> dict[str, tuple[bool, bool]]:
         path = _path(f.get("path"))
         if path in files:
             raise XrayStoreError(f"file {path} is listed twice")
-        files[path] = (f["is_test"], f["is_entry"])
+        lang, kind = f.get("lang", "python"), f.get("kind", "file")
+        if not (isinstance(lang, str) and _LANG.fullmatch(lang)):
+            raise XrayStoreError(f"file {path}: lang must be a short lowercase name")
+        if kind not in NODE_KINDS:
+            raise XrayStoreError(f"file {path}: kind must be one of {NODE_KINDS}")
+        if kind == "package" and (f["is_test"] or f["is_entry"]):
+            raise XrayStoreError(f"package {path} cannot be a test or an entry point")
+        files[path] = (f["is_test"], f["is_entry"], lang, kind)
     return files
 
 
