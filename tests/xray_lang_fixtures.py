@@ -63,11 +63,10 @@ def _repo(tmp_path: Path, files: dict[str, str]) -> Path:
     repo = tmp_path / "repo"
     repo.mkdir(parents=True)
     _git(repo, "init", "-q")
-    _git(repo, "config", "core.autocrlf", "false")  # bytes in == bytes out, on Windows too
     for rel, text in files.items():
         p = repo / rel
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(text)
+        p.write_bytes(text.encode())  # write_text turns \n into \r\n on Windows
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "init")
     return repo
