@@ -1,11 +1,22 @@
 # Project Status
 
-_Last updated: 2026-10-27 (board replies routed to the asking agent session built; X-ray X2 tripwire on edit built; X1 blast radius built)_
+_Last updated: 2026-10-28 (bookkeeping: X1, X2 and board reply routing shipped in 0.29.0; X3 next)_
 
 ## In Flight
 
-**Board: replies routed to the agent session that asked (feature/board-agent-routing,
-stacked on feature/xray-edit-tripwire, unreleased).** Several sessions of one
+**Board #5 Codebase X-ray - X3 scar tissue next.** X3 links memories (bugs, decisions,
+gotchas) to the files they are about, so an edit surfaces both what depends on the file
+and what it has cost before.
+
+X1 follow-ups (not built): `TYPE_CHECKING` imported under an alias; a module
+present under both the repo root and `src/` (reported, not guessed); git
+submodules, linked worktrees, unusual filenames; a test for a file changing
+mid-capture; `overview.top` and the payload's `skipped` are bounded but not
+paged; a git `core.fsmonitor`-style check for other config that runs code.
+
+## Recently Completed
+
+**Board: replies routed to the agent session that asked - MERGED (#143), released in 0.29.0.** Several sessions of one
 persona shared one inbox, so a reply meant for the session that
 asked reached all of them. Identity is Claude Code's `CLAUDE_CODE_SESSION_ID`,
 stored only as `sha256(raw)[:32]` (`agent_session.py`); the proxy forwards it in
@@ -20,8 +31,7 @@ an ended session is not lost. The 1-hour grace is a default the agent picked,
 and is a one-constant change. Routing is not an access fence; the namespace
 grant still is. Tests: `tests/test_board_agent_routing.py`.
 
-**Board #5 Codebase X-ray - X2 tripwire on edit built (feature/xray-edit-tripwire,
-unreleased).** In `gingugu hook tool`, the first Edit/Write/MultiEdit of a
+**Board #5 Codebase X-ray - X2 tripwire on edit: MERGED (#142), released in 0.29.0.** In `gingugu hook tool`, the first Edit/Write/MultiEdit of a
 `.py` file that other files import is denied once per file per session, with
 the dependent count, the top 5 dependents by rank with hop counts, up to 5
 candidate tests and an import-based-estimate caveat; the re-issued edit
@@ -31,8 +41,7 @@ Own switch `MEMORY_XRAY_TRIPWIRE`. Measured on this repo (356 `.py` files):
 first edit with a graph rebuild 1.46s for the whole hook process, cached 0.5s.
 Tests: `tests/test_xray_edit_hook.py`, `tests/test_xray_edit_hook_wiring.py`.
 
-**Board #5 Codebase X-ray - X1 blast radius built (feature/xray-blast-radius),
-stacked on fix/board-delivery.** `code_xray` (`blast`/`overview`/`refresh`/
+**Board #5 Codebase X-ray - X1 blast radius: MERGED (#139), released in 0.29.0.** `code_xray` (`blast`/`overview`/`refresh`/
 `ingest`), migration 019, `xray/` package, `proxy_xray`. Design and spec were
 reviewed over the agent board before build; extractor built tests-first by a
 minion. Measured on this repo: 347 files, fingerprint 0.07s, extract 0.41s,
@@ -44,14 +53,12 @@ coverage (every unread source is a skip with a reason), safe git
 anything is sent, `exact` vs `current` freshness, edge foreign keys and
 `graph_digest` in migration 019, and cancellation in the proxy.
 
-X1 follow-ups (not built): `TYPE_CHECKING` imported under an alias; a module
-present under both the repo root and `src/` (reported, not guessed); git
-submodules, linked worktrees, unusual filenames; a test for a file changing
-mid-capture; `overview.top` and the payload's `skipped` are bounded but not
-paged; a git `core.fsmonitor`-style check for other config that runs code.
-X2 (tripwire on edit) is built, above. Next sub-item: X3, scar tissue.
-
-## Recently Completed
+**Board watcher contract: MERGED (#144), released in 0.29.0.** The session-start
+hook and the installed memory-protocol rules now tell an agent with a persona to keep
+`gingugu board watch` running all session under its harness's background watcher
+(Claude Code: `Monitor` at max timeout), never stop it, and re-arm it on expiry. No
+persona, no watcher. Both the repo hook and the bootstrap templates carry it. Tests:
+`tests/test_board_watch_contract.py`.
 
 **CodeQL hardening (fix/codeql-hardening).** CI's token is now read-only
 (`permissions: contents: read`), and the TLS probe in `remote_tls.py` plus the
@@ -90,7 +97,7 @@ why: the runner's C: temp drive (720s on C:, 209s with `TMP`/`TEMP` on D:,
 ordered by insertion but ids are random, so a tied post with a smaller id was
 never shown. The cursor now keeps every id delivered at its newest timestamp.
 
-**Board delivery receipt (fix/board-delivery).** A post addressed to a persona
+**Board delivery receipt - MERGED (#138), released in 0.29.0.** A post addressed to a persona
 whose clients cannot read its namespace was stored, returned `ok`, and never
 showed in their inbox. `post` and `reply` now return `delivery` for a
 persona recipient: `visible` true, false (with a note naming the namespace),
@@ -1330,7 +1337,7 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-## The Board (current: 2026-10-26)
+## The Board (current: 2026-10-28)
 
 **Resequenced 2026-09-29 into build order.** The table below is the order the
 work gets done in, top first; `#` is that position. Item numbers used to be
@@ -1384,13 +1391,15 @@ turn a silent outage into a named one.
 #134 (0.27.0) and #136 (0.28.0, one persona on two machines) - and came off;
 every row moved up one.
 
+**2026-10-28:** X1 (#139) and X2 (#142) of the Codebase X-ray shipped in 0.29.0; the item stays on the board at row 5 with X3 next.
+
 | # | Item | Old # | Why this position |
 |---|---|---|---|
 | 1 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
 | 2 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
 | 3 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
 | 4 | **A referee for rival memory tools** | 17 | Only a fair comparison once 3 exists |
-| 5 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit BUILT (unreleased); X3 next | 19 | Standalone; picked 2026-10-26. A 13-part roadmap (X1-X13) in its section below |
+| 5 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X3 next | 19 | Standalone; picked 2026-10-26. A 13-part roadmap (X1-X13) in its section below |
 | 6 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
 | 7 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
 | 8 | Session flight recorder (low priority) | 18 | Check prior art first |
@@ -2072,8 +2081,8 @@ memories, so a read-only minion can ask for a blast radius but not store one.
 
 | # | Sub-item | Reuses | Notes |
 |---|---|---|---|
-| X1 | **Blast radius** (BUILT, unreleased) - persisted import graph keyed by repo + commit; the agent builds or refreshes it when missing or stale; spreading activation over reverse imports, ranked by directed PageRank | dream graph math, spreading activation | The foundation. Persist outside `memories` so the store's own graph is not flooded |
-| X2 | **Tripwire on edit (BUILT, unreleased)** - a hook that names a file's dependents, top ranked first, before the edit lands | tripwires, hooks | The first edit of an imported `.py` file is denied once per file per session with its blast radius; the re-issued edit passes. Own switch `MEMORY_XRAY_TRIPWIRE` |
+| X1 | **Blast radius** (SHIPPED in 0.29.0, #139) - persisted import graph keyed by repo + commit; the agent builds or refreshes it when missing or stale; spreading activation over reverse imports, ranked by directed PageRank | dream graph math, spreading activation | The foundation. Persist outside `memories` so the store's own graph is not flooded |
+| X2 | **Tripwire on edit (SHIPPED in 0.29.0, #142)** - a hook that names a file's dependents, top ranked first, before the edit lands | tripwires, hooks | The first edit of an imported `.py` file is denied once per file per session with its blast radius; the re-issued edit passes. Own switch `MEMORY_XRAY_TRIPWIRE` |
 | X3 | **Scar tissue** - link memories (bugs, decisions, gotchas) to the files they are about; an edit surfaces both what depends on the file and what it has cost before | memory store, relations, recall | The part no code-analysis tool can have, because none holds the history |
 | X4 | **History as a second graph** - co-change coupling (files that change together without importing each other), churn x centrality x authors as hotspots, per-commit X-ray diffs as architectural drift | git log, dream proposal queue | Drift can run in the nightly dream pass and stage proposals |
 | X5 | **Module boundaries** - communities that hold up on import graphs | dream clusters | Label propagation fails as-is (see above); needs a decided approach, not a knob |
