@@ -1,7 +1,7 @@
-"""Read a repo's Python sources from disk, naming everything it declines to read.
+"""Read a repo's sources and manifests from disk, naming everything it declines to read.
 
 The tree being scanned is untrusted: it may hold symlinks aimed outside the
-repo, a ``.py`` too big to be real source, or a git config that tries to run a
+repo, a source file too big to be real, or a git config that tries to run a
 program. Every file we decline is returned with a reason rather than dropped
 silently, because a graph that quietly omits files looks complete and is not.
 
@@ -13,9 +13,9 @@ read-only analysis has no business taking index locks.
 
 from __future__ import annotations
 
+import fnmatch
 import os
 import subprocess
-import tomllib
 from pathlib import Path
 
 
@@ -51,14 +51,42 @@ def commit(root: Path) -> str | None:
     return proc.stdout.decode().strip() or None
 
 
-def read_sources(root: Path, max_bytes: int) -> tuple[dict[str, bytes], list[tuple[str, str]]]:
-    """Return ({path: bytes}, [(path, reason)]) for every listed ``.py`` file."""
-    proc = git(root, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.py")
+def is_manifest(rel: str, patterns: tuple[str, ...]) -> bool:
+    """Whether ``rel``'s basename matches a manifest pattern, case-sensitively."""
+    name = rel.rpartition("/")[2]
+    return any(fnmatch.fnmatchcase(name, pat) for pat in patterns)
+
+
+def read_sources(
+    root: Path, max_bytes: int, extensions: tuple[str, ...], manifests: tuple[str, ...] = ()
+) -> tuple[dict[str, bytes], dict[str, bytes], list[tuple[str, str]]]:
+    """Return (sources, manifests, skipped) for every listed file the adapters want.
+
+    ``sources`` are files ending in one of ``extensions``; ``manifests`` are
+    files whose basename matches one of the ``manifests`` patterns (``fnmatch``,
+    e.g. ``tsconfig*.json``), wherever they sit. Both map a repo-relative path
+    to its bytes, and both pass the same checks.
+    """
+    specs = [f"*{ext}" for ext in extensions] + [f"*{name}" for name in manifests]
+    proc = git(root, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", *specs)
     if proc.returncode != 0:
         raise XrayError(f"git ls-files failed: {proc.stderr.decode().strip()}")
     sources: dict[str, bytes] = {}
+    found: dict[str, bytes] = {}
     skipped: list[tuple[str, str]] = []
-    for rel in sorted({p for p in proc.stdout.decode().split("\0") if p}):
+    for raw in sorted({p for p in proc.stdout.split(b"\0") if p}):
+        rel = raw.decode("utf-8", errors="replace")
+        if rel.endswith(extensions):
+            into = sources
+        elif is_manifest(rel, manifests):
+            into = found
+        else:
+            continue  # a pathspec glob also matches e.g. "foogo.mod"
+        if "\ufffd" in rel or "\\" in rel:
+            # Git allows any bytes in a name; the brain takes only plain UTF-8 paths
+            # and refuses a payload whole over one. Named (mangled), never shipped.
+            skipped.append((rel.replace("\\", "\ufffd"), "unreadable"))
+            continue
         full = root / rel
         if full.is_symlink():
             skipped.append((rel, "symlink"))
@@ -72,37 +100,7 @@ def read_sources(root: Path, max_bytes: int) -> tuple[dict[str, bytes], list[tup
             if full.stat().st_size > max_bytes:
                 skipped.append((rel, "too_large"))
                 continue
-            sources[rel] = full.read_bytes()
+            into[rel] = full.read_bytes()
         except OSError:
             skipped.append((rel, "unreadable"))
-    return sources, skipped
-
-
-def _entry_targets(data: dict) -> set[str]:
-    project = data.get("project", {})
-    targets: list[object] = []
-    if isinstance(project, dict):
-        for table in ("scripts", "gui-scripts"):
-            group = project.get(table, {})
-            targets += list(group.values()) if isinstance(group, dict) else []
-        groups = project.get("entry-points", {})
-        for group in groups.values() if isinstance(groups, dict) else []:
-            targets += list(group.values()) if isinstance(group, dict) else []
-    return {t.split(":")[0].strip() for t in targets if isinstance(t, str)}
-
-
-def load_pyproject(root: Path) -> tuple[bytes | None, str | None, set[str]]:
-    """Return (bytes hashed, skip reason, entry-point module names)."""
-    path = root / "pyproject.toml"
-    if path.is_symlink():
-        return None, "symlink", set()
-    if not path.exists():
-        return None, None, set()
-    try:
-        data = path.read_bytes()
-    except OSError:
-        return None, "unreadable", set()
-    try:
-        return data, None, _entry_targets(tomllib.loads(data.decode("utf-8")))
-    except (tomllib.TOMLDecodeError, UnicodeDecodeError):
-        return data, "malformed", set()
+    return sources, found, skipped

@@ -41,7 +41,7 @@ def _meta(row: sqlite3.Row) -> dict:
         "edges": row["edge_count"],
         "created_at": row["created_at"],
         "coverage": {
-            # Complete = every Python source the client meant to read was read and
+            # Complete = every source the client meant to read was read and
             # parsed. A deliberate exclusion (a symlink) does not count against it.
             "complete": not parse_errors and not missing,
             "parse_errors": parse_errors,
@@ -123,9 +123,12 @@ def ingest(conn: sqlite3.Connection, namespace_id: str, payload, *, replace: boo
             ),
         )
         conn.executemany(
-            "INSERT INTO xray_files(snapshot_id, path, is_test, is_entry, rank) "
-            "VALUES (?, ?, ?, ?, ?)",
-            [(sid, p, int(t), int(e), ranks[p]) for p, (t, e) in v["files"].items()],
+            "INSERT INTO xray_files(snapshot_id, path, is_test, is_entry, rank, lang, kind) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [
+                (sid, p, int(t), int(e), ranks[p], lang, kind)
+                for p, (t, e, lang, kind) in v["files"].items()
+            ],
         )
         conn.executemany(
             "INSERT INTO xray_edges(snapshot_id, src, dst, kind, certain, implicit) "
@@ -158,11 +161,13 @@ def _snapshot(conn, snapshot_id: str) -> sqlite3.Row:
 
 def _graph(conn, snapshot_id: str):
     rows = conn.execute(
-        "SELECT path, is_test, is_entry, rank FROM xray_files WHERE snapshot_id = ?", (snapshot_id,)
+        "SELECT path, is_test, is_entry, rank, lang, kind FROM xray_files WHERE snapshot_id = ?",
+        (snapshot_id,),
     ).fetchall()
     files = {r["path"]: bool(r["is_test"]) for r in rows}
     entries = {r["path"] for r in rows if r["is_entry"]}
     ranks = {r["path"]: r["rank"] for r in rows}
+    nodes = {r["path"]: (r["lang"], r["kind"]) for r in rows}
     links = [
         rank.Link(r["src"], r["dst"], bool(r["certain"]), bool(r["implicit"]))
         for r in conn.execute(
@@ -170,35 +175,53 @@ def _graph(conn, snapshot_id: str):
             (snapshot_id,),
         )
     ]
-    return files, entries, ranks, links
+    return files, entries, ranks, links, nodes
+
+
+def _packages(nodes: dict[str, tuple[str, str]]) -> set[str]:
+    return {p for p, (_, kind) in nodes.items() if kind == "package"}
 
 
 def blast(conn, snapshot_id: str, seeds: list[str], *, limit=None, offset: int = 0) -> dict:
     """What a change to ``seeds`` reaches, by import, in one snapshot."""
     row = _snapshot(conn, snapshot_id)
-    files, _, ranks, links = _graph(conn, snapshot_id)
-    out = rank.blast(seeds, files, links, ranks, limit=limit, offset=offset)
+    files, _, ranks, links, nodes = _graph(conn, snapshot_id)
+    out = rank.blast(
+        seeds, files, links, ranks, limit=limit, offset=offset, hidden=_packages(nodes)
+    )
     return {**out, "snapshot": _meta(row)}
 
 
 def overview(conn, snapshot_id: str, *, top: int = 20, limit=None, offset: int = 0) -> dict:
     """The most load-bearing files, and the files no root reaches (paged)."""
     row = _snapshot(conn, snapshot_id)
-    files, entries, ranks, links = _graph(conn, snapshot_id)
+    files, entries, ranks, links, nodes = _graph(conn, snapshot_id)
+    packages = _packages(nodes)
     imported_by: dict[str, int] = {}
     for ln in links:
-        if not ln.implicit:  # counted like rank: who asked for it, not who ran it
+        # Counted like rank: who asked for it, not who ran it. A package reaching
+        # its own files is membership, not an import.
+        if not ln.implicit and ln.src not in packages:
             imported_by[ln.dst] = imported_by.get(ln.dst, 0) + 1
     n = len(files) or 1
     ordered = sorted(ranks, key=lambda p: (-ranks[p], p))[: max(0, top)]
     tests = {p for p, is_test in files.items() if is_test}
     dead = rank.unreachable(files, links, roots=tests | entries)
+    if dead is not None:
+        dead = [p for p in dead if p not in packages]
+    languages: dict[str, int] = {}
+    for lang, kind in nodes.values():
+        if kind == "file":
+            languages[lang] = languages.get(lang, 0) + 1
     end = None if limit is None else offset + limit
     return {
         "snapshot": _meta(row),
+        "languages": dict(sorted(languages.items())),
         "top": [
             {
                 "path": p,
+                "kind": nodes[p][1],
+                "lang": nodes[p][0],
                 "rank": round(ranks[p], 8),
                 "times_baseline": round(ranks[p] * n, 2),
                 "imported_by": imported_by.get(p, 0),

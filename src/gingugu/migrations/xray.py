@@ -78,3 +78,23 @@ CREATE INDEX idx_xray_edges_dst ON xray_edges(snapshot_id, dst);
 
 def _migration_019_xray(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA_V19)
+
+
+def _migration_021_xray_languages(conn: sqlite3.Connection) -> None:
+    """``xray_files.lang`` and ``kind``: X-ray reads more than Python.
+
+    ``lang`` names the adapter that parsed the node; ``kind`` is ``file`` or
+    ``package`` - a synthetic node for languages that import a directory (Go),
+    so a package's rank is split across its files rather than multiplied by
+    them. Every snapshot stored before this was Python files, so the defaults
+    are the truth for old rows and nothing is backfilled. Plain TEXT validated
+    in Python, like ``xray_edges.kind``.
+
+    Resumable, like 020: a column already present is skipped.
+    """
+    have = {row[1] for row in conn.execute("PRAGMA table_info(xray_files)")}
+    for column, default in (("lang", "python"), ("kind", "file")):
+        if column not in have:
+            conn.execute(
+                f"ALTER TABLE xray_files ADD COLUMN {column} TEXT NOT NULL DEFAULT '{default}'"
+            )

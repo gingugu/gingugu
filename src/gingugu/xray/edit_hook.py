@@ -1,4 +1,4 @@
-"""X-ray on edit: the first edit of an imported ``.py`` file names its dependents.
+"""X-ray on edit: the first edit of an imported source file names its dependents.
 
 Called from ``gingugu hook tool`` (PreToolUse). Deny is the only lever that
 speaks before a call runs, so the first ``Edit``/``Write``/``MultiEdit`` of a
@@ -18,7 +18,7 @@ import os
 import time
 from pathlib import Path
 
-from . import extract, local, rank
+from . import extract, lang, local, rank
 from .scan import XrayError
 
 TOP_N = 5
@@ -86,7 +86,7 @@ def _target(payload: dict) -> tuple[Path, str] | None:
     if not isinstance(tool_input, dict):
         return None
     raw = tool_input.get("file_path")
-    if not isinstance(raw, str) or not raw or not raw.endswith(".py"):
+    if not isinstance(raw, str) or not raw or lang.for_path(raw) is None:
         return None
     cwd = payload.get("cwd")
     cwd_path = Path(cwd) if isinstance(cwd, str) and cwd else Path.cwd()
@@ -125,7 +125,7 @@ def _claim(path: Path) -> bool:
 
 
 def _graph(root: Path, state_dir: Path):
-    """(files, links, ranks) for the checkout: cached by fingerprint."""
+    """(files, links, ranks, packages) for the checkout: cached by fingerprint."""
     digest = hashlib.sha256(str(root).encode()).hexdigest()[:16]
     cache = state_dir / f"xray-graph-{digest}.json"
     fp = extract.fingerprint(root)
@@ -135,13 +135,15 @@ def _graph(root: Path, state_dir: Path):
             files = {str(k): bool(v) for k, v in data["files"].items()}
             links = [rank.Link(s, d, bool(c), bool(i)) for s, d, c, i in data["links"]]
             ranks = {str(k): float(v) for k, v in data["ranks"].items()}
-            return files, links, ranks
+            packages = {str(p) for p in data["packages"]}
+            return files, links, ranks, packages
     except (KeyError, TypeError, ValueError, AttributeError):
         pass  # a corrupt cache is rebuilt, not fatal
     ex = extract.extract(root)
     files = {f.path: f.is_test for f in ex.files}
     links = [rank.Link(e.src, e.dst, e.certain, e.implicit) for e in ex.edges]
     ranks = rank.pagerank(sorted(files), links)
+    packages = {f.path for f in ex.files if f.kind == "package"}
     _write_json(
         cache,
         {
@@ -149,9 +151,10 @@ def _graph(root: Path, state_dir: Path):
             "files": files,
             "links": [[ln.src, ln.dst, ln.certain, ln.implicit] for ln in links],
             "ranks": ranks,
+            "packages": sorted(packages),
         },
     )
-    return files, links, ranks
+    return files, links, ranks, packages
 
 
 def _render(rel: str, blast: dict) -> str:
@@ -213,10 +216,10 @@ def check(payload: dict, state_dir: Path) -> str | None:
         claim = _claim_path(state_dir, session_id, root, rel)
         if claim.exists():
             return None
-        files, links, ranks = _graph(root, state_dir)
-        if rel not in files:
+        files, links, ranks, packages = _graph(root, state_dir)
+        if rel not in files or rel in packages:
             return None
-        blast = _without_seed(rank.blast([rel], files, links, ranks), rel)
+        blast = _without_seed(rank.blast([rel], files, links, ranks, hidden=packages), rel)
         if blast["code_total"] + blast["tests_total"] == 0:
             return None
         # Deny only once the claim is on disk, and only for the hook that made it.

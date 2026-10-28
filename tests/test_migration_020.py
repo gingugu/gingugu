@@ -35,10 +35,10 @@ def _columns(conn: sqlite3.Connection) -> set[str]:
     return {row[1] for row in conn.execute("PRAGMA table_info(board_posts)")}
 
 
-def test_020_is_registered_once_and_latest():
+def test_020_is_registered_once():
     targets = [t for t, _ in MIGRATIONS]
     assert targets.count(20) == 1
-    assert LATEST_SCHEMA_VERSION == 20
+    assert LATEST_SCHEMA_VERSION >= 20
 
 
 def test_fresh_db_has_both_agent_columns():

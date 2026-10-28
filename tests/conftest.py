@@ -20,6 +20,7 @@ from tests.client_grants_fixtures import hook, live, root  # noqa: F401 - client
 from tests.hook_remote_fixtures import remote  # noqa: F401 - remote-mode hook suites
 from tests.scoped_fixtures import brain  # noqa: F401 - shared fixture for the scoped suites
 from tests.ui_api_fixtures import seeded  # noqa: F401 - Explorer API suites
+from tests.xray_lang_fixtures import fake  # noqa: F401 - X-ray language suites
 
 
 class _MemoryKeyring(KeyringBackend):
