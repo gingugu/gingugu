@@ -1,0 +1,205 @@
+"""tsconfig/jsconfig and package.json, read as data: path aliases, workspaces, entries."""
+
+from __future__ import annotations
+
+import json
+import posixpath
+import re
+from dataclasses import dataclass
+
+from . import jsonc
+from .ts_paths import join, norm, resolve_file
+
+CONFIG_NAMES = ("tsconfig.json", "jsconfig.json")
+MAX_EXTENDS = 16
+# Bounds on what one config or package.json can make every import pay for.
+MAX_PATHS_KEYS = 1000
+MAX_TARGETS = 32
+MAX_DEPTH = 32
+# Matched inside one tag at a time (see ``script_srcs``), never across a page.
+_SCRIPT_OPEN = re.compile(r"<script\b", re.I)
+_SRC = re.compile(r"\bsrc\s*=\s*[\"']([^\"'>]+)[\"']", re.I)
+
+
+def script_srcs(html: str) -> list[str]:
+    """``src`` of every ``<script>`` tag. Linear: each tag's end is found once,
+    so a page of unclosed tags cannot make a regex backtrack across it."""
+    out: list[str] = []
+    pos = 0
+    while start := _SCRIPT_OPEN.search(html, pos):
+        end = html.find(">", start.end())
+        if end < 0:
+            break
+        m = _SRC.search(html, start.end(), end)
+        if m:
+            out.append(m.group(1))
+        pos = end + 1  # an opener nested inside this tag is never revisited
+    return out
+
+
+@dataclass
+class Config:
+    """The aliasing a tsconfig (with its ``extends`` chain) gives its files."""
+
+    base_url: str | None = None  # repo path; set by the config that wrote baseUrl
+    paths: dict[str, list[str]] | None = None
+    paths_dir: str = ""  # what ``paths`` targets are relative to, absent a baseUrl
+
+    def over(self, top: Config) -> Config:
+        return Config(
+            top.base_url if top.base_url is not None else self.base_url,
+            top.paths if top.paths is not None else self.paths,
+            top.paths_dir if top.paths is not None else self.paths_dir,
+        )
+
+
+def _paths_map(raw: object) -> dict[str, list[str]] | None:
+    if not isinstance(raw, dict):
+        return None
+    out: dict[str, list[str]] = {}
+    for k, v in list(raw.items())[:MAX_PATHS_KEYS]:
+        if isinstance(v, list):
+            out[k] = [t for t in v if isinstance(t, str)][:MAX_TARGETS]
+    return out
+
+
+def _parse(data: bytes, jsonc_file: bool) -> object:
+    try:
+        return jsonc.loads(data) if jsonc_file else json.loads(data.decode("utf-8-sig"))
+    except (ValueError, RecursionError):  # Decode/Unicode errors subclass ValueError;
+        return None  # a hostile, deeply nested file raises RecursionError
+
+
+def leaves(value: object) -> list[str]:
+    """Every string in a nested str/list/dict structure, in document order.
+
+    Iterative and depth-capped: a hostile ``exports`` nested past Python's
+    recursion limit would otherwise abort the extraction."""
+    out: list[str] = []
+    stack: list[tuple[object, int]] = [(value, 0)]
+    while stack:
+        node, depth = stack.pop()
+        if isinstance(node, str):
+            out.append(node)
+        elif depth < MAX_DEPTH and isinstance(node, (list, dict)):
+            items = list(node.values()) if isinstance(node, dict) else node
+            stack.extend((v, depth + 1) for v in reversed(items))
+    return out
+
+
+class Manifests:
+    """Every config/package manifest, parsed once; malformed ones go to ``skipped``."""
+
+    def __init__(self, manifests: dict[str, bytes], skipped: list[tuple[str, str]]) -> None:
+        self.configs: dict[str, dict] = {}
+        self.packages: dict[str, dict] = {}
+        self.html: dict[str, str] = {}
+        for path in sorted(manifests):
+            name = posixpath.basename(path)
+            if name == "index.html":
+                self.html[path] = manifests[path].decode("utf-8", "replace")
+                continue
+            is_pkg = name == "package.json"
+            obj = _parse(manifests[path], jsonc_file=not is_pkg)
+            if isinstance(obj, dict):
+                (self.packages if is_pkg else self.configs)[path] = obj
+            else:
+                skipped.append((path, "malformed"))
+        self._effective: dict[str, Config] = {}
+
+    # --- tsconfig -----------------------------------------------------------
+
+    def _extends(self, path: str, value: object) -> list[str]:
+        found: list[str] = []
+        for ref in value if isinstance(value, list) else [value]:
+            if not isinstance(ref, str) or not ref.startswith("."):
+                continue  # a package config (@tsconfig/...) is not in the repo
+            target = join(posixpath.dirname(path), ref)
+            if target is None:
+                continue
+            for cand in (target, f"{target}.json"):
+                if cand in self.configs:
+                    if cand not in found:  # a repeated parent adds nothing but work
+                        found.append(cand)
+                    break
+        return found
+
+    def effective(self, path: str, seen: tuple[str, ...] = ()) -> Config:
+        """``path``'s aliasing with its ``extends`` chain applied.
+
+        Every result is cached, so a hostile diamond of configs costs one visit
+        each rather than one per route; a cycle or a chain deeper than
+        ``MAX_EXTENDS`` contributes nothing past that point. Real chains are 2-4."""
+        if path in self._effective:
+            return self._effective[path]
+        here = posixpath.dirname(path)
+        cfg = Config(paths_dir=here)
+        if path in seen or len(seen) >= MAX_EXTENDS:
+            return cfg
+        data = self.configs[path]
+        for parent in self._extends(path, data.get("extends")):
+            cfg = cfg.over(self.effective(parent, (*seen, path)))
+        opts = data.get("compilerOptions")
+        opts = opts if isinstance(opts, dict) else {}
+        base = opts.get("baseUrl")
+        cfg = cfg.over(
+            Config(
+                join(here, base) if isinstance(base, str) else None,
+                _paths_map(opts.get("paths")),
+                here,
+            )
+        )
+        self._effective[path] = cfg
+        return cfg
+
+    def governing(self, src: str) -> Config | None:
+        """The nearest tsconfig.json/jsconfig.json up from ``src``."""
+        d = posixpath.dirname(src)
+        while True:
+            for name in CONFIG_NAMES:
+                cand = posixpath.join(d, name) if d else name
+                if cand in self.configs:
+                    return self.effective(cand)
+            if not d:
+                return None
+            d = posixpath.dirname(d)
+
+    # --- workspace packages -------------------------------------------------
+
+    def workspace(self) -> dict[str, tuple[str, dict]]:
+        """Package name -> (directory, package.json), for each package that names itself."""
+        names: dict[str, tuple[str, dict]] = {}
+        for path, data in self.packages.items():
+            name = data.get("name")
+            if isinstance(name, str) and name:
+                names.setdefault(name, (posixpath.dirname(path), data))
+        return names
+
+    # --- entries ------------------------------------------------------------
+
+    def entries(self, files: dict[str, bytes]) -> set[str]:
+        found: set[str] = set()
+        for path, data in self.packages.items():
+            here = posixpath.dirname(path)
+            fields = [data.get(k) for k in ("main", "module", "bin", "exports")]
+            for leaf in leaves(fields):
+                base = None if "*" in leaf else join(here, leaf)
+                hit = resolve_file(base, files) if base is not None else None
+                if hit:
+                    found.add(hit)
+        for path, html in self.html.items():
+            here = posixpath.dirname(path)
+            for ref in script_srcs(html):
+                if "://" in ref or ref.startswith("//"):
+                    continue
+                rel = ref.split("?", 1)[0].split("#", 1)[0]
+                # Vite serves "/x" from the project root, which is the html's directory.
+                cands = [join(here, rel.lstrip("/"))]
+                if rel.startswith("/"):
+                    cands.append(norm(rel.lstrip("/")))
+                for base in cands:
+                    hit = resolve_file(base, files) if base is not None else None
+                    if hit:
+                        found.add(hit)
+                        break
+        return found
