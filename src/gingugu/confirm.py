@@ -15,6 +15,12 @@ tool runs with ``MEMORY_CONFIRM_DESTRUCTIVE=off``, the escape hatch for
 automation. Anything this module does not recognise is a refusal: it fails
 closed.
 
+A client can declare elicitation and still show nothing: Claude Code's VS Code
+extension (2.1.312) answers every request ``decline`` unasked. Taken at its word
+that is "the user declined", from someone who never saw a question. It names
+itself to the stdio servers it launches, so they - and the proxy, for the brain
+behind it - treat it as the client that cannot ask that it is.
+
 Resolvers run before the tool wrapper, so before the grant fence, and a plain
 ``def`` resolver runs on a worker thread where the sqlite connection is not
 usable. So resolvers here are ``async`` and check the fence themselves before
@@ -29,9 +35,15 @@ from typing import Any
 
 from mcp.server.elicitation import AcceptedElicitation, CancelledElicitation, DeclinedElicitation
 from mcp.server.mcpserver.resolve import Elicit
+from mcp.shared.message import SessionMessage
 from pydantic import BaseModel, Field
 
 ENV = "MEMORY_CONFIRM_DESTRUCTIVE"
+
+# How a Claude Code client names itself to the servers it launches, and the
+# names of those that declare elicitation but show no dialog for it.
+ENTRYPOINT = "CLAUDE_CODE_ENTRYPOINT"
+_SHOWS_NO_DIALOG = frozenset({"claude-vscode"})
 
 # A resolver's plain (non-``Elicit``) return values. The SDK hands them to the
 # tool as ``AcceptedElicitation(data=<value>)``; they are never written to
@@ -56,6 +68,12 @@ def shown(text: Any, limit: int = 80) -> str:
     return f'"{flat}"'
 
 
+def plain(text: str) -> bool:
+    """Whether ``text`` shows as itself: no control, zero-width or bidi character,
+    and no backtick to break out of the code span a message puts it in."""
+    return "`" not in text and not _UNSHOWABLE.search(text)
+
+
 class Confirm(BaseModel):
     confirm: bool = Field(description="Tick to confirm. This cannot be undone.")
 
@@ -77,8 +95,32 @@ def opted_out() -> bool:
     return os.environ.get(ENV, "").strip().lower() in ("off", "false", "0", "no")
 
 
-def can_ask(ctx: Any) -> bool:
-    """Whether the client declared form elicitation (a bare ``{}`` counts)."""
+def shows_no_dialog() -> bool:
+    """Whether the client that launched this process answers without asking.
+
+    Meaningful only where that client is this process's own: a stdio server, or
+    the proxy. Over HTTP the client is somewhere else."""
+    return os.environ.get(ENTRYPOINT, "").strip() in _SHOWS_NO_DIALOG
+
+
+def withhold_dialogs(item: SessionMessage) -> SessionMessage:
+    """The client's ``initialize`` as the proxy forwards it: without elicitation
+    when the client shows no dialog, so the brain refuses "cannot ask" instead
+    of passing the client's unasked "decline" off as the person's."""
+    params = item.message.params or {}
+    caps = params.get("capabilities") or {}
+    if not shows_no_dialog() or "elicitation" not in caps:
+        return item
+    kept = {k: v for k, v in caps.items() if k != "elicitation"}
+    message = item.message.model_copy(update={"params": {**params, "capabilities": kept}})
+    return SessionMessage(message)
+
+
+def can_ask(ctx: Any, transport: str) -> bool:
+    """Whether the client declared form elicitation (a bare ``{}`` counts) and,
+    on stdio, is not one known to show no dialog."""
+    if transport == "stdio" and shows_no_dialog():
+        return False
     try:
         caps = ctx.client_capabilities
     except Exception:  # noqa: BLE001 - no request context: nobody to ask
@@ -89,18 +131,21 @@ def can_ask(ctx: Any) -> bool:
     return elicitation.form is not None or elicitation.url is None
 
 
-def ask(ctx: Any, message: str) -> Elicit[Confirm] | str:
-    """The resolver's answer for a destructive call: a dialog, or why there is none."""
+def ask(ctx: Any, message: str, transport: str) -> Elicit[Confirm] | str:
+    """The resolver's answer for a destructive call: a dialog, or why there is none.
+    ``transport`` is the executing server's (``ServerContext.transport``)."""
     if opted_out():
         return OPTED_OUT
-    if not can_ask(ctx):
+    if not can_ask(ctx, transport):
         return CANNOT_ASK
     return Elicit(message, Confirm)
 
 
-def refusal(answer: Any, what: str) -> str | None:
+def refusal(answer: Any, what: str, by_hand: str | None = None) -> str | None:
     """Why ``what`` must not happen, or None to go ahead. Call only for a
-    destructive call: ``NOT_NEEDED`` here is a refusal, never a pass."""
+    destructive call: ``NOT_NEEDED`` here is a refusal, never a pass.
+    ``by_hand`` is how a person can do it without a dialog, offered when none
+    could be shown."""
     if isinstance(answer, AcceptedElicitation):
         data = answer.data
         if data == OPTED_OUT:
@@ -110,8 +155,8 @@ def refusal(answer: Any, what: str) -> str | None:
         if data == CANNOT_ASK:
             return (
                 f"{what} needs the user's confirmation and this client cannot ask "
-                f"for it. Use a client that supports MCP elicitation, or set {ENV}=off "
-                "on the server"
+                f"for it. Use a client that shows MCP elicitation dialogs, or set {ENV}=off "
+                "on the server" + (f", or {by_hand}" if by_hand else "")
             )
         return f"{what} was not confirmed"
     if isinstance(answer, DeclinedElicitation):

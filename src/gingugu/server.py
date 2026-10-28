@@ -140,6 +140,10 @@ def main() -> None:
         from .token_cli import main as token_main
 
         raise SystemExit(token_main(sys.argv[2:]))
+    if cmd == ["credential"]:
+        from .credential_cli import main as credential_main
+
+        raise SystemExit(credential_main(sys.argv[2:]))
     if cmd == ["remote"]:
         from .remote import main as remote_main
 

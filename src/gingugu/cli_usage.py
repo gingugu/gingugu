@@ -11,6 +11,9 @@ Usage:
   gingugu serve                Run over streamable HTTP for a remote/central brain.
   gingugu token add|list|revoke  Manage scoped tokens for `gingugu serve`.
   gingugu remote status|on|off|login  Choose which brain this machine talks to.
+  gingugu credential list|delete  This machine's credential vault by hand; delete
+                               asks you to type the name back, at a terminal.
+                               For a client that cannot show the confirmation.
   gingugu promote [options]    Promote local gold memories up to a central brain.
   gingugu init [options]       Bootstrap a repo so an AI assistant uses Gingugu.
   gingugu harness [options]    Install the Claude Code harness on top of init: safety
