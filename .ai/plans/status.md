@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-10-28 (X-ray reads TypeScript/JavaScript and Go; X3 next)_
+_Last updated: 2026-10-28 (confirmations under the VS Code extension; `gingugu credential`)_
 
 ## In Flight
 
@@ -34,6 +34,20 @@ mid-capture; `overview.top` and the payload's `skipped` are bounded but not
 paged; a git `core.fsmonitor`-style check for other config that runs code.
 
 ## Recently Completed
+
+**Confirmations under Claude Code's VS Code extension (fix/vscode-elicitation).**
+The extension (2.1.312) declares MCP elicitation but answers every request
+`decline` unasked: its bundled Agent SDK falls back to `{action: "decline"}` when
+the host wires no `onElicitation`, and it wires none. Every destructive call was
+refused as "the user declined". `confirm` now treats a stdio client with
+`CLAUDE_CODE_ENTRYPOINT=claude-vscode` as unable to ask (`can_ask`/`ask` take the
+executing server's transport: over HTTP this process's env says nothing about the
+client), and the proxy strips elicitation from the `initialize` it forwards
+(`withhold_dialogs`) so the brain refuses the same way. New `gingugu credential
+list|delete` (`credential_cli.py`) for deleting without a dialog: TTY-only, type the
+name back, no `--yes`. `tests/conftest.py` clears `CLAUDE_CODE_ENTRYPOINT`, which a
+pytest launched from a VS Code session inherits. Drop `claude-vscode` from
+`confirm._SHOWS_NO_DIALOG` once the extension shows the dialog.
 
 **README synced with gingugu.com (docs/readme-sync).** The opening drops the
 comparison framing ("existing memory tools...", "junk drawer") for a plain

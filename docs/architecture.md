@@ -31,7 +31,10 @@ the brain's owner-only `GET /ui/api/*` (see **Explorer read path** in
 `.ai/specs/dataflow.md`). It binds loopback only and credits no recall.
 The proxy also serves this machine's credential vault locally, so a
 `credential_delete` is confirmed with the user by the proxy, while the
-brain's own confirmations (a hard forget, say) relay through it unchanged.
+brain's own confirmations (a hard forget, say) relay through it unchanged -
+except for a client known to show no dialog (Claude Code's VS Code extension),
+whose `initialize` the proxy forwards without `elicitation`, so the brain refuses
+"cannot ask" rather than relaying a question nobody sees.
 
 ---
 
@@ -1667,7 +1670,14 @@ confirmation through the client (MCP elicitation) and go ahead only on accept
 with the box ticked. The answer is a hidden parameter, absent from the tool's
 input schema, so the model cannot supply it. Decline, cancel (what a headless
 client answers) and a client without elicitation each return a structured
-`ok: false`. `MEMORY_CONFIRM_DESTRUCTIVE=off` (also `false`/`0`/`no`,
+`ok: false`. Claude Code's VS Code extension declares elicitation but answers
+every one "decline" without showing a dialog, so a stdio server treats it as
+unable to ask (`CLAUDE_CODE_ENTRYPOINT=claude-vscode`; the variable is ignored
+over HTTP, where it says nothing about the remote client). In remote mode the
+proxy strips `elicitation` from the `initialize` it forwards to the brain and
+replays to the local vault, so both refuse the same way. The `credential_delete`
+refusal then names the way out: `gingugu credential delete NAME` in a terminal.
+`MEMORY_CONFIRM_DESTRUCTIVE=off` (also `false`/`0`/`no`,
 case-insensitive; anything else keeps confirmations on) on the server that
 executes the tool skips the dialog, for automation: in remote mode that is
 the brain for memory tools and the local proxy for the credential vault.
@@ -1840,7 +1850,10 @@ Remove a service bundle or a specific field. Cleans up Keychain entries.
 - `field_name` (optional) — delete a single field instead of the whole service
 - `confirm` (optional, default `true`) — the user's confirmation dialog decides;
   `confirm=false` refuses outright. Through a remote-mode proxy the dialog is
-  asked by the proxy's local vault session.
+  asked by the proxy's local vault session. Where no client can show it, the
+  refusal points at `gingugu credential delete NAME [--field F]` in a terminal,
+  which asks for the service name typed back (see `gingugu credential list` to
+  find names; secret values are never printed).
 
 ### Expiry Behavior
 
@@ -2016,6 +2029,7 @@ src/gingugu/
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine
 ├── remote_args.py          # usage text + argparse for `gingugu remote`, mint ssh argv
 ├── remote_tls.py           # Client TLS: pins, verify_for, downgrade refusal, login's live check, diagnose/speaks_tls
+├── credential_cli.py       # `gingugu credential list|delete`: the vault by hand, at a terminal
 ├── confirm.py              # Destructive tools ask the user (MCP elicitation); MEMORY_CONFIRM_DESTRUCTIVE opt-out
 ├── grants.py               # Per-namespace read/write grants plus a home namespace (derived tokens), bound per tool call
 ├── serve_ui.py             # GET /ui/api/*: the Explorer read API on a brain, owner tokens only
