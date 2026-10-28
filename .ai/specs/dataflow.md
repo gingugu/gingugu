@@ -523,12 +523,14 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
         MEMORY_TRIPWIRES)
       → X-ray edit check (xray/edit_hook; its own switch, runs before the
         MEMORY_TRIPWIRES check and does not exit the hook)
-          Edit/Write/MultiEdit of a .py file, else skip
+          Edit/Write/MultiEdit of a file an X-ray adapter parses (lang.for_path:
+          Python, TS/JS, Go), else skip
           MEMORY_XRAY_TRIPWIRE=off: skip
           git root + content fingerprint of the checkout
           graph cache hook-sessions/xray-graph-<sha16(root)>.json; rebuilt
           locally with the code_xray extractor on a fingerprint miss
-          blast radius of the file (rank.blast); nothing imports it → skip
+          blast radius of the file (rank.blast, walking through package nodes
+          but never listing one); nothing imports it → skip
           already claimed in hook-sessions/xray-shown-<session>/ → skip
           claim it atomically (O_EXCL; lost race or failed write → skip), then the
           X-ray reason: importer count, top 5 dependents with hops, up to 5
