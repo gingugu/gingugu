@@ -43,6 +43,7 @@ def register(mcp, ctx: ServerContext) -> None:
             ctx_,
             f"Permanently delete memory {confirm.shown(mem.title)} ({mem.id})? "
             "This cannot be undone.",
+            ctx.transport,
         )
 
     @mcp.tool()

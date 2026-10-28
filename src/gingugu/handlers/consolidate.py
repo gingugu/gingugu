@@ -48,6 +48,7 @@ def register(mcp, ctx: ServerContext) -> None:
             ctx_,
             f"Consolidate {len(ids)} memories ({titles}{more}) and permanently delete "
             "the originals? This cannot be undone.",
+            ctx.transport,
         )
 
     @mcp.tool()

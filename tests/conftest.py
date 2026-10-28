@@ -45,6 +45,17 @@ class _MemoryKeyring(KeyringBackend):
 
 
 @pytest.fixture(autouse=True)
+def not_under_a_client(monkeypatch: pytest.MonkeyPatch):
+    """Run as if no client launched the suite.
+
+    A client names itself to what it launches (``CLAUDE_CODE_ENTRYPOINT``), and
+    ``confirm`` treats some as unable to ask - so pytest run from a Claude Code
+    session in VS Code would otherwise see every confirmation refused.
+    """
+    monkeypatch.delenv("CLAUDE_CODE_ENTRYPOINT", raising=False)
+
+
+@pytest.fixture(autouse=True)
 def fake_keyring():
     previous = keyring.get_keyring()
     keyring.set_keyring(_MemoryKeyring())

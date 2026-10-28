@@ -70,7 +70,7 @@ Add search ranking, decay scoring, and auto-context.
 | `credential_store` tool | ✅ | Bundle upsert, secret fields → keychain |
 | `credential_get` tool | ✅ | Retrieve bundle; secrets redacted by default, `into` writes one to a 0600 file, `reveal` opt-in |
 | `credential_list` tool | ✅ | Non-secret fields + expiry status, no keychain hit |
-| `credential_delete` tool | ✅ | Service/field removal + keychain cleanup; the user confirms through the client (MCP elicitation), `confirm=false` refuses |
+| `credential_delete` tool | ✅ | Service/field removal + keychain cleanup; the user confirms through the client (MCP elicitation), `confirm=false` refuses; where no client can show the dialog (VS Code), `gingugu credential delete` in a terminal does it |
 | Expiry tracking in `credential_list` + `memory_stats` | ✅ | active / expiring_soon / expired |
 | Unit tests for credential CRUD + keyring | ✅ | `test_credentials.py` with in-memory keyring backend |
 

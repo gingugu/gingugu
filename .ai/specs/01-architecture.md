@@ -66,7 +66,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
    Decisions), `board_hook` (board mail for the prompt hook; see Key Decisions), `cli_usage` (the top-level help text), `minion_fence`, `subagent_hook` and `subagent_warmup` (see Warm minions),
    `recall_pick` (the recall pipeline the local hook and `/hook/recall` share),
    `hook_remote` + `hook_remote_flows` and `serve_hooks` (see Remote mode), `hook_grant`
-   (the client's `MEMORY_GRANT` as the hooks apply it), `confirm` (the user's
+   (the client's `MEMORY_GRANT` as the hooks apply it), `credential_cli` (`gingugu
+   credential list|delete`: the vault by hand, for a person at a terminal), `confirm` (the user's
    confirmation for destructive tools; see Key Decisions), `proxy_vault_link`
    (the local vault behind an in-memory MCP session; see Remote mode), `client_grants` (each server
    publishes its grant for its client's hooks; see Warm minions), `claude_trust`
@@ -461,12 +462,15 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   review, 2026-10-04): everything else in the session is relayed, so a steered
   model could otherwise put an inline secret into a brain-bound call; `into`
   cannot. The vault runs as an MCP server over in-memory streams
-  (`proxy_vault_link.VaultLink`), handshaken with the client's own `initialize`,
+  (`proxy_vault_link.VaultLink`), handshaken with the client's `initialize`,
   so it sees the client's capabilities and `credential_delete` can ask the user
   through the client: the proxy's confirmation, with
   `MEMORY_CONFIRM_DESTRUCTIVE=off` on the proxy as its opt-out. The brain's own
   elicitations (hard forget, cascade delete, consolidate, import) relay through
-  the proxy unchanged. A vault that fails to open ends the proxy with a
+  the proxy unchanged, except for a client known to show no dialog (Claude Code's
+  VS Code extension): the proxy strips `elicitation` from the `initialize` it
+  forwards (`confirm.withhold_dialogs`), so the brain and the vault both refuse
+  "cannot ask". A vault that fails to open ends the proxy with a
   `ProxyLost` message. With credentials off, `credential_*` is stripped and
   refused. `memory_stats` is relayed, but its credential summary
   (`global.credentials` or `stats.credentials`) describes the brain's vault, so
@@ -771,7 +775,18 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   stays as an optional, model-side no (`confirm=false` refuses outright). *Refuse
   when nobody can be asked*: decline, cancel (what a headless client answers),
   and a client without elicitation each return a structured `ok: false`; an
-  unrecognised answer refuses too. *The env opt-out sits on the server that
+  unrecognised answer refuses too. Claude Code's VS Code extension declares
+  elicitation but answers every one "decline" without a dialog, so it counts as
+  unable to ask: `confirm.shows_no_dialog()` (env `CLAUDE_CODE_ENTRYPOINT` in
+  `_SHOWS_NO_DIALOG`) makes `can_ask` false, but only on a stdio server - over
+  HTTP the env says nothing about the remote client, so `ask`/`can_ask` take the
+  executing server's transport. In remote mode the proxy strips `elicitation`
+  from the `initialize` it forwards and stores (`withhold_dialogs`), so the brain
+  and the local vault refuse the same way. The refusal can carry a `by_hand`
+  pointer: `credential_delete`'s names `gingugu credential delete NAME` (new
+  `credential_cli.py`), which asks at a real terminal - it refuses a non-TTY
+  stdin and has no `--yes`, stopping accidents and piping, not an agent with a
+  shell. *The env opt-out sits on the server that
   executes the tool*: `MEMORY_CONFIRM_DESTRUCTIVE=off` (also `false`/`0`/`no`)
   is read straight from the environment, so in remote mode it is the brain for
   memory tools and the local proxy for the vault. *Resolvers run before the

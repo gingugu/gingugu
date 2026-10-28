@@ -520,6 +520,21 @@ off the machine, while `into` keeps it in a local 0600 file. Set
 `credential_delete` still asks you to confirm: the proxy's local vault shows the
 dialog through your client, just as the brain does for its own destructive tools.
 
+Some clients cannot show that dialog. Claude Code's VS Code extension declares
+MCP elicitation but answers every request "decline" without asking you, so under
+it (it names itself in `CLAUDE_CODE_ENTRYPOINT=claude-vscode`) a destructive call
+is refused as "this client cannot ask" rather than blamed on you - the proxy
+tells the brain the same. Use the terminal `claude` for those, or delete a
+credential by hand:
+
+```bash
+gingugu credential list                        # names and fields, never a secret value
+gingugu credential delete my-api               # type the name back to confirm
+gingugu credential delete my-api --field token # one field only
+```
+
+`delete` needs a real terminal: input cannot be piped, and there is no `--yes`.
+
 Plain `http` to a non-loopback host starts with a warning. The proxy sends the
 machine token only to `POST /token/derive` (owner tokens only; scoped tokens get
 403), which trades it for a session token held in memory on the server (stamped with
@@ -1145,7 +1160,7 @@ Environment variables (all optional):
 | `MEMORY_W_ACCESS` | `0.10` | Composite-score weight for access frequency |
 | `MEMORY_W_CONFIDENCE` | `0.35` | Composite-score weight for confidence (trust — the dominant standalone signal) |
 | `MEMORY_CREDENTIALS_ENABLED` | `true` | Expose the `credential_*` vault tools. Set `false` to run an instance without a secret vault (e.g. a shared/central server) |
-| `MEMORY_CONFIRM_DESTRUCTIVE` | *(unset: confirmations on)* | Destructive tools (hard `memory_forget`, cascading namespace delete, `memory_consolidate` with `keep_originals=false`, overwriting `memory_import`, `credential_delete`) ask *you* to confirm through the client. `off` (also `false`, `0`, `no`) skips the dialog, for automation. Applies to the server that executes the tool: with a remote brain, set it on the brain for memory tools and on the local proxy for the credential vault |
+| `MEMORY_CONFIRM_DESTRUCTIVE` | *(unset: confirmations on)* | Destructive tools (hard `memory_forget`, cascading namespace delete, `memory_consolidate` with `keep_originals=false`, overwriting `memory_import`, `credential_delete`) ask *you* to confirm through the client (a client that cannot show the dialog is refused - see `gingugu credential delete` for the vault). `off` (also `false`, `0`, `no`) skips the dialog, for automation. Applies to the server that executes the tool: with a remote brain, set it on the brain for memory tools and on the local proxy for the credential vault |
 | `MEMORY_GRANT` | *(unset)* | Fence a stdio server like a scoped token: `ns=read\|write,...` (e.g. `my-project=read,minions=write`). Unset is full access. A bad spec, an empty value, or `*=write` refuses to start. Used by a subagent's own `brain` server in its agent file. The client's hooks follow it too, whether it is set in the MCP server's `env` block (the server publishes it) or in the hooks' own environment: recall, tripwires and minion warm-up stay inside it, and an unusable value or a disagreement keeps them quiet |
 | `MEMORY_PERSONA` | *(unset)* | This agent's own namespace (e.g. `research`). Recall, tripwires and the SessionStart contract load `crow`, then the persona, then the repo (recall and tripwires narrowed by `MEMORY_GRANT` when set). A malformed value is ignored |
 | `MEMORY_REMOTE_URL` | *(unset)* | Use this remote brain for this client only (`off` forces local). A bare `gingugu` then relays to it; the credential vault stays local |

@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`gingugu credential list|delete`**: this machine's credential vault by hand,
+  for a client that cannot show the confirmation dialog. `delete NAME [--field F]`
+  asks you to type the name back at a real terminal - piped input is refused and
+  there is no `--yes`. `list` never prints a secret value, and names are shown
+  with control and bidi characters stripped. Works the same with a remote brain: the vault is
+  always this machine's.
+
+### Fixed
+
+- **Confirmations under Claude Code's VS Code extension** are refused as "this
+  client cannot ask" instead of "the user declined". The extension declares MCP
+  elicitation but answers every request `decline` without showing a dialog. A
+  stdio server launched with `CLAUDE_CODE_ENTRYPOINT=claude-vscode` now treats
+  it as unable to ask, and in remote mode the proxy withholds elicitation from
+  the `initialize` it forwards, so the brain refuses the same way. A refused
+  `credential_delete` names the `gingugu credential delete` command to run.
+
 ---
 
 ## [0.30.0] - 2026-10-28
