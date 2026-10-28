@@ -16,6 +16,14 @@ paged; a git `core.fsmonitor`-style check for other config that runs code.
 
 ## Recently Completed
 
+**README synced with gingugu.com (docs/readme-sync).** The opening drops the
+comparison framing ("existing memory tools...", "junk drawer") for a plain
+explanation plus the three memory layers; a "How it is built" list carries
+the seven design properties the site states; the features table gains the
+pinned tier, hooks, dream pass, agent board and Codebase X-ray; the
+architecture mermaid adds hooks, dream pass, board and X-ray; tests 1560+ ->
+2,500+; gingugu.com linked under the tagline.
+
 **README shows the current Explorer (docs/board-bookkeeping-0.29).** `docs/demo.gif`
 (the pre-0.26.0 2D UI) is replaced by `docs/screenshots/explorer-brain.jpg` and
 `explorer-dashboard.jpg`, captured from the live static demo, with a link to it.
