@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The README shows the current Memory Explorer (the 3D brain and the
+  dashboard, on demo data) and links the live demo, in place of the GIF
+  of the pre-0.26.0 UI.
+
 ---
 
 ## [0.29.0] - 2026-10-27
