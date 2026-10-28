@@ -26,6 +26,13 @@ dependencies = [
     # A hook finds the client it runs under (and that client's servers) by
     # process tree, on every OS CI covers (client_grants.py).
     "psutil>=7,<8",
+    # Codebase X-ray parses non-Python sources with tree-sitter. Each grammar is
+    # a prebuilt wheel, pinned and hashed in uv.lock: nothing is downloaded or
+    # compiled at runtime (xray/lang/).
+    "tree-sitter>=0.26,<0.27",
+    "tree-sitter-javascript>=0.25,<0.26",
+    "tree-sitter-typescript>=0.23.2,<0.24",
+    "tree-sitter-go>=0.25,<0.26",
 ]
 
 [project.scripts]

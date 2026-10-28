@@ -477,7 +477,13 @@ def test_payload_is_plain_json_without_the_local_root(tmp_path):
     assert str(repo) not in json.dumps(body)  # never ships a client path to the brain
     assert body["fingerprint"] == x.fingerprint
     assert body["extractor_version"] == extract.EXTRACTOR_VERSION
-    assert {"path": "tests/test_a.py", "is_test": True, "is_entry": False} in body["files"]
+    assert {
+        "path": "tests/test_a.py",
+        "is_test": True,
+        "is_entry": False,
+        "lang": "python",
+        "kind": "file",
+    } in body["files"]
     assert {
         "src": "a.py",
         "dst": "b.py",

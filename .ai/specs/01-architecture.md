@@ -56,7 +56,9 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `xray/edit_hook`; see Key Decisions), `board` + `board_events` (the agent board store and its
    `subscriptions/listen` bus; see Key Decisions), `board_delivery` (the post/reply
    delivery receipt: can the recipient persona's known clients read the namespace),
-   `xray/` (Codebase X-ray: `scan` + `extract` + `resolve` + `local` on the client, `validate` +
+   `xray/` (Codebase X-ray: `scan` + `extract` + `lang/` (one adapter per language: `python`
+   on `ast` with `resolve`; `typescript` + `ts_*` + `jsonc` and `golang` on tree-sitter) +
+   `model` + `local` on the client, `validate` +
    `rank` + `store` on the brain, plus `edit_hook`, the hook side that builds the graph itself and never
    touches the brain; see Key Decisions), `proxy_xray` (the proxy's local half of `code_xray`),
    `board_watch` +
@@ -94,7 +96,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `queries.py` for the query log (`query_log`, migration 015),
    `tripwires.py` for the tripwire triggers (`tripwires`, migration 016),
    `board.py` for the agent board (`board_posts`, `board_reads`, migrations 017, 018, 020),
-   `xray.py` for Codebase X-ray (`xray_snapshots`, `xray_files`, `xray_edges`, migration 019), and
+   `xray.py` for Codebase X-ray (`xray_snapshots`, `xray_files`, `xray_edges`, migration 019;
+   `xray_files.lang`/`kind`, migration 021), and
    `__init__.py` for the ordered registry and the runner. `config.py` resolves
    the DB path.
 
@@ -682,12 +685,12 @@ A subagent gets its own fenced brain and arrives already knowing the task.
 
 ## Key Decisions
 - **Codebase X-ray: the client reads the checkout, the brain keeps the graph
-  (X1, unreleased).** `code_xray` maps a Python repo's import graph. A brain
+  (X1, v0.29.0).** `code_xray` maps a repo's import graph. A brain
   under `gingugu serve` may be another host, so it never reads a path: the
   local stdio server or the proxy (`proxy_xray`, like the vault) runs
   `xray.extract` on this machine and sends a payload of repo-relative names
-  and edges. *Content-addressed snapshots*: the fingerprint covers every `.py`
-  file's bytes, `pyproject.toml` and `EXTRACTOR_VERSION`, so two worktrees with
+  and edges. *Content-addressed snapshots*: the fingerprint covers every source
+  file's bytes, every manifest an adapter reads and `EXTRACTOR_VERSION`, so two worktrees with
   different edits are two snapshots and nothing needs compare-and-set; every
   query fingerprints first (0.07s on this repo) and extracts + ingests only on
   a miss, so results match the working tree without the agent asking. *Full
@@ -704,8 +707,34 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   and an explicit `refresh` replaces a snapshot whose `graph_digest` differs.
   *Coverage is honest*: every source not read is a skip with a reason, and
   only a deliberate one (a symlink) leaves the graph `complete`.
-- **Codebase X-ray: tripwire on edit (X2, unreleased).** The first
-  Edit/Write/MultiEdit of a `.py` file that other files import is denied once
+- **Codebase X-ray: one adapter per language (unreleased).** `xray/lang/`
+  holds an adapter per language family: the file extensions it parses, the
+  manifest basename patterns it needs (`pyproject.toml`, `go.mod`,
+  `tsconfig*.json`, `package.json`, `index.html`), and a pure function from
+  bytes to files + edges. The scan reads every source and manifest once,
+  under the same symlink / containment / size checks, and an adapter never
+  touches the disk. *Python stays on `ast`* (the running interpreter's exact
+  grammar); TypeScript/JavaScript and Go parse with **tree-sitter** from pinned
+  grammar wheels, imported lazily so a Python-only repo never loads a parser.
+  Rejected: tree-sitter-language-pack (downloads native parsers on first use,
+  no documented integrity check), SCIP (needs a working build, i.e. runs the
+  repo's toolchain, and reindexes whole), stack-graphs (archived 2025-09).
+  *Package nodes*: Go imports a directory, and an edge to every file in it
+  gave bubbletea 2,992 edges for 116 files and handed a big package one
+  share of its importer's rank per file. A package is now a node (`kind:
+  package`, named by import path): importer -> package (`module`), package ->
+  each non-test file (`member`), a file -> its own package (`package`,
+  uncertain and implicit, so blast reaches siblings but rank ignores it), a
+  test -> its package. PageRank then divides a package's rank across its
+  files with no change to `rank.py`; 227 edges on bubbletea. Blast walks
+  through packages (`hidden=`) and never lists one. *Containment*: the
+  extractor drops a dangling or repeated edge (counted unresolved) and the
+  scan skips a name the brain would refuse (not UTF-8, a backslash), since
+  `validate` refuses a payload whole over one. Migration 021 adds
+  `xray_files.lang`/`kind` with defaults true for every older row, and a
+  payload without them still ingests.
+- **Codebase X-ray: tripwire on edit (X2, v0.29.0).** The first
+  Edit/Write/MultiEdit of a source file an X-ray adapter parses that other files import is denied once
   per file per Claude Code session, in `gingugu hook tool`. The reason lists
   how many files import it and how many candidate tests, the top 5 dependents
   by rank with hop counts, up to 5 candidate tests (`test_*.py` first, nearest
@@ -721,7 +750,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `xray-shown-<session>/` (one claim file per shown file, created atomically
   with `O_EXCL` so parallel hooks cannot lose a record); owner-only 0600,
   swept after 7 days untouched. *Silent by construction*: a file
-  nothing imports, a new file, a non-`.py` file, a path outside a git repo, a
+  nothing imports, a new file, a file no adapter parses, a path outside a git repo, a
   missing session id or any failure passes; it denies only once its "shown"
   state is saved, so a failed write can never block an edit forever. File
   names with control characters are quoted in the deny text. Own switch

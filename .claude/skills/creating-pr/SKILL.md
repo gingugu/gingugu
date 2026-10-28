@@ -41,6 +41,11 @@ embeddings, UI (`ui/`), tests, CI, or documentation.
 - `.ai/plans/status.md` - update "In Progress", "Recently Completed", and "Blocked/Pending"
 - `README.md` - update if the tool surface, setup, configuration, or features changed
 - `CHANGELOG.md` - add an entry under `[Unreleased]` for any user-visible change (Keep a Changelog format)
+- **gingugu.com** (`~/GIT/gingugu.com`: `index.html`, `js/content.js`, `README.md`) - if
+  `README.md`, `CHANGELOG.md`, `docs/` or `.ai/specs/product-spec.md` changed, check the
+  site says the same thing (features, tool list, languages, test count) and open its own
+  PR in the same session. Both repos stay in sync, in both directions. A memory tripwire
+  fires on the first such doc edit as the early warning; this step is the gate.
 
 **Then work `ai-assessment-checklist.md`** for the conditional files - what to
 check when `src/` changed, and what to check when conventions or standards

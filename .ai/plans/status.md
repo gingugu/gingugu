@@ -1,12 +1,31 @@
 # Project Status
 
-_Last updated: 2026-10-28 (bookkeeping: X1, X2 and board reply routing shipped in 0.29.0; X3 next)_
+_Last updated: 2026-10-28 (X-ray reads TypeScript/JavaScript and Go; X3 next)_
 
 ## In Flight
 
-**Board #5 Codebase X-ray - X3 scar tissue next.** X3 links memories (bugs, decisions,
-gotchas) to the files they are about, so an edit surfaces both what depends on the file
-and what it has cost before.
+**Codebase X-ray in every language we can parse - phase 1 (feature/xray-languages).**
+Extraction runs through one adapter per language (`xray/lang/`): Python stays on `ast`;
+TypeScript/JavaScript and Go parse with tree-sitter from pinned grammar wheels (core
+dependencies), never run. Go imports packages, so a package is a node (migration 021:
+`xray_files.lang`/`kind`). Measured: gingugu (383 Python + 52 TS/JS files) 0.49s; vite
+(1,638 TS/JS) 0.66s extract, edit hook 0.89s cold / 0.21s cached; bubbletea (116 Go
+files, 67 packages) 227 edges, 0 unresolved. Phase 2: Rust, C/C++, Bash, HCL/Terraform,
+Ruby, PHP, Lua/Luau (path imports). Phase 3: Java, Kotlin, Scala, C#, Swift, Elixir
+(convention imports, more `certain: false`). Language follow-ups: tree-sitter-typescript
+0.23.2 (the newest on PyPI) predates TS 5.0 `export type * as X from` and the JS grammar
+trips on JSX `class=` (9 of vite's 1,638 files report a parse error, edges recovered);
+`tsconfig` `extends` to a package (`@tsconfig/...`) is skipped; `exports` star patterns
+are not resolved; a go.mod `module ( ... )` block reads as malformed.
+
+**Board #5 Codebase X-ray - X3 scar tissue next** (design approved 2026-10-28, parked
+behind languages). X3 links memories (bugs, decisions, gotchas) to the files they are
+about, so an edit surfaces both what depends on the file and what it has cost before.
+Derived at read time, not stored: the brain FTS-searches the project namespace for a
+file's basename and the client resolves the hits against the checkout; scored by type
+(bug > decision/architecture > fact/pattern; workflow/context dropped), divided by the
+number of repo files a memory names, recency as tiebreak. Measured: 472 of 678 gingugu
+memories name a repo file.
 
 X1 follow-ups (not built): `TYPE_CHECKING` imported under an alias; a module
 present under both the repo root and `src/` (reported, not guessed); git
@@ -2066,7 +2085,8 @@ to run or refresh the X-ray itself rather than ask for it. Decided in X1:
   `gingugu serve` a path is refused.
 - **Persistence.** Own tables (migration 019), not memories, keyed by namespace
   and a content fingerprint; the 5 most recently used snapshots are kept.
-- **Languages.** Python via `ast`; others later.
+- **Languages.** Python via `ast`; TypeScript/JavaScript and Go via tree-sitter
+  (2026-10-28), one adapter each in `xray/lang/`; more in two phases (see In Flight).
 
 **The vision (2026-10-26).** X-ray is not one tool but the repurposing of
 everything gingugu already does - rank a graph, wake what a node touches,

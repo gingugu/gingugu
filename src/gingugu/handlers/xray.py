@@ -81,8 +81,9 @@ def register(mcp, ctx: ServerContext) -> None:
         offset: int = 0,
         top: int = 20,
     ) -> dict:
-        """X-ray a Python repository's import graph: what a change reaches, and what the
-        code leans on. Use before editing a file to see its dependents and the tests to run.
+        """X-ray a repository's import graph (Python, TypeScript/JavaScript, Go): what a
+        change reaches, and what the code leans on. Use before editing a file to see its
+        dependents and the tests to run.
 
         Actions: "blast" (files: the files you are changing, comma-separated or a list;
         returns every transitive importer, split into code and candidate tests, with hop
@@ -92,7 +93,7 @@ def register(mcp, ctx: ServerContext) -> None:
         a client-extracted graph; ``replace`` as refresh does).
 
         ``path`` is any directory in the git checkout (default: the working directory).
-        The snapshot is rebuilt automatically when the checkout's Python content changed,
+        The snapshot is rebuilt automatically when the checkout's source content changed,
         so results match the working tree (``freshness: current``); a ``fingerprint``
         names one snapshot exactly (``exact``); with neither, the latest (``unknown``).
         ``namespace`` scopes it like a memory.
