@@ -11,22 +11,29 @@ from . import jsonc
 from .ts_paths import join, norm, resolve_file
 
 CONFIG_NAMES = ("tsconfig.json", "jsconfig.json")
+MAX_EXTENDS = 16
+# Bounds on what one config or package.json can make every import pay for.
+MAX_PATHS_KEYS = 1000
+MAX_TARGETS = 32
+MAX_DEPTH = 32
 # Matched inside one tag at a time (see ``script_srcs``), never across a page.
+_SCRIPT_OPEN = re.compile(r"<script\b", re.I)
 _SRC = re.compile(r"\bsrc\s*=\s*[\"']([^\"'>]+)[\"']", re.I)
 
 
 def script_srcs(html: str) -> list[str]:
     """``src`` of every ``<script>`` tag. Linear: each tag's end is found once,
     so a page of unclosed tags cannot make a regex backtrack across it."""
-    out, lower, i = [], html.lower(), 0
-    while (i := lower.find("<script", i)) >= 0:
-        end = lower.find(">", i)
+    out: list[str] = []
+    pos = 0
+    while start := _SCRIPT_OPEN.search(html, pos):
+        end = html.find(">", start.end())
         if end < 0:
             break
-        m = _SRC.search(html, i, end)
+        m = _SRC.search(html, start.end(), end)
         if m:
             out.append(m.group(1))
-        i = end + 1
+        pos = end + 1  # an opener nested inside this tag is never revisited
     return out
 
 
@@ -49,7 +56,11 @@ class Config:
 def _paths_map(raw: object) -> dict[str, list[str]] | None:
     if not isinstance(raw, dict):
         return None
-    return {k: [t for t in v if isinstance(t, str)] for k, v in raw.items() if isinstance(v, list)}
+    out: dict[str, list[str]] = {}
+    for k, v in list(raw.items())[:MAX_PATHS_KEYS]:
+        if isinstance(v, list):
+            out[k] = [t for t in v if isinstance(t, str)][:MAX_TARGETS]
+    return out
 
 
 def _parse(data: bytes, jsonc_file: bool) -> object:
@@ -60,14 +71,20 @@ def _parse(data: bytes, jsonc_file: bool) -> object:
 
 
 def leaves(value: object) -> list[str]:
-    """Every string in a nested str/list/dict structure, in document order."""
-    if isinstance(value, str):
-        return [value]
-    if isinstance(value, list):
-        return [s for v in value for s in leaves(v)]
-    if isinstance(value, dict):
-        return [s for v in value.values() for s in leaves(v)]
-    return []
+    """Every string in a nested str/list/dict structure, in document order.
+
+    Iterative and depth-capped: a hostile ``exports`` nested past Python's
+    recursion limit would otherwise abort the extraction."""
+    out: list[str] = []
+    stack: list[tuple[object, int]] = [(value, 0)]
+    while stack:
+        node, depth = stack.pop()
+        if isinstance(node, str):
+            out.append(node)
+        elif depth < MAX_DEPTH and isinstance(node, (list, dict)):
+            items = list(node.values()) if isinstance(node, dict) else node
+            stack.extend((v, depth + 1) for v in reversed(items))
+    return out
 
 
 class Manifests:
@@ -93,7 +110,7 @@ class Manifests:
     # --- tsconfig -----------------------------------------------------------
 
     def _extends(self, path: str, value: object) -> list[str]:
-        found = []
+        found: list[str] = []
         for ref in value if isinstance(value, list) else [value]:
             if not isinstance(ref, str) or not ref.startswith("."):
                 continue  # a package config (@tsconfig/...) is not in the repo
@@ -102,16 +119,22 @@ class Manifests:
                 continue
             for cand in (target, f"{target}.json"):
                 if cand in self.configs:
-                    found.append(cand)
+                    if cand not in found:  # a repeated parent adds nothing but work
+                        found.append(cand)
                     break
         return found
 
     def effective(self, path: str, seen: tuple[str, ...] = ()) -> Config:
+        """``path``'s aliasing with its ``extends`` chain applied.
+
+        Every result is cached, so a hostile diamond of configs costs one visit
+        each rather than one per route; a cycle or a chain deeper than
+        ``MAX_EXTENDS`` contributes nothing past that point. Real chains are 2-4."""
         if path in self._effective:
             return self._effective[path]
         here = posixpath.dirname(path)
         cfg = Config(paths_dir=here)
-        if path in seen:
+        if path in seen or len(seen) >= MAX_EXTENDS:
             return cfg
         data = self.configs[path]
         for parent in self._extends(path, data.get("extends")):
@@ -126,8 +149,7 @@ class Manifests:
                 here,
             )
         )
-        if not seen:  # a result computed inside a cycle was cut short; don't cache it
-            self._effective[path] = cfg
+        self._effective[path] = cfg
         return cfg
 
     def governing(self, src: str) -> Config | None:

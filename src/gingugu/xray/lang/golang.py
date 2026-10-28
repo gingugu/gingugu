@@ -16,26 +16,34 @@ from ..model import PACKAGE, Edge, FileInfo, LangResult
 _LANG = None
 _IMPORTS = None
 _PACKAGE = None
+_PARSER = None
 
 
 def _parsers():
     """Language and queries, built once; tree-sitter loads only for a Go repo."""
-    global _LANG, _IMPORTS, _PACKAGE
+    global _LANG, _IMPORTS, _PACKAGE, _PARSER
     if _LANG is None:
         import tree_sitter as ts
         import tree_sitter_go as tsg
 
         _LANG = ts.Language(tsg.language())
+        _PARSER = ts.Parser(_LANG)
         _IMPORTS = ts.Query(_LANG, "(import_spec path: (_) @p)")
         _PACKAGE = ts.Query(_LANG, "(package_clause (package_identifier) @n)")
-    return _LANG, _IMPORTS, _PACKAGE
+    return _PARSER, _IMPORTS, _PACKAGE
+
+
+MAX_MODULE = 256
 
 
 def _valid(mod: str) -> bool:
     """A module path becomes a node name, and the brain refuses a payload whole
-    over one bad name: no leading slash, no empty, ``.`` or ``..`` segment."""
+    over one bad name: printable, bounded, no leading slash, no backslash, no
+    empty, ``.`` or ``..`` segment. Also what an agent reads in an overview."""
     return (
-        not mod.startswith("/")
+        len(mod) <= MAX_MODULE
+        and mod.isprintable()
+        and not mod.startswith("/")
         and "\\" not in mod
         and all(part not in ("", ".", "..") for part in mod.split("/"))
     )
@@ -68,15 +76,21 @@ def _import_path(root: str, mod: str, directory: str) -> str:
 
 
 def _under(path: str, mods: set[str]) -> bool:
-    return any(path == m or path.startswith(m + "/") for m in mods)
+    """Whether ``path`` is one of ``mods`` or below one, on a ``/`` boundary.
+    Walks the path's own prefixes, so the cost does not grow with the repo."""
+    while path:
+        if path in mods:
+            return True
+        path = path.rpartition("/")[0]
+    return False
 
 
 def _parse(rel: str, data: bytes, out: LangResult) -> tuple[str, list[str]]:
     """The package clause name and the import paths of one file."""
     import tree_sitter as ts
 
-    lang, imports_q, package_q = _parsers()
-    root = ts.Parser(lang).parse(data).root_node
+    parser, imports_q, package_q = _parsers()
+    root = parser.parse(data).root_node
     if root.has_error:
         out.parse_errors.append(rel)
     names = ts.QueryCursor(package_q).captures(root).get("n", [])
@@ -112,6 +126,8 @@ class GoAdapter:
             directory = "" if parent == "." else parent
             owner = _nearest_module(directory, modules)
             pkg = _import_path(owner[0], owner[1], directory) if owner else None
+            if pkg is not None and pkg in sources:
+                pkg = None  # a crafted module path naming a real file never shadows it
             placed[rel] = (pkg, test)
             if pkg and not test:
                 members.setdefault(pkg, []).append(rel)

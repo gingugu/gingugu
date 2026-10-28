@@ -39,6 +39,8 @@
   clients and auth) + **anyio** for the remote-mode proxy and the hooks; **psutil** for
   the hooks to find their client's servers
 - **SQLite + FTS5** (WAL mode); semantic embeddings for hybrid retrieval
+- **tree-sitter** (`tree-sitter` + the `-javascript`, `-typescript`, `-go` grammar wheels,
+  core deps, pinned in `uv.lock`) for Codebase X-ray's non-Python adapters; Python uses `ast`
 - **platformdirs** for the cross-platform DB path
 - **uv**-managed; `ruff` + `black`; `pytest` + `pytest-asyncio` + `pytest-timeout`
   (suite is offline and bounded — see `.ai/standards/01-code-and-testing.md`)
@@ -163,7 +165,7 @@
 | `claude_trust.py` | Whether Claude Code trusts a folder (`~/.claude.json` `projects[<dir>].hasTrustDialogAccepted`, a parent counts). `untrusted_note` feeds the warm-up note and the `gingugu harness` warning: an untrusted repo's agent-file `brain` servers do not load. Advisory only |
 | `subagent_hook.py` | `gingugu hook subagent`: the `SubagentStart` warm-up. `SubagentStart` carries no task, so `tool_hook` `stash`es the spawning `Agent` call's prompt (`hook-sessions/spawns-<session>.json`, 300s TTL) and this takes it as `task_hint`. Reads the agent file's `MEMORY_GRANT`, ranks `build_context`-style on a read-only connection under `grants.bind`, injects compact lines as `additionalContext`. No grant in the agent file = no warm-up. A project agent file in a folder Claude Code has not trusted gets a note that its `brain` will not load (`claude_trust`). The agent file's spec is first narrowed to what the client's own `MEMORY_GRANT` can read (`hook_grant.narrow_spec`); nothing left, or a client grant that cannot be honoured, = no warm-up. In remote mode the ranking runs on the brain (`/hook/warmup`). Exits 0 on every path |
 | `subagent_warmup.py` | `warmup()` (re-exported by `subagent_hook`): the read-only, grant-bound ranking. `scope` (namespace names) limits a wildcard read; locally it is `namespaces_for(cwd)`, remotely the client sends it |
-| `tool_hook.py` | `gingugu hook tool`: the `PreToolUse` entry point. A `PreToolUse` `additionalContext` lands next to the tool *result*, so the only way to speak before the call is to deny it: the first match per session per memory is denied with title + summary + "re-issue unchanged to pass", and the re-issue passes (state in `hook-sessions/tripwires-<session_id>.json`). `mcp__gingugu__*` never trips. Inside a subagent the minion fence runs first (and may deny those tools' writes); a main-thread `Agent` spawn for a fenced agent has its prompt stashed for the warm-up. Rules load for `namespaces_for(cwd)`, so a client `MEMORY_GRANT` narrows them; an empty list exits 0 before any network or DB work. `MEMORY_TRIPWIRES=off` disables memory tripwires only; every failure exits 0. After the fence it runs the X-ray edit check (`xray/edit_hook.py`, own switch `MEMORY_XRAY_TRIPWIRE`): the first Edit/Write/MultiEdit of an imported `.py` file per session is denied with its blast radius, and when a memory tripwire also fires they share ONE deny; state in `hook-sessions/xray-graph-<sha16(root)>.json` and `xray-shown-<session>/` (one atomic claim per file); X-ray denies are not logged. Each trip is logged to `query_log` (`tool='tripwire'`) |
+| `tool_hook.py` | `gingugu hook tool`: the `PreToolUse` entry point. A `PreToolUse` `additionalContext` lands next to the tool *result*, so the only way to speak before the call is to deny it: the first match per session per memory is denied with title + summary + "re-issue unchanged to pass", and the re-issue passes (state in `hook-sessions/tripwires-<session_id>.json`). `mcp__gingugu__*` never trips. Inside a subagent the minion fence runs first (and may deny those tools' writes); a main-thread `Agent` spawn for a fenced agent has its prompt stashed for the warm-up. Rules load for `namespaces_for(cwd)`, so a client `MEMORY_GRANT` narrows them; an empty list exits 0 before any network or DB work. `MEMORY_TRIPWIRES=off` disables memory tripwires only; every failure exits 0. After the fence it runs the X-ray edit check (`xray/edit_hook.py`, own switch `MEMORY_XRAY_TRIPWIRE`): the first Edit/Write/MultiEdit of an imported source file (any X-ray language) per session is denied with its blast radius, and when a memory tripwire also fires they share ONE deny; state in `hook-sessions/xray-graph-<sha16(root)>.json` and `xray-shown-<session>/` (one atomic claim per file); X-ray denies are not logged. Each trip is logged to `query_log` (`tool='tripwire'`) |
 | `staleness.py` | Advisory review hints for point-in-time memories |
 | `claims.py` | Extracts checkable state claims (repo-qualified PR/MR refs) from prose; ignores refs inside `[[wiki-links]]` |
 | `claim_qualify.py` | Decides **which repo** a ref names: URL, then a repo the prose names next to it, then a binding stated elsewhere in the same memory, then the namespace default. Requires the `#`/`!` sigil so plan ordinals ("PR 1") are not refs |
@@ -433,7 +435,9 @@ gap between the count and the rows.
   old posts keep the old inbox rule. Migration 019 adds the X-ray tables
   (`migrations/xray.py`), additive: empty tables, no change in behaviour.
   Migration 020 adds the nullable `board_posts.author_agent` and
-  `recipient_agent`, never backfilled: old posts are unrouted.
+  `recipient_agent`, never backfilled: old posts are unrouted. Migration 021
+  adds `xray_files.lang` and `kind` with defaults (`python`, `file`) that are
+  true for every older row; nothing is backfilled.
 
 ---
 

@@ -19,7 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `go.mod` in the repo, nested modules included). Each language is an
   adapter in `xray/lang/`; Python stays on `ast`, the others parse with
   tree-sitter from pinned grammar wheels - nothing is downloaded, compiled
-  or run. A Go import names a package, so a package is its own node:
+  or run. New core dependencies: `tree-sitter`, `tree-sitter-javascript`,
+  `tree-sitter-typescript`, `tree-sitter-go` (prebuilt wheels, 0.1-0.7MB). A Go import names a package, so a package is its own node:
   blast radius walks through it, rank is split across its files, and it is
   never listed as a dependent. `overview` reports `languages` and marks
   each top row with `lang` and `kind`. Migration 021 adds
@@ -29,7 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A file name that is not UTF-8, or that holds a backslash, no longer fails
   an X-ray scan or makes the brain refuse the whole snapshot; it is skipped
-  and named.
+  and named. A hostile checkout is bounded: a total-bytes cap on the scan,
+  capped `extends` chains and `paths` maps, and a node name the brain would
+  refuse is never shipped.
 
 ### Changed
 

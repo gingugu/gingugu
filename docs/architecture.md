@@ -2011,7 +2011,7 @@ src/gingugu/
 ├── proxy_vault.py          # Remote mode: the machine's credential vault, screened (reveal refused) and exposed as a server
 ├── proxy_vault_link.py     # Remote mode: runs that vault behind an in-memory MCP session so it can ask the user
 ├── proxy_xray.py           # Remote mode: code_xray reads the checkout here, asks the brain by fingerprint
-├── xray/                   # Codebase X-ray: scan, extract, resolve, local (client); validate, rank, store (brain); edit_hook (PreToolUse X-ray)
+├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); edit_hook (PreToolUse X-ray)
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine
 ├── remote_args.py          # usage text + argparse for `gingugu remote`, mint ssh argv
@@ -2059,7 +2059,7 @@ src/gingugu/
 │   ├── queries.py          # The query log: query_log (migration 015)
 │   ├── tripwires.py        # Tripwire triggers: tripwires (migration 016)
 │   ├── board.py            # The agent board: board_posts, board_reads (migration 017; 018 adds author_origin; 020 adds author_agent, recipient_agent)
-│   └── xray.py             # Codebase X-ray: xray_snapshots, xray_files, xray_edges (migration 019)
+│   └── xray.py             # Codebase X-ray: xray_snapshots, xray_files, xray_edges (019); xray_files.lang/kind (021)
 ├── models.py               # Data models + MEMORY_COLUMNS, the one column list
 ├── storage.py              # CRUD for the memories row and its transaction boundary
 ├── storage_derived.py      # The four satellite tables a memory drags along, plus the query log

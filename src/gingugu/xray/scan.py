@@ -58,15 +58,21 @@ def is_manifest(rel: str, patterns: tuple[str, ...]) -> bool:
 
 
 def read_sources(
-    root: Path, max_bytes: int, extensions: tuple[str, ...], manifests: tuple[str, ...] = ()
+    root: Path,
+    max_bytes: int,
+    extensions: tuple[str, ...],
+    manifests: tuple[str, ...] = (),
+    max_total: int | None = None,
 ) -> tuple[dict[str, bytes], dict[str, bytes], list[tuple[str, str]]]:
     """Return (sources, manifests, skipped) for every listed file the adapters want.
 
     ``sources`` are files ending in one of ``extensions``; ``manifests`` are
     files whose basename matches one of the ``manifests`` patterns (``fnmatch``,
     e.g. ``tsconfig*.json``), wherever they sit. Both map a repo-relative path
-    to its bytes, and both pass the same checks.
+    to its bytes, and both pass the same checks. Past ``max_total`` bytes read,
+    every further file is ``too_large``: the parse runs inside a hook.
     """
+    total = 0
     specs = [f"*{ext}" for ext in extensions] + [f"*{name}" for name in manifests]
     proc = git(root, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", *specs)
     if proc.returncode != 0:
@@ -97,10 +103,12 @@ def read_sources(
             skipped.append((rel, "outside"))
             continue
         try:
-            if full.stat().st_size > max_bytes:
+            size = full.stat().st_size
+            if size > max_bytes or (max_total is not None and total + size > max_total):
                 skipped.append((rel, "too_large"))
                 continue
             into[rel] = full.read_bytes()
+            total += size
         except OSError:
             skipped.append((rel, "unreadable"))
     return sources, found, skipped
