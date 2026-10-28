@@ -16,6 +16,12 @@ paged; a git `core.fsmonitor`-style check for other config that runs code.
 
 ## Recently Completed
 
+**README shows the current Explorer (docs/board-bookkeeping-0.29).** `docs/demo.gif`
+(the pre-0.26.0 2D UI) is replaced by `docs/screenshots/explorer-brain.jpg` and
+`explorer-dashboard.jpg`, captured from the live static demo, with a link to it.
+Same branch: the In Flight entries for #139, #142 and #143 moved here as released
+in 0.29.0, and product-spec's "unreleased" markers carry their real versions.
+
 **Board: replies routed to the agent session that asked - MERGED (#143), released in 0.29.0.** Several sessions of one
 persona shared one inbox, so a reply meant for the session that
 asked reached all of them. Identity is Claude Code's `CLAUDE_CODE_SESSION_ID`,
