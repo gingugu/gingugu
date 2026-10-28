@@ -20,8 +20,8 @@ import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import lang
-from .model import Edge, FileInfo
+from . import lang, validate
+from .model import Edge, FileInfo, LangResult
 from .scan import XrayError as XrayError
 from .scan import commit, is_manifest, read_sources, toplevel
 
@@ -30,6 +30,7 @@ __all__ = ["EXTRACTOR_VERSION", "Edge", "Extraction", "FileInfo", "XrayError", "
 # 2: every language in ``lang/``, nodes carry lang + kind, package nodes.
 EXTRACTOR_VERSION: int = 2
 MAX_FILE_BYTES: int = 2_000_000  # real source is far smaller; read at call time
+MAX_TOTAL_BYTES: int = 256_000_000  # vite's sources are ~10MB; read at call time
 
 
 @dataclass
@@ -80,7 +81,7 @@ class Extraction:
 
 
 def _scan(root: Path):
-    return read_sources(root, MAX_FILE_BYTES, lang.extensions(), lang.manifests())
+    return read_sources(root, MAX_FILE_BYTES, lang.extensions(), lang.manifests(), MAX_TOTAL_BYTES)
 
 
 def _fingerprint(
@@ -116,10 +117,19 @@ def extract(path: str | Path) -> Extraction:
         wanted = {p: b for p, b in manifests.items() if is_manifest(p, adapter.manifests)}
         if not mine:
             continue
-        res = adapter.extract(mine, wanted)
+        try:
+            res = adapter.extract(mine, wanted)
+        except RecursionError:
+            # Hostile input past a bound an adapter missed: that language's files
+            # stay nodes, reported unparsed, and every other language still lands.
+            res = LangResult(
+                files=[FileInfo(p, False, False, adapter.name) for p in mine],
+                parse_errors=sorted(mine),
+            )
         for f in res.files:
-            # A synthetic node (a package) never shadows a real file.
-            if f.path not in seen:
+            # A synthetic node (a package) never shadows a real file, and a name
+            # the brain would refuse is never shipped: it sinks the whole payload.
+            if f.path not in seen and validate.is_valid_path(f.path):
                 seen.add(f.path)
                 out.files.append(f)
         out.edges.extend(res.edges)

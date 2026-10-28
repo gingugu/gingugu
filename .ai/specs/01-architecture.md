@@ -685,7 +685,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
 
 ## Key Decisions
 - **Codebase X-ray: the client reads the checkout, the brain keeps the graph
-  (X1, unreleased).** `code_xray` maps a repo's import graph. A brain
+  (X1, v0.29.0).** `code_xray` maps a repo's import graph. A brain
   under `gingugu serve` may be another host, so it never reads a path: the
   local stdio server or the proxy (`proxy_xray`, like the vault) runs
   `xray.extract` on this machine and sends a payload of repo-relative names
@@ -733,8 +733,8 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `validate` refuses a payload whole over one. Migration 021 adds
   `xray_files.lang`/`kind` with defaults true for every older row, and a
   payload without them still ingests.
-- **Codebase X-ray: tripwire on edit (X2, unreleased).** The first
-  Edit/Write/MultiEdit of a `.py` file that other files import is denied once
+- **Codebase X-ray: tripwire on edit (X2, v0.29.0).** The first
+  Edit/Write/MultiEdit of a source file an X-ray adapter parses that other files import is denied once
   per file per Claude Code session, in `gingugu hook tool`. The reason lists
   how many files import it and how many candidate tests, the top 5 dependents
   by rank with hop counts, up to 5 candidate tests (`test_*.py` first, nearest
@@ -750,7 +750,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `xray-shown-<session>/` (one claim file per shown file, created atomically
   with `O_EXCL` so parallel hooks cannot lose a record); owner-only 0600,
   swept after 7 days untouched. *Silent by construction*: a file
-  nothing imports, a new file, a non-`.py` file, a path outside a git repo, a
+  nothing imports, a new file, a file no adapter parses, a path outside a git repo, a
   missing session id or any failure passes; it denies only once its "shown"
   state is saved, so a failed write can never block an edit forever. File
   names with control characters are quoted in the deny text. Own switch

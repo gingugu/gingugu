@@ -23,6 +23,7 @@ TS_EXTENSIONS = (".ts", ".tsx", ".mts", ".cts")
 JS_EXTENSIONS = (".js", ".jsx", ".mjs", ".cjs")
 
 _STRENGTH = {TYPE: 1, LAZY: 2, MODULE: 3}
+MAX_SPEC = 1024
 _TEST_FILE = re.compile(r"\.(test|spec)\.[cm]?[jt]sx?$")
 _TEST_DIRS = ("__tests__", "tests", "test")
 
@@ -59,6 +60,9 @@ class TypeScriptAdapter:
     def _resolve(rel, spec, kind, resolver, out, found) -> None:
         spec = strip_query(spec)
         if not spec:
+            return
+        if len(spec) > MAX_SPEC:  # no real module name is this long; never resolved
+            out.external += 1
             return
         certain = True
         if is_relative(spec):

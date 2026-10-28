@@ -57,6 +57,15 @@ def _path(value) -> str:
     return value
 
 
+def is_valid_path(value) -> bool:
+    """Whether the brain would accept ``value`` as a node name."""
+    try:
+        _path(value)
+    except XrayStoreError:
+        return False
+    return True
+
+
 def _list(payload: dict, key: str, cap: int) -> list:
     value = payload.get(key, [])
     if not isinstance(value, list) or len(value) > cap:
