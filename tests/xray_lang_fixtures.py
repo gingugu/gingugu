@@ -63,6 +63,7 @@ def _repo(tmp_path: Path, files: dict[str, str]) -> Path:
     repo = tmp_path / "repo"
     repo.mkdir(parents=True)
     _git(repo, "init", "-q")
+    _git(repo, "config", "core.autocrlf", "false")  # bytes in == bytes out, on Windows too
     for rel, text in files.items():
         p = repo / rel
         p.parent.mkdir(parents=True, exist_ok=True)
