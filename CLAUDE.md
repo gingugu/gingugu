@@ -155,6 +155,7 @@ This repo maintains a living knowledge base in `.ai/`. These rules apply to ever
 | `.ai/specs/product-spec.md` | A tool/feature shipped, got blocked, or was descoped |
 | `.claude/agents/` | A subagent's scope, tool allowlist, or model tier changed |
 | `.ai/standards/` | Testing, code, or database discipline changed |
+| **gingugu.com** (`~/GIT/gingugu.com`) | `README.md`, `CHANGELOG.md`, `docs/` or `product-spec.md` changed - the site must say the same thing; open its PR in the same session (and the reverse: a site change means checking `README.md`) |
 
 ### PR creation
 
