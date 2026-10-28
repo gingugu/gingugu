@@ -18,8 +18,12 @@ file on your machine.
 [![Glama](https://glama.ai/mcp/servers/gingugu/gingugu/badges/score.svg)](https://glama.ai/mcp/servers/gingugu/gingugu)
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/gingugu/gingugu/main/docs/demo.gif" alt="Memory Explorer UI — knowledge graph and dashboard" width="800">
+  <img src="https://raw.githubusercontent.com/gingugu/gingugu/main/docs/screenshots/explorer-brain.jpg" alt="Memory Explorer: the 3D brain, one lobe per namespace" width="800">
 </p>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/gingugu/gingugu/main/docs/screenshots/explorer-dashboard.jpg" alt="Memory Explorer: the dashboard" width="800">
+</p>
+<p align="center"><em>The Memory Explorer on demo data. <a href="https://gingugu.github.io/gingugu/">Try the live demo</a>.</em></p>
 
 ---
 
