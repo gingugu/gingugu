@@ -199,3 +199,26 @@ def test_edges_are_unique(n):
     imports = ["example.com/m/u"] * n
     res = run({"a/a.go": go("a", *imports), "u/u.go": go("u")})
     assert [e for e in res.edges if e.src == "a/a.go"] == [edge(res, "a/a.go", "example.com/m/u")]
+
+
+@pytest.mark.parametrize("mod", ["../escape", "/abs/m", "a/", "a/./b", "a\\b"])
+def test_a_module_path_the_brain_would_refuse_is_malformed(mod):
+    from gingugu.xray import validate
+
+    res = run({"a.go": go("a")}, {"go.mod": f"module {mod}\n"})
+    assert ("go.mod", "malformed") in res.skipped
+    assert all(f.kind == "file" for f in res.files)
+    files = [{"path": f.path, "is_test": f.is_test, "is_entry": f.is_entry} for f in res.files]
+    validate.payload(
+        {
+            "fingerprint": "a" * 64,
+            "extractor_version": 2,
+            "commit": None,
+            "files": files,
+            "edges": [],
+            "unresolved": 0,
+            "dynamic": 0,
+            "external": 0,
+            "parse_errors": [],
+        }
+    )
