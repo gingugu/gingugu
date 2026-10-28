@@ -31,12 +31,23 @@ def _parsers():
     return _LANG, _IMPORTS, _PACKAGE
 
 
+def _valid(mod: str) -> bool:
+    """A module path becomes a node name, and the brain refuses a payload whole
+    over one bad name: no leading slash, no empty, ``.`` or ``..`` segment."""
+    return (
+        not mod.startswith("/")
+        and "\\" not in mod
+        and all(part not in ("", ".", "..") for part in mod.split("/"))
+    )
+
+
 def module_path(data: bytes) -> str | None:
     """The ``module`` directive of a go.mod (quoted or not, comments ignored)."""
     for line in data.decode("utf-8", errors="replace").splitlines():
         parts = line.split("//", 1)[0].split()
         if len(parts) >= 2 and parts[0] == "module":
-            return parts[1].strip('"`') or None
+            mod = parts[1].strip('"`')
+            return mod if mod and _valid(mod) else None
     return None
 
 
