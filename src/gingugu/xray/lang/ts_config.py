@@ -11,7 +11,23 @@ from . import jsonc
 from .ts_paths import join, norm, resolve_file
 
 CONFIG_NAMES = ("tsconfig.json", "jsconfig.json")
-_SCRIPT_SRC = re.compile(r"<script\b[^>]*?\bsrc\s*=\s*[\"']([^\"']+)[\"']", re.I | re.S)
+# Matched inside one tag at a time (see ``script_srcs``), never across a page.
+_SRC = re.compile(r"\bsrc\s*=\s*[\"']([^\"'>]+)[\"']", re.I)
+
+
+def script_srcs(html: str) -> list[str]:
+    """``src`` of every ``<script>`` tag. Linear: each tag's end is found once,
+    so a page of unclosed tags cannot make a regex backtrack across it."""
+    out, lower, i = [], html.lower(), 0
+    while (i := lower.find("<script", i)) >= 0:
+        end = lower.find(">", i)
+        if end < 0:
+            break
+        m = _SRC.search(html, i, end)
+        if m:
+            out.append(m.group(1))
+        i = end + 1
+    return out
 
 
 @dataclass
@@ -39,8 +55,8 @@ def _paths_map(raw: object) -> dict[str, list[str]] | None:
 def _parse(data: bytes, jsonc_file: bool) -> object:
     try:
         return jsonc.loads(data) if jsonc_file else json.loads(data.decode("utf-8-sig"))
-    except ValueError:  # JSONDecodeError and UnicodeDecodeError both subclass it
-        return None
+    except (ValueError, RecursionError):  # Decode/Unicode errors subclass ValueError;
+        return None  # a hostile, deeply nested file raises RecursionError
 
 
 def leaves(value: object) -> list[str]:
@@ -151,7 +167,7 @@ class Manifests:
                     found.add(hit)
         for path, html in self.html.items():
             here = posixpath.dirname(path)
-            for ref in _SCRIPT_SRC.findall(html):
+            for ref in script_srcs(html):
                 if "://" in ref or ref.startswith("//"):
                     continue
                 rel = ref.split("?", 1)[0].split("#", 1)[0]

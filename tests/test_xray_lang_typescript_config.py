@@ -230,3 +230,22 @@ def test_test_files_are_tests():
     paths = ["a.test.ts", "b.spec.tsx", "src/__tests__/c.ts", "tests/d.js", "test/e.mjs", "f.ts"]
     res = run(dict.fromkeys(paths, ""))
     assert {f.path for f in res.files if f.is_test} == set(paths) - {"f.ts"}
+
+
+# --- hostile manifests ------------------------------------------------------------------
+
+
+def test_a_deeply_nested_manifest_is_malformed_not_fatal():
+    deep = "[" * 100_000 + "]" * 100_000
+    res = run({"a.ts": ""}, {"package.json": deep, "tsconfig.json": deep})
+    assert ("package.json", "malformed") in res.skipped
+    assert ("tsconfig.json", "malformed") in res.skipped
+
+
+def test_a_page_of_unclosed_script_tags_is_fast():
+    import time
+
+    html = "<script " * 200_000
+    start = time.perf_counter()
+    run({"a.ts": ""}, {"index.html": html})
+    assert time.perf_counter() - start < 2.0
