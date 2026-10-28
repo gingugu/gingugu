@@ -443,7 +443,12 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.29.0** (PyPI, 2026-10-27). Minor: Codebase X-ray -
+- Current version: **0.30.0** (PyPI, 2026-10-28). Minor: Codebase X-ray reads
+  TypeScript/JavaScript and Go - one adapter per language (`xray/lang/`),
+  tree-sitter grammar wheels as core deps, Go package nodes, migration 021
+  (schema v21), hostile-checkout bounds; gingugu.com sync step in the PR
+  checklist (#150).
+- 0.29.0 (2026-10-27): Minor: Codebase X-ray -
   `code_xray` blast radius (migration 019) and the X-ray tripwire on edit;
   board replies routed to the asking agent session (migration 020, schema
   v20); the startup contract keeps a persona's board watcher running; board
