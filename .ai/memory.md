@@ -451,7 +451,11 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.30.0** (PyPI, 2026-10-28). Minor: Codebase X-ray reads
+- Current version: **0.31.0** (PyPI, 2026-10-28). Minor: `gingugu credential
+  list|delete` (the vault by hand, TTY-only); a client that shows no confirmation
+  dialog (Claude Code's VS Code extension) is refused as "cannot ask", and the
+  proxy withholds elicitation from it for the brain (#151).
+- 0.30.0 (2026-10-28): Minor: Codebase X-ray reads
   TypeScript/JavaScript and Go - one adapter per language (`xray/lang/`),
   tree-sitter grammar wheels as core deps, Go package nodes, migration 021
   (schema v21), hostile-checkout bounds; gingugu.com sync step in the PR
