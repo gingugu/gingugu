@@ -77,6 +77,7 @@ def register(mcp, ctx: ServerContext) -> None:
             ctx_,
             f"Delete namespace {confirm.shown(name)} and all {count} memories in it? "
             "This cannot be undone.",
+            ctx.transport,
         )
 
     async def _ask_import(ctx_: Context, data: dict, on_conflict: str = "skip") -> object:
@@ -91,6 +92,7 @@ def register(mcp, ctx: ServerContext) -> None:
             ctx_,
             f"Overwrite {count} existing memories with the imported copies? "
             "This cannot be undone.",
+            ctx.transport,
         )
 
     @mcp.tool()
