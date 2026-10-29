@@ -4,8 +4,8 @@ _Last updated: 2026-10-29 (X-ray roadmap: map on arrival, writes from any tool, 
 
 ## In Flight
 
-**Codebase X-ray in every language we can parse - phase 1 (feature/xray-languages).**
-Extraction runs through one adapter per language (`xray/lang/`): Python stays on `ast`;
+**Codebase X-ray in every language we can parse - phase 1 MERGED (#150), released in
+0.30.0; phases 2 and 3 not started.** Extraction runs through one adapter per language (`xray/lang/`): Python stays on `ast`;
 TypeScript/JavaScript and Go parse with tree-sitter from pinned grammar wheels (core
 dependencies), never run. Go imports packages, so a package is a node (migration 021:
 `xray_files.lang`/`kind`). Measured: gingugu (383 Python + 52 TS/JS files) 0.49s; vite
