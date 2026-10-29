@@ -946,7 +946,8 @@ On top of everything `init` installs, it adds:
   its own `brain` server that reads `crow` and this repo's namespace and writes
   only `minions`.
 - **The `/creating-pr` skill** - opens a PR only after assessing the `.ai/`
-  knowledge base.
+  knowledge base and running the `ai-docs-auditor` on every PR; each confirmed
+  finding is fixed in that PR.
 - **An `.ai/` knowledge base** - `memory.md`, `plans/status.md`, `specs/`,
   `standards/`, created only where missing and never overwritten, even with
   `--force`.
