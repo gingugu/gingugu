@@ -65,8 +65,10 @@ def _ranked(g: Graph) -> list[str]:
     return sorted((p for p in g.files if p not in g.packages), key=lambda p: (-g.ranks[p], p))
 
 
-def _render_map(root: Path, g: Graph) -> str:
+def _render_map(root: Path, g: Graph) -> str | None:
     source = _ranked(g)
+    if not source:
+        return None  # nothing X-ray can parse: no map is better than an empty one
     counts: dict[str, int] = {}
     for p in source:
         language = g.langs.get(p, "unknown")
@@ -77,7 +79,7 @@ def _render_map(root: Path, g: Graph) -> str:
     tests = sum(1 for p in source if g.files[p])
     lines = [
         f"GINGUGU X-RAY MAP: {_show(root.name)} - {len(source)} files ({langs}), "
-        f"{edges} import edges, {tests} tests. Most imported:"
+        f"{edges} import edges, {tests} tests. Top by rank:"
     ]
     for p in source[:MAP_FILES]:
         n = len(imported_by.get(p, ()))
@@ -154,8 +156,9 @@ def check(payload: dict, state_dir: Path) -> str | None:
             return None
         g = hook_common.graph(root, state_dir)
         parts = []
-        if want_map and _claim(map_claim):
-            parts.append(_render_map(root, g))
+        repo_map = _render_map(root, g) if want_map else None
+        if repo_map and _claim(map_claim):
+            parts.append(repo_map)
         if want_read and rel is not None:
             near = _render_neighbourhood(rel, g)
             if near and _claim(read_claim):
