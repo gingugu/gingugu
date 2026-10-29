@@ -843,6 +843,14 @@ It installs:
   files that import it and the tests worth running; re-issue the edit and it
   passes. It reads your checkout locally and never asks the brain. Set
   `MEMORY_XRAY_TRIPWIRE=off` to disable it.
+- **`.claude/hooks/post_tool_xray.py`** — a `PostToolUse` hook (matched to
+  `Read|Grep|Glob`) that gives the agent the **X-ray map on arrival**: the first
+  Read, Grep or Glob in a repo in a session adds a compact repo map (size,
+  languages, import edges, the most imported files, entry points), and each
+  source file Read adds who imports it, what it imports and which tests reach
+  it, once per file. It rides `additionalContext` next to the tool result and
+  never blocks. Built locally from your checkout, sharing the edit tripwire's
+  graph cache; the brain is never asked. Set `MEMORY_XRAY_MAP=off` to disable it.
 - **`.claude/skills/sink-the-ship/SKILL.md`** — a `/sink-the-ship` skill to flush
   everything worth keeping before you close a session. If an older install left a
   `.claude/commands/sink-the-ship.md` behind, `gingugu init` retires it and keeps
@@ -1165,6 +1173,7 @@ Environment variables (all optional):
 | `MEMORY_PERSONA` | *(unset)* | This agent's own namespace (e.g. `research`). Recall, tripwires and the SessionStart contract load `crow`, then the persona, then the repo (recall and tripwires narrowed by `MEMORY_GRANT` when set). A malformed value is ignored |
 | `MEMORY_REMOTE_URL` | *(unset)* | Use this remote brain for this client only (`off` forces local). A bare `gingugu` then relays to it; the credential vault stays local |
 | `MEMORY_XRAY_TRIPWIRE` | `on` | Set `off` to disable the X-ray edit tripwire in `gingugu hook tool` (the first edit of an imported Python, TypeScript/JavaScript or Go file per session is denied with its dependents) |
+| `MEMORY_XRAY_MAP` | `on` | Set `off` to disable the X-ray map on arrival in `gingugu hook read` (the repo map on a session's first Read/Grep/Glob of a repo, and each Read source file's importers and imports, once per session) |
 | `MEMORY_MINION_FENCE` | `on` | Set `off` to disable the subagent fence in `gingugu hook tool` (data-dir file/shell access and inherited-server writes) |
 | `MEMORY_SERVE_HOST` | `127.0.0.1` | Bind host for `gingugu serve` (set `0.0.0.0` to accept remote connections) |
 | `MEMORY_SERVE_PORT` | `8765` | Bind port for `gingugu serve` |
