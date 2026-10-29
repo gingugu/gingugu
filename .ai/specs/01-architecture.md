@@ -53,13 +53,13 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `context`, `relations`, `consolidation`, `decay`, `stats`, `namespaces`,
    `portability`, `capability`, `grants` (the per-call grant every chokepoint
    consults), `serve_tokens`, `tripwire` (the memory-tripwire decision half of the `PreToolUse` hook; its other half is
-   `xray/edit_hook`; see Key Decisions), `board` + `board_events` (the agent board store and its
+   `xray/edit_hook`; see Key Decisions), `post_tool_hook` (`gingugu hook read`, the `PostToolUse` entry; hands off to `xray/read_hook`), `board` + `board_events` (the agent board store and its
    `subscriptions/listen` bus; see Key Decisions), `board_delivery` (the post/reply
    delivery receipt: can the recipient persona's known clients read the namespace),
    `xray/` (Codebase X-ray: `scan` + `extract` + `lang/` (one adapter per language: `python`
    on `ast` with `resolve`; `typescript` + `ts_*` + `jsonc` and `golang` on tree-sitter) +
    `model` + `local` on the client, `validate` +
-   `rank` + `store` on the brain, plus `edit_hook`, the hook side that builds the graph itself and never
+   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check) and `read_hook` (map on arrival), the hook side that builds the graph itself and never
    touches the brain; see Key Decisions), `proxy_xray` (the proxy's local half of `code_xray`),
    `board_watch` +
    `board_watch_remote`, `board_watch_emit` (the `gingugu board watch` wake-up command; see Key
@@ -711,7 +711,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   and an explicit `refresh` replaces a snapshot whose `graph_digest` differs.
   *Coverage is honest*: every source not read is a skip with a reason, and
   only a deliberate one (a symlink) leaves the graph `complete`.
-- **Codebase X-ray: one adapter per language (unreleased).** `xray/lang/`
+- **Codebase X-ray: one adapter per language (shipped 0.30.0).** `xray/lang/`
   holds an adapter per language family: the file extensions it parses, the
   manifest basename patterns it needs (`pyproject.toml`, `go.mod`,
   `tsconfig*.json`, `package.json`, `index.html`), and a pure function from
@@ -778,7 +778,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   capped under 9000 characters (the harness cap is 10,000). Own switch
   `MEMORY_XRAY_MAP` (default on). Wired by `gingugu init` with a 15s timeout and
   matcher `Read|Grep|Glob`; it coexists with the harness's own PostToolUse logger.
-- **Destructive tools ask the user, not the model (unreleased).** Five paths
+- **Destructive tools ask the user, not the model (shipped 0.25.0).** Five paths
   confirm through MCP elicitation (SDK 2.x `Resolve` + `Elicit`): a hard
   `memory_forget`, a cascading `memory_namespaces` delete of a non-empty
   namespace, `memory_consolidate` with `keep_originals=False`, a
@@ -927,12 +927,12 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   memory startup contract every session (a rules file is not guaranteed to load
   into context; a hook is), a `Stop` save-discipline hook, a `UserPromptSubmit` hook (involuntary
   recall), a `PreToolUse` hook (tripwires, the X-ray edit check, via the
-  `.claude/hooks/pre_tool_tripwire.py` doorway), and the
+  `.claude/hooks/pre_tool_tripwire.py` doorway), a `PostToolUse` hook (the X-ray map on arrival, `.claude/hooks/post_tool_xray.py`), and the
   `/sink-the-ship` skill (`.claude/skills/sink-the-ship/SKILL.md`, the format
   Anthropic's docs steer new work to; the legacy `.claude/commands/` copy is
   retired with a `.bak` only when it is byte-identical to the template we would
   have written, and kept when it differs - the marker says we once wrote a file,
-  not that the user left it alone) - plus a `SubagentStart` hook (minion warm-up, `.claude/hooks/subagent_warmup.py`) - merging all five hooks into `.claude/settings.json`
+  not that the user left it alone) - plus a `SubagentStart` hook (minion warm-up, `.claude/hooks/subagent_warmup.py`) - merging all six hooks into `.claude/settings.json`
   non-destructively (`settings.py`), allowing `mcp__brain` there and in the
   user-level `~/.claude/settings.json` (`init_user_permissions`) and appending the hooks' runtime artifacts
   (`logs/`, `.claude/data/`, `.claude/settings.local.json`,
