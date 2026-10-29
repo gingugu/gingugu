@@ -15,11 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `gingugu hook read`, wired by `gingugu init` for `Read|Grep|Glob` through
   `.claude/hooks/post_tool_xray.py`. The first Read, Grep or Glob in a repo in a
   session adds a compact repo map (file and language counts, import edges, tests,
-  the most imported files, entry points); each source file Read adds its
-  importers, its imports, its rank and the candidate tests that reach it, once
-  per file. The agent has the shape of the code while it reads, not only when an
-  edit is denied. It shares the edit tripwire's per-repo graph cache and never
-  asks the brain. Set `MEMORY_XRAY_MAP=off` to disable it.
+  the top-ranked files with their importer counts, entry points); each source
+  file Read adds its importers, its imports, its rank and the candidate tests
+  that reach it, once per file. The agent has the shape of the code while it
+  reads, not only when an edit is denied. It shares the edit tripwire's per-repo
+  graph cache and never asks the brain. Set `MEMORY_XRAY_MAP=off` to disable it.
+
+### Fixed
+
+- **X-ray hooks on a checkout too big to build in time** no longer start the
+  graph build again on every tool call: a build the hook timeout killed is not
+  retried for the rest of that session, while a build another hook is still
+  running in parallel goes ahead as before. A dangling `xray-*` link in the hook
+  state directory no longer stops the weekly cleanup.
 
 ---
 
