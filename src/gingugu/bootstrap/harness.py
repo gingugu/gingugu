@@ -51,6 +51,7 @@ _INIT_HOOKS = (
     "stop.py",
     "user_prompt_recall.py",
     "pre_tool_tripwire.py",
+    "post_tool_xray.py",
     "subagent_warmup.py",
 )
 # Every hook --migrate overwrites with ours: init's five plus the harness's own.
