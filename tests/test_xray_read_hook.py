@@ -266,3 +266,121 @@ def test_the_graph_cache_is_shared_with_the_edit_hook(repo, state):
     caches = list(state.glob("xray-graph-*.json"))
     edit_hook.check(_payload(repo, "pkg/a.py"), state)
     assert list(state.glob("xray-graph-*.json")) == caches
+
+
+# --- bounded cost: a silent answer is still an answer ----------------------------
+
+
+@pytest.fixture
+def graph_calls(monkeypatch):
+    from gingugu.xray import hook_common
+
+    calls = []
+    real = hook_common.graph
+
+    def counting(root, state_dir, *args, **kwargs):
+        calls.append(root)
+        return real(root, state_dir, *args, **kwargs)
+
+    monkeypatch.setattr(hook_common, "graph", counting)
+    return calls
+
+
+def test_a_silent_file_is_not_reconsidered(repo, state, graph_calls):
+    read_hook.check(_search(repo, "Grep"), state)
+    read_hook.check(_read(repo, "pkg/leaf.py"), state)
+    before = len(graph_calls)
+    assert read_hook.check(_read(repo, "pkg/leaf.py"), state) is None
+    assert len(graph_calls) == before
+
+
+def test_a_non_source_file_is_not_reconsidered(repo, state, graph_calls):
+    (repo / "README.md").write_text("# hi\n")
+    read_hook.check(_search(repo, "Grep"), state)
+    read_hook.check(_read(repo, "README.md"), state)
+    before = len(graph_calls)
+    read_hook.check(_read(repo, "README.md"), state)
+    assert len(graph_calls) == before
+
+
+def test_a_repo_with_nothing_to_parse_is_not_reconsidered(tmp_path, state, graph_calls):
+    repo = _repo(tmp_path, {"README.md": "# hi\n"})
+    read_hook.check(_search(repo, "Grep"), state)
+    before = len(graph_calls)
+    read_hook.check(_search(repo, "Glob"), state)
+    assert len(graph_calls) == before
+
+
+def _build_marker(repo, state, age: float, session="cc-1"):
+    """A build marker as a hook leaves it: ``age`` seconds old, no cache beside it."""
+    import os
+    import time
+
+    from gingugu.xray import hook_common
+
+    root = hook_common.local.root(str(repo))
+    marker = hook_common.claim_path(state, "xray-build", session, root)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.touch()
+    then = time.time() - age
+    os.utime(marker, (then, then))
+    return marker
+
+
+def _no_rebuild(monkeypatch):
+    from gingugu.xray import extract
+
+    def boom(path):
+        raise AssertionError("rebuilt a graph this session already gave up on")
+
+    monkeypatch.setattr(extract, "extract", boom)
+
+
+def test_a_build_that_never_finished_is_not_retried_this_session(repo, state, monkeypatch):
+    # A hook killed mid-build (the doorway's timeout) leaves its marker and no cache.
+    _build_marker(repo, state, age=120)
+    _no_rebuild(monkeypatch)
+    assert read_hook.check(_read(repo, "pkg/core.py"), state) is None
+    # another session still tries
+    monkeypatch.undo()
+    assert read_hook.check(_read(repo, "pkg/core.py", session="cc-2"), state) is not None
+
+
+def test_a_finished_build_clears_its_marker(repo, state):
+    read_hook.check(_read(repo, "pkg/core.py"), state)
+    assert not list(state.glob("xray-build-*/*"))
+
+
+def test_a_dangling_symlink_does_not_stop_the_sweep(state):
+    import os
+    import time
+
+    from gingugu.xray import hook_common
+
+    state.mkdir(parents=True)
+    week_ago = time.time() - 8 * 24 * 3600
+    dangling = state / "xray-dangling"
+    dangling.symlink_to(state / "nowhere")
+    os.utime(dangling, (week_ago, week_ago), follow_symlinks=False)
+    old = state / "xray-old"
+    old.mkdir()
+    os.utime(old, (week_ago, week_ago))
+    hook_common._sweep(state)
+    # Following the link raises on a dangling one; the link's own age decides.
+    assert not dangling.is_symlink()
+    assert not old.exists()
+
+
+def test_the_edit_hook_also_skips_a_build_that_never_finished(repo, state, monkeypatch):
+    from gingugu.xray import edit_hook
+
+    _build_marker(repo, state, age=120)
+    _no_rebuild(monkeypatch)
+    assert edit_hook.check(_payload(repo, "pkg/core.py"), state) is None
+
+
+def test_a_build_in_progress_elsewhere_does_not_stop_this_one(repo, state):
+    # A fresh marker is a parallel hook still building: build too, as before.
+    _build_marker(repo, state, age=1)
+    text = read_hook.check(_read(repo, "pkg/core.py"), state)
+    assert text is not None and "pkg/a.py" in text
