@@ -763,6 +763,21 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   tripwires; when a memory tripwire and the X-ray both fire on one call they
   share one deny (tripwire reason, blank line, X-ray reason). X-ray denies are
   not logged to `query_log`.
+- **Codebase X-ray: map on arrival (X14, unreleased).** A non-blocking
+  `PostToolUse` hook (`gingugu hook read`, `post_tool_hook` + `xray/read_hook`)
+  puts the shape of the code in front of the agent while it reads: the first
+  Read/Grep/Glob of a repo in a session adds a repo map, and each source file
+  Read adds its importers, imports, rank and reaching tests, once per file.
+  *Inform, not deny*: PostToolUse `additionalContext` lands next to the result,
+  which is the right place for orientation (X2 still denies, because an edit
+  must be stopped before it runs). Claims are separate from X2's
+  (`xray-map-<session>/` per repo, `xray-read-<session>/` per file), so a read
+  never silences the edit deny and the reverse. `xray/hook_common` holds what
+  both hooks share: owner-only state writes, the sweep, path quoting, and one
+  per-repo graph cache (now also carrying language and entry points). Output is
+  capped under 9000 characters (the harness cap is 10,000). Own switch
+  `MEMORY_XRAY_MAP` (default on). Wired by `gingugu init` with a 15s timeout and
+  matcher `Read|Grep|Glob`; it coexists with the harness's own PostToolUse logger.
 - **Destructive tools ask the user, not the model (unreleased).** Five paths
   confirm through MCP elicitation (SDK 2.x `Resolve` + `Elicit`): a hard
   `memory_forget`, a cascading `memory_namespaces` delete of a non-empty
