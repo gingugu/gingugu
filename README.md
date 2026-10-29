@@ -116,7 +116,10 @@ once, never ranked. `gingugu board watch` wakes an idle agent when one arrives.
 TypeScript/JavaScript and Go: before an edit, an agent asks what the change
 reaches and which tests to run, and which files the rest of the code leans on. It reads your checkout on your machine, even when the
 brain is remote, and rebuilds itself whenever the code changes. The tool hook also
-tells the agent on its first edit of an imported file what depends on it.
+tells the agent on its first edit of an imported file what depends on it, and a
+read hook brings a map on arrival: the first read into a repo adds an overview of
+it, and each file read adds that file's neighbourhood (who imports it, what it
+imports).
 
 That is the part that makes the memory worth having, and it is in the box.
 
@@ -237,10 +240,10 @@ or Rust toolchain required to use it. The MCP SDK is first-class in Python.
 | 📊 **Health Metrics** | Memory stats, dormancy reports, review sweep, namespace overviews |
 | 🔐 **Credential Vault** | Secure service-bundle storage for API keys/tokens via OS Keychain |
 | 📌 **Pinned Tier** | The handful of rules that must never be missed load first at every session start, exempt from ranking |
-| 🪝 **Hooks** | Session-start contract, involuntary recall on a prompt, tripwires that stop a tool call a memory forbids, warm minions for subagents, and a save-discipline stop hook — wired by `gingugu init` |
+| 🪝 **Hooks** | Session-start contract, involuntary recall on a prompt, tripwires that stop a tool call a memory forbids, an X-ray map when an agent first reads into a repo, warm minions for subagents, and a save-discipline stop hook — wired by `gingugu init` |
 | 🌙 **Dream Pass** | Deterministic consolidation over the relation graph (PageRank, label propagation, orphan reconnection), staged to a proposal queue you accept or reject - safe on a cron |
 | 📬 **Agent Board** | Agents sharing a brain leave each other addressed posts and claimable tasks; `gingugu board watch` wakes an idle agent, and a reply goes back to the session that asked |
-| 🩻 **Codebase X-ray** | `code_xray` maps a repo's import graph (Python, TypeScript/JavaScript, Go; parsed, never run): blast radius before an edit (dependents by hop, candidate tests) and the files the code leans on, ranked by directed PageRank. The tool hook says it on the first edit of an imported file |
+| 🩻 **Codebase X-ray** | `code_xray` maps a repo's import graph (Python, TypeScript/JavaScript, Go; parsed, never run): blast radius before an edit (dependents by hop, candidate tests) and the files the code leans on, ranked by directed PageRank. The tool hook says it on the first edit of an imported file, and a read hook brings a repo map on the first read and each file's neighbourhood the first time it is read |
 | 🌐 **Memory Explorer UI** | 3D brain (one lobe per namespace), list, dashboard, timeline, and trust map — a read-only observer ([live demo](https://gingugu.github.io/gingugu/)) |
 | 📡 **Central Brain (optional)** | `gingugu serve` runs the same server over HTTP behind Bearer tokens, each client scoped to its own namespaces; `gingugu promote` harvests a local brain's durable knowledge up to it with provenance stamps |
 
@@ -251,7 +254,7 @@ or Rust toolchain required to use it. The MCP SDK is first-class in Python.
 ```mermaid
 graph TD
     A[AI Assistant<br/>any MCP client] -->|MCP Protocol| B[Gingugu Server]
-    HK[Harness Hooks<br/>session start · prompt recall<br/>tripwires · warm minions · stop] -->|reads| D
+    HK[Harness Hooks<br/>session start · prompt recall<br/>tripwires · X-ray map · warm minions · stop] -->|reads| D
     HK -.->|injects context| A
     B --> C[Search Engine<br/>FTS5 BM25 + embeddings, RRF]
     B --> D[Storage Layer<br/>SQLite + WAL]
@@ -866,7 +869,7 @@ It installs:
   built-in agent like Explore can read the brain but not change it. This
   prevents accidents; it is not a sandbox against a hostile process running as
   you. Set `MEMORY_MINION_FENCE=off` to disable the fence.
-- All five hooks wired into `.claude/settings.json`, **merged non-destructively** —
+- All six hooks wired into `.claude/settings.json`, **merged non-destructively** —
   any existing config is backed up (`settings.json.bak`) and preserved.
 - `mcp__brain` added to `permissions.allow`, in the repo's `.claude/settings.json`
   and in your user-level `~/.claude/settings.json` (backed up, idempotent), so a

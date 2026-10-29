@@ -530,7 +530,8 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
           Python, TS/JS, Go), else skip
           MEMORY_XRAY_TRIPWIRE=off: skip
           git root + content fingerprint of the checkout
-          graph cache hook-sessions/xray-graph-<sha16(root)>.json; rebuilt
+          graph cache hook-sessions/xray-graph-<sha16(root)>.json (shared with
+          the map hook below; lives in xray/hook_common); rebuilt
           locally with the code_xray extractor on a fingerprint miss
           blast radius of the file (rank.blast, walking through package nodes
           but never listing one); nothing imports it → skip
@@ -574,6 +575,34 @@ the rows (`add` / `list` / `remove`) and `test` is a dry run of the same
 matching that never denies and never logs. Accepted v1 limitation: after
 context compaction the memory may drop out of context while suppression still
 counts it as shown.
+
+## X-ray map on arrival (PostToolUse)
+
+```
+PostToolUse event (Read | Grep | Glob)  →  .claude/hooks/post_tool_xray.py (pure stdlib, 15s)
+  → `gingugu hook read` (post_tool_hook) → xray/read_hook
+      MEMORY_XRAY_MAP=off, no session id, or no git root: skip
+      graph: xray/hook_common cache hook-sessions/xray-graph-<sha16(root)>.json
+        (shared with the edit hook); on a fingerprint miss, rebuilt locally
+        with the code_xray extractor. A build that never finished leaves a
+        marker in hook-sessions/xray-build-<session>/ and is not retried this session.
+        Nothing parseable in the repo → skip
+      first Read/Grep/Glob of the repo this session
+        (claim hook-sessions/xray-map-<session>/, O_EXCL) →
+        repo map: file count, languages, import edges, tests, top 8 files by
+        rank with importer counts, entry points
+      Read of a source file an adapter parses, once per file per session
+        (claim hook-sessions/xray-read-<session>/) →
+        up to 4 lines: rank k of N, direct importers, transitive reach with
+        candidate tests, direct imports; silent for a file with no edges
+  → emit additionalContext beside the tool result (output capped under 9000 chars)
+```
+
+**Inject, never block.** The map is delivered next to the result of a call that
+already ran, so it cannot stop anything and every failure exits 0 silently. Its
+claim directories are separate from `xray-shown-<session>/`, so showing a map
+never silences the edit tripwire's first-edit deny. Entirely local: the checkout
+and the graph cache, no request to the brain, identical in remote mode.
 
 ## Warm minions (SubagentStart + the minion fence)
 
@@ -654,6 +683,10 @@ PreToolUse → `gingugu hook tool`
   → match locally; suppression in local tripwires-<session>.json
   → on a trip: POST /hook/trip {session_id, text, ids, namespaces}
       brain: query_log row (tool='tripwire')
+
+PostToolUse → `gingugu hook read`
+  → X-ray map on arrival: entirely local (checkout, graph cache, claim dirs);
+    no request to the brain, so it is identical in remote mode
 
 SubagentStart → `gingugu hook subagent`
   → take the stashed task + read the agent file's grant (local), narrowed to

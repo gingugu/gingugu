@@ -18,10 +18,22 @@ trips on JSX `class=` (9 of vite's 1,638 files report a parse error, edges recov
 `tsconfig` `extends` to a package (`@tsconfig/...`) is skipped; `exports` star patterns
 are not resolved; a go.mod `module ( ... )` block reads as malformed.
 
-**Board #5 Codebase X-ray - X14 map on arrival next** (2026-10-29). The end goal
-was restated: a sophisticated map before any work starts, so the map now reaches
-the agent on reads and on any write, not only through the edit tools. New items
-X14-X18 (section 19); build order X14, X15, X16, X17, then X3.
+**Board #5 Codebase X-ray - X14 map on arrival BUILT, unreleased
+(feature/xray-map-on-arrival); X15 writes from any tool next** (2026-10-29). The
+end goal was restated: a sophisticated map before any work starts, so the map
+reaches the agent on reads and on any write, not only through the edit tools. New
+items X14-X18 (section 19); build order X14, X15, X16, X17, then X3.
+
+X14: a PostToolUse hook matched `Read|Grep|Glob` (`gingugu hook read`,
+`xray/read_hook.py`) adds the repo map on a session's first touch of a repo and a
+file's neighbourhood (rank, importers, reach and candidate tests, imports) on its
+first `Read`; it informs, never blocks, and shares the edit hook's graph cache
+(`xray/hook_common.py`). Silence is claimed too, so a quiet file costs one look per
+session; a graph build killed by the hook timeout is not retried in that session
+(marker older than 30s). Measured on this repo: first read 1.1s (cold build),
+later reads 0.5s. Switch: `MEMORY_XRAY_MAP`. Follow-ups: the map's entry points are
+mostly `.claude/hooks/*.py`; printable file names reach the agent verbatim (quoted
+only when they hold control characters) - the edit hook has the same exposure.
 
 **X3 scar tissue** (design approved 2026-10-28, now after X14-X17; it plugs into
 the X14 read hook). X3 links memories (bugs, decisions, gotchas) to the files they are
@@ -1453,7 +1465,7 @@ every row moved up one.
 | 2 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
 | 3 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
 | 4 | **A referee for rival memory tools** | 17 | Only a fair comparison once 3 exists |
-| 5 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival next | 19 | Standalone; picked 2026-10-26. An 18-part roadmap (X1-X18) in its section below |
+| 5 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival built (unreleased); X15 next | 19 | Standalone; picked 2026-10-26. An 18-part roadmap (X1-X18) in its section below |
 | 6 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
 | 7 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
 | 8 | Session flight recorder (low priority) | 18 | Check prior art first |
@@ -2164,7 +2176,7 @@ slices alongside them. IDs are stable references, not the order.
 | X11 | **Predict, then score** - the agent predicts failing tests and broken files before a change; the calibration ledger scores it after | X1, calibration ledger (#2) | |
 | X12 | **Board-driven upkeep** - the nightly X-ray posts findings (dead files, new cycles, drift) to the agent board for agents to claim | X4, agent board | |
 | X13 | **Code fingerprints** - embed code units; near-duplicate logic across repos, and provenance of copied code | embeddings, hybrid search | |
-| X14 | **Map on arrival** - a short repo overview (top-ranked files, clusters, entry points) on the session's first touch of a repo, then a ~3-line neighbourhood (importers, imports, rank) after each `Read` | X1 graph cache, hooks | PostToolUse context, non-blocking. Leaf files stay silent. First touch, not session start, so a session that never touches code pays nothing |
+| X14 | **Map on arrival (BUILT, unreleased)** - a short repo overview (size, languages, top-ranked files, entry points) on the session's first touch of a repo, then an up-to-4-line neighbourhood (rank, importers, reach, imports) on a file's first `Read` | X1 graph cache, hooks | PostToolUse context, non-blocking. Leaf files stay silent. First touch, not session start, so a session that never touches code pays nothing |
 | X15 | **Writes from any tool** - after each shell call, diff `git status --porcelain` against the session's last snapshot and X-ray newly changed source files | X2, hooks | Command parsing can never be complete; watching the checkout catches every write path, and any harness that edits through a shell. Informs, cannot deny |
 | X16 | **Incremental refresh** - per-file content hashes; re-parse only what changed; refresh after writes and in the nightly dream pass | X1, dream | A full re-extract is 0.4s here and grows with the repo |
 | X17 | **Symbol graph** - functions, classes, definitions and call sites, not just files and imports | `xray/lang/` adapters, tree-sitter | The resolution X7 needs to name the function an entry point reaches, not just the file |

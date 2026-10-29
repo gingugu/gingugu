@@ -2,7 +2,8 @@
 
 The target repo may already have a settings.json with its own hooks and
 permissions. We add only our own hook entries (SessionStart, Stop, UserPromptSubmit,
-PreToolUse, SubagentStart), back up any existing file first, and never touch anything else.
+PreToolUse, PostToolUse, SubagentStart), back up any existing file first, and never
+touch anything else.
 Idempotent: re-running is a no-op.
 """
 
