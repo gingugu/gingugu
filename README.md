@@ -116,7 +116,10 @@ once, never ranked. `gingugu board watch` wakes an idle agent when one arrives.
 TypeScript/JavaScript and Go: before an edit, an agent asks what the change
 reaches and which tests to run, and which files the rest of the code leans on. It reads your checkout on your machine, even when the
 brain is remote, and rebuilds itself whenever the code changes. The tool hook also
-tells the agent on its first edit of an imported file what depends on it.
+tells the agent on its first edit of an imported file what depends on it, and a
+read hook brings a map on arrival: the first read into a repo adds an overview of
+it, and each file read adds that file's neighbourhood (who imports it, what it
+imports).
 
 That is the part that makes the memory worth having, and it is in the box.
 
@@ -237,10 +240,10 @@ or Rust toolchain required to use it. The MCP SDK is first-class in Python.
 | 📊 **Health Metrics** | Memory stats, dormancy reports, review sweep, namespace overviews |
 | 🔐 **Credential Vault** | Secure service-bundle storage for API keys/tokens via OS Keychain |
 | 📌 **Pinned Tier** | The handful of rules that must never be missed load first at every session start, exempt from ranking |
-| 🪝 **Hooks** | Session-start contract, involuntary recall on a prompt, tripwires that stop a tool call a memory forbids, warm minions for subagents, and a save-discipline stop hook — wired by `gingugu init` |
+| 🪝 **Hooks** | Session-start contract, involuntary recall on a prompt, tripwires that stop a tool call a memory forbids, an X-ray map when an agent first reads into a repo, warm minions for subagents, and a save-discipline stop hook — wired by `gingugu init` |
 | 🌙 **Dream Pass** | Deterministic consolidation over the relation graph (PageRank, label propagation, orphan reconnection), staged to a proposal queue you accept or reject - safe on a cron |
 | 📬 **Agent Board** | Agents sharing a brain leave each other addressed posts and claimable tasks; `gingugu board watch` wakes an idle agent, and a reply goes back to the session that asked |
-| 🩻 **Codebase X-ray** | `code_xray` maps a repo's import graph (Python, TypeScript/JavaScript, Go; parsed, never run): blast radius before an edit (dependents by hop, candidate tests) and the files the code leans on, ranked by directed PageRank. The tool hook says it on the first edit of an imported file |
+| 🩻 **Codebase X-ray** | `code_xray` maps a repo's import graph (Python, TypeScript/JavaScript, Go; parsed, never run): blast radius before an edit (dependents by hop, candidate tests) and the files the code leans on, ranked by directed PageRank. The tool hook says it on the first edit of an imported file, and a read hook brings a repo map on the first read and each file's neighbourhood the first time it is read |
 | 🌐 **Memory Explorer UI** | 3D brain (one lobe per namespace), list, dashboard, timeline, and trust map — a read-only observer ([live demo](https://gingugu.github.io/gingugu/)) |
 | 📡 **Central Brain (optional)** | `gingugu serve` runs the same server over HTTP behind Bearer tokens, each client scoped to its own namespaces; `gingugu promote` harvests a local brain's durable knowledge up to it with provenance stamps |
 
@@ -251,7 +254,7 @@ or Rust toolchain required to use it. The MCP SDK is first-class in Python.
 ```mermaid
 graph TD
     A[AI Assistant<br/>any MCP client] -->|MCP Protocol| B[Gingugu Server]
-    HK[Harness Hooks<br/>session start · prompt recall<br/>tripwires · warm minions · stop] -->|reads| D
+    HK[Harness Hooks<br/>session start · prompt recall<br/>tripwires · X-ray map · warm minions · stop] -->|reads| D
     HK -.->|injects context| A
     B --> C[Search Engine<br/>FTS5 BM25 + embeddings, RRF]
     B --> D[Storage Layer<br/>SQLite + WAL]
@@ -843,6 +846,14 @@ It installs:
   files that import it and the tests worth running; re-issue the edit and it
   passes. It reads your checkout locally and never asks the brain. Set
   `MEMORY_XRAY_TRIPWIRE=off` to disable it.
+- **`.claude/hooks/post_tool_xray.py`** — a `PostToolUse` hook (matched to
+  `Read|Grep|Glob`) that gives the agent the **X-ray map on arrival**: the first
+  Read, Grep or Glob in a repo in a session adds a compact repo map (size,
+  languages, import edges, the most imported files, entry points), and each
+  source file Read adds who imports it, what it imports and which tests reach
+  it, once per file. It rides `additionalContext` next to the tool result and
+  never blocks. Built locally from your checkout, sharing the edit tripwire's
+  graph cache; the brain is never asked. Set `MEMORY_XRAY_MAP=off` to disable it.
 - **`.claude/skills/sink-the-ship/SKILL.md`** — a `/sink-the-ship` skill to flush
   everything worth keeping before you close a session. If an older install left a
   `.claude/commands/sink-the-ship.md` behind, `gingugu init` retires it and keeps
@@ -858,7 +869,7 @@ It installs:
   built-in agent like Explore can read the brain but not change it. This
   prevents accidents; it is not a sandbox against a hostile process running as
   you. Set `MEMORY_MINION_FENCE=off` to disable the fence.
-- All five hooks wired into `.claude/settings.json`, **merged non-destructively** —
+- All six hooks wired into `.claude/settings.json`, **merged non-destructively** —
   any existing config is backed up (`settings.json.bak`) and preserved.
 - `mcp__brain` added to `permissions.allow`, in the repo's `.claude/settings.json`
   and in your user-level `~/.claude/settings.json` (backed up, idempotent), so a
@@ -1165,6 +1176,7 @@ Environment variables (all optional):
 | `MEMORY_PERSONA` | *(unset)* | This agent's own namespace (e.g. `research`). Recall, tripwires and the SessionStart contract load `crow`, then the persona, then the repo (recall and tripwires narrowed by `MEMORY_GRANT` when set). A malformed value is ignored |
 | `MEMORY_REMOTE_URL` | *(unset)* | Use this remote brain for this client only (`off` forces local). A bare `gingugu` then relays to it; the credential vault stays local |
 | `MEMORY_XRAY_TRIPWIRE` | `on` | Set `off` to disable the X-ray edit tripwire in `gingugu hook tool` (the first edit of an imported Python, TypeScript/JavaScript or Go file per session is denied with its dependents) |
+| `MEMORY_XRAY_MAP` | `on` | Set `off` to disable the X-ray map on arrival in `gingugu hook read` (the repo map on a session's first Read/Grep/Glob of a repo, and each Read source file's importers and imports, once per session) |
 | `MEMORY_MINION_FENCE` | `on` | Set `off` to disable the subagent fence in `gingugu hook tool` (data-dir file/shell access and inherited-server writes) |
 | `MEMORY_SERVE_HOST` | `127.0.0.1` | Bind host for `gingugu serve` (set `0.0.0.0` to accept remote connections) |
 | `MEMORY_SERVE_PORT` | `8765` | Bind port for `gingugu serve` |

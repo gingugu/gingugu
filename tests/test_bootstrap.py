@@ -259,6 +259,7 @@ def test_merge_settings_reports_added_events():
         "Stop",
         "UserPromptSubmit",
         "PreToolUse",
+        "PostToolUse",
         "SubagentStart",
     }
     assert warnings == []

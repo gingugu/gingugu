@@ -51,9 +51,10 @@ _INIT_HOOKS = (
     "stop.py",
     "user_prompt_recall.py",
     "pre_tool_tripwire.py",
+    "post_tool_xray.py",
     "subagent_warmup.py",
 )
-# Every hook --migrate overwrites with ours: init's five plus the harness's own.
+# Every hook --migrate overwrites with ours: init's six plus the harness's own.
 _HOOKS = frozenset([*_INIT_HOOKS, *(Path(d).name for _, d in _MANAGED if "/hooks/" in d)])
 _AI_FILES = (
     "memory.md",
@@ -85,7 +86,7 @@ def _install_managed(
 ) -> None:
     """``force_hooks`` force-replaces only hook scripts (``--migrate``).
 
-    That covers init's five hooks too: migrate runs init without force so init's
+    That covers init's six hooks too: migrate runs init without force so init's
     skill (``sink-the-ship``, which a repo may have made its own) is never
     replaced, then forces init's hooks here.
     """
