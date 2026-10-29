@@ -52,14 +52,21 @@ check when `src/` changed, and what to check when conventions or standards
 changed. Do not skip it because the change looks small; that judgment is what
 the checklist exists to replace.
 
-The `ai-docs-auditor` subagent does this assessment properly and returns
-`path:line` drift. Prefer it over eyeballing the tree.
+**Run the `ai-docs-auditor` subagent on every PR - it is not optional.** It
+returns `path:line` drift across `.ai/`, the README, the CHANGELOG and the docs.
+Confirm each finding against the code (calling a doc wrong is a claim to check,
+not a fact), then fix every confirmed line in this PR, before step 3. Drift is
+never listed as "noticed, not touched" in a PR body or a summary: it is fixed,
+or it was not drift.
 
 ### 3. Commit the docs updates
 
+Stage every file step 2 fixed - including anything under `docs/` - not just the
+three below.
+
 ```bash
-git add .ai/ README.md CHANGELOG.md
-git commit -m "docs: update .ai knowledge base - <brief reason>"
+git add .ai/ README.md CHANGELOG.md docs/
+git commit -m "docs: <what the docs now say> - <brief reason>"
 ```
 
 ### 4. *** STOP. Get explicit approval before anything leaves this machine ***
