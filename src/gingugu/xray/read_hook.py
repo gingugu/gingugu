@@ -154,14 +154,17 @@ def check(payload: dict, state_dir: Path) -> str | None:
         want_read = rel is not None and not read_claim.exists()
         if not (want_map or want_read):
             return None
-        g = hook_common.graph(root, state_dir)
+        g = hook_common.graph(root, state_dir, session_id)
+        # Claimed whether or not there is anything to say: silence is an answer
+        # too, and an unclaimed silent file would cost a fingerprint every read.
         parts = []
-        repo_map = _render_map(root, g) if want_map else None
-        if repo_map and _claim(map_claim):
-            parts.append(repo_map)
-        if want_read and rel is not None:
+        if want_map and _claim(map_claim):
+            repo_map = _render_map(root, g)
+            if repo_map:
+                parts.append(repo_map)
+        if want_read and rel is not None and _claim(read_claim):
             near = _render_neighbourhood(rel, g)
-            if near and _claim(read_claim):
+            if near:
                 parts.append(near)
         if not parts:
             return None

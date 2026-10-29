@@ -18,6 +18,8 @@ from . import extract, local, rank
 from .scan import XrayError
 
 _STATE_TTL_SECONDS = 7 * 24 * 3600
+# Past every hook timeout (doorway 10s, settings 15s): a build marker this old was killed.
+_ABANDONED_SECONDS = 30
 
 
 def _write_json(path: Path, data: object) -> bool:
@@ -45,7 +47,7 @@ def _sweep(state_dir: Path) -> None:
     cutoff = time.time() - _STATE_TTL_SECONDS
     try:
         for entry in state_dir.glob("xray-*"):
-            if entry.stat().st_mtime >= cutoff:
+            if entry.lstat().st_mtime >= cutoff:  # a dangling link must not stop the sweep
                 continue
             if entry.is_dir() and not entry.is_symlink():
                 shutil.rmtree(entry, ignore_errors=True)
@@ -110,8 +112,12 @@ class Graph(NamedTuple):
     entries: set[str]
 
 
-def graph(root: Path, state_dir: Path) -> Graph:
-    """The checkout's graph, cached by fingerprint."""
+def graph(root: Path, state_dir: Path, session_id: str | None = None) -> Graph:
+    """The checkout's graph, cached by fingerprint.
+
+    With a session, a build that never finished - the doorway's timeout killed
+    it - is not started again in that session: a checkout too big to build in
+    time would otherwise pay the whole build on every tool call."""
     digest = hashlib.sha256(str(root).encode()).hexdigest()[:16]
     cache = state_dir / f"xray-graph-{digest}.json"
     fp = extract.fingerprint(root)
@@ -128,6 +134,16 @@ def graph(root: Path, state_dir: Path) -> Graph:
             )
     except (KeyError, TypeError, ValueError, AttributeError):
         pass  # a corrupt or older-format cache is rebuilt, not fatal
+    marker = claim_path(state_dir, "xray-build", session_id, root) if session_id else None
+    if marker is not None and not _claim(marker):
+        # A fresh marker is a parallel hook mid-build: build too, as before. One
+        # older than any hook may run is a build that was killed.
+        try:
+            age = time.time() - marker.lstat().st_mtime
+        except OSError:
+            age = 0.0
+        if age >= _ABANDONED_SECONDS:
+            raise XrayError("a graph build for this checkout did not finish this session")
     ex = extract.extract(root)
     files = {f.path: f.is_test for f in ex.files}
     links = [rank.Link(e.src, e.dst, e.certain, e.implicit) for e in ex.edges]
@@ -147,4 +163,6 @@ def graph(root: Path, state_dir: Path) -> Graph:
             "entries": sorted(entries),
         },
     )
+    if marker is not None:
+        marker.unlink(missing_ok=True)
     return Graph(files, links, ranks, packages, langs, entries)

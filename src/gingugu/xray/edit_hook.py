@@ -108,7 +108,7 @@ def check(payload: dict, state_dir: Path) -> str | None:
         claim = _claim_path(state_dir, session_id, root, rel)
         if claim.exists():
             return None
-        files, links, ranks, packages, _, _ = hook_common.graph(root, state_dir)
+        files, links, ranks, packages, _, _ = hook_common.graph(root, state_dir, session_id)
         if rel not in files or rel in packages:
             return None
         blast = _without_seed(rank.blast([rel], files, links, ranks, hidden=packages), rel)
