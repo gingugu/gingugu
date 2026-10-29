@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-10-28 (confirmations under the VS Code extension; `gingugu credential`)_
+_Last updated: 2026-10-29 (X-ray roadmap: map on arrival, writes from any tool, X-ray Explorer)_
 
 ## In Flight
 
@@ -18,8 +18,13 @@ trips on JSX `class=` (9 of vite's 1,638 files report a parse error, edges recov
 `tsconfig` `extends` to a package (`@tsconfig/...`) is skipped; `exports` star patterns
 are not resolved; a go.mod `module ( ... )` block reads as malformed.
 
-**Board #5 Codebase X-ray - X3 scar tissue next** (design approved 2026-10-28, parked
-behind languages). X3 links memories (bugs, decisions, gotchas) to the files they are
+**Board #5 Codebase X-ray - X14 map on arrival next** (2026-10-29). The end goal
+was restated: a sophisticated map before any work starts, so the map now reaches
+the agent on reads and on any write, not only through the edit tools. New items
+X14-X18 (section 19); build order X14, X15, X16, X17, then X3.
+
+**X3 scar tissue** (design approved 2026-10-28, now after X14-X17; it plugs into
+the X14 read hook). X3 links memories (bugs, decisions, gotchas) to the files they are
 about, so an edit surfaces both what depends on the file and what it has cost before.
 Derived at read time, not stored: the brain FTS-searches the project namespace for a
 file's basename and the client resolves the hits against the checkout; scored by type
@@ -1440,13 +1445,15 @@ every row moved up one.
 
 **2026-10-28:** X1 (#139) and X2 (#142) of the Codebase X-ray shipped in 0.29.0; the item stays on the board at row 5 with X3 next.
 
+**2026-10-29:** X-ray gained X14-X18 (map on arrival, writes from any tool, incremental refresh, symbol graph, X-ray Explorer); X14 is next and X3 follows X17.
+
 | # | Item | Old # | Why this position |
 |---|---|---|---|
 | 1 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
 | 2 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
 | 3 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
 | 4 | **A referee for rival memory tools** | 17 | Only a fair comparison once 3 exists |
-| 5 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X3 next | 19 | Standalone; picked 2026-10-26. A 13-part roadmap (X1-X13) in its section below |
+| 5 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival next | 19 | Standalone; picked 2026-10-26. An 18-part roadmap (X1-X18) in its section below |
 | 6 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
 | 7 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
 | 8 | Session flight recorder (low priority) | 18 | Check prior art first |
@@ -2096,7 +2103,12 @@ to run or refresh the X-ray itself rather than ask for it. Decided in X1:
 
 - **Transport.** The brain never reads a path. The local stdio server or the
   proxy reads the caller's checkout and sends names and edges; under
-  `gingugu serve` a path is refused.
+  `gingugu serve` a path is refused. A path handed to a remote brain would be
+  read from the wrong disk at best, and at worst would make the brain a file
+  reader for any token holder.
+- **Structure, not source.** What crosses to the brain is names, edges and
+  ranks - later symbols and call sites - never file contents. A stolen brain
+  leaks the outline of the code, not the code.
 - **Persistence.** Own tables (migration 019), not memories, keyed by namespace
   and a content fingerprint; the 5 most recently used snapshots are kept.
 - **Languages.** Python via `ast`; TypeScript/JavaScript and Go via tree-sitter
@@ -2125,7 +2137,17 @@ memories, so a read-only minion can ask for a blast radius but not store one.
   handler), so dead-file detection has to know entry points and tests to say
   anything.
 
-**Roadmap.** Sub-items, in build order:
+**The end goal (2026-10-29).** A sophisticated map of the repo before any
+work starts, stored per repo and kept current as it is touched. X1 and X2 only
+meet the agent at the moment of an edit, and only through the edit tools: a
+read never fires, and a write through the shell bypasses X-ray entirely. X1-X13
+describe what is stored; X14-X18 add how the map reaches the agent, how it
+stays current, and how it is seen.
+
+**Build order:** X14, X15, X16, X17, then X3, then X4/X6/X7/X8. X18 ships in
+slices alongside them. IDs are stable references, not the order.
+
+**Roadmap.** Sub-items:
 
 | # | Sub-item | Reuses | Notes |
 |---|---|---|---|
@@ -2142,6 +2164,11 @@ memories, so a read-only minion can ask for a blast radius but not store one.
 | X11 | **Predict, then score** - the agent predicts failing tests and broken files before a change; the calibration ledger scores it after | X1, calibration ledger (#2) | |
 | X12 | **Board-driven upkeep** - the nightly X-ray posts findings (dead files, new cycles, drift) to the agent board for agents to claim | X4, agent board | |
 | X13 | **Code fingerprints** - embed code units; near-duplicate logic across repos, and provenance of copied code | embeddings, hybrid search | |
+| X14 | **Map on arrival** - a short repo overview (top-ranked files, clusters, entry points) on the session's first touch of a repo, then a ~3-line neighbourhood (importers, imports, rank) after each `Read` | X1 graph cache, hooks | PostToolUse context, non-blocking. Leaf files stay silent. First touch, not session start, so a session that never touches code pays nothing |
+| X15 | **Writes from any tool** - after each shell call, diff `git status --porcelain` against the session's last snapshot and X-ray newly changed source files | X2, hooks | Command parsing can never be complete; watching the checkout catches every write path, and any harness that edits through a shell. Informs, cannot deny |
+| X16 | **Incremental refresh** - per-file content hashes; re-parse only what changed; refresh after writes and in the nightly dream pass | X1, dream | A full re-extract is 0.4s here and grows with the repo |
+| X17 | **Symbol graph** - functions, classes, definitions and call sites, not just files and imports | `xray/lang/` adapters, tree-sitter | The resolution X7 needs to name the function an entry point reaches, not just the file |
+| X18 | **X-ray Explorer** - a view in the Memory Explorer: repo as a 3D city (height = rank, colour = churn or tests, districts = X5 boundaries), animated blast radius, X7 attack paths, X6 blind-spot heat, X3 scar markers linking into the memory drawer, X4 drift slider over snapshots | `ui/`, `ui_api/` read-only observer | Ships in slices; city + blast radius first |
 
 ### Standing rules
 
