@@ -54,7 +54,7 @@ _INIT_HOOKS = (
     "post_tool_xray.py",
     "subagent_warmup.py",
 )
-# Every hook --migrate overwrites with ours: init's five plus the harness's own.
+# Every hook --migrate overwrites with ours: init's six plus the harness's own.
 _HOOKS = frozenset([*_INIT_HOOKS, *(Path(d).name for _, d in _MANAGED if "/hooks/" in d)])
 _AI_FILES = (
     "memory.md",

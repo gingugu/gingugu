@@ -210,6 +210,16 @@ def test_reading_a_non_source_file_still_brings_the_map(repo, state):
     assert text is not None and "X-RAY MAP" in text
 
 
+def test_a_repo_with_no_source_files_gets_no_map(tmp_path, state):
+    repo = _repo(tmp_path, {"README.md": "# hi\n", "notes.txt": "x\n"})
+    assert read_hook.check(_read(repo, "README.md"), state) is None
+
+
+def test_the_map_says_it_is_ordered_by_rank(repo, state):
+    text = read_hook.check(_search(repo, "Grep"), state)
+    assert "rank" in text.splitlines()[0].lower()
+
+
 def test_reading_a_non_source_file_after_the_map_is_silent(repo, state):
     read_hook.check(_search(repo, "Grep"), state)
     (repo / "README.md").write_text("# hi\n")
