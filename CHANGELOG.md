@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The `/creating-pr` skill makes the docs audit mandatory.** `gingugu harness`
+  installs a skill that now runs the `ai-docs-auditor` subagent on every PR,
+  confirms each finding against the code, and fixes every confirmed line in the
+  same PR - drift is never left as "noticed, not touched"; step 3 now stages
+  `docs/` too. Existing repos pick it up with `gingugu harness --force`, which
+  refreshes every managed harness file (hooks, agents, skill), keeping a `.bak`
+  of any you customised; plain `gingugu harness` and `--migrate` leave an
+  existing skill alone.
+
 ---
 
 ## [0.32.0] - 2026-10-29
