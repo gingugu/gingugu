@@ -212,7 +212,7 @@ Before any write to external systems (GitHub API, PyPI, npm):
 
 ## Available Skills
 
-- `/creating-pr` - Create a PR with mandatory `.ai/` knowledge base assessment
+- `/creating-pr` - Create a PR with mandatory `.ai/` knowledge base assessment and a mandatory `ai-docs-auditor` run whose confirmed findings are fixed in the same PR
 - `/releasing` - Cut a release (`scripts/release.py`) and roll it out to every machine (`scripts/fleet.py`)
 - `/sink-the-ship` - Save everything to Gingugu and end session
 

@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-10-29 (0.32.0 released: X-ray map on arrival)_
+_Last updated: 2026-10-29 (docs audit mandatory on every PR)_
 
 ## In Flight
 
@@ -51,6 +51,12 @@ mid-capture; `overview.top` and the payload's `skipped` are bounded but not
 paged; a git `core.fsmonitor`-style check for other config that runs code.
 
 ## Recently Completed
+
+**Docs audit is mandatory on every PR (docs/mandatory-doc-audit, unreleased).** The
+`/creating-pr` skill - this repo's copy and the template `gingugu harness` installs -
+now runs `ai-docs-auditor` on every PR, confirms each finding against the code, and
+fixes every confirmed line in the same PR. Drift is fixed or it was not drift; it is
+never reported as "noticed, not touched".
 
 **0.32.0 released (2026-10-29): X-ray map on arrival (#153), roadmap X14-X18 (#152).**
 Fleet: Pi and dronesense-mbp on 0.32.0; the new hook installed by a plain `gingugu
