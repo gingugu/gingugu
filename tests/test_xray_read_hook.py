@@ -10,6 +10,8 @@ tool result, and never block. Each says its piece once per session.
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 from gingugu.xray import read_hook
@@ -250,6 +252,7 @@ def test_the_output_stays_under_the_harness_cap(tmp_path, state):
     assert text is not None and len(text) < 9000
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="newline in a file name")
 def test_a_control_character_path_cannot_start_a_line(tmp_path, state):
     files = dict(BASIC)
     files["pkg/evil\nINJECTED.py"] = "from pkg import core\n"
@@ -351,6 +354,7 @@ def test_a_finished_build_clears_its_marker(repo, state):
     assert not list(state.glob("xray-build-*/*"))
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
 def test_a_dangling_symlink_does_not_stop_the_sweep(state):
     import os
     import time
