@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.32.0] - 2026-10-29
+
 ### Added
 
 - **X-ray map on arrival (X14)**: a new non-blocking `PostToolUse` hook,
