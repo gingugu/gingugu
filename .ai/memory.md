@@ -456,8 +456,9 @@ gap between the count and the rows.
 - Current version: **0.32.0** (PyPI, 2026-10-29). Minor: X-ray map on arrival
   (X14) - a `PostToolUse` hook (`gingugu hook read`, `Read|Grep|Glob`) adds a repo
   map on the first read into a repo and each file's neighbourhood on its first
-  read (#153); X-ray roadmap X14-X18 (#152). Machines need `gingugu init --force`
-  per repo for the new hook.
+  read (#153); X-ray roadmap X14-X18 (#152). Each repo needs a plain `gingugu
+  init` (no `--force`) to install the new hook; `--force` would also overwrite
+  customised managed files.
 - 0.31.0 (PyPI, 2026-10-28). Minor: `gingugu credential
   list|delete` (the vault by hand, TTY-only); a client that shows no confirmation
   dialog (Claude Code's VS Code extension) is refused as "cannot ask", and the
