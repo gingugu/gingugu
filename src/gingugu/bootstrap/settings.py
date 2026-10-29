@@ -2,7 +2,8 @@
 
 The target repo may already have a settings.json with its own hooks and
 permissions. We add only our own hook entries (SessionStart, Stop, UserPromptSubmit,
-PreToolUse, SubagentStart), back up any existing file first, and never touch anything else.
+PreToolUse, PostToolUse, SubagentStart), back up any existing file first, and never
+touch anything else.
 Idempotent: re-running is a no-op.
 """
 
@@ -17,6 +18,7 @@ SESSION_START_CMD = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/session_start.py"
 STOP_CMD = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/stop.py --check-memory-saves"
 PROMPT_RECALL_CMD = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/user_prompt_recall.py"
 TRIPWIRE_CMD = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/pre_tool_tripwire.py"
+POST_TOOL_CMD = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/post_tool_xray.py"
 WARMUP_CMD = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/subagent_warmup.py"
 
 # (event name, command, timeout, marker used to detect an existing entry)
@@ -28,6 +30,10 @@ WARMUP_CMD = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/subagent_warmup.py"
 # PreToolUse gets 15s rather than the 600s default: it runs on every tool call,
 # so a hung hook should surrender well before it stalls the whole session.
 #
+# PostToolUse gets 15s for the same reason, and is matched to Read|Grep|Glob so
+# no other tool call spawns it. A cold graph build for the repo map is the slow
+# part; past the timeout the read simply goes without the map.
+#
 # SubagentStart gets 20s: the spawn waits on it, and a cold encoder load for the
 # task hint is the slow part. Past that the minion simply starts cold.
 _HOOKS = [
@@ -35,6 +41,7 @@ _HOOKS = [
     ("Stop", STOP_CMD, 30, "stop.py"),
     ("UserPromptSubmit", PROMPT_RECALL_CMD, 20, "user_prompt_recall.py"),
     ("PreToolUse", TRIPWIRE_CMD, 15, "pre_tool_tripwire.py"),
+    ("PostToolUse", POST_TOOL_CMD, 15, "post_tool_xray.py", "Read|Grep|Glob"),
     ("SubagentStart", WARMUP_CMD, 20, "subagent_warmup.py"),
 ]
 
@@ -48,6 +55,7 @@ _KNOWN_FLAGS = {
     "stop.py": {"--check-memory-saves", "--min-tool-calls"},
     "user_prompt_recall.py": set(),
     "pre_tool_tripwire.py": set(),
+    "post_tool_xray.py": set(),
     "subagent_warmup.py": set(),
 }
 

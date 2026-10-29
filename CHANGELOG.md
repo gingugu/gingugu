@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **X-ray map on arrival (X14)**: a new non-blocking `PostToolUse` hook,
+  `gingugu hook read`, wired by `gingugu init` for `Read|Grep|Glob` through
+  `.claude/hooks/post_tool_xray.py`. The first Read, Grep or Glob in a repo in a
+  session adds a compact repo map (file and language counts, import edges, tests,
+  the most imported files, entry points); each source file Read adds its
+  importers, its imports, its rank and the candidate tests that reach it, once
+  per file. The agent has the shape of the code while it reads, not only when an
+  edit is denied. It shares the edit tripwire's per-repo graph cache and never
+  asks the brain. Set `MEMORY_XRAY_MAP=off` to disable it.
+
 ---
 
 ## [0.31.0] - 2026-10-28

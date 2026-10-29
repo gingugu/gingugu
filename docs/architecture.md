@@ -67,6 +67,7 @@ graph LR
     subgraph Claude Code Hooks
         PH[UserPromptSubmit<br/>gingugu hook prompt]
         Y[PreToolUse<br/>gingugu hook tool<br/>tripwires · X-ray · minion fence]
+        PO[PostToolUse<br/>gingugu hook read<br/>X-ray map on arrival]
         Z[SubagentStart<br/>gingugu hook subagent]
     end
 
@@ -93,6 +94,7 @@ graph LR
         W[(tripwires<br/>action triggers)]
         BP[(board_posts · board_reads<br/>agent board)]
         XR[(xray_snapshots · files · edges<br/>codebase X-ray)]
+        XG[(hook-sessions/<br/>X-ray graph cache)]
     end
 
     subgraph OS Secrets
@@ -129,6 +131,9 @@ graph LR
     A -->|each pending tool call| Y
     Y -->|reads matches| W
     Y -->|logs each trip| T
+    Y -->|local: X-ray edit check| XG
+    A -->|each Read · Grep · Glob| PO
+    PO -->|local: map and neighbourhood| XG
     A -->|spawns| M
     Y -->|stashes a fenced agent's task prompt| Z
     Z -->|read-only, under the grant| H
@@ -167,11 +172,20 @@ is built locally from the checkout and never touches the brain, the deny is not
 logged, and when a tripwire fires on the same call the two share one deny. It
 never touches the MCP server process.
 
+`PostToolUse` is a fourth: `gingugu hook read` runs after every `Read`, `Grep`
+or `Glob` and adds context next to the result, never a block. The first such call
+in a repo per session brings a map (file count, languages, import edges, tests,
+the most-imported files, entry points), and each source file read brings its
+neighbourhood (rank, importers, transitive reach with candidate tests, imports),
+once per file per session. It uses the same locally built graph cache as the edit
+check, never touches the brain or the MCP server process, and `MEMORY_XRAY_MAP=off`
+turns it off.
+
 `SubagentStart` is the third: `gingugu hook subagent` warms a minion whose agent
 file declares `MEMORY_GRANT`. The spawning `Agent` call's prompt is stashed by
 the `PreToolUse` hook (`hook-sessions/spawns-<session>.json`, 300s TTL) and used
 as the task hint; ranking runs on a read-only connection under the grant, first
-narrowed to what the spawning client's grant can read. All three hooks apply
+narrowed to what the spawning client's grant can read. All four hooks apply
 that client grant to the namespaces they look up. The grant is what the
 client's own gingugu servers published (`client_grants.py`: each server writes
 its grant and ancestor chain before serving; a hook takes the publications
@@ -403,8 +417,12 @@ matching call per session per memory and logs the trip to `query_log`
 (`tool='tripwire'`). Per-session suppression lives beside the DB in
 `hook-sessions/tripwires-<session_id>.json`, not in SQLite. The X-ray edit
 check keeps two more files there: `xray-graph-<sha16(root)>.json` (the import
-graph, cached per repo by fingerprint) and `xray-shown-<session>/`
-(one claim file per file already shown this session); both owner-only, swept after 7 days.
+graph, cached per repo by fingerprint, shared with the map-on-arrival hook) and `xray-shown-<session>/`
+(one claim file per file already shown this session). The map hook adds three
+more directories: `xray-map-<session>/` (the repo map, once per session),
+`xray-read-<session>/` (one claim per file whose neighbourhood was shown) and
+`xray-build-<session>/` (a marker so a graph build that never finished is not
+retried that session); all owner-only, swept after 7 days.
 
 #### `board_posts` / `board_reads`
 ```sql
@@ -1659,7 +1677,8 @@ trip, so a bad tripwire can always be repaired. Inside a subagent the same hook
 runs the minion fence first, which does deny the write tools of the inherited
 `mcp__gingugu__*` server (see warm minions). `MEMORY_TRIPWIRES=off` disables
 memory tripwires only; the X-ray edit check has its own switch,
-`MEMORY_XRAY_TRIPWIRE` (default on), and the minion fence has
+`MEMORY_XRAY_TRIPWIRE` (default on), the X-ray map on arrival (the `PostToolUse` hook, `gingugu hook read`) has
+`MEMORY_XRAY_MAP` (default on), and the minion fence has
 `MEMORY_MINION_FENCE`.
 
 **Destructive calls ask the user, not the model.** A hard `memory_forget`, a
@@ -2024,7 +2043,7 @@ src/gingugu/
 ├── proxy_vault.py          # Remote mode: the machine's credential vault, screened (reveal refused) and exposed as a server
 ├── proxy_vault_link.py     # Remote mode: runs that vault behind an in-memory MCP session so it can ask the user
 ├── proxy_xray.py           # Remote mode: code_xray reads the checkout here, asks the brain by fingerprint
-├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); edit_hook (PreToolUse X-ray)
+├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), read_hook (PostToolUse map on arrival)
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine
 ├── remote_args.py          # usage text + argparse for `gingugu remote`, mint ssh argv
@@ -2138,6 +2157,7 @@ src/gingugu/
 ├── board_delivery.py       # board post/reply delivery receipt: can the recipient persona's known clients read it
 ├── board_hook.py           # board mail for the prompt hook: unread posts, grant-fenced, per-session shown ids, local or POST /hook/inbox
 ├── cli_usage.py            # the top-level `gingugu --help` text (USAGE)
+├── post_tool_hook.py       # gingugu hook read: PostToolUse entry point (X-ray map on arrival: repo map + a Read file's neighbourhood); informs, never blocks
 ├── tool_hook.py            # gingugu hook tool: PreToolUse entry point (tripwires, X-ray, minion fence); deny once, re-issue passes
 ├── minion_fence.py         # Inside a subagent: deny data-dir access, CLI, inherited-server writes
 ├── subagent_hook.py        # gingugu hook subagent: SubagentStart warm-up; stash/take of the spawn prompt

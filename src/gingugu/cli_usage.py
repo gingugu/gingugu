@@ -42,6 +42,10 @@ Usage:
   gingugu hook subagent        Warm minions: reads a SubagentStart event and
                                injects the memories the subagent's grant can
                                read. Wired by `gingugu init`; not run by hand.
+  gingugu hook read            X-ray map on arrival: reads a PostToolUse event
+                               (Read/Grep/Glob); the first read in a repo gets a
+                               map, each source file its import neighbourhood.
+                               Wired by `gingugu init`; not run by hand.
 
 Options:
   -h, --help                   Show this help and exit.
