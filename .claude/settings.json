@@ -125,6 +125,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Read|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/post_tool_xray.py",
+            "timeout": 15
+          }
+        ]
       }
     ],
     "PostToolUseFailure": [
