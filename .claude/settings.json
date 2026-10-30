@@ -135,6 +135,16 @@
             "timeout": 15
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/post_bash_xray.py",
+            "timeout": 15
+          }
+        ]
       }
     ],
     "PostToolUseFailure": [
