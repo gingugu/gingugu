@@ -33,7 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not about the branch costs one retry per session. A brief inside board mail
   checks the range with git before building any graph, gives git 10 seconds,
   is not rebuilt in a session whose build the hook timeout killed, and a post is
-  marked shown only once its mail has been rendered.
+  marked shown only once its mail has been rendered. The notice under a stopped
+  call says which X-ray stopped it: an edit with dependents, or a board post
+  asked for its range.
 
 ---
 

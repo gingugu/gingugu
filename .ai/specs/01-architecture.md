@@ -763,7 +763,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   guard, X-ray, memory tripwires; when a memory tripwire and the X-ray both fire on one call they
   share one deny (tripwire reason, blank line, X-ray reason). X-ray denies are
   not logged to `query_log`.
-- **Checkout guard (unreleased).** `checkout_guard.py`, called from
+- **Checkout guard (shipped 0.33.0).** `checkout_guard.py`, called from
   `tool_hook.run` right after the minion fence: a Bash git command that would
   move or empty the PRIMARY checkout (`switch`; `checkout` unless paths follow `--`;
   `rebase` other than `--abort`/`--quit`; `reset --hard`/`--merge`/`--keep`;
@@ -782,7 +782,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   the package, so every repo already wired to `gingugu hook tool` gets it with
   an upgrade; `init` also git-ignores `.claude/worktrees/` and the managed
   protocol block carries a "Concurrent sessions" rule.
-- **Codebase X-ray: map on arrival (X14, unreleased).** A non-blocking
+- **Codebase X-ray: map on arrival (X14, shipped 0.32.0).** A non-blocking
   `PostToolUse` hook (`gingugu hook read`, `post_tool_hook` + `xray/read_hook`)
   puts the shape of the code in front of the agent while it reads: the first
   Read/Grep/Glob of a repo in a session adds a repo map, and each source file

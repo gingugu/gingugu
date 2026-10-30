@@ -2194,7 +2194,7 @@ src/gingugu/
 ├── board_hook.py           # board mail for the prompt hook: unread posts, grant-fenced, per-session shown ids, local or POST /hook/inbox; appends an X20 brief
 ├── cli_usage.py            # the top-level `gingugu --help` text (USAGE)
 ├── post_tool_hook.py       # gingugu hook read: PostToolUse entry point (X-ray map on arrival: repo map + a Read file's neighbourhood); informs, never blocks
-├── tool_hook.py            # gingugu hook tool: PreToolUse entry point (tripwires, X-ray, minion fence, checkout guard); deny once, re-issue passes
+├── tool_hook.py            # gingugu hook tool: PreToolUse entry point (tripwires, X-ray edit check and board nudge, minion fence, checkout guard); deny once, re-issue passes
 ├── checkout_guard.py       # Deny, every time, a git command that moves or empties a shared primary checkout; points at a worktree
 ├── minion_fence.py         # Inside a subagent: deny data-dir access, CLI, inherited-server writes
 ├── subagent_hook.py        # gingugu hook subagent: SubagentStart warm-up; stash/take of the spawn prompt
