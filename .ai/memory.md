@@ -460,7 +460,11 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.35.2** (PyPI, 2026-10-30). Patch: a board post's `xray:` ref
+- Current version: **0.36.0** (PyPI, 2026-10-30). Minor: a board post's `xray:` line can
+  name its repo (`xray: <repo> <range>`); the receiver finds its checkout of it
+  (`xray/repo_id`, `MEMORY_XRAY_REPOS`), and the not-available line suggests only a
+  shell-safe command (#161).
+- 0.35.2 (PyPI, 2026-10-30). Patch: a board post's `xray:` ref
   reaching a receiver with no checkout (a Codex thread dir) arrives as one line naming
   `gingugu xray brief --range <ref>`, not silence (#160).
 - 0.35.1 (PyPI, 2026-10-30). Patch: X20 live-test fixes - the
