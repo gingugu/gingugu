@@ -53,6 +53,7 @@ _INIT_HOOKS = (
     "pre_tool_tripwire.py",
     "post_tool_xray.py",
     "post_bash_xray.py",
+    "post_edit_xray.py",
     "subagent_warmup.py",
 )
 # Every hook --migrate overwrites with ours: init's seven plus the harness's own.

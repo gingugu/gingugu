@@ -13,7 +13,8 @@ from typing import NamedTuple
 
 from . import hook_common, local, rank, scan
 from .hook_common import _show
-from .read_hook import _importers, _ranked
+from .hook_common import importers as _importers
+from .read_hook import _ranked
 
 # Claude Code caps additionalContext at 10,000 characters; same margin as read_hook.
 MAX_CHARS = 8800

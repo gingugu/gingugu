@@ -51,16 +51,6 @@ def _search_root(payload: dict, tool_input: dict) -> Path | None:
         return None
 
 
-def _importers(g: Graph) -> dict[str, set[str]]:
-    """dst -> who imports it, counted like ``store.overview``: asked for, not
-    implied, and a package reaching its own files is membership, not an import."""
-    out: dict[str, set[str]] = {}
-    for ln in g.links:
-        if not ln.implicit and ln.src not in g.packages and ln.src != ln.dst:
-            out.setdefault(ln.dst, set()).add(ln.src)
-    return out
-
-
 def _ranked(g: Graph) -> list[str]:
     return sorted((p for p in g.files if p not in g.packages), key=lambda p: (-g.ranks[p], p))
 
@@ -74,7 +64,7 @@ def _render_map(root: Path, g: Graph) -> str | None:
         language = g.langs.get(p, "unknown")
         counts[language] = counts.get(language, 0) + 1
     langs = ", ".join(f"{k} {v}" for k, v in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
-    imported_by = _importers(g)
+    imported_by = hook_common.importers(g)
     edges = sum(len(v) for v in imported_by.values())
     tests = sum(1 for p in source if g.files[p])
     lines = [
@@ -84,7 +74,12 @@ def _render_map(root: Path, g: Graph) -> str | None:
     for p in source[:MAP_FILES]:
         n = len(imported_by.get(p, ()))
         lines.append(f"- {_show(p)} ({n} importer{'' if n == 1 else 's'})")
-    entries = sorted(e for e in g.entries if e not in g.packages)
+    # A dot-directory (.claude/hooks) holds tooling, not the product's entry points.
+    entries = sorted(
+        e
+        for e in g.entries
+        if e not in g.packages and not any(seg.startswith(".") for seg in e.split("/"))
+    )
     if entries:
         named = ", ".join(_show(e) for e in entries[:MAP_ENTRIES])
         more = f" (+{len(entries) - MAP_ENTRIES} more)" if len(entries) > MAP_ENTRIES else ""
@@ -96,14 +91,13 @@ def _render_map(root: Path, g: Graph) -> str | None:
 
 
 def _names(paths: list[str]) -> str:
-    listed = ", ".join(_show(p) for p in paths[:NAMED])
-    return listed + (f" (+{len(paths) - NAMED} more)" if len(paths) > NAMED else "")
+    return hook_common.named(paths, NAMED)
 
 
 def _render_neighbourhood(rel: str, g: Graph) -> str | None:
     if rel not in g.files or rel in g.packages or rel.rsplit("/", 1)[-1] == "__init__.py":
         return None
-    by_rank = sorted(_importers(g).get(rel, ()), key=lambda p: (-g.ranks.get(p, 0), p))
+    by_rank = sorted(hook_common.importers(g).get(rel, ()), key=lambda p: (-g.ranks.get(p, 0), p))
     imports = sorted(
         {ln.dst for ln in g.links if ln.src == rel and not ln.implicit and ln.dst != rel},
         key=lambda p: (-g.ranks.get(p, 0), p),
@@ -117,9 +111,8 @@ def _render_neighbourhood(rel: str, g: Graph) -> str | None:
         lines.append(f"Imported by {len(by_rank)}: {_names(by_rank)}")
         blast = rank.blast([rel], g.files, g.links, g.ranks, hidden=g.packages)
         tests = [r for r in blast["tests"] if r["path"] != rel]
-        reach = blast["code_total"] + len(tests)
-        noun = "candidate test" if len(tests) == 1 else "candidate tests"
-        lines.append(f"Reaches {reach} files transitively ({len(tests)} {noun}).")
+        if tests:
+            lines.append(f"Nearest tests: {_names(hook_common.nearest_tests(tests))}")
     if imports:
         lines.append(f"Imports {len(imports)}: {_names(imports)}")
     return "\n".join(lines)
