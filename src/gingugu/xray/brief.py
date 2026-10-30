@@ -25,6 +25,15 @@ CAVEAT = (
 )
 _STATUSES = ("A", "M", "D", "R")
 _WORDS = {"A": "added", "M": "modified", "D": "deleted", "R": "renamed"}
+# Past this the blast lists alone could crowd the changed files out of the text.
+MAX_LIMIT = 50
+
+
+def _safe(path: str | None) -> str | None:
+    """A non-UTF-8 name decodes to lone surrogates, which no JSON encoder accepts."""
+    if path is None:
+        return None
+    return path.encode("utf-8", "surrogateescape").decode("utf-8", "replace")
 
 
 class Change(NamedTuple):
@@ -101,9 +110,9 @@ def build(g: hook_common.Graph, changes: list[Change], limit: int = 10) -> dict:
     imported_by = _importers(g)
     rows = [
         {
-            "path": c.path,
+            "path": _safe(c.path),
             "status": c.status,
-            "old_path": c.old_path,
+            "old_path": _safe(c.old_path),
             "source": c.path in position and c.status != "D",
             "rank": position.get(c.path),
             "importers": len(imported_by.get(c.path, ())),
@@ -111,20 +120,20 @@ def build(g: hook_common.Graph, changes: list[Change], limit: int = 10) -> dict:
         for c in changes
     ]
     rows.sort(key=lambda r: (not r["source"], r["rank"] or 0, r["path"]))
-    seeds = [r["path"] for r in rows if r["source"]]
+    seeds = [c.path for c in changes if c.path in position and c.status != "D"]
     reach = rank.blast(seeds, g.files, g.links, g.ranks, limit=limit, hidden=g.packages)
     return {
         "changed": rows,
         "counts": {s: sum(1 for c in changes if c.status == s) for s in _STATUSES},
         "other": sum(1 for r in rows if not r["source"] and r["status"] != "D"),
         "blast": {
-            "code": [r["path"] for r in reach["code"]],
-            "tests": [r["path"] for r in reach["tests"]],
+            "code": [_safe(r["path"]) for r in reach["code"]],
+            "tests": [_safe(r["path"]) for r in reach["tests"]],
             "code_total": reach["code_total"],
             "tests_total": reach["tests_total"],
         },
         "files": len(source),
-        "top": source[:TOP],
+        "top": [_safe(p) for p in source[:TOP]],
     }
 
 
@@ -183,7 +192,7 @@ def answer(path: str | None, rev_range: str | None, files, limit: int = 10) -> d
     named = local.file_list(files)
     if rev_range is not None and named:
         raise ValueError("pass a range or files, not both")
-    rel = local.seeds(named, repo) if named else None
+    rel = [p for p in local.seeds(named, repo) if p] if named else None  # "." is no file
     g = hook_common.graph(repo, load_config().db_path.parent / "hook-sessions")
-    data = build(g, changes(repo, rev_range, rel), limit=max(0, limit))
+    data = build(g, changes(repo, rev_range, rel), limit=min(max(0, limit), MAX_LIMIT))
     return {"ok": True, **data, "text": render(data, repo.name), "caveat": CAVEAT}
