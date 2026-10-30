@@ -24,6 +24,7 @@ a post is the agent's act, not the watcher's.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import threading
 from pathlib import Path
@@ -114,7 +115,7 @@ def main(argv: list[str], out: TextIO | None = None, err: TextIO | None = None) 
         cursor = Cursor.for_brain(Path(config.db_path).parent, brain, me)
         if args.everything:
             cursor.reset()
-        emitter = Emitter(out, err, args.exec_cmd, cursor)
+        emitter = Emitter(out, err, args.exec_cmd, cursor, cwd=os.getcwd())
         if target is not None:
             import anyio
 
