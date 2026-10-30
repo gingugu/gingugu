@@ -89,6 +89,14 @@ def test_an_edit_spanning_a_huge_file_stays_fast(tmp_path, state):
     assert len(inner) == 8000 and inner[0] == "C0.m"
 
 
+def test_a_multi_line_edit_lands_in_a_crlf_file(tmp_path, state):
+    repo = _repo(tmp_path, {"u.py": "import m\n", "m.py": ""})
+    (repo / "m.py").write_bytes(b"def f():\r\n    a = 1\r\n    return a\r\n")
+    p = _payload(repo, "m.py")
+    p["tool_input"].update(old_string="    a = 1\n    return a", new_string="    return 1")
+    assert "Edit lands in `f` (L1-3)" in edit_hook.check(p, state)
+
+
 def test_the_edited_file_is_read_with_a_cap(tmp_path, state, monkeypatch):
     from gingugu.xray import edit_symbols
 

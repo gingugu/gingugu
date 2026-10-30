@@ -42,7 +42,10 @@ def _olds(payload: dict) -> list[str]:
 def _quals(sym: symbols.Symbols, rel: str, text: str, olds: list[str]) -> list[str]:
     """The definitions the old strings sit in, first seen first, each once."""
     out: list[str] = []
-    for old in olds:
+    # Line endings are compared, not their bytes: a CRLF file and an LF old_string
+    # (or the reverse) still name the same lines.
+    text = text.replace("\r\n", "\n")
+    for old in (o.replace("\r\n", "\n") for o in olds):
         i = text.find(old)
         if i < 0:
             continue
