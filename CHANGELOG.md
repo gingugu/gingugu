@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.35.2] - 2026-10-30
+
 ### Fixed
 
 - **A brief the receiver cannot render says so.** A board post that names a range
