@@ -1,10 +1,11 @@
 """X20: a board post that names a range arrives with its X-ray brief.
 
 The agents X19's brief is for fire no hooks, so a handoff should carry its brief
-unasked. The post carries only the ref (a line of its own, ``xray: <range>``);
-the brief is rendered on the receiver, from the receiver's own checkout, so no
-paths or stale text cross the board. The ref is another agent's words: it passes
-the same gate as any range before git sees it.
+unasked. The post carries only the ref (a line of its own, ``xray: <range>`` or
+``xray: <repo> <range>``); the brief is rendered on the receiver, from its own
+checkout of that repo (``repo_id``), so no paths or stale text cross the board.
+The ref is another agent's words: it passes the same gate as any range before
+git sees it, and only a shell-safe range enters a suggested command.
 """
 
 from __future__ import annotations

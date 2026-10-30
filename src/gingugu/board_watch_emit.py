@@ -9,7 +9,7 @@ never forge an event on stdout. A batch runs at most ``MAX_EXEC_PER_BATCH``
 commands - a flood of posts must not become a flood of messages into a live
 thread - and every post is still printed. A post with an ``xray: <range>`` line also
 carries the X-ray brief of it (``xray``; at most ``MAX_BRIEFS_PER_BATCH`` a batch),
-rendered from the watcher's own checkout.
+rendered from the watcher's own checkout, or its checkout of the repo the line names.
 """
 
 from __future__ import annotations
