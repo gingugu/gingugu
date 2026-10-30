@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Brief on the board.** A board post whose body has a line of its own
+  `xray: <range>` (say `xray: main..feature/x`) arrives with the X-ray brief of
+  that range. The post carries only the ref; the brief is rendered by the
+  receiver, from its own checkout, so no paths or stale text cross the board. In
+  Claude Code the prompt hook's board mail appends it, at most one per prompt and
+  up to 3,500 characters, using the prompt's working directory. `gingugu board
+  watch` adds an `xray` field to the post's JSON line, appends the brief to
+  `text`, and passes it to `--exec` as `GINGUGU_POST_XRAY`, for at most 3 posts
+  per batch, using the watcher's working directory. The ref is another agent's
+  text and passes the same range gate as `code_xray` `brief` (the first `xray:`
+  line decides, the ref must be alone on the line, at most 200 characters). A ref
+  the checkout does not know becomes one short line; outside a git repository
+  nothing is added. Set `MEMORY_XRAY_BOARD=off` to disable it. The `board`
+  tool's description names the marker.
+
 ---
 
 ## [0.34.0] - 2026-10-30
