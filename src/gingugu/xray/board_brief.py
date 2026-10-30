@@ -13,20 +13,20 @@ import json
 import os
 import re
 
-from . import brief, local
+from . import brief, local, repo_id
 from .scan import XrayError
 
 MAX_REF = 200
 _MARKER = re.compile(r"^[ \t]*xray:", re.IGNORECASE | re.MULTILINE)
-_LINE = re.compile(r"^[ \t]*xray:[ \t]*(\S+)[ \t]*$", re.IGNORECASE)
+_LINE = re.compile(r"^[ \t]*xray:[ \t]*(\S+(?:[ \t]+\S+)*)[ \t]*$", re.IGNORECASE)
 
 
 def enabled() -> bool:
     return os.environ.get("MEMORY_XRAY_BOARD", "on").lower() not in ("0", "off", "false")
 
 
-def ref_in(body: object) -> str | None:
-    """The range a post names, or None. The first ``xray:`` line decides."""
+def parse(body: object) -> tuple[str | None, str] | None:
+    """(repo or None, range) from the first ``xray:`` line, or None."""
     if not isinstance(body, str):
         return None
     found = _MARKER.search(body)
@@ -34,13 +34,26 @@ def ref_in(body: object) -> str | None:
         return None
     line = body[found.start() :].split("\n", 1)[0].rstrip("\r")
     m = _LINE.match(line)
-    if m is None or len(m.group(1)) > MAX_REF:
+    if m is None:
+        return None
+    tokens = m.group(1).split()
+    if len(tokens) not in (1, 2):
+        return None
+    repo = tokens[0] if len(tokens) == 2 else None
+    ref = tokens[-1]
+    if len(ref) > MAX_REF or (repo is not None and not repo_id.valid(repo)):
         return None
     try:
-        brief._check_range(m.group(1))
+        brief._check_range(ref)
     except ValueError:
         return None
-    return m.group(1)
+    return repo, ref
+
+
+def ref_in(body: object) -> str | None:
+    """The range a post names, or None. The first ``xray:`` line decides."""
+    parsed = parse(body)
+    return parsed[1] if parsed else None
 
 
 CLIPPED = "(brief clipped to fit; code_xray brief or `gingugu xray brief` has all of it)"
@@ -64,10 +77,11 @@ def _fit(text: str, max_chars: int) -> str:
     return body + "\n" + CLIPPED
 
 
-def _not_here(ref: str) -> str:
+def _not_here(ref: str, repo: str | None = None) -> str:
     """One line for a receiver with no checkout: a silent None would drop the ref."""
+    where = f"no checkout of {repo} found" if repo else "no git checkout"
     return (
-        f"X-ray brief: {json.dumps(ref)} is not available here (no git checkout); "
+        f"X-ray brief: {json.dumps(ref)} is not available here ({where}); "
         f"run `gingugu xray brief --range {ref}` in that repo."
     )
 
@@ -78,21 +92,29 @@ def attach(
     """The brief for the range ``body`` names, rendered from ``cwd``; None when
     there is nothing to say. Never raises."""
     try:
-        ref = ref_in(body)
-        if not enabled() or ref is None:
+        parsed = parse(body)
+        if not enabled() or parsed is None:
             return None
-        if not cwd:
+        repo, ref = parsed
+        if repo is not None:
+            found = repo_id.find(repo, cwd)
+            if found is None:
+                return _not_here(ref, repo)
+            cwd = str(found)
+        elif not cwd:
             return _not_here(ref)
-        try:
-            local.root(cwd)
-        except (XrayError, ValueError, OSError):
-            return _not_here(ref)  # a watcher outside a repo, e.g. a Codex thread dir
+        else:
+            try:
+                local.root(cwd)
+            except (XrayError, ValueError, OSError):
+                return _not_here(ref)  # a watcher outside a repo, e.g. a Codex thread dir
         try:
             data = brief.answer(cwd, ref, None, session_id=session_id)
         except (XrayError, ValueError) as exc:
             why = json.dumps(str(exc)[:120])
             return f"X-ray brief: {json.dumps(ref)} is not available from this checkout ({why})."
-        head = f"X-ray brief for {json.dumps(ref)}, rendered on this machine from this checkout:"
+        label = f"{repo} {ref}" if repo else ref
+        head = f"X-ray brief for {json.dumps(label)}, rendered on this machine from this checkout:"
         return _fit(head + "\n" + data["text"], max_chars)
     except Exception:  # noqa: BLE001 - a brief must never cost the mail
         return None
