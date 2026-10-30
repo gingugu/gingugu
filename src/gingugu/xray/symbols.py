@@ -25,6 +25,7 @@ from collections import deque
 from dataclasses import dataclass, field
 
 from .resolve import ModuleIndex, _from_base
+from .symbols_walk import is_qual
 
 MODULE = "<module>"
 _BUILTINS = frozenset(dir(builtins))
@@ -209,9 +210,18 @@ def callers(sym: Symbols, path: str, qual: str, *, limit: int | None = None, off
 def enclosing(sym: Symbols, path: str, start: int, end: int) -> list[str]:
     """The innermost definitions in ``path`` that lines ``start``-``end`` touch."""
     defs = sym.defs.get(path, {})
-    hit = [q for q, (_, line, last) in defs.items() if line <= end and last >= start]
-    inner = [q for q in hit if not any(o.startswith(q + ".") for o in hit)]
+    hit = sorted(q for q, (_, line, last) in defs.items() if line <= end and last >= start)
+    # "." sorts below every identifier character, so a definition's descendants
+    # follow it directly: one look at the next name, not a scan of all of them.
+    inner = [
+        q for i, q in enumerate(hit) if i + 1 == len(hit) or not hit[i + 1].startswith(q + ".")
+    ]
     return sorted(inner, key=lambda q: (defs[q][1], q))
+
+
+def label(qual: str, cap: int = 120) -> str:
+    """A qualified name as the agent reads it: identifiers only, but of any length."""
+    return qual if len(qual) <= cap else qual[: cap - 3] + "..."
 
 
 def to_json(sym: Symbols) -> dict:
@@ -243,15 +253,16 @@ def from_json(data: object) -> Symbols | None:
     if not all(_count(data[k]) for k in ("resolved", "external", "unresolved")):
         return None
     for qs in defs.values():
-        if not isinstance(qs, dict) or not all(
-            isinstance(q, str) and _is_def(d) for q, d in qs.items()
-        ):
+        if not isinstance(qs, dict) or not all(is_qual(q) and _is_def(d) for q, d in qs.items()):
             return None
     for e in edges:
         if not (
             isinstance(e, list)
             and len(e) == 5
-            and all(isinstance(s, str) for s in e[:4])
+            and isinstance(e[0], str)
+            and isinstance(e[2], str)
+            and is_qual(e[1], module_ok=True)
+            and is_qual(e[3])
             and _count(e[4], 1)
         ):
             return None
