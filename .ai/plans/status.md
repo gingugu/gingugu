@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-10-29 (X-ray brief)_
+_Last updated: 2026-10-30 (brief on the board)_
 
 ## In Flight
 
@@ -19,7 +19,8 @@ trips on JSX `class=` (9 of vite's 1,638 files report a parse error, edges recov
 are not resolved; a go.mod `module ( ... )` block reads as malformed.
 
 **Board #5 Codebase X-ray - X14 map on arrival RELEASED in 0.32.0 (#153); X19
-X-ray brief built, unreleased; X20 brief on the board next, then X15** (2026-10-29). The
+X-ray brief RELEASED in 0.34.0 (#157); X20 brief on the board built, unreleased;
+X15 next** (2026-10-30). The
 end goal was restated: a sophisticated map before any work starts, so the map
 reaches the agent on reads and on any write, not only through the edit tools. New
 items X14-X20 (section 19); build order X14, X19, X20, X15, X16, X17, then X3.
@@ -52,7 +53,29 @@ paged; a git `core.fsmonitor`-style check for other config that runs code.
 
 ## Recently Completed
 
-**X-ray brief, X19 (feature/xray-brief, unreleased; 2026-10-29).** An agent that never
+**Brief on the board, X20 (feature/xray-board-brief, unreleased; 2026-10-30).** A board
+post whose body has a line of its own `xray: <range>` arrives with the X-ray brief of
+that range, rendered by the receiver from its own checkout (the post carries only the
+ref). `xray/board_brief.py` (`ref_in`, `attach`): the first `xray:` line decides, the ref
+must be alone on the line, at most 200 chars, then the same `_check_range` gate as
+`code_xray` `brief`. Claude Code: the prompt hook's board mail (`board_hook.mail`, now
+takes the prompt's cwd) appends at most one per prompt, up to 3500 chars. `board watch`
+(`board_watch_emit`): an `xray` field on the JSON line, the brief appended to `text`,
+`GINGUGU_POST_XRAY` for `--exec`, at most 3 per batch (`MAX_BRIEFS_PER_BATCH`), from the
+watcher's cwd. An unknown ref gives one short line; not a git repo gives nothing; the
+`board` tool docstring names the marker. Sender nudge (`xray/board_nudge.py`, wired in
+`tool_hook._xray`): the first board `post` of a session with no `xray:` line, from a
+branch ahead of the default branch (origin/HEAD, else main, else master), is denied once
+with the exact line as the reason; the re-issue passes. Security review fixes: the range
+is checked by git before any graph build, git runs under 10s (`scan.git(timeout=)`), the
+brief passes the session to `graph()` so a killed build is not retried, mail marks posts
+shown only after rendering, the watch brief is capped at 3500. Follow-up: the watch
+`text` fence (`"""` + raw body) can be closed by a body - pre-dates X20; fixing it
+changes the `text` format consumers read. Switch: `MEMORY_XRAY_BOARD=off`. Never raises.
+The deny's user-facing `systemMessage` names what X-ray did (`tool_hook._emit_xray`: "asked a board post for its range" vs "stopped an edit").
+Tests: `tests/test_xray_board_brief.py`, `_safety.py`, `tests/test_xray_board_nudge.py`.
+
+**X-ray brief, X19 (feature/xray-brief, released in 0.34.0, #157; 2026-10-29).** An agent that never
 fires the Read/Edit hooks (Codex reading via shell, editing via `apply_patch`) still
 gets the X-ray map of a task when handed it. `code_xray` gains `action: "brief"` and a
 `range` argument; the CLI is `gingugu xray brief [--range R | --files a,b] [--path P]
@@ -65,7 +88,7 @@ it, the proxy (`proxy_xray`) answers it locally. For reviews, handoffs and
 `gingugu board watch --exec`. Tests: `tests/test_xray_brief.py`,
 `tests/test_xray_brief_tool.py`.
 
-**Checkout guard (feature/checkout-guard, unreleased).** Several sessions sharing a
+**Checkout guard (shipped 0.33.0, #156).** Several sessions sharing a
 repo's primary checkout kept moving its branch under each other, carrying uncommitted
 edits onto the wrong branch. `gingugu hook tool` now denies, every time, a Bash git
 command that would move or empty the primary checkout (`switch`, `checkout` unless
@@ -79,7 +102,7 @@ worktree from the start. Not built: a SessionStart warning (the gate makes it
 redundant, and a template change needs `init --force`); `sudo`/`bash -c`/subshell
 forms are not followed - the guard stops habits, it is not a sandbox.
 
-**Docs audit is mandatory on every PR (docs/mandatory-doc-audit, unreleased).** The
+**Docs audit is mandatory on every PR (shipped 0.33.0, #155).** The
 `/creating-pr` skill - this repo's copy and the template `gingugu harness` installs -
 now runs `ai-docs-auditor` on every PR, confirms each finding against the code, and
 fixes every confirmed line in the same PR. Drift is fixed or it was not drift; it is
@@ -2221,8 +2244,8 @@ slices alongside them. IDs are stable references, not the order.
 | X15 | **Writes from any tool** - after each shell call, diff `git status --porcelain` against the session's last snapshot and X-ray newly changed source files | X2, hooks | Command parsing can never be complete; watching the checkout catches every write path, and any harness that edits through a shell. Informs, cannot deny |
 | X16 | **Incremental refresh** - per-file content hashes; re-parse only what changed; refresh after writes and in the nightly dream pass | X1, dream | A full re-extract is 0.4s here and grows with the repo |
 | X17 | **Symbol graph** - functions, classes, definitions and call sites, not just files and imports | `xray/lang/` adapters, tree-sitter | The resolution X7 needs to name the function an entry point reaches, not just the file |
-| X19 | **X-ray brief (BUILT, unreleased)** - the changed files by rank with importer counts, plus their combined blast (code and candidate tests), for an agent that fires no hooks | X1, X14 graph cache | `code_xray` `brief` (`range`, `files`, `path`) and `gingugu xray brief [--range R \| --files a,b] [--path P] [--json]`. Computed on the caller's machine from the hook graph cache; nothing stored, the brain never asked; `gingugu serve` refuses it, the proxy answers it locally. Compact `text` <= 8800 chars, for reviews, handoffs and `board watch --exec`. `xray/brief.py`, `xray_cli.py` |
-| X20 | **Brief on the board** - a handoff carries its X-ray brief without anyone asking. Why next: the agents X19 is for fire no hooks, so a brief they must request is a brief they rarely see | X19, agent board | When a board post names a branch or revision range, the RECEIVING side renders `xray brief` for it and attaches the text: the prompt hook's board mail (Claude Code) and `board watch --exec` (Codex). Rendered on the receiver's machine from its own checkout; the post itself carries only the ref, never paths or the brief |
+| X19 | **X-ray brief (SHIPPED in 0.34.0, #157)** - the changed files by rank with importer counts, plus their combined blast (code and candidate tests), for an agent that fires no hooks | X1, X14 graph cache | `code_xray` `brief` (`range`, `files`, `path`) and `gingugu xray brief [--range R \| --files a,b] [--path P] [--json]`. Computed on the caller's machine from the hook graph cache; nothing stored, the brain never asked; `gingugu serve` refuses it, the proxy answers it locally. Compact `text` <= 8800 chars, for reviews, handoffs and `board watch --exec`. `xray/brief.py`, `xray_cli.py` |
+| X20 | **Brief on the board (BUILT, unreleased)** - a handoff carries its X-ray brief without anyone asking. Why next: the agents X19 is for fire no hooks, so a brief they must request is a brief they rarely see | X19, agent board | When a board post names a range (`xray: <range>`), the RECEIVING side renders `xray brief` for it and attaches the text: the prompt hook's board mail (Claude Code) and `board watch --exec` (Codex). Rendered on the receiver's machine from its own checkout; the post itself carries only the ref, never paths or the brief. BUILT as a line of its own `xray: <range>` in the body: board mail appends at most one per prompt (<= 3500 chars, the prompt's cwd); `board watch` adds an `xray` field, appends to `text` and sets `GINGUGU_POST_XRAY` (<= 3 per batch, the watcher's cwd). Same range gate as `brief`, ref <= 200 chars. Sender nudge: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line (`xray/board_nudge.py`). Switch `MEMORY_XRAY_BOARD`. `xray/board_brief.py` |
 | X18 | **X-ray Explorer** - a view in the Memory Explorer: repo as a 3D city (height = rank, colour = churn or tests, districts = X5 boundaries), animated blast radius, X7 attack paths, X6 blind-spot heat, X3 scar markers linking into the memory drawer, X4 drift slider over snapshots | `ui/`, `ui_api/` read-only observer | Ships in slices; city + blast radius first |
 
 ### Standing rules

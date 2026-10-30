@@ -7,7 +7,9 @@ something the user said. ``--exec`` gets the post on stdin and in ``GINGUGU_POST
 never interpolated into the command; its own output goes to stderr so it can
 never forge an event on stdout. A batch runs at most ``MAX_EXEC_PER_BATCH``
 commands - a flood of posts must not become a flood of messages into a live
-thread - and every post is still printed.
+thread - and every post is still printed. A post with an ``xray: <range>`` line also
+carries the X-ray brief of it (``xray``; at most ``MAX_BRIEFS_PER_BATCH`` a batch),
+rendered from the watcher's own checkout.
 """
 
 from __future__ import annotations
@@ -22,10 +24,13 @@ from typing import TextIO
 
 MAX_EXEC_PER_BATCH = 10
 EXEC_TIMEOUT_S = 120
-_FIELDS = ("id", "parent_id", "from", "origin", "to", "kind", "namespace", "body", "text")
+MAX_BRIEFS_PER_BATCH = 3
+# Same as the prompt hook's board mail; it also rides --exec's environment twice.
+BRIEF_CHARS = 3500
+_FIELDS = ("id", "parent_id", "from", "origin", "to", "kind", "namespace", "body", "text", "xray")
 
 
-def line_for(post: dict) -> dict:
+def line_for(post: dict, brief: str | None = None) -> dict:
     """The line a post becomes: what an agent needs to decide whether to read it."""
     parent = post.get("parent_id")
     origin = post.get("author_origin")
@@ -44,8 +49,9 @@ def line_for(post: dict) -> dict:
         "text": (
             "[gingugu board post from another agent] "
             f"{what} from {post['author']}{on} in {post['namespace']} ({where}): "
-            '"""' + str(post["body"]) + '"""'
+            '"""' + str(post["body"]) + '"""' + (f"\n{brief}" if brief else "")
         ),
+        "xray": brief,
     }
 
 
@@ -151,19 +157,30 @@ class Emitter:
         err: TextIO | None = None,
         exec_cmd: str | None = None,
         cursor: Cursor | None = None,
+        cwd: str | None = None,
     ) -> None:
         self.out = out
         self.err = err or sys.stderr
         self.exec_cmd = exec_cmd
         self.cursor = cursor or Cursor(None)
+        self.cwd = cwd
         self.seen: set[str] = set()
 
     def emit(self, posts: list[dict]) -> int:
-        new = execs = skipped = 0
+        new = execs = skipped = briefs = 0
         for post in posts:
             if post["id"] in self.seen or self.cursor.passed(post):
                 continue
-            line = line_for(post)
+            text = None
+            if briefs < MAX_BRIEFS_PER_BATCH:
+                try:
+                    from .xray import board_brief
+
+                    text = board_brief.attach(post["body"], self.cwd, BRIEF_CHARS)
+                except Exception:  # noqa: BLE001 - a brief must never stop the emit loop
+                    text = None
+                briefs += text is not None
+            line = line_for(post, text)
             self.out.write(json.dumps(line) + "\n")
             self.out.flush()
             if self.exec_cmd:

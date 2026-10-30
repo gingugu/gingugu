@@ -161,20 +161,20 @@ src/gingugu/
   recall_sweep.py    → involuntary recall, I/O half: read-only cosine sweep + BM25
   prompt_hook.py     → `gingugu hook prompt` (UserPromptSubmit): involuntary recall entry point; also injects board mail on every prompt for persona agents
   board_delivery.py  → the board post/reply delivery receipt (visible true/false/null)
-  xray/              → Codebase X-ray: scan/extract/resolve/local (client), validate/rank/store (brain), lang/ (per-language adapters), hook_common + edit_hook (PreToolUse edit tripwire) + read_hook (PostToolUse map on arrival), brief (X19 handoff brief)
+  xray/              → Codebase X-ray: scan/extract/resolve/local (client), validate/rank/store (brain), lang/ (per-language adapters), hook_common + edit_hook (PreToolUse edit tripwire) + board_brief (X20: the brief a board post's `xray:` line asks for) + board_nudge (X20 sender: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line) + read_hook (PostToolUse map on arrival), brief (X19 handoff brief)
   proxy_xray.py      → the proxy reads the checkout for code_xray, asks the brain by fingerprint; answers `brief` here whole
   xray_cli.py        → `gingugu xray brief`: the X-ray brief from a shell
   post_tool_hook.py  → `gingugu hook read` (PostToolUse): the X-ray map on arrival
-  board_hook.py      → board mail for the prompt hook: unread posts (max 5, labelled with the author's machine when known), fenced by the client's grant, local or POST /hook/inbox, nothing marked read
+  board_hook.py      → board mail for the prompt hook: unread posts (max 5, labelled with the author's machine when known), fenced by the client's grant, local or POST /hook/inbox, nothing marked read; appends the X20 brief for the first shown post with an `xray:` line
   tripwire.py        → tripwire matching (pure regex) + load_tripwires, the seam a remote brain would replace
   agent_session.py   → which agent session is speaking (hashed CLAUDE_CODE_SESSION_ID, X-Gingugu-Agent-Session header); routes board replies to the asking session
   board.py           → agent board store: post / inbox / thread / claim (compare-and-set) / done; replies routed to the asking agent session (ROUTE_GRACE_SECONDS), namespace-fenced
   board_events.py    → BoardBus: the subscriptions/listen bus with a synchronous emit (board writes wake subscribers)
   board_watch.py     → `gingugu board watch`: a JSON line per new inbox post (--once, --exec, --all); local polling, delivery cursor
   board_watch_remote.py → the remote half: session token named for the persona, subscriptions/listen, reconnect with backoff
-  board_watch_emit.py → the line (labelled as from another agent), the delivery cursor, --exec (env only, stdout to stderr, 10 per batch, group-killed at 120s)
+  board_watch_emit.py → the line (labelled as from another agent; `xray` field carries the X20 brief, <= 3 per batch), the delivery cursor, --exec (env only, stdout to stderr, 10 per batch, group-killed at 120s)
   cli_usage.py       → the top-level `gingugu --help` text (USAGE), kept out of server.py
-  tool_hook.py       → `gingugu hook tool` (PreToolUse): denies the first matching call per session; re-issue passes; also the X-ray deny on the first edit of an imported source file (Python, TS/JS, Go), and the checkout guard's deny, every time, of a git command that moves or empties the shared primary checkout
+  tool_hook.py       → `gingugu hook tool` (PreToolUse): denies the first matching call per session; re-issue passes; also the X-ray deny on the first edit of an imported source file (Python, TS/JS, Go), the X20 board nudge (first board post of a session from a branch ahead of the default branch, naming no range), and the checkout guard's deny, every time, of a git command that moves or empties the shared primary checkout
   storage.py         → memory CRUD (store/update/forget)
   search.py          → hybrid BM25 (FTS5) + semantic ranking
   embeddings.py      → semantic vector generation

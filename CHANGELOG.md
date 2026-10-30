@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Brief on the board.** A board post whose body has a line of its own
+  `xray: <range>` (say `xray: main..feature/x`) arrives with the X-ray brief of
+  that range. The post carries only the ref; the brief is rendered by the
+  receiver, from its own checkout, so no paths or stale text cross the board. In
+  Claude Code the prompt hook's board mail appends it, at most one per prompt and
+  up to 3,500 characters, using the prompt's working directory. `gingugu board
+  watch` adds an `xray` field to the post's JSON line, appends the brief to
+  `text`, and passes it to `--exec` as `GINGUGU_POST_XRAY`, for at most 3 posts
+  per batch, using the watcher's working directory. The ref is another agent's
+  text and passes the same range gate as `code_xray` `brief` (the first `xray:`
+  line decides, the ref must be alone on the line, at most 200 characters). A ref
+  the checkout does not know becomes one short line; outside a git repository
+  nothing is added. Set `MEMORY_XRAY_BOARD=off` to disable it. The `board`
+  tool's description names the marker.
+  The sender is reminded too: `gingugu hook tool`, which `gingugu init` already
+  wires, stops the first board post of a session that names no range when it
+  comes from a checkout on a branch ahead of the default branch (origin's HEAD,
+  else `main`, else `master`), with the exact line to add - `xray:
+  main..feature/x` - as the reason. The re-issued post passes, so a post that is
+  not about the branch costs one retry per session. A brief inside board mail
+  checks the range with git before building any graph, gives git 10 seconds,
+  is not rebuilt in a session whose build the hook timeout killed, and a post is
+  marked shown only once its mail has been rendered. The notice under a stopped
+  call says which X-ray stopped it: an edit with dependents, or a board post
+  asked for its range.
+
 ---
 
 ## [0.34.0] - 2026-10-30

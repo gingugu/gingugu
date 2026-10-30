@@ -19,6 +19,7 @@ from pathlib import Path
 MAX_SHOWN = 5
 PREVIEW = 300
 INBOX_TIMEOUT_S = 3.0
+BRIEF_CHARS = 3500
 
 
 def render(posts: list[dict]) -> str:
@@ -110,17 +111,18 @@ def _remote(
     return [p for p in posts if isinstance(p, dict) and isinstance(p.get("id"), str)]
 
 
-def mail(db_path: Path, session_id: str) -> tuple[str, int] | None:
+def mail(db_path: Path, session_id: str, cwd: str | None = None) -> tuple[str, int] | None:
     """``(block, unread count)`` for this prompt, or None. Never raises."""
     try:
-        return _mail(db_path, session_id)
+        return _mail(db_path, session_id, cwd)
     except Exception:  # noqa: BLE001 - mail must never cost the turn its recall
         return None
 
 
-def _mail(db_path: Path, session_id: str) -> tuple[str, int] | None:
+def _mail(db_path: Path, session_id: str, cwd: str | None) -> tuple[str, int] | None:
     from . import agent_session, hook_remote
     from .prompt_hook import load_suppressed, persona, save_suppressed
+    from .xray import board_brief
 
     me = persona()
     if not me:
@@ -135,5 +137,15 @@ def _mail(db_path: Path, session_id: str) -> tuple[str, int] | None:
         posts = unread_local(db_path, me, names, shown, agent=agent_session.key(session_id))
     if not posts:
         return None
+    block = render(posts)
+    for p in posts[:MAX_SHOWN]:  # one brief per prompt: the first post that names a range
+        if board_brief.ref_in(p.get("body")) is None:
+            continue
+        text = board_brief.attach(p.get("body"), cwd, BRIEF_CHARS, session_id)
+        if text:
+            block += f"\n\n(for post {p['id']})\n{text}"
+            break
+    # Marked shown only now: a hook killed mid-brief printed nothing, so the post
+    # must come back on the next prompt.
     save_suppressed(db_path, key, shown | {p["id"] for p in posts[:MAX_SHOWN]})
-    return render(posts), len(posts)
+    return block, len(posts)
