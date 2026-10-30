@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.37.0] - 2026-10-30
+
 ### Added
 
 - **A shell command's writes get their X-ray (X15).** The edit tripwire speaks before an
