@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import lang, validate
+from . import parse_cache as _pc
 from .model import Edge, FileInfo, LangResult
 from .scan import XrayError as XrayError
 from .scan import commit, is_manifest, read_sources, toplevel
@@ -102,8 +103,25 @@ def fingerprint(path: str | Path) -> str:
     return _fingerprint(*_scan(toplevel(path)))
 
 
-def extract(path: str | Path) -> Extraction:
-    """Build the import graph for the git repo containing ``path``."""
+def _raws(adapter, mine: dict[str, bytes], cached: dict[str, object]):
+    """(file -> raw, slot -> raw) for one adapter, parsing only what ``cached`` lacks
+    or fails to validate: a cache entry is any JSON until proven otherwise."""
+    raws: dict[str, object] = {}
+    kept: dict[str, object] = {}
+    for rel, data in mine.items():
+        slot = _pc.slot(rel, data)
+        raw = cached.get(slot)
+        if slot not in cached or not adapter.valid(raw):
+            raw = adapter.parse(rel, data)
+        raws[rel] = kept[slot] = raw
+    return raws, kept
+
+
+def extract(path: str | Path, parse_cache: str | Path | None = None) -> Extraction:
+    """Build the import graph for the git repo containing ``path``.
+
+    With ``parse_cache``, each file's parse is cached there by content, so only
+    bytes not seen before are parsed. Without it nothing is written anywhere."""
     root = toplevel(path)
     sources, manifests, skipped = _scan(root)
     out = Extraction(
@@ -112,14 +130,21 @@ def extract(path: str | Path) -> Extraction:
         fingerprint=_fingerprint(sources, manifests, skipped),
     )
     seen: set[str] = set()
+    before = _pc.load(parse_cache, EXTRACTOR_VERSION) if parse_cache else {}
+    after: _pc.Raws = {}
     for adapter in lang.ADAPTERS:
         mine = {p: b for p, b in sources.items() if lang.for_path(p) is adapter}
         wanted = {p: b for p, b in manifests.items() if is_manifest(p, adapter.manifests)}
         if not mine:
             continue
         try:
-            res = adapter.extract(mine, wanted)
+            if parse_cache:
+                raws, after[adapter.name] = _raws(adapter, mine, before.get(adapter.name, {}))
+                res = adapter.link(raws, wanted)
+            else:
+                res = adapter.extract(mine, wanted)
         except RecursionError:
+            after.pop(adapter.name, None)
             # Hostile input past a bound an adapter missed: that language's files
             # stay nodes, reported unparsed, and every other language still lands.
             res = LangResult(
@@ -151,4 +176,6 @@ def extract(path: str | Path) -> Extraction:
     out.edges = sorted(edges.values(), key=lambda e: (e.src, e.dst))
     out.parse_errors.sort()
     out.skipped = sorted(set(skipped))
+    if parse_cache and after != before:  # also prunes: only sources present now are kept
+        _pc.save(parse_cache, EXTRACTOR_VERSION, after)
     return out

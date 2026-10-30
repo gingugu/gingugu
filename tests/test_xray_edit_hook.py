@@ -154,7 +154,7 @@ def _count_extracts(monkeypatch) -> list[int]:
     calls = [0]
     real = extract.extract
 
-    def counting(path):
+    def counting(path, **kw):
         calls[0] += 1
         return real(path)
 
@@ -196,7 +196,7 @@ def test_cache_and_state_files_are_owner_only(repo, state):
 
 
 def test_an_extraction_failure_is_silent(repo, state, monkeypatch):
-    def boom(path):
+    def boom(path, **kw):
         raise extract.XrayError("nope")
 
     monkeypatch.setattr(extract, "extract", boom)

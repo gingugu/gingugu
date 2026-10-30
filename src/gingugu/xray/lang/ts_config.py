@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import posixpath
 import re
+from collections.abc import Container
 from dataclasses import dataclass
 
 from . import jsonc
@@ -177,7 +178,7 @@ class Manifests:
 
     # --- entries ------------------------------------------------------------
 
-    def entries(self, files: dict[str, bytes]) -> set[str]:
+    def entries(self, files: Container[str]) -> set[str]:
         found: set[str] = set()
         for path, data in self.packages.items():
             here = posixpath.dirname(path)

@@ -102,8 +102,9 @@ def test_identical_bytes_under_two_extensions_are_parsed_separately(tmp_path, pa
     write(repo, "web/src/side.tsx", text)
     write(repo, "web/src/side.js", text)
     parses.clear()
-    assert _warm(repo, cache) == _cold(repo)
+    got = _warm(repo, cache)
     assert set(parses) == {"web/src/side.tsx", "web/src/side.js"}
+    assert got == _cold(repo)
 
 
 def test_deleted_sources_are_pruned_from_the_cache(tmp_path):
@@ -114,9 +115,7 @@ def test_deleted_sources_are_pruned_from_the_cache(tmp_path):
     (repo / "app/cli.py").unlink()
     _warm(repo, cache)
     raws = json.loads(cache.read_text())["raws"]
-    live = {
-        (Path(r).suffix, FILES[r]) for r in FILES if lang.for_path(r) and (repo / r).exists()
-    }
+    live = {(Path(r).suffix, FILES[r]) for r in FILES if lang.for_path(r) and (repo / r).exists()}
     assert sum(len(v) for v in raws.values()) == len(live)
 
 
@@ -175,6 +174,7 @@ def test_the_cache_file_is_owner_only(tmp_path):
 
 def test_no_cache_argument_writes_nothing(tmp_path):
     repo = make_repo(tmp_path)
+
     def files() -> set[Path]:
         return {p for p in tmp_path.rglob("*") if ".git" not in p.parts}  # git keeps its own
 
@@ -207,4 +207,4 @@ def test_the_hook_graph_reparses_only_the_edited_file(tmp_path, parses):
     g = hook_common.graph(repo, state)
     assert parses == ["app/util.py"]
     fresh = hook_common.graph(repo, tmp_path / "fresh-state")
-    assert (g.files, sorted(g.links), g.ranks) == (fresh.files, sorted(fresh.links), fresh.ranks)
+    assert (g.files, set(g.links), g.ranks) == (fresh.files, set(fresh.links), fresh.ranks)

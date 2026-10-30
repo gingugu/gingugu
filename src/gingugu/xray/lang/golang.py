@@ -85,21 +85,19 @@ def _under(path: str, mods: set[str]) -> bool:
     return False
 
 
-def _parse(rel: str, data: bytes, out: LangResult) -> tuple[str, list[str]]:
-    """The package clause name and the import paths of one file."""
+def _parse(data: bytes) -> dict:
+    """The package clause name, import paths and parse-error flag of one file."""
     import tree_sitter as ts
 
     parser, imports_q, package_q = _parsers()
     root = parser.parse(data).root_node
-    if root.has_error:
-        out.parse_errors.append(rel)
     names = ts.QueryCursor(package_q).captures(root).get("n", [])
     pkg = names[0].text.decode("utf-8", errors="replace") if names else ""
     paths = [
         n.text.decode("utf-8", errors="replace")[1:-1]
         for n in ts.QueryCursor(imports_q).captures(root).get("p", [])
     ]
-    return pkg, paths
+    return {"pkg": pkg, "imports": paths, "err": root.has_error}
 
 
 class GoAdapter:
@@ -107,7 +105,26 @@ class GoAdapter:
     extensions = (".go",)
     manifests = ("go.mod",)
 
+    def parse(self, rel: str, data: bytes) -> dict:
+        """What the bytes alone say; ``rel`` is unused (the answer is cached by content)."""
+        return _parse(data)
+
+    @staticmethod
+    def valid(raw: object) -> bool:
+        """Whether ``raw`` has exactly the shape ``parse`` returns (a cache is untrusted)."""
+        return (
+            isinstance(raw, dict)
+            and set(raw) == {"pkg", "imports", "err"}
+            and isinstance(raw["pkg"], str)
+            and isinstance(raw["err"], bool)
+            and isinstance(raw["imports"], list)
+            and all(isinstance(i, str) for i in raw["imports"])
+        )
+
     def extract(self, sources: dict[str, bytes], manifests: dict[str, bytes]) -> LangResult:
+        return self.link({rel: self.parse(rel, data) for rel, data in sources.items()}, manifests)
+
+    def link(self, raws: dict[str, dict], manifests: dict[str, bytes]) -> LangResult:
         out = LangResult()
         modules: dict[str, str | None] = {}
         for mpath, data in manifests.items():
@@ -120,23 +137,22 @@ class GoAdapter:
         # file -> (import path of its package or None, is_test)
         placed: dict[str, tuple[str | None, bool]] = {}
         members: dict[str, list[str]] = {}
-        for rel in sources:
+        for rel in raws:
             test = rel.endswith("_test.go")
             parent = str(PurePosixPath(rel).parent)
             directory = "" if parent == "." else parent
             owner = _nearest_module(directory, modules)
             pkg = _import_path(owner[0], owner[1], directory) if owner else None
-            if pkg is not None and pkg in sources:
+            if pkg is not None and pkg in raws:
                 pkg = None  # a crafted module path naming a real file never shadows it
             placed[rel] = (pkg, test)
             if pkg and not test:
                 members.setdefault(pkg, []).append(rel)
 
-        raw: dict[str, tuple[str, list[str]]] = {}
-        for rel, data in sources.items():
-            raw[rel] = _parse(rel, data, out)
         for rel, (pkg_path, test) in placed.items():
-            clause, imports = raw[rel]
+            clause, imports = raws[rel]["pkg"], raws[rel]["imports"]
+            if raws[rel]["err"]:
+                out.parse_errors.append(rel)
             out.files.append(FileInfo(rel, test, clause == "main" and not test, self.name))
             if pkg_path is None:
                 out.external += len(imports)

@@ -38,20 +38,48 @@ class TypeScriptAdapter:
     extensions = TS_EXTENSIONS + JS_EXTENSIONS
     manifests = ("tsconfig*.json", "jsconfig*.json", "package.json", "index.html")
 
+    def parse(self, rel: str, data: bytes) -> dict:
+        """Specifiers and counts from the bytes; ``rel`` only picks the grammar by extension."""
+        imports = parse(rel, data)
+        return {
+            "specs": [[spec, kind] for spec, kind in imports.specs],
+            "dyn": imports.dynamic,
+            "err": imports.has_error,
+        }
+
+    @staticmethod
+    def valid(raw: object) -> bool:
+        """Whether ``raw`` has exactly the shape ``parse`` returns (a cache is untrusted)."""
+        return (
+            isinstance(raw, dict)
+            and set(raw) == {"specs", "dyn", "err"}
+            and isinstance(raw["err"], bool)
+            and isinstance(raw["dyn"], int)
+            and not isinstance(raw["dyn"], bool)
+            and raw["dyn"] >= 0
+            and isinstance(raw["specs"], list)
+            and all(
+                isinstance(s, list) and len(s) == 2 and isinstance(s[0], str) and s[1] in _STRENGTH
+                for s in raw["specs"]
+            )
+        )
+
     def extract(self, sources: dict[str, bytes], manifests: dict[str, bytes]) -> LangResult:
+        return self.link({rel: self.parse(rel, data) for rel, data in sources.items()}, manifests)
+
+    def link(self, raws: dict[str, dict], manifests: dict[str, bytes]) -> LangResult:
         out = LangResult()
         mf = Manifests(manifests, out.skipped)
-        resolver = Resolver(sources, mf)
-        entries = mf.entries(sources)
-        for rel, data in sources.items():
+        resolver = Resolver(raws, mf)
+        entries = mf.entries(raws)
+        for rel, raw in raws.items():
             lang = "typescript" if rel.endswith(TS_EXTENSIONS) else "javascript"
             out.files.append(FileInfo(rel, is_test(rel), rel in entries, lang))
-            imports = parse(rel, data)
-            if imports.has_error:
+            if raw["err"]:
                 out.parse_errors.append(rel)
-            out.dynamic += imports.dynamic
+            out.dynamic += raw["dyn"]
             found: dict[str, tuple[str, bool]] = {}
-            for spec, kind in imports.specs:
+            for spec, kind in raw["specs"]:
                 self._resolve(rel, spec, kind, resolver, out, found)
             out.edges.extend(Edge(rel, dst, k, c) for dst, (k, c) in found.items())
         return out
