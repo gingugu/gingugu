@@ -81,7 +81,7 @@ def _install_managed(
 ) -> None:
     """``force_hooks`` force-replaces only hook scripts (``--migrate``).
 
-    That covers init's seven hooks too: migrate runs init without force so init's
+    That covers init's hooks too: migrate runs init without force so init's
     skill (``sink-the-ship``, which a repo may have made its own) is never
     replaced, then forces init's hooks here.
     """

@@ -12,7 +12,8 @@ first matching call in a session is denied with the memory as the reason, and
 the agent either changes course or re-issues the call, which then passes. The
 memory is in context by then; firing again would only block the retry.
 
-The first edit of an imported ``.py`` file is denied the same way by the X-ray
+A blind edit of an imported source file (one this session never read or wrote) is
+denied the same way by the X-ray
 (``xray.edit_hook``), on its own switch, independent of memory tripwires. A git
 command that would move the shared primary checkout is denied every time by the
 checkout guard (``checkout_guard``), also on its own switch.

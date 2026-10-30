@@ -557,8 +557,9 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
           or the file written by this session) → skip: not a blind edit
           already claimed in hook-sessions/xray-shown-<session>/ → skip
           claim it atomically (O_EXCL; lost race or failed write → skip), then the
-          X-ray reason: importer count, top 5 dependents with hops, up to 5
-          candidate tests; for an Edit/MultiEdit, `Edit lands in` lines for the
+          X-ray reason: direct importer count, reach and candidate-test totals,
+          top 5 direct importers by rank, top 5 nearest tests (a test named for the
+          file first); for an Edit/MultiEdit, `Edit lands in` lines for the
           definitions each old_string sits in (X17, xray/edit_symbols) and a
           lower-bound line; import-based-estimate caveat last
       → X-ray Bash snapshot (xray/tool_xray.reason → xray/bash_hook.before; same
@@ -627,8 +628,8 @@ PostToolUse event (Read | Grep | Glob)  →  .claude/hooks/post_tool_xray.py (pu
 
 **Inject, never block.** The map is delivered next to the result of a call that
 already ran, so it cannot stop anything and every failure exits 0 silently. Its
-claim directories are separate from `xray-shown-<session>/`, so showing a map
-never silences the edit tripwire's first-edit deny. Entirely local: the checkout
+claim directories are separate from `xray-shown-<session>/`; a file's
+`xray-read-<session>/` claim is what tells the edit tripwire the edit is not blind. Entirely local: the checkout
 and the graph cache, no request to the brain, identical in remote mode.
 
 **The brief (X19) is the same map, asked for.** For an agent that fires neither
@@ -673,7 +674,8 @@ post body → board_brief.ref_in: first `xray:` line, ref alone on it, <= 200 ch
 
 For `code_xray` `brief` (X19), nothing is stored and the brain is never asked: stdio
 answers it in process, the proxy claims it and answers it locally, and `gingugu serve`
-refuses it.
+refuses it. The board brief (X20) uses no tool call at all: it runs in the prompt hook
+or the watch process on the receiver's machine.
 
 **The symbol graph (X17) rides the same build.** The Python parse carries
 `symbols_walk` records (`"sym"` in each cached raw); linking resolves them into call
@@ -712,8 +714,7 @@ PostToolUse Bash → gingugu hook bash → xray/ledger.observe (independent of t
   tool_response stdout + stderr → outcome row
 gingugu xray score → predictions before each outcome in the same (session, repo)
   → per predictor: top5 | listed | missed; no prediction in that session: unpredicted
-``` The board brief (X20) uses no tool call at all: it runs in the prompt hook
-or the watch process on the receiver's machine.
+```
 
 ## X-ray of a shell command's writes (X15)
 
@@ -746,7 +747,7 @@ PostToolUse event (Bash)  →  .claude/hooks/post_bash_xray.py (pure stdlib; set
         stood before the command), minus the other deleted files
       changed files → hook_common.graph (rebuilt locally on a fingerprint miss, re-parsing only files
         whose bytes changed: xray-parse cache, X16), then
-        per file the edit tripwire's blast lines (top dependents, candidate tests)
+        per file the edit tripwire's blast lines (direct importers, nearest tests)
       a file already claimed in xray-shown-<session>/ is skipped, else claimed
         (so the edit tripwire does not deny it later); at most 5 files in full,
         the rest counted ("+N more changed source files not shown")
@@ -841,10 +842,11 @@ PreToolUse → `gingugu hook tool`
   → on a trip: POST /hook/trip {session_id, text, ids, namespaces}
       brain: query_log row (tool='tripwire')
 
-PostToolUse → `gingugu hook read` / `gingugu hook bash`
-  → X-ray map on arrival, and the X-ray of a shell command's writes (X15): entirely
-    local (checkout, graph cache, claim dirs); no request to the brain, so both are
-    identical in remote mode
+PostToolUse → `gingugu hook read` / `gingugu hook bash` / `gingugu hook edit`
+  → X-ray map on arrival, the X-ray of a shell command's writes (X15) plus the test
+    ledger's pytest outcomes, and the note after an edit: entirely local (checkout,
+    caches, claim dirs, ledger); no request to the brain, so all are identical in
+    remote mode
 
 SubagentStart → `gingugu hook subagent`
   → take the stashed task + read the agent file's grant (local), narrowed to

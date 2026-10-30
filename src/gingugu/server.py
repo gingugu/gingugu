@@ -104,7 +104,7 @@ def main() -> None:
     ``gingugu harness`` → `init` plus the Claude Code harness (hooks, minions, skill, .ai/).
     ``gingugu ui``      → launch the Memory Explorer web UI in a browser.
     ``gingugu dream``   → run the consolidation pass; stages proposals only.
-    ``gingugu xray``    → X-ray brief: changed files by rank and what they reach.
+    ``gingugu xray``    → X-ray brief (changed files by rank and what they reach), score.
     ``gingugu embed``   → run the embedding backfill to completion.
     """
     import sys

@@ -750,10 +750,10 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   gets the post-edit note (`xray/edit_note`, PostToolUse `gingugu hook edit`) instead:
   cross-file callers of the definitions touched and their nearest tests. The deny text
   below was later changed to lead with direct importers (`is imported directly by D;
-  a change reaches N`, `Direct importers by rank`, `Nearest tests`). The reason lists
-  how many files import it and how many candidate tests, the top 5 dependents
-  by rank with hop counts, up to 5 candidate tests (`test_*.py` first, nearest
-  first) and an "import-based estimate" caveat; the re-issued edit passes.
+  a change reaches N`, `Direct importers by rank` (top 5), `Nearest tests` (top 5:
+  `test_*` files, one named for the file first, then hops) and an "import-based
+  estimate" caveat); the re-issued edit passes. As first built, the reason listed the
+  top 5 transitive dependents with hop counts and up to 5 candidate tests.
   *Deny, not inform-after*, for the reason memory tripwires deny: a
   `PreToolUse` `additionalContext` lands next to the tool result, after the
   edit. *Local, no brain round trip*: the hook builds the graph itself from the
@@ -764,11 +764,13 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   edit incremental; numbers under that entry). State lives beside the DB in
   `hook-sessions/`: `xray-graph-<sha16(root)>.json` (cache),
   `xray-parse-<sha16(root)>.json` (X16 per-file parse cache),
-  `xray-symbols-<sha16(root)>.json` (X17 symbol graph, written by the same build) and
-  `xray-shown-<session>/` (one claim file per shown file, created atomically
+  `xray-symbols-<sha16(root)>.json` (X17 symbol graph, written by the same build),
+  `xray-read-<session>/` (read by the deny: a file shown on Read or written this
+  session is not blind), `xray-edit-<session>/` (the post-edit note, once per
+  definition) and `xray-shown-<session>/` (one claim file per shown file, created atomically
   with `O_EXCL` so parallel hooks cannot lose a record); owner-only 0600,
   swept after 7 days untouched (the parse cache too). *Silent by construction*: a file
-  nothing imports, a new file, a file no adapter parses, a path outside a git repo, a
+  already read or written this session, a file nothing imports, a new file, a file no adapter parses, a path outside a git repo, a
   missing session id or any failure passes; it denies only once its "shown"
   state is saved, so a failed write can never block an edit forever. File
   names with control characters are quoted in the deny text. Own switch
@@ -800,12 +802,13 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `PostToolUse` hook (`gingugu hook read`, `post_tool_hook` + `xray/read_hook`)
   puts the shape of the code in front of the agent while it reads: the first
   Read/Grep/Glob of a repo in a session adds a repo map, and each source file
-  Read adds its importers, imports, rank and reaching tests, once per file.
+  Read adds its importers, imports, rank and nearest tests, once per file.
   *Inform, not deny*: PostToolUse `additionalContext` lands next to the result,
   which is the right place for orientation (X2 still denies, because an edit
-  must be stopped before it runs). Claims are separate from X2's
-  (`xray-map-<session>/` per repo, `xray-read-<session>/` per file), so a read
-  never silences the edit deny and the reverse. `xray/hook_common` holds what
+  must be stopped before it runs). Claims are its own
+  (`xray-map-<session>/` per repo, `xray-read-<session>/` per file); since the X-ray
+  tuning the edit deny reads `xray-read-*`, so a file whose neighbourhood was shown
+  is not denied (the edit is not blind), while an edit never silences a read. `xray/hook_common` holds what
   both hooks share: owner-only state writes, the sweep, path quoting, and one
   per-repo graph cache (now also carrying language and entry points) and, since
   X16, the per-file parse cache its graph build reads. Output is
@@ -825,7 +828,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   and the checkout of any existing path token in the command. A repo with more than
   500 dirty paths is skipped; the whole snapshot has a 4s budget. After the call,
   `gingugu hook bash` (`xray/bash_hook.after`) diffs and adds `additionalContext`: per
-  changed source file its top dependents and candidate tests, for a deleted file its old
+  changed source file its direct importers, reach and nearest tests, for a deleted file its old
   importers from the graph cached before the command (`hook_common.cached_graph`); at
   most 5 files in full, the rest counted, <= 8800 chars. *Inform, not deny* (the write
   already happened), and it shares the edit tripwire's `xray-shown` claim both ways, so
@@ -1062,7 +1065,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   Anthropic's docs steer new work to; the legacy `.claude/commands/` copy is
   retired with a `.bak` only when it is byte-identical to the template we would
   have written, and kept when it differs - the marker says we once wrote a file,
-  not that the user left it alone) - plus a `SubagentStart` hook (minion warm-up, `.claude/hooks/subagent_warmup.py`) - merging all seven hooks into `.claude/settings.json`
+  not that the user left it alone) - plus a `SubagentStart` hook (minion warm-up, `.claude/hooks/subagent_warmup.py`) - merging all eight hooks into `.claude/settings.json`
   non-destructively (`settings.py`), allowing `mcp__brain` there and in the
   user-level `~/.claude/settings.json` (`init_user_permissions`) and appending the hooks' runtime artifacts
   (`logs/`, `.claude/data/`, `.claude/settings.local.json`,

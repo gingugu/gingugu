@@ -1,10 +1,12 @@
-"""X-ray on edit: the first edit of an imported source file names its dependents.
+"""X-ray on edit: a blind edit of an imported source file names its dependents.
 
 Called from ``gingugu hook tool`` (PreToolUse). Deny is the only lever that
-speaks before a call runs, so the first ``Edit``/``Write``/``MultiEdit`` of a
-file that other files import is denied with its blast radius as the reason; the
-re-issued call passes. The graph is built here from the checkout and cached
-per repo by fingerprint, so it never needs the brain.
+speaks before a call runs, so an ``Edit``/``Write``/``MultiEdit`` of a file that
+other files import, which this session never read or wrote, is denied once with
+its direct importers, reach and nearest tests as the reason; the re-issued call
+passes. A file already shown needs no deny: ``edit_note`` speaks after the edit.
+The graph is built here from the checkout and cached per repo by fingerprint, so
+it never needs the brain.
 
 Like every hook it must never break a session: bad input, a non-repo path or
 an extraction failure all return None (stay silent).
@@ -97,7 +99,7 @@ def _without_seed(blast: dict, rel: str) -> dict:
 
 
 def check(payload: dict, state_dir: Path) -> str | None:
-    """A deny reason for the first edit of an imported file, else None."""
+    """A deny reason for a blind edit of an imported file, else None."""
     try:
         target = _target(payload)
         if target is None:
