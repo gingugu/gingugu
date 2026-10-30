@@ -66,6 +66,45 @@ def _show(path: str) -> str:
     return path if path.isprintable() else json.dumps(path)
 
 
+def _words(path: str) -> list[str]:
+    name = path.rsplit("/", 1)[-1].removesuffix(".py")
+    return [w for w in name.removeprefix("test_").split("_") if w]
+
+
+def _named_for(test: str, stem: list[str]) -> int:
+    """0: ``test_<stem>...``; 1: the stem's words appear in order; 2: neither."""
+    words = _words(test)
+    if not stem:
+        return 2
+    if words[: len(stem)] == stem:
+        return 0
+    n = len(stem)
+    return 1 if any(words[i : i + n] == stem for i in range(len(words) - n + 1)) else 2
+
+
+def nearest_tests(tests: list[dict], seed: str | None = None) -> list[str]:
+    """Candidate test paths, nearest first. Rank says little about tests (fixtures
+    and helpers outrank them), and hops tie constantly, so: ``test_*`` files; then,
+    given the changed file, a test named for it (its stem as whole words); then
+    fewer hops, then path. A package ``__init__`` is named for its directory."""
+    stem: list[str] = []
+    if seed:
+        parts = seed.removesuffix(".py").split("/")
+        stem = _words(parts[-2] if parts[-1] == "__init__" and len(parts) > 1 else parts[-1])
+
+    def key(r: dict) -> tuple:
+        is_test = r["path"].rsplit("/", 1)[-1].startswith("test_")
+        return (not is_test, _named_for(r["path"], stem) if is_test else 2, r["hops"], r["path"])
+
+    return [r["path"] for r in sorted(tests, key=key)]
+
+
+def named(paths: list[str], top: int) -> str:
+    """The first ``top`` paths, shown safely, with how many were left out."""
+    listed = ", ".join(_show(p) for p in paths[:top])
+    return listed + (f" (+{len(paths) - top} more)" if len(paths) > top else "")
+
+
 def _read_json(path: Path) -> object:
     try:
         return json.loads(path.read_text())
@@ -151,10 +190,29 @@ def _symbols_path(root: Path, state_dir: Path) -> Path:
     return state_dir / f"xray-symbols-{_digest(root)}.json"
 
 
+def importers(g: Graph) -> dict[str, set[str]]:
+    """dst -> who imports it, counted like ``store.overview``: asked for, not
+    implied, and a package reaching its own files is membership, not an import."""
+    out: dict[str, set[str]] = {}
+    for ln in g.links:
+        if not ln.implicit and ln.src not in g.packages and ln.src != ln.dst:
+            out.setdefault(ln.dst, set()).add(ln.src)
+    return out
+
+
 def _load_symbols(cache: Path, fingerprint: str) -> _sym.Symbols | None:
     """The cached symbol graph, only if it is this checkout's and well-formed."""
     data = _read_json(cache)
     if not isinstance(data, dict) or data.get("fingerprint") != fingerprint:
+        return None
+    return _sym.from_json({k: v for k, v in data.items() if k != "fingerprint"})
+
+
+def cached_symbols(root: Path, state_dir: Path) -> _sym.Symbols | None:
+    """The symbol graph as last cached, fingerprint unchecked: what the checkout
+    looked like before an edit changed it. None when nothing was cached."""
+    data = _read_json(_symbols_path(root, state_dir))
+    if not isinstance(data, dict):
         return None
     return _sym.from_json({k: v for k, v in data.items() if k != "fingerprint"})
 

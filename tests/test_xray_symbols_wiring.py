@@ -150,7 +150,7 @@ def _edit(repo, rel, old, tool="Edit", session="cc-1"):
 
 def test_an_edit_names_the_definition_it_lands_in_and_its_callers(repo, state):
     reason = edit_hook.check(_edit(repo, "pkg/core.py", "    return 1"), state)
-    assert "is imported by" in reason  # the file blast is still there
+    assert "is imported directly by" in reason  # the file blast is still there
     line = next(ln for ln in reason.splitlines() if ln.startswith("Edit lands in"))
     assert line == (
         "Edit lands in `f` (L1-2): 2 callers - pkg/core.py:Store.save, pkg/svc.py:serve; "

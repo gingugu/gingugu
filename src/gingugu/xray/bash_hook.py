@@ -23,7 +23,6 @@ from pathlib import Path
 from . import bash_state, edit_hook, hook_common, lang, local, rank
 from .bash_state import remember, touched
 from .hook_common import _claim, _show, _sweep
-from .read_hook import _importers
 from .scan import XrayError
 
 __all__ = ["MAX_DIRTY", "MAX_REPOS", "after", "before", "remember", "touched"]
@@ -166,7 +165,7 @@ def _deleted_lines(root: Path, state_dir: Path, session_id: str, deleted: list[s
     old = hook_common.cached_graph(root, state_dir)  # as it stood, before any rebuild
     if old is None:
         return []
-    importers = _importers(old)
+    importers = hook_common.importers(old)
     out = []
     for rel in deleted:
         who = sorted(importers.get(rel, ()) - set(deleted), key=lambda p: (-old.ranks.get(p, 0), p))
@@ -180,7 +179,8 @@ def _file_lines(root: Path, state_dir: Path, session_id: str, changed: list[str]
     out: list[str] = []
     if not changed:
         return out
-    files, links, ranks, packages, _, _ = hook_common.graph(root, state_dir, session_id)
+    g = hook_common.graph(root, state_dir, session_id)
+    files, links, ranks, packages = g.files, g.links, g.ranks, g.packages
     full = 0
     for rel in changed:
         claim = edit_hook._claim_path(state_dir, session_id, root, rel)
@@ -195,7 +195,7 @@ def _file_lines(root: Path, state_dir: Path, session_id: str, changed: list[str]
         if blast["code_total"] + blast["tests_total"] == 0 or not _claim(claim):
             continue
         full += 1
-        out.extend(edit_hook._dependents(rel, blast))
+        out.extend(edit_hook._dependents(rel, blast, edit_hook.direct_importers(rel, g)))
     more = out.count("")
     out = [line for line in out if line]
     if more:

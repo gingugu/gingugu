@@ -104,7 +104,7 @@ def main() -> None:
     ``gingugu harness`` → `init` plus the Claude Code harness (hooks, minions, skill, .ai/).
     ``gingugu ui``      → launch the Memory Explorer web UI in a browser.
     ``gingugu dream``   → run the consolidation pass; stages proposals only.
-    ``gingugu xray``    → X-ray brief: changed files by rank and what they reach.
+    ``gingugu xray``    → X-ray brief (changed files by rank and what they reach), score.
     ``gingugu embed``   → run the embedding backfill to completion.
     """
     import sys
@@ -191,13 +191,13 @@ def main() -> None:
             from .subagent_hook import main as subagent_hook_main
 
             raise SystemExit(subagent_hook_main())
-        if sys.argv[2:3] in (["read"], ["bash"]):
+        if sys.argv[2:3] in (["read"], ["bash"], ["edit"]):
             from .post_tool_hook import main as post_tool_hook_main
 
             raise SystemExit(post_tool_hook_main())
         if sys.argv[2:3] != ["prompt"]:
             print(
-                "gingugu hook: expected 'prompt', 'tool', 'subagent', 'read' or 'bash'",
+                "gingugu hook: expected 'prompt', 'tool', 'subagent', 'read', 'bash' or 'edit'",
                 file=sys.stderr,
             )
             raise SystemExit(2)
