@@ -460,7 +460,10 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.36.0** (PyPI, 2026-10-30). Minor: a board post's `xray:` line can
+- Current version: **0.36.1** (PyPI, 2026-10-30). Patch: the receiver's repo search
+  looks in each folder once (`repo_id.roots` dedupes by inode; `~/GIT` is `~/git` on
+  macOS) (#162).
+- 0.36.0 (PyPI, 2026-10-30). Minor: a board post's `xray:` line can
   name its repo (`xray: <repo> <range>`); the receiver finds its checkout of it
   (`xray/repo_id`, `MEMORY_XRAY_REPOS`), and the not-available line suggests only a
   shell-safe command (#161).
