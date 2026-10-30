@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.40.0] - 2026-10-30
+
 ### Changed
 
 - **The X-ray edit tripwire stops only a blind edit.** It denied the first edit of every
