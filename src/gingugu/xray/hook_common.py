@@ -202,14 +202,23 @@ def _build(root: Path, state_dir: Path, session_id: str | None) -> tuple[Graph, 
     return Graph(files, links, ranks, packages, langs, entries), ex.symbols
 
 
-def graph(root: Path, state_dir: Path, session_id: str | None = None) -> Graph:
-    """The checkout's graph, cached by fingerprint (see ``_build`` for the marker)."""
-    cached = _load_cache(_cache_path(root, state_dir), extract.fingerprint(root))
+def graph(
+    root: Path, state_dir: Path, session_id: str | None = None, fingerprint: str | None = None
+) -> Graph:
+    """The checkout's graph, cached by fingerprint (see ``_build`` for the marker).
+
+    A hook that needs the graph and the symbols passes one ``fingerprint`` to
+    both: hashing the checkout is the warm path's whole cost (0.37s on django)."""
+    fp = fingerprint or extract.fingerprint(root)
+    cached = _load_cache(_cache_path(root, state_dir), fp)
     return cached if cached is not None else _build(root, state_dir, session_id)[0]
 
 
-def symbols(root: Path, state_dir: Path, session_id: str | None = None) -> _sym.Symbols:
+def symbols(
+    root: Path, state_dir: Path, session_id: str | None = None, fingerprint: str | None = None
+) -> _sym.Symbols:
     """The checkout's symbol graph (who calls what), cached beside the import
     graph by the same fingerprint; one build writes both."""
-    cached = _load_symbols(_symbols_path(root, state_dir), extract.fingerprint(root))
+    fp = fingerprint or extract.fingerprint(root)
+    cached = _load_symbols(_symbols_path(root, state_dir), fp)
     return cached if cached is not None else _build(root, state_dir, session_id)[1]

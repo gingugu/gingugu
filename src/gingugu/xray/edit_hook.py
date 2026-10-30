@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from . import bash_state, edit_symbols, hook_common, lang, rank
+from . import bash_state, edit_symbols, extract, hook_common, lang, rank
 from .hook_common import _claim, _show, _sweep
 from .scan import XrayError
 
@@ -117,7 +117,8 @@ def check(payload: dict, state_dir: Path) -> str | None:
         claim = _claim_path(state_dir, session_id, root, rel)
         if claim.exists():
             return None
-        files, links, ranks, packages, _, _ = hook_common.graph(root, state_dir, session_id)
+        fp = extract.fingerprint(root)  # once: the graph and the symbol lines share it
+        files, links, ranks, packages, _, _ = hook_common.graph(root, state_dir, session_id, fp)
         if rel not in files or rel in packages:
             return None
         blast = _without_seed(rank.blast([rel], files, links, ranks, hidden=packages), rel)
@@ -128,7 +129,7 @@ def check(payload: dict, state_dir: Path) -> str | None:
             return None
         _sweep(state_dir)
         try:
-            symbol_lines = edit_symbols.lines(payload, root, rel, state_dir, session_id)
+            symbol_lines = edit_symbols.lines(payload, root, rel, state_dir, session_id, fp)
         except (XrayError, ValueError, OSError):
             symbol_lines = []  # the deny still fires; only the symbol lines are lost
         return _render(rel, blast, symbol_lines)

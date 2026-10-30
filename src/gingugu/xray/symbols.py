@@ -229,13 +229,7 @@ def _count(v: object, low: int = 0) -> bool:
 
 
 def _is_def(d: object) -> bool:
-    return (
-        isinstance(d, list)
-        and len(d) == 3
-        and d[0] in _KINDS
-        and _count(d[1])
-        and _count(d[2])
-    )
+    return isinstance(d, list) and len(d) == 3 and d[0] in _KINDS and _count(d[1]) and _count(d[2])
 
 
 def from_json(data: object) -> Symbols | None:
