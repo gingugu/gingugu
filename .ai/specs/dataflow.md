@@ -614,6 +614,23 @@ claim directories are separate from `xray-shown-<session>/`, so showing a map
 never silences the edit tripwire's first-edit deny. Entirely local: the checkout
 and the graph cache, no request to the brain, identical in remote mode.
 
+**The brief (X19) is the same map, asked for.** For an agent that fires neither
+hook, `code_xray` `action: "brief"` (or `gingugu xray brief`) runs
+`xray/brief.answer` on the caller's machine:
+
+```
+changed files: git diff --name-status over --range, the named --files, or the
+  working tree against HEAD plus untracked files
+  → graph: xray/hook_common cache hook-sessions/xray-graph-<sha16(root)>.json
+    (the one the hooks share; rebuilt locally on a fingerprint miss)
+  → rows: path, status, rank, importers; blast of the changed source files
+    (code + candidate tests); repo top-5
+  → data + compact `text` (<= 8800 chars)
+```
+
+Nothing is stored and the brain is never asked: stdio answers it in process, the
+proxy claims it and answers it locally, and `gingugu serve` refuses it.
+
 ## Warm minions (SubagentStart + the minion fence)
 
 ```

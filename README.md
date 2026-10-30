@@ -119,7 +119,9 @@ brain is remote, and rebuilds itself whenever the code changes. The tool hook al
 tells the agent on its first edit of an imported file what depends on it, and a
 read hook brings a map on arrival: the first read into a repo adds an overview of
 it, and each file read adds that file's neighbourhood (who imports it, what it
-imports).
+imports). For an agent that never fires those hooks, `gingugu xray brief` (or
+`code_xray` with `action: "brief"`) hands it the same map of a task: the changed
+files by rank and what they reach.
 
 That is the part that makes the memory worth having, and it is in the box.
 
@@ -243,7 +245,7 @@ or Rust toolchain required to use it. The MCP SDK is first-class in Python.
 | 🪝 **Hooks** | Session-start contract, involuntary recall on a prompt, tripwires that stop a tool call a memory forbids, an X-ray map when an agent first reads into a repo, warm minions for subagents, and a save-discipline stop hook — wired by `gingugu init` |
 | 🌙 **Dream Pass** | Deterministic consolidation over the relation graph (PageRank, label propagation, orphan reconnection), staged to a proposal queue you accept or reject - safe on a cron |
 | 📬 **Agent Board** | Agents sharing a brain leave each other addressed posts and claimable tasks; `gingugu board watch` wakes an idle agent, and a reply goes back to the session that asked |
-| 🩻 **Codebase X-ray** | `code_xray` maps a repo's import graph (Python, TypeScript/JavaScript, Go; parsed, never run): blast radius before an edit (dependents by hop, candidate tests) and the files the code leans on, ranked by directed PageRank. The tool hook says it on the first edit of an imported file, and a read hook brings a repo map on the first read and each file's neighbourhood the first time it is read |
+| 🩻 **Codebase X-ray** | `code_xray` maps a repo's import graph (Python, TypeScript/JavaScript, Go; parsed, never run): blast radius before an edit (dependents by hop, candidate tests) and the files the code leans on, ranked by directed PageRank. The tool hook says it on the first edit of an imported file, and a read hook brings a repo map on the first read and each file's neighbourhood the first time it is read. `gingugu xray brief` gives the same map of a change to an agent that fires no hooks |
 | 🌐 **Memory Explorer UI** | 3D brain (one lobe per namespace), list, dashboard, timeline, and trust map — a read-only observer ([live demo](https://gingugu.github.io/gingugu/)) |
 | 📡 **Central Brain (optional)** | `gingugu serve` runs the same server over HTTP behind Bearer tokens, each client scoped to its own namespaces; `gingugu promote` harvests a local brain's durable knowledge up to it with provenance stamps |
 
@@ -864,6 +866,10 @@ It installs:
   it, once per file. It rides `additionalContext` next to the tool result and
   never blocks. Built locally from your checkout, sharing the edit tripwire's
   graph cache; the brain is never asked. Set `MEMORY_XRAY_MAP=off` to disable it.
+  For an agent that fires neither hook, `gingugu xray brief [--range R |
+  --files a,b] [--path P] [--json]` prints the changed files by rank with their
+  importer counts and the combined blast of the changed source, from the same
+  cache; nothing is stored and the brain is never asked.
 - **`.claude/skills/sink-the-ship/SKILL.md`** — a `/sink-the-ship` skill to flush
   everything worth keeping before you close a session. If an older install left a
   `.claude/commands/sink-the-ship.md` behind, `gingugu init` retires it and keeps
@@ -1235,7 +1241,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_dream` | Run the deterministic consolidation pass, read its proposal queue, and accept or reject a finding. PageRank, community detection and orphan reconnection over the relation graph - staged for you to decide, never written |
 | `memory_tripwire` | Bind a memory to a tool call so it stops that call once, before it runs: `add` (a tool-name regex + an input regex), `list`, `remove`, and `test` (a dry run that never denies) |
 | `board` | Leave posts for other agents sharing this brain and read the ones left for you: `post` (to a persona or `*`, as a `message` or a `task`), `inbox`, `read` (a thread), `reply` (with no `to`, it goes to the post's author, or to whoever spoke last in the thread when that is you), `claim` (one agent wins), `done`. Posts are not memories, and you post as yourself - the author is never an argument. Your inbox is also the subscribable resource `gingugu://board/inbox/<you>`; `gingugu board watch` turns it into a command that prints a line per new post, to wake an idle agent; a post or reply to a persona returns a `delivery` receipt |
-| `code_xray` | Codebase X-ray for a Python, TypeScript/JavaScript or Go repo: `blast` (what a change to these files reaches, and the tests worth running), `overview` (the files the code leans on most, and files nothing reaches), `refresh`, `ingest`. Rebuilt automatically when the checkout changes; read on your machine even with a remote brain |
+| `code_xray` | Codebase X-ray for a Python, TypeScript/JavaScript or Go repo: `blast` (what a change to these files reaches, and the tests worth running), `overview` (the files the code leans on most, and files nothing reaches), `refresh`, `ingest`, and `brief` (`range`, `files`: the changed files by rank with importer counts, their combined blast and a compact `text`, computed locally and never stored). Rebuilt automatically when the checkout changes; read on your machine even with a remote brain |
 | `memory_forget` | Deprecate or remove a memory (a hard delete asks you to confirm) |
 | `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo). Deleting a non-empty namespace asks you to confirm |
 | `memory_export` | Export memories + tags + relations to portable JSON |
