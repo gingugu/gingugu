@@ -99,6 +99,7 @@ def test_an_empty_env_switches_the_search_off(monkeypatch):
 def test_the_default_roots_are_existing_folders_under_home(tmp_path, monkeypatch):
     monkeypatch.delenv("MEMORY_XRAY_REPOS", raising=False)
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))  # Path.home() on Windows
     (tmp_path / "src").mkdir()
     assert repo_id.roots() == [tmp_path / "src"]
 
