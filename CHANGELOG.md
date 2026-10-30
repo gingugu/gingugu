@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Each repo folder is searched once.** On a case-insensitive filesystem (macOS)
+  `~/GIT` and `~/git` are one folder; the receiver's repo search listed it twice, so
+  a repo found nowhere was looked for twice. Folders are now told apart by the
+  folder itself, not by its spelling.
+
 ---
 
 ## [0.36.0] - 2026-10-30
