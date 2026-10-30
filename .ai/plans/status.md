@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-10-29 (checkout guard)_
+_Last updated: 2026-10-29 (X-ray brief)_
 
 ## In Flight
 
@@ -18,11 +18,11 @@ trips on JSX `class=` (9 of vite's 1,638 files report a parse error, edges recov
 `tsconfig` `extends` to a package (`@tsconfig/...`) is skipped; `exports` star patterns
 are not resolved; a go.mod `module ( ... )` block reads as malformed.
 
-**Board #5 Codebase X-ray - X14 map on arrival RELEASED in 0.32.0 (#153); X15
-writes from any tool next** (2026-10-29). The
+**Board #5 Codebase X-ray - X14 map on arrival RELEASED in 0.32.0 (#153); X19
+X-ray brief built, unreleased; X15 writes from any tool next** (2026-10-29). The
 end goal was restated: a sophisticated map before any work starts, so the map
 reaches the agent on reads and on any write, not only through the edit tools. New
-items X14-X18 (section 19); build order X14, X15, X16, X17, then X3.
+items X14-X18 (section 19); build order X14, X19, X15, X16, X17, then X3.
 
 X14: a PostToolUse hook matched `Read|Grep|Glob` (`gingugu hook read`,
 `xray/read_hook.py`) adds the repo map on a session's first touch of a repo and a
@@ -51,6 +51,19 @@ mid-capture; `overview.top` and the payload's `skipped` are bounded but not
 paged; a git `core.fsmonitor`-style check for other config that runs code.
 
 ## Recently Completed
+
+**X-ray brief, X19 (feature/xray-brief, unreleased; 2026-10-29).** An agent that never
+fires the Read/Edit hooks (Codex reading via shell, editing via `apply_patch`) still
+gets the X-ray map of a task when handed it. `code_xray` gains `action: "brief"` and a
+`range` argument; the CLI is `gingugu xray brief [--range R | --files a,b] [--path P]
+[--json]`. It returns the changed files (git range, named files, or the working tree
+against HEAD with untracked files) placed by rank with importer counts, the combined
+blast of the changed source (code and candidate tests), a repo top-5 and a compact
+`text` (<= 8800 chars). Computed locally from the hook graph cache (`xray/brief.py`,
+`xray_cli.py`); nothing is stored and the brain is never asked: `gingugu serve` refuses
+it, the proxy (`proxy_xray`) answers it locally. For reviews, handoffs and
+`gingugu board watch --exec`. Tests: `tests/test_xray_brief.py`,
+`tests/test_xray_brief_tool.py`.
 
 **Checkout guard (feature/checkout-guard, unreleased).** Several sessions sharing a
 repo's primary checkout kept moving its branch under each other, carrying uncommitted
@@ -2182,7 +2195,7 @@ read never fires, and a write through the shell bypasses X-ray entirely. X1-X13
 describe what is stored; X14-X18 add how the map reaches the agent, how it
 stays current, and how it is seen.
 
-**Build order:** X14, X15, X16, X17, then X3, then X4/X6/X7/X8. X18 ships in
+**Build order:** X14, X19, X15, X16, X17, then X3, then X4/X6/X7/X8. X18 ships in
 slices alongside them. IDs are stable references, not the order.
 
 **Roadmap.** Sub-items:
@@ -2206,6 +2219,7 @@ slices alongside them. IDs are stable references, not the order.
 | X15 | **Writes from any tool** - after each shell call, diff `git status --porcelain` against the session's last snapshot and X-ray newly changed source files | X2, hooks | Command parsing can never be complete; watching the checkout catches every write path, and any harness that edits through a shell. Informs, cannot deny |
 | X16 | **Incremental refresh** - per-file content hashes; re-parse only what changed; refresh after writes and in the nightly dream pass | X1, dream | A full re-extract is 0.4s here and grows with the repo |
 | X17 | **Symbol graph** - functions, classes, definitions and call sites, not just files and imports | `xray/lang/` adapters, tree-sitter | The resolution X7 needs to name the function an entry point reaches, not just the file |
+| X19 | **X-ray brief (BUILT, unreleased)** - the changed files by rank with importer counts, plus their combined blast (code and candidate tests), for an agent that fires no hooks | X1, X14 graph cache | `code_xray` `brief` (`range`, `files`, `path`) and `gingugu xray brief [--range R \| --files a,b] [--path P] [--json]`. Computed on the caller's machine from the hook graph cache; nothing stored, the brain never asked; `gingugu serve` refuses it, the proxy answers it locally. Compact `text` <= 8800 chars, for reviews, handoffs and `board watch --exec`. `xray/brief.py`, `xray_cli.py` |
 | X18 | **X-ray Explorer** - a view in the Memory Explorer: repo as a 3D city (height = rank, colour = churn or tests, districts = X5 boundaries), animated blast radius, X7 attack paths, X6 blind-spot heat, X3 scar markers linking into the memory drawer, X4 drift slider over snapshots | `ui/`, `ui_api/` read-only observer | Ships in slices; city + blast radius first |
 
 ### Standing rules
