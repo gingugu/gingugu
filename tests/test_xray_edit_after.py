@@ -67,6 +67,12 @@ def test_a_file_this_session_already_edited_is_not_denied_again_by_a_write(repo,
     assert edit_hook.check(_payload(repo, "pkg/core.py", tool="Edit"), state) is None
 
 
+def test_an_own_write_counts_as_seen_in_every_x_ray_language(tmp_path, state):
+    repo = _repo(tmp_path, {"src/a.ts": "export const x = 1\n", "src/b.ts": "import './a'\n"})
+    edit_note.check(_after(repo, "src/a.ts", tool="Write", content="export const x = 2\n"), state)
+    assert edit_hook.check(_payload(repo, "src/a.ts"), state) is None
+
+
 def test_the_deny_leads_with_direct_importers(tmp_path, state):
     repo = _repo(
         tmp_path,
