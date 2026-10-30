@@ -68,13 +68,12 @@ deeply nested cache reads as missing.
 
 X14: a PostToolUse hook matched `Read|Grep|Glob` (`gingugu hook read`,
 `xray/read_hook.py`) adds the repo map on a session's first touch of a repo and a
-file's neighbourhood (rank, importers, reach and candidate tests, imports) on its
+file's neighbourhood (rank, importers, nearest tests, imports) on its
 first `Read`; it informs, never blocks, and shares the edit hook's graph cache
 (`xray/hook_common.py`). Silence is claimed too, so a quiet file costs one look per
 session; a graph build killed by the hook timeout is not retried in that session
 (marker older than 30s). Measured on this repo: first read 1.1s (cold build),
-later reads 0.5s. Switch: `MEMORY_XRAY_MAP`. Follow-ups: the map's entry points are
-mostly `.claude/hooks/*.py`; printable file names reach the agent verbatim (quoted
+later reads 0.5s. Switch: `MEMORY_XRAY_MAP`. Follow-ups: printable file names reach the agent verbatim (quoted
 only when they hold control characters) - the edit hook has the same exposure.
 
 **X3 scar tissue** (design approved 2026-10-28, now after X14-X17; it plugs into
@@ -135,8 +134,8 @@ repo the session touched (`xray/bash_state`, `xray-repos-<session>/`), the check
 existing path in the command; > 500 dirty paths skips a repo, 4s budget, never denies. A NEW
 doorway `.claude/hooks/post_bash_xray.py` (matcher `Bash`; new because `gingugu init` skips an
 existing entry, so a changed matcher would never reach an initialised repo) runs `gingugu hook
-bash` (`post_tool_hook` -> `bash_hook.after`): per changed source file its top dependents and
-candidate tests, for a deleted file its old importers from the graph cached before the command
+bash` (`post_tool_hook` -> `bash_hook.after`): per changed source file its direct importers, reach and
+nearest tests, for a deleted file its old importers from the graph cached before the command
 (`hook_common.cached_graph`); <= 5 files in full, the rest counted, <= 8800 chars. Informs only;
 shares the edit tripwire's `xray-shown` claim both ways. Switch `MEMORY_XRAY_TRIPWIRE` covers
 both. Limit: a repo the session never touched, reached only by a `cd` inside a script, is not
@@ -2370,7 +2369,7 @@ slices alongside them. IDs are stable references, not the order.
 | X11 | **Predict, then score** - the agent predicts failing tests and broken files before a change; the calibration ledger scores it after | X1, calibration ledger (#2) | Lean version BUILT (unreleased): X-ray's own test predictions (by call, by import) vs pytest failures in a local ledger, `gingugu xray score`. The agent's own predictions and the brain-side calibration ledger are still to do |
 | X12 | **Board-driven upkeep** - the nightly X-ray posts findings (dead files, new cycles, drift) to the agent board for agents to claim | X4, agent board | |
 | X13 | **Code fingerprints** - embed code units; near-duplicate logic across repos, and provenance of copied code | embeddings, hybrid search | |
-| X14 | **Map on arrival (SHIPPED in 0.32.0, #153)** - a short repo overview (size, languages, top-ranked files, entry points) on the session's first touch of a repo, then an up-to-4-line neighbourhood (rank, importers, reach, imports; X17 adds a fifth, `Most called`, for Python) on a file's first `Read` | X1 graph cache, hooks | PostToolUse context, non-blocking. Leaf files stay silent. First touch, not session start, so a session that never touches code pays nothing |
+| X14 | **Map on arrival (SHIPPED in 0.32.0, #153)** - a short repo overview (size, languages, top-ranked files, entry points) on the session's first touch of a repo, then an up-to-4-line neighbourhood (rank, importers, nearest tests since the X-ray tuning, imports; X17 adds a fifth, `Most called`, for Python) on a file's first `Read` | X1 graph cache, hooks | PostToolUse context, non-blocking. Leaf files stay silent. First touch, not session start, so a session that never touches code pays nothing |
 | X15 | **Writes from any tool (RELEASED in 0.37.0)** - before a Bash call `gingugu hook tool` snapshots the dirty set of up to 8 candidate checkouts (cwd repo, repos the session touched, repos of paths in the command); after it `gingugu hook bash` (new doorway `post_bash_xray.py`, matcher `Bash`) diffs it and X-rays the changed source files, and a deleted file's old importers from the cached graph | X2, hooks | Command parsing can never be complete; watching the checkout catches every write path, and any harness that edits through a shell. Informs, cannot deny; shares the edit tripwire's once-per-file claim; a repo reached only by a `cd` inside a script is not watched |
 | X16 | **Incremental refresh (RELEASED in 0.38.0, #164)** - the hooks' graph build caches each file's parse by content (`xray/parse_cache.py`, `xray-parse-<sha16(root)>.json`; adapters split into `parse`/`valid`/`link`) and re-parses only files whose bytes changed; linking always reruns. Refresh after writes stays lazy (the next hook call pays only for what changed); the nightly dream pass was dropped - the brain cannot read a client's checkout. Measured: django (3,050 files) one edit 0.82s instead of 4.3s, unchanged 0.37s; vite (1,639 TS/JS files) one edit 0.48s, cold 1.0s | X1, hooks | A full re-extract grows with the repo: 4.3s on django |
 | X17 | **Symbol graph (Python, RELEASED in 0.39.0, #165)** - definitions, call sites and resolved call edges; the edit tripwire names the definitions an edit lands in and their callers, the read neighbourhood the most-called definitions, `code_xray` `callers` one symbol's callers and reach. Client-side (`xray/symbols_walk.py`, `xray/symbols.py`, cache `xray-symbols-<sha16(root)>.json`), a lower bound (unresolved calls counted, never guessed). Measured on gingugu: 64.7% of non-external calls resolve; `require_write_id` 8 direct callers, 72 files by call vs 262 by import | `xray/lang/` adapters, X16 parse cache | The resolution X7 needs to name the function an entry point reaches, not just the file. Phase 2: TS/JS + Go via tree-sitter |

@@ -259,7 +259,7 @@ or Rust toolchain required to use it. The MCP SDK is first-class in Python.
 | 🪝 **Hooks** | Session-start contract, involuntary recall on a prompt, tripwires that stop a tool call a memory forbids, an X-ray map when an agent first reads into a repo, warm minions for subagents, and a save-discipline stop hook — wired by `gingugu init` |
 | 🌙 **Dream Pass** | Deterministic consolidation over the relation graph (PageRank, label propagation, orphan reconnection), staged to a proposal queue you accept or reject - safe on a cron |
 | 📬 **Agent Board** | Agents sharing a brain leave each other addressed posts and claimable tasks; `gingugu board watch` wakes an idle agent, and a reply goes back to the session that asked |
-| 🩻 **Codebase X-ray** | `code_xray` maps a repo's import graph (Python, TypeScript/JavaScript, Go; parsed, never run): blast radius before an edit (dependents by hop, candidate tests) and the files the code leans on, ranked by directed PageRank. The tool hook says it on the first edit of an imported file, and a read hook brings a repo map on the first read and each file's neighbourhood the first time it is read. `gingugu xray brief` gives the same map of a change to an agent that fires no hooks |
+| 🩻 **Codebase X-ray** | `code_xray` maps a repo's import graph (Python, TypeScript/JavaScript, Go; parsed, never run): blast radius before an edit (dependents by hop, candidate tests) and the files the code leans on, ranked by directed PageRank. The tool hook says it before a blind edit of an imported file and names the callers right after any other edit, and a read hook brings a repo map on the first read and each file's neighbourhood the first time it is read. `gingugu xray brief` gives the same map of a change to an agent that fires no hooks |
 | 🌐 **Memory Explorer UI** | 3D brain (one lobe per namespace), list, dashboard, timeline, and trust map — a read-only observer ([live demo](https://gingugu.github.io/gingugu/)) |
 | 📡 **Central Brain (optional)** | `gingugu serve` runs the same server over HTTP behind Bearer tokens, each client scoped to its own namespaces; `gingugu promote` harvests a local brain's durable knowledge up to it with provenance stamps |
 
@@ -885,7 +885,7 @@ It installs:
   `Read|Grep|Glob`) that gives the agent the **X-ray map on arrival**: the first
   Read, Grep or Glob in a repo in a session adds a compact repo map (size,
   languages, import edges, the most imported files, entry points), and each
-  source file Read adds who imports it, what it imports and which tests reach
+  source file Read adds who imports it, what it imports and the nearest tests
   it, once per file. It rides `additionalContext` next to the tool result and
   never blocks. Built locally from your checkout, sharing the edit tripwire's
   graph cache; the brain is never asked. Set `MEMORY_XRAY_MAP=off` to disable it.
@@ -894,21 +894,22 @@ It installs:
   codegen script or a `git checkout` writes behind the edit tripwire's back, so
   `gingugu hook tool` notes each watched checkout's changed files before the
   command and `gingugu hook bash` diffs them after it, adding what each changed
-  source file reaches (top dependents, candidate tests; for a deleted file, who
+  source file reaches (direct importers, nearest tests; for a deleted file, who
   imported it). It watches the command's own repo, every repo the session has
   touched and the repo of any path the command names, describes at most 5 files
   in full and counts the rest, and shares the edit tripwire's once-per-file claim.
   After a `pytest` run it also records which test files failed, for the test ledger.
+  It informs and never blocks. Run `gingugu init` in each repo to add it; set
+  `MEMORY_XRAY_TRIPWIRE=off` to disable it.
 - **`.claude/hooks/post_edit_xray.py`** — a `PostToolUse` hook (matched to
   `Edit|Write|MultiEdit`) that gives the agent the **note after an edit**: for each
   definition an edit of a Python file landed in, its callers in other files and the
   tests nearest them, once per definition per session, from the cached symbol graph.
   Each note records the tests it named in a local ledger (`xray-ledger.jsonl`, beside
   the hook state); `gingugu xray score` says how often the tests that then failed were
-  among them. Set `MEMORY_XRAY_TRIPWIRE=off` to disable it.
-  It informs and never blocks. Run `gingugu init` in each repo to add it; set
-  `MEMORY_XRAY_TRIPWIRE=off` to disable it.
-  For an agent that fires neither hook, `gingugu xray brief [--range R |
+  among them. It informs and never blocks; `gingugu init` adds it, and
+  `MEMORY_XRAY_TRIPWIRE=off` disables it and the ledger.
+  For an agent that fires none of these hooks, `gingugu xray brief [--range R |
   --files a,b] [--path P] [--json]` prints the changed files by rank with their
   importer counts and the combined blast of the changed source, from the same
   cache; nothing is stored and the brain is never asked.
@@ -927,7 +928,7 @@ It installs:
   built-in agent like Explore can read the brain but not change it. This
   prevents accidents; it is not a sandbox against a hostile process running as
   you. Set `MEMORY_MINION_FENCE=off` to disable the fence.
-- All seven hooks wired into `.claude/settings.json`, **merged non-destructively** —
+- All eight hooks wired into `.claude/settings.json`, **merged non-destructively** —
   any existing config is backed up (`settings.json.bak`) and preserved.
 - `mcp__brain` added to `permissions.allow`, in the repo's `.claude/settings.json`
   and in your user-level `~/.claude/settings.json` (backed up, idempotent), so a
