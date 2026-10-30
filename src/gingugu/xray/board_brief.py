@@ -64,6 +64,14 @@ def _fit(text: str, max_chars: int) -> str:
     return body + "\n" + CLIPPED
 
 
+def _not_here(ref: str) -> str:
+    """One line for a receiver with no checkout: a silent None would drop the ref."""
+    return (
+        f"X-ray brief: {json.dumps(ref)} is not available here (no git checkout); "
+        f"run `gingugu xray brief --range {ref}` in that repo."
+    )
+
+
 def attach(
     body: object, cwd: str | None, max_chars: int, session_id: str | None = None
 ) -> str | None:
@@ -71,12 +79,14 @@ def attach(
     there is nothing to say. Never raises."""
     try:
         ref = ref_in(body)
-        if not enabled() or ref is None or not cwd:
+        if not enabled() or ref is None:
             return None
+        if not cwd:
+            return _not_here(ref)
         try:
             local.root(cwd)
         except (XrayError, ValueError, OSError):
-            return None  # not a repo: stay silent
+            return _not_here(ref)  # a watcher outside a repo, e.g. a Codex thread dir
         try:
             data = brief.answer(cwd, ref, None, session_id=session_id)
         except (XrayError, ValueError) as exc:
