@@ -216,5 +216,5 @@ def test_candidate_tests_list_runnable_tests_nearest_first(tmp_path, state):
         },
     )
     reason = edit_hook.check(_payload(repo, "pkg/core.py"), state)
-    line = next(ln for ln in reason.splitlines() if ln.startswith("Candidate tests:"))
+    line = next(ln for ln in reason.splitlines() if ln.startswith("Nearest tests:"))
     assert line.index("test_near.py") < line.index("test_far.py") < line.index("helpers.py")

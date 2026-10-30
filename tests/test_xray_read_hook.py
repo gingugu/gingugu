@@ -161,11 +161,12 @@ def test_a_neighbourhood_is_short(tmp_path, state):
     assert "more" in text  # 20 importers, a few named
 
 
-def test_a_read_does_not_silence_the_edit_xray(repo, state):
+def test_a_read_stands_in_for_the_edit_deny(repo, state):
+    """The neighbourhood already showed what the deny would; the edit is not blind."""
     from gingugu.xray import edit_hook
 
     read_hook.check(_read(repo, "pkg/core.py"), state)
-    assert edit_hook.check(_payload(repo, "pkg/core.py"), state) is not None
+    assert edit_hook.check(_payload(repo, "pkg/core.py"), state) is None
 
 
 def test_an_edit_does_not_silence_the_read_neighbourhood(repo, state):
