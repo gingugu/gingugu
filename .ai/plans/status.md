@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-10-30 (X20 part 2: repo on the board line)_
+_Last updated: 2026-10-30 (repo_id roots dedupe)_
 
 ## In Flight
 
@@ -53,6 +53,12 @@ mid-capture; `overview.top` and the payload's `skipped` are bounded but not
 paged; a git `core.fsmonitor`-style check for other config that runs code.
 
 ## Recently Completed
+
+**repo_id roots dedupe (fix/roots-dedupe, unreleased; 2026-10-30).** A live check of
+0.36.0 from a non-repo dir resolved `gingugu/gingugu` to `~/GIT/gingugu` and rendered
+the brief, but `repo_id.roots()` listed `~/GIT` and `~/git` (one folder on macOS:
+`resolve()` keeps the given case). Roots now dedupe on `(st_dev, st_ino)`. Test:
+`tests/test_xray_repo_id.py` (skips on a case-sensitive filesystem).
 
 **X20 part 2, repo on the board line (feature/xray-repo-id, released in 0.36.0, #161;
 2026-10-30).** `xray: <repo> <range>`: the sender nudge stamps the checkout's origin as
