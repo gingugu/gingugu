@@ -1674,6 +1674,21 @@ asked, so under `gingugu serve` it is refused and through the proxy it is
 answered locally. `gingugu xray brief [--range R | --files a,b] [--path P]
 [--json]` prints the same answer.
 
+**The symbol graph (X17, Python).** The same local build records every
+definition (function, method, class, with its line span) and resolves call sites
+to definitions through what static reading can prove: a definition in scope, an
+import binding, a class named in scope (`s = Store()`, `s: Store`, a typed
+argument, `with Store() as s`) and `self`/`cls`. Anything else is counted as
+unresolved, never guessed, so callers are a lower bound and the file blast stays
+the upper bound. It is cached beside the graph
+(`hook-sessions/xray-symbols-<sha16(root)>.json`) and never sent to the brain.
+The edit tripwire adds, for each definition an `Edit`/`MultiEdit` lands in,
+`Edit lands in `f` (L1-2): 2 callers - ...; reaches 5 definitions in 4 files.`;
+the read neighbourhood adds `Most called: ...`; and `callers` (`files`: one
+file, `symbol`, `path`, `limit`, `offset`) returns `direct` (with call-site
+counts), `reach` (with hops), `reach_files` and `coverage`, computed on the
+caller's machine like `brief`.
+
 **A shell command's writes get their X-ray (X15).** The edit tripwire cannot see a
 `sed -i`, a codegen script or a `git checkout`. Before a `Bash` call, `gingugu hook tool`
 (through the existing `pre_tool_tripwire.py` doorway; `xray/bash_hook.before`, never a

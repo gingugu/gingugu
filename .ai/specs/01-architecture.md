@@ -59,7 +59,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `xray/` (Codebase X-ray: `scan` + `extract` + `lang/` (one adapter per language: `python`
    on `ast` with `resolve`; `typescript` + `ts_*` + `jsonc` and `golang` on tree-sitter) +
    `model` + `local` + `parse_cache` + `resolve_walk` on the client, `validate` +
-   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check), `tool_xray` (the PreToolUse X-ray decision, apart from `tool_hook`), `bash_hook` + `bash_state` (X15: a shell command's writes get their X-ray; the repos a session touched) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), `board_nudge` (X20 sender: asks a board post from a branch ahead of the default branch for its range, once per session, from `gingugu hook tool`), `board_brief` (X20: the brief a board post's `xray:` line asks for, rendered on the receiver), `repo_id` (X20: a checkout's identity and where the repo a post names is checked out here), the hook side that builds the graph itself and never
+   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check), `tool_xray` (the PreToolUse X-ray decision, apart from `tool_hook`), `bash_hook` + `bash_state` (X15: a shell command's writes get their X-ray; the repos a session touched) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), `symbols_walk` + `symbols` (X17: the Python symbol graph - per-file definition/binding/call/type records, resolved to call edges; client only, cached beside the graph), `edit_symbols` (X17: the tripwire's `Edit lands in` lines), `callers_tool` (X17: `code_xray` `callers`, local only), `board_nudge` (X20 sender: asks a board post from a branch ahead of the default branch for its range, once per session, from `gingugu hook tool`), `board_brief` (X20: the brief a board post's `xray:` line asks for, rendered on the receiver), `repo_id` (X20: a checkout's identity and where the repo a post names is checked out here), the hook side that builds the graph itself and never
    touches the brain; see Key Decisions), `proxy_xray` (the proxy's local half of `code_xray`),
    `board_watch` +
    `board_watch_remote`, `board_watch_emit` (the `gingugu board watch` wake-up command; see Key
@@ -866,6 +866,22 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `gingugu serve` refuses it (it cannot read the caller's checkout) and the proxy
   claims it and answers it locally. A range is checked before git sees it (no
   option, whitespace or control characters).
+- **Codebase X-ray: the symbol graph (X17, Python, built, unreleased).** Files and
+  imports say what a change *could* reach; definitions and calls say what it does.
+  The Python parse also yields per-file records (`xray/symbols_walk`, content-only,
+  so they ride the X16 parse cache; extractor version 3), and `xray/symbols` links
+  them through the same `ModuleIndex` as the imports. *A lower bound by
+  construction*: a call resolves only through a definition in scope, an import
+  binding, a class named in scope (constructor, annotation, `with`) or `self`/`cls`;
+  everything else is counted unresolved, never guessed, so file blast stays the
+  upper bound. *Client-side only*: one build writes the graph cache and
+  `xray-symbols-<sha16(root)>.json`; `Extraction.payload` is unchanged and the brain
+  never sees symbols - brain tables are owed as X21 (a migration, decided when X7/X9
+  needs them; deferred so no schema ships before a consumer). Surfaces: the edit
+  tripwire's `Edit lands in` lines (`xray/edit_symbols`, gating unchanged), the read
+  neighbourhood's `Most called` line, and `code_xray` `callers` (`xray/callers_tool`,
+  refused by `gingugu serve`, answered locally by the proxy). The hooks hash the
+  checkout once and pass the fingerprint to both caches.
 - **Codebase X-ray: the brief on the board (X20, released in 0.35.0).** The agents the
   brief is for fire no hooks, so a handoff carries one unasked. A post body with a
   line of its own `xray: <range>` arrives with the brief of that range, rendered by
