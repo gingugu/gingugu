@@ -867,7 +867,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `gingugu serve` refuses it (it cannot read the caller's checkout) and the proxy
   claims it and answers it locally. A range is checked before git sees it (no
   option, whitespace or control characters).
-- **Codebase X-ray: the symbol graph (X17, Python, built, unreleased).** Files and
+- **Codebase X-ray: the symbol graph (X17, Python, released in 0.39.0).** Files and
   imports say what a change *could* reach; definitions and calls say what it does.
   The Python parse also yields per-file records (`xray/symbols_walk`, content-only,
   so they ride the X16 parse cache; extractor version 3), and `xray/symbols` links
