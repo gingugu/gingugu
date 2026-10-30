@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A brief the receiver cannot render says so.** A board post that names a range
+  (`xray: <range>`) now arrives with one line when the receiving agent runs outside
+  a git checkout, as a Codex thread directory does: the ref is not available here,
+  run `gingugu xray brief --range <range>` in that repo. The board mail and
+  `board watch` (its `xray` field, `text` and `GINGUGU_POST_XRAY`) both carry it.
+
 ---
 
 ## [0.35.1] - 2026-10-30
