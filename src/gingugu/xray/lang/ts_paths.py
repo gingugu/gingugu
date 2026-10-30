@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import posixpath
+from collections.abc import Container
 
 CODE_EXTS = (".ts", ".tsx", ".d.ts", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs")
 # ESM imports name the emitted file (./x.js); the source is its TS twin.
@@ -50,7 +51,7 @@ def asset_ext(spec: str) -> str:
     return posixpath.splitext(name)[1].lower()
 
 
-def resolve_file(base: str, files: set[str] | dict[str, bytes]) -> str | None:
+def resolve_file(base: str, files: Container[str]) -> str | None:
     """The source file ``base`` names, in TypeScript's order; None when there is none.
 
     Exact path, the ESM ``.js`` -> ``.ts`` twin, ``base`` + each extension, then

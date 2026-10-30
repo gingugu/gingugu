@@ -114,9 +114,12 @@ class Graph(NamedTuple):
     entries: set[str]
 
 
+def _digest(root: Path) -> str:
+    return hashlib.sha256(str(root).encode()).hexdigest()[:16]
+
+
 def _cache_path(root: Path, state_dir: Path) -> Path:
-    digest = hashlib.sha256(str(root).encode()).hexdigest()[:16]
-    return state_dir / f"xray-graph-{digest}.json"
+    return state_dir / f"xray-graph-{_digest(root)}.json"
 
 
 def _load_cache(cache: Path, fingerprint: str | None) -> Graph | None:
@@ -163,7 +166,7 @@ def graph(root: Path, state_dir: Path, session_id: str | None = None) -> Graph:
             age = 0.0
         if age >= _ABANDONED_SECONDS:
             raise XrayError("a graph build for this checkout did not finish this session")
-    ex = extract.extract(root)
+    ex = extract.extract(root, parse_cache=state_dir / f"xray-parse-{_digest(root)}.json")
     files = {f.path: f.is_test for f in ex.files}
     links = [rank.Link(e.src, e.dst, e.certain, e.implicit) for e in ex.edges]
     ranks = rank.pagerank(sorted(files), links)
