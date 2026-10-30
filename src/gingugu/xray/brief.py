@@ -27,6 +27,8 @@ _STATUSES = ("A", "M", "D", "R")
 _WORDS = {"A": "added", "M": "modified", "D": "deleted", "R": "renamed"}
 # Past this the blast lists alone could crowd the changed files out of the text.
 MAX_LIMIT = 50
+# The range may be another agent's choice, and a brief can run inside a hook.
+GIT_TIMEOUT_S = 10
 
 
 def _safe(path: str | None) -> str | None:
@@ -72,7 +74,7 @@ def _parse(out: bytes) -> list[Change]:
 
 
 def _run(repo: Path, *args: str) -> bytes:
-    proc = scan.git(repo, *args)
+    proc = scan.git(repo, *args, timeout=GIT_TIMEOUT_S)
     if proc.returncode != 0:
         raise scan.XrayError(proc.stderr.decode(errors="replace").strip() or "git failed")
     return proc.stdout
@@ -184,8 +186,16 @@ def render(data: dict, name: str) -> str:
     return text[:MAX_CHARS]
 
 
-def answer(path: str | None, rev_range: str | None, files, limit: int = MAX_LIMIT) -> dict:
-    """The whole brief for one checkout; shared by the handler, the proxy and the CLI."""
+def answer(
+    path: str | None,
+    rev_range: str | None,
+    files,
+    limit: int = MAX_LIMIT,
+    *,
+    session_id: str | None = None,
+) -> dict:
+    """The whole brief for one checkout; shared by the handler, the proxy, the CLI and
+    the board. With a session, a graph build that was killed is not retried in it."""
     from ..config import load_config
 
     repo = local.root(path)
@@ -193,6 +203,7 @@ def answer(path: str | None, rev_range: str | None, files, limit: int = MAX_LIMI
     if rev_range is not None and named:
         raise ValueError("pass a range or files, not both")
     rel = [p for p in local.seeds(named, repo) if p] if named else None  # "." is no file
-    g = hook_common.graph(repo, load_config().db_path.parent / "hook-sessions")
-    data = build(g, changes(repo, rev_range, rel), limit=min(max(0, limit), MAX_LIMIT))
+    found = changes(repo, rev_range, rel)  # a ref git rejects fails before any build
+    g = hook_common.graph(repo, load_config().db_path.parent / "hook-sessions", session_id)
+    data = build(g, found, limit=min(max(0, limit), MAX_LIMIT))
     return {"ok": True, **data, "text": render(data, repo.name), "caveat": CAVEAT}
