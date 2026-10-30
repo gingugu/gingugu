@@ -525,9 +525,12 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
       → minion fence / spawn stash first (see "Warm minions"; independent of
         MEMORY_TRIPWIRES)
       → checkout guard (checkout_guard; MEMORY_CHECKOUT_GUARD, own switch)
-          Bash only; per shell segment, a git switch / checkout without -- /
-          rebase / reset --hard|--merge|--keep / stash (not list|show), in the
-          dir that segment runs in (cwd, a prior cd, git -C)
+          Bash only; heredoc bodies dropped, quote-aware split into segments;
+          per segment, a git switch / checkout (unless paths follow --) /
+          rebase (not --abort|--quit) / reset --hard|--merge|--keep /
+          stash (not list|show), also behind env / command / VAR=, in the
+          dir that segment runs in (cwd, a prior cd, git -C; ~ and $VAR
+          expanded), one rev-parse per distinct dir
           that dir is a PRIMARY checkout (git-dir == git-common-dir)
             → deny EVERY time, pointing at a worktree; the hook exits here
           GINGUGU_PRIMARY_OK=1 prefix, a linked worktree, or any failure: pass

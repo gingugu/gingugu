@@ -15,8 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the primary checkout carries every other session's uncommitted edits onto the
   new branch. `gingugu hook tool` (the `PreToolUse` hook `gingugu init` already
   wires) now denies, every time, a Bash git command that would move or empty the
-  primary checkout - `switch`, `checkout <branch>`/`-b`, `rebase`,
-  `reset --hard`/`--merge`/`--keep`, `stash` other than `list`/`show` - and
+  primary checkout - `switch`, `checkout` unless paths follow `--`, `rebase`
+  other than `--abort`/`--quit`, `reset --hard`/`--merge`/`--keep`, `stash`
+  other than `list`/`show` - and
   points at a worktree (`EnterWorktree`, or
   `git worktree add .claude/worktrees/<name> -b <branch>`). Linked worktrees are
   never guarded; commits, pull, push and reads pass. A `GINGUGU_PRIMARY_OK=1`

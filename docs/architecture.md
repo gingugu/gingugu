@@ -66,7 +66,7 @@ graph LR
 
     subgraph Claude Code Hooks
         PH[UserPromptSubmit<br/>gingugu hook prompt]
-        Y[PreToolUse<br/>gingugu hook tool<br/>tripwires · X-ray · minion fence]
+        Y[PreToolUse<br/>gingugu hook tool<br/>tripwires · X-ray · minion fence · checkout guard]
         PO[PostToolUse<br/>gingugu hook read<br/>X-ray map on arrival]
         Z[SubagentStart<br/>gingugu hook subagent]
     end
@@ -170,7 +170,9 @@ match, denies the call once with the memory as the reason and logs the trip to
 Go) that other files import, once per file per session, with its blast radius (the X-ray): the graph
 is built locally from the checkout and never touches the brain, the deny is not
 logged, and when a tripwire fires on the same call the two share one deny. It
-never touches the MCP server process.
+also runs the checkout guard, which denies every time a git command that would
+move or empty a repo's shared primary checkout. It never touches the MCP server
+process.
 
 `PostToolUse` is a fourth: `gingugu hook read` runs after every `Read`, `Grep`
 or `Glob` and adds context next to the result, never a block. The first such call
@@ -1685,7 +1687,7 @@ memory tripwires only; the X-ray edit check has its own switch,
 minion fence. Several sessions often share one repo's primary checkout, and a
 branch switch there carries every other session's uncommitted edits onto the
 new branch. So a Bash call whose git command would move or empty the primary
-checkout (`switch`, `checkout` without `--`, `rebase` other than `--abort`,
+checkout (`switch`, `checkout` unless paths follow `--`, `rebase` other than `--abort`/`--quit`,
 `reset --hard`/`--merge`/`--keep`, `stash` other than `list`/`show`) is denied
 every time, with a pointer to a worktree. Primary means `git rev-parse
 --git-dir` equals `--git-common-dir`; a linked worktree is never guarded. A
@@ -2169,7 +2171,8 @@ src/gingugu/
 ├── board_hook.py           # board mail for the prompt hook: unread posts, grant-fenced, per-session shown ids, local or POST /hook/inbox
 ├── cli_usage.py            # the top-level `gingugu --help` text (USAGE)
 ├── post_tool_hook.py       # gingugu hook read: PostToolUse entry point (X-ray map on arrival: repo map + a Read file's neighbourhood); informs, never blocks
-├── tool_hook.py            # gingugu hook tool: PreToolUse entry point (tripwires, X-ray, minion fence); deny once, re-issue passes
+├── tool_hook.py            # gingugu hook tool: PreToolUse entry point (tripwires, X-ray, minion fence, checkout guard); deny once, re-issue passes
+├── checkout_guard.py       # Deny, every time, a git command that moves or empties a shared primary checkout; points at a worktree
 ├── minion_fence.py         # Inside a subagent: deny data-dir access, CLI, inherited-server writes
 ├── subagent_hook.py        # gingugu hook subagent: SubagentStart warm-up; stash/take of the spawn prompt
 ├── subagent_warmup.py      # warmup(): the grant-bound ranking, shared with /hook/warmup

@@ -53,7 +53,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `context`, `relations`, `consolidation`, `decay`, `stats`, `namespaces`,
    `portability`, `capability`, `grants` (the per-call grant every chokepoint
    consults), `serve_tokens`, `tripwire` (the memory-tripwire decision half of the `PreToolUse` hook; its other half is
-   `xray/edit_hook`; see Key Decisions), `post_tool_hook` (`gingugu hook read`, the `PostToolUse` entry; hands off to `xray/read_hook`), `board` + `board_events` (the agent board store and its
+   `xray/edit_hook`; see Key Decisions), `post_tool_hook` (`gingugu hook read`, the `PostToolUse` entry; hands off to `xray/read_hook`), `checkout_guard` (denies moves of a shared primary checkout from `gingugu hook tool`), `board` + `board_events` (the agent board store and its
    `subscriptions/listen` bus; see Key Decisions), `board_delivery` (the post/reply
    delivery receipt: can the recipient persona's known clients read the namespace),
    `xray/` (Codebase X-ray: `scan` + `extract` + `lang/` (one adapter per language: `python`
@@ -765,15 +765,19 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   not logged to `query_log`.
 - **Checkout guard (unreleased).** `checkout_guard.py`, called from
   `tool_hook.run` right after the minion fence: a Bash git command that would
-  move or empty the PRIMARY checkout (`switch`; `checkout` without `--`;
+  move or empty the PRIMARY checkout (`switch`; `checkout` unless paths follow `--`;
   `rebase` other than `--abort`/`--quit`; `reset --hard`/`--merge`/`--keep`;
   `stash` other than `list`/`show`) is denied every time, never once per
   session, with a pointer to `EnterWorktree` or `git worktree add
   .claude/worktrees/<name>`. Primary = `git rev-parse --git-dir` equals
   `--git-common-dir`, asked of the directory the git call runs in (payload
-  `cwd`, moved by a preceding `cd` segment or `git -C`). Shallow parse: split on
-  shell separators, `shlex` per segment, only a segment whose first word after
-  `VAR=value` prefixes is `git`. `GINGUGU_PRIMARY_OK=1` as a prefix passes one
+  `cwd`, moved by a preceding `cd` segment or `git -C`, with `~` and `$VAR`
+  expanded; one `rev-parse` per distinct directory). Shallow parse: heredoc
+  bodies dropped, then one quote-aware `shlex` pass split on `; & | newline`,
+  so prose in a commit message or PR body is never read as a command; only a
+  segment whose first word after `env`/`command`/`VAR=value` is `git` counts
+  (`sudo`, `bash -c`, subshells are not followed - it stops habits, it is not
+  a sandbox). `GINGUGU_PRIMARY_OK=1` as a prefix passes one
   command; `MEMORY_CHECKOUT_GUARD=off` disables it. Any failure passes. Lives in
   the package, so every repo already wired to `gingugu hook tool` gets it with
   an upgrade; `init` also git-ignores `.claude/worktrees/` and the managed
