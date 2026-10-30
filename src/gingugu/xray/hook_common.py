@@ -114,18 +114,16 @@ class Graph(NamedTuple):
     entries: set[str]
 
 
-def graph(root: Path, state_dir: Path, session_id: str | None = None) -> Graph:
-    """The checkout's graph, cached by fingerprint.
-
-    With a session, a build that never finished - the doorway's timeout killed
-    it - is not started again in that session: a checkout too big to build in
-    time would otherwise pay the whole build on every tool call."""
+def _cache_path(root: Path, state_dir: Path) -> Path:
     digest = hashlib.sha256(str(root).encode()).hexdigest()[:16]
-    cache = state_dir / f"xray-graph-{digest}.json"
-    fp = extract.fingerprint(root)
+    return state_dir / f"xray-graph-{digest}.json"
+
+
+def _load_cache(cache: Path, fingerprint: str | None) -> Graph | None:
+    """The cached graph; with a ``fingerprint``, only if it still matches."""
     data = _read_json(cache)
     try:
-        if isinstance(data, dict) and data["fingerprint"] == fp:
+        if isinstance(data, dict) and (fingerprint is None or data["fingerprint"] == fingerprint):
             return Graph(
                 {str(k): bool(v) for k, v in data["files"].items()},
                 [rank.Link(s, d, bool(c), bool(i)) for s, d, c, i in data["links"]],
@@ -136,6 +134,25 @@ def graph(root: Path, state_dir: Path, session_id: str | None = None) -> Graph:
             )
     except (KeyError, TypeError, ValueError, AttributeError):
         pass  # a corrupt or older-format cache is rebuilt, not fatal
+    return None
+
+
+def cached_graph(root: Path, state_dir: Path) -> Graph | None:
+    """The graph as last cached, fingerprint unchecked: what the checkout looked
+    like before something changed it. None when nothing was cached."""
+    return _load_cache(_cache_path(root, state_dir), None)
+
+
+def graph(root: Path, state_dir: Path, session_id: str | None = None) -> Graph:
+    """The checkout's graph, cached by fingerprint.
+
+    With a session, a build that never finished - the doorway's timeout killed
+    it - is not started again in that session: a checkout too big to build in
+    time would otherwise pay the whole build on every tool call."""
+    fp = extract.fingerprint(root)
+    cached = _load_cache(_cache_path(root, state_dir), fp)
+    if cached is not None:
+        return cached
     marker = claim_path(state_dir, "xray-build", session_id, root) if session_id else None
     if marker is not None and not _claim(marker):
         # A fresh marker is a parallel hook mid-build: build too, as before. One
@@ -154,7 +171,7 @@ def graph(root: Path, state_dir: Path, session_id: str | None = None) -> Graph:
     langs = {f.path: f.lang for f in ex.files}
     entries = {f.path for f in ex.files if f.is_entry}
     _write_json(
-        cache,
+        _cache_path(root, state_dir),
         {
             "fingerprint": ex.fingerprint,
             "files": files,

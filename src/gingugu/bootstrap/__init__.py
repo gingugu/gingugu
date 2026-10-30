@@ -116,6 +116,13 @@ def init_claude_code(
         results=results,
     )
     _write_file(
+        hooks_dir / "post_bash_xray.py",
+        _read_template("post_bash_xray.py.tmpl"),
+        force=force,
+        dry_run=dry_run,
+        results=results,
+    )
+    _write_file(
         hooks_dir / "subagent_warmup.py",
         _read_template("subagent_warmup.py.tmpl"),
         force=force,

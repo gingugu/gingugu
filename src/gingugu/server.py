@@ -191,13 +191,13 @@ def main() -> None:
             from .subagent_hook import main as subagent_hook_main
 
             raise SystemExit(subagent_hook_main())
-        if sys.argv[2:3] == ["read"]:
+        if sys.argv[2:3] in (["read"], ["bash"]):
             from .post_tool_hook import main as post_tool_hook_main
 
             raise SystemExit(post_tool_hook_main())
         if sys.argv[2:3] != ["prompt"]:
             print(
-                "gingugu hook: expected 'prompt', 'tool', 'subagent' or 'read'",
+                "gingugu hook: expected 'prompt', 'tool', 'subagent', 'read' or 'bash'",
                 file=sys.stderr,
             )
             raise SystemExit(2)
