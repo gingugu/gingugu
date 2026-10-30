@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from . import hook_common, local, rank
+from . import bash_state, hook_common, local, rank
 from .hook_common import Graph, _claim, _show, _sweep
 from .scan import XrayError
 
@@ -148,6 +148,7 @@ def check(payload: dict, state_dir: Path) -> str | None:
             root = _search_root(payload, tool_input)
             if root is None:
                 return None
+        bash_state.remember(state_dir, session_id, root)
         map_claim = hook_common.claim_path(state_dir, "xray-map", session_id, root)
         read_claim = hook_common.claim_path(state_dir, "xray-read", session_id, root, rel or "")
         want_map = not map_claim.exists()

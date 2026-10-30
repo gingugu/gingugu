@@ -53,13 +53,13 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `context`, `relations`, `consolidation`, `decay`, `stats`, `namespaces`,
    `portability`, `capability`, `grants` (the per-call grant every chokepoint
    consults), `serve_tokens`, `tripwire` (the memory-tripwire decision half of the `PreToolUse` hook; its other half is
-   `xray/edit_hook`; see Key Decisions), `post_tool_hook` (`gingugu hook read`, the `PostToolUse` entry; hands off to `xray/read_hook`), `checkout_guard` (denies moves of a shared primary checkout from `gingugu hook tool`), `board` + `board_events` (the agent board store and its
+   `xray/edit_hook`; see Key Decisions), `post_tool_hook` (`gingugu hook read` / `gingugu hook bash`, the `PostToolUse` entry; hands off to `xray/read_hook` or `xray/bash_hook`), `checkout_guard` (denies moves of a shared primary checkout from `gingugu hook tool`), `board` + `board_events` (the agent board store and its
    `subscriptions/listen` bus; see Key Decisions), `board_delivery` (the post/reply
    delivery receipt: can the recipient persona's known clients read the namespace),
    `xray/` (Codebase X-ray: `scan` + `extract` + `lang/` (one adapter per language: `python`
    on `ast` with `resolve`; `typescript` + `ts_*` + `jsonc` and `golang` on tree-sitter) +
    `model` + `local` on the client, `validate` +
-   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), `board_nudge` (X20 sender: asks a board post from a branch ahead of the default branch for its range, once per session, from `gingugu hook tool`), `board_brief` (X20: the brief a board post's `xray:` line asks for, rendered on the receiver), `repo_id` (X20: a checkout's identity and where the repo a post names is checked out here), the hook side that builds the graph itself and never
+   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check), `tool_xray` (the PreToolUse X-ray decision, apart from `tool_hook`), `bash_hook` + `bash_state` (X15: a shell command's writes get their X-ray; the repos a session touched) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), `board_nudge` (X20 sender: asks a board post from a branch ahead of the default branch for its range, once per session, from `gingugu hook tool`), `board_brief` (X20: the brief a board post's `xray:` line asks for, rendered on the receiver), `repo_id` (X20: a checkout's identity and where the repo a post names is checked out here), the hook side that builds the graph itself and never
    touches the brain; see Key Decisions), `proxy_xray` (the proxy's local half of `code_xray`),
    `board_watch` +
    `board_watch_remote`, `board_watch_emit` (the `gingugu board watch` wake-up command; see Key
@@ -797,6 +797,29 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   capped under 9000 characters (the harness cap is 10,000). Own switch
   `MEMORY_XRAY_MAP` (default on). Wired by `gingugu init` with a 15s timeout and
   matcher `Read|Grep|Glob`; it coexists with the harness's own PostToolUse logger.
+- **Codebase X-ray: writes from any tool (X15, unreleased).** The edit tripwire cannot
+  see a `sed -i`, a codegen script or a `git checkout`, so a `Bash` call gets its own
+  X-ray. *Snapshot, then diff*: `gingugu hook tool` (the existing
+  `pre_tool_tripwire.py` doorway already passes Bash) calls `xray/bash_hook.before`,
+  which records the dirty set (`git status --porcelain=v1 -z --untracked-files=all`,
+  sha256 of each dirty file <= 64 KiB, `size:mtime_ns` above) of up to 8 candidate
+  checkouts into an owner-only snapshot keyed by session + `tool_use_id`; it never
+  denies and prints nothing. Candidates: the command's cwd repo, every repo the
+  session touched (the read, edit and bash hooks record them in owner-only per-session
+  files, `xray-repos-<session>/`, one file per repo because hooks run in parallel),
+  and the checkout of any existing path token in the command. A repo with more than
+  500 dirty paths is skipped; the whole snapshot has a 4s budget. After the call,
+  `gingugu hook bash` (`xray/bash_hook.after`) diffs and adds `additionalContext`: per
+  changed source file its top dependents and candidate tests, for a deleted file its old
+  importers from the graph cached before the command (`hook_common.cached_graph`); at
+  most 5 files in full, the rest counted, <= 8800 chars. *Inform, not deny* (the write
+  already happened), and it shares the edit tripwire's `xray-shown` claim both ways, so
+  a file is reported once per session whichever way it changed. A NEW doorway,
+  `.claude/hooks/post_bash_xray.py` (matcher `Bash`), because `gingugu init` skips an
+  existing entry, so a changed matcher on `post_tool_xray.py` would never reach an
+  already-initialised repo; a plain `gingugu init` adds it. Switch: `MEMORY_XRAY_TRIPWIRE`
+  turns both off. Limit: a repo the session never touched, reached only by a `cd` hidden
+  inside a script, is not watched.
 - **Codebase X-ray: the brief (X19, shipped 0.34.0).** An agent that fires neither
   hook (Codex reading via a shell, editing via `apply_patch`) still gets the map
   when handed it: `code_xray` `action: "brief"` / `gingugu xray brief` (`xray/brief`,
@@ -975,12 +998,12 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   memory startup contract every session (a rules file is not guaranteed to load
   into context; a hook is), a `Stop` save-discipline hook, a `UserPromptSubmit` hook (involuntary
   recall), a `PreToolUse` hook (tripwires, the X-ray edit check, via the
-  `.claude/hooks/pre_tool_tripwire.py` doorway), a `PostToolUse` hook (the X-ray map on arrival, `.claude/hooks/post_tool_xray.py`), and the
+  `.claude/hooks/pre_tool_tripwire.py` doorway), a `PostToolUse` hook (the X-ray map on arrival, `.claude/hooks/post_tool_xray.py`), a second `PostToolUse` hook matched to `Bash` (X15, the X-ray of a shell command's writes, `.claude/hooks/post_bash_xray.py`), and the
   `/sink-the-ship` skill (`.claude/skills/sink-the-ship/SKILL.md`, the format
   Anthropic's docs steer new work to; the legacy `.claude/commands/` copy is
   retired with a `.bak` only when it is byte-identical to the template we would
   have written, and kept when it differs - the marker says we once wrote a file,
-  not that the user left it alone) - plus a `SubagentStart` hook (minion warm-up, `.claude/hooks/subagent_warmup.py`) - merging all six hooks into `.claude/settings.json`
+  not that the user left it alone) - plus a `SubagentStart` hook (minion warm-up, `.claude/hooks/subagent_warmup.py`) - merging all seven hooks into `.claude/settings.json`
   non-destructively (`settings.py`), allowing `mcp__brain` there and in the
   user-level `~/.claude/settings.json` (`init_user_permissions`) and appending the hooks' runtime artifacts
   (`logs/`, `.claude/data/`, `.claude/settings.local.json`,

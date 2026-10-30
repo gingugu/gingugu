@@ -67,7 +67,7 @@ graph LR
     subgraph Claude Code Hooks
         PH[UserPromptSubmit<br/>gingugu hook prompt]
         Y[PreToolUse<br/>gingugu hook tool<br/>tripwires · X-ray · minion fence · checkout guard]
-        PO[PostToolUse<br/>gingugu hook read<br/>X-ray map on arrival]
+        PO[PostToolUse<br/>gingugu hook read · hook bash<br/>X-ray map on arrival · shell writes]
         Z[SubagentStart<br/>gingugu hook subagent]
     end
 
@@ -184,6 +184,11 @@ neighbourhood (rank, importers, transitive reach with candidate tests, imports),
 once per file per session. It uses the same locally built graph cache as the edit
 check, never touches the brain or the MCP server process, and `MEMORY_XRAY_MAP=off`
 turns it off.
+
+A second `PostToolUse` doorway, matched to `Bash`, runs `gingugu hook bash` (the same
+entry module): the X-ray of a shell command's writes (X15, below). It is a separate
+doorway because `gingugu init` skips an entry that already exists, so a widened
+matcher would never reach a repo that is already initialised.
 
 `SubagentStart` is the third: `gingugu hook subagent` warms a minion whose agent
 file declares `MEMORY_GRANT`. The spawning `Agent` call's prompt is stashed by
@@ -1667,6 +1672,27 @@ asked, so under `gingugu serve` it is refused and through the proxy it is
 answered locally. `gingugu xray brief [--range R | --files a,b] [--path P]
 [--json]` prints the same answer.
 
+**A shell command's writes get their X-ray (X15).** The edit tripwire cannot see a
+`sed -i`, a codegen script or a `git checkout`. Before a `Bash` call, `gingugu hook tool`
+(through the existing `pre_tool_tripwire.py` doorway; `xray/bash_hook.before`, never a
+deny, nothing printed) snapshots the dirty set of up to 8 candidate checkouts:
+`git status --porcelain=v1 -z --untracked-files=all`, with a sha256 of each dirty file
+up to 64 KiB (`size:mtime_ns` above that). The candidates are the command's cwd repo,
+every repo the session has touched (recorded by the read, edit and bash hooks in
+owner-only per-session records, `xray-repos-<session>/`) and the checkout of any
+existing path the command names. A repo with more than 500 dirty paths is skipped and
+the whole snapshot has a 4s budget. The snapshot is owner-only, keyed by session and
+`tool_use_id`. After the call, `.claude/hooks/post_bash_xray.py` (matched to `Bash`)
+runs `gingugu hook bash`, which consumes the snapshot, diffs it, and adds
+`additionalContext`: per changed source file its top dependents and candidate tests,
+and for a deleted file its old importers, read from the graph cached before the
+command. At most 5 files are described in full, the rest are counted, and the text is
+at most 8,800 characters. It informs only - the write already happened - and shares the
+edit tripwire's `xray-shown` claim both ways: a file reported here is not denied later
+by the edit tripwire, and one the tripwire showed is not repeated. `MEMORY_XRAY_TRIPWIRE=off`
+turns both off. A repo the session never touched, reached only by a `cd` inside a
+script, is not watched.
+
 The snapshot is the checkout at `path` (default: the working directory),
 fingerprinted on every call and re-extracted when its content changed
 (`freshness: current`); a `fingerprint` names one exactly (`exact`); with
@@ -1704,7 +1730,7 @@ trip, so a bad tripwire can always be repaired. Inside a subagent the same hook
 runs the minion fence first, which does deny the write tools of the inherited
 `mcp__gingugu__*` server (see warm minions). `MEMORY_TRIPWIRES=off` disables
 memory tripwires only; the X-ray edit check has its own switch,
-`MEMORY_XRAY_TRIPWIRE` (default on), the X-ray map on arrival (the `PostToolUse` hook, `gingugu hook read`) has
+`MEMORY_XRAY_TRIPWIRE` (default on; it also gates the X-ray of a Bash command's writes), the X-ray map on arrival (the `PostToolUse` hook, `gingugu hook read`) has
 `MEMORY_XRAY_MAP` (default on), the brief on the board has `MEMORY_XRAY_BOARD` (default on), the minion fence has
 `MEMORY_MINION_FENCE`, and the checkout guard has `MEMORY_CHECKOUT_GUARD`.
 
@@ -2081,7 +2107,7 @@ src/gingugu/
 ├── proxy_vault.py          # Remote mode: the machine's credential vault, screened (reveal refused) and exposed as a server
 ├── proxy_vault_link.py     # Remote mode: runs that vault behind an in-memory MCP session so it can ask the user
 ├── proxy_xray.py           # Remote mode: code_xray reads the checkout here, asks the brain by fingerprint
-├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only), board_nudge (X20 sender: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line), board_brief (X20: the brief a board post's `xray: <range>` line asks for, rendered on the receiver), repo_id (X20: a checkout's identity, and the local checkout an `xray: <repo> <range>` line names)
+├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), tool_xray (the PreToolUse X-ray decision, kept apart from tool_hook), bash_hook + bash_state (X15: a shell command's dirty-set snapshot and diff; the repos a session touched), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only), board_nudge (X20 sender: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line), board_brief (X20: the brief a board post's `xray: <range>` line asks for, rendered on the receiver), repo_id (X20: a checkout's identity, and the local checkout an `xray: <repo> <range>` line names)
 ├── xray_cli.py             # `gingugu xray brief`: the X-ray brief from a shell (--range / --files / --path / --json)
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine
@@ -2196,7 +2222,7 @@ src/gingugu/
 ├── board_delivery.py       # board post/reply delivery receipt: can the recipient persona's known clients read it
 ├── board_hook.py           # board mail for the prompt hook: unread posts, grant-fenced, per-session shown ids, local or POST /hook/inbox; appends an X20 brief
 ├── cli_usage.py            # the top-level `gingugu --help` text (USAGE)
-├── post_tool_hook.py       # gingugu hook read: PostToolUse entry point (X-ray map on arrival: repo map + a Read file's neighbourhood); informs, never blocks
+├── post_tool_hook.py       # gingugu hook read / hook bash: PostToolUse entry point (X-ray map on arrival: repo map + a Read file's neighbourhood; X15: what a shell command's writes reach); informs, never blocks
 ├── tool_hook.py            # gingugu hook tool: PreToolUse entry point (tripwires, X-ray edit check and board nudge, minion fence, checkout guard); deny once, re-issue passes
 ├── checkout_guard.py       # Deny, every time, a git command that moves or empties a shared primary checkout; points at a worktree
 ├── minion_fence.py         # Inside a subagent: deny data-dir access, CLI, inherited-server writes

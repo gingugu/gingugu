@@ -50,6 +50,10 @@ Usage:
                                (Read/Grep/Glob); the first read in a repo gets a
                                map, each source file its import neighbourhood.
                                Wired by `gingugu init`; not run by hand.
+  gingugu hook bash            X-ray after a shell command: reads a PostToolUse
+                               event (Bash) and names what the source files the
+                               command changed reach. Wired by `gingugu init`;
+                               not run by hand.
 
 Options:
   -h, --help                   Show this help and exit.

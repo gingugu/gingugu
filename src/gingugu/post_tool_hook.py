@@ -15,14 +15,19 @@ _READ_TOOLS = ("Read", "Grep", "Glob")
 def run(payload: dict) -> int:
     """Decide and print. Returns the process exit code (always 0)."""
     try:
-        if payload.get("tool_name") not in _READ_TOOLS:
+        tool = payload.get("tool_name")
+        if tool not in _READ_TOOLS and tool != "Bash":
             return 0
         from .config import load_config
-        from .xray import read_hook
+        from .xray import bash_hook, read_hook
 
-        if not read_hook.enabled():
+        state = load_config().db_path.parent / "hook-sessions"
+        if tool == "Bash":
+            text = bash_hook.after(payload, state)  # gated by the edit switch inside
+        elif read_hook.enabled():
+            text = read_hook.check(payload, state)
+        else:
             return 0
-        text = read_hook.check(payload, load_config().db_path.parent / "hook-sessions")
         if text:
             print(
                 json.dumps(
