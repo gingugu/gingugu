@@ -111,7 +111,7 @@ def test_the_hook_fires_for_any_registered_language(tmp_path, fake):
     repo = _repo(tmp_path, MIXED)
     reason = edit_hook.check(_edit(repo, "lib/a.fk"), tmp_path / "state")
     assert reason is not None
-    assert "app/main.fk" in reason
+    assert "a change reaches 2 files" in reason  # main.fk imports the package, not a.fk
     assert "fake:lib" not in reason  # a package is the path, never a dependent
 
 

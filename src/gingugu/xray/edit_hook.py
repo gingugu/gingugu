@@ -49,42 +49,35 @@ def _claim_path(state_dir: Path, session_id: str, root: Path, rel: str) -> Path:
     return hook_common.claim_path(state_dir, "xray-shown", session_id, root, rel)
 
 
-def _dependents(rel: str, blast: dict) -> list[str]:
-    """The lines naming what imports ``rel``; shared with the Bash X-ray."""
-    code, tests = blast["code"], blast["tests"]
-    code_total, tests_total = blast["code_total"], blast["tests_total"]
-    n_files = code_total + tests_total
-    noun = "candidate test" if tests_total == 1 else "candidate tests"
+def _dependents(rel: str, blast: dict, direct: list[str]) -> list[str]:
+    """The lines naming what imports ``rel``; shared with the Bash X-ray.
+
+    ``direct`` is who imports it itself, best-ranked first. It leads: the
+    transitive total is one number, since a hub makes it say little else."""
+    tests_total = blast["tests_total"]
+    n_files = blast["code_total"] + tests_total
+    d = len(direct)
     lines = [
-        f"{_show(rel)} is imported by {n_files} file{'' if n_files == 1 else 's'} "
-        f"({tests_total} {noun})."
+        f"{_show(rel)} is imported directly by {d} file{'' if d == 1 else 's'}; "
+        f"a change reaches {n_files} file{'' if n_files == 1 else 's'} "
+        f"({tests_total} candidate test{'' if tests_total == 1 else 's'})."
     ]
-    if code:
-        lines.append("Top dependents by rank:")
-        for row in code[:TOP_N]:
-            hop = row["hops"]
-            lines.append(f"- {_show(row['path'])} ({hop} hop{'' if hop == 1 else 's'})")
-        if code_total > TOP_N:
-            lines.append(f"... and {code_total - TOP_N} more")
-    if tests:
-        # Rank says little about tests: fixtures and helpers outrank them. List
-        # what can be run, nearest the edit first.
-        tests = sorted(
-            tests,
-            key=lambda r: (
-                not r["path"].rsplit("/", 1)[-1].startswith("test_"),
-                r["hops"],
-                r["path"],
-            ),
-        )
-        listed = ", ".join(_show(row["path"]) for row in tests[:TOP_N])
-        more = f" (+{tests_total - TOP_N} more)" if tests_total > TOP_N else ""
-        lines.append(f"Candidate tests: {listed}{more}")
+    if direct:
+        lines.append(f"Direct importers by rank: {hook_common.named(direct, TOP_N)}")
+    if blast["tests"]:
+        nearest = hook_common.nearest_tests(blast["tests"])
+        lines.append(f"Nearest tests: {hook_common.named(nearest, TOP_N)}")
     return lines
 
 
-def _render(rel: str, blast: dict, symbol_lines: list[str] | None = None) -> str:
-    lines = _dependents(rel, blast)
+def direct_importers(rel: str, g: hook_common.Graph) -> list[str]:
+    """Files that import ``rel`` themselves, best-ranked first."""
+    who = hook_common.importers(g).get(rel, ())
+    return sorted(who, key=lambda p: (-g.ranks.get(p, 0), p))
+
+
+def _render(rel: str, blast: dict, direct: list[str], symbol_lines: list[str] | None = None) -> str:
+    lines = _dependents(rel, blast, direct)
     lines[0] = "GINGUGU X-RAY: " + lines[0]
     lines.extend(symbol_lines or [])
     lines.append(
@@ -114,11 +107,16 @@ def check(payload: dict, state_dir: Path) -> str | None:
             return None  # a shared "unknown" would let one session silence another
         root, rel = target
         bash_state.remember(state_dir, session_id, root)
+        # Blind edits only: a Read (or an earlier write) already put this file's
+        # X-ray in front of the agent, so the deny would only be friction.
+        if hook_common.claim_path(state_dir, "xray-read", session_id, root, rel).exists():
+            return None
         claim = _claim_path(state_dir, session_id, root, rel)
         if claim.exists():
             return None
         fp = extract.fingerprint(root)  # once: the graph and the symbol lines share it
-        files, links, ranks, packages, _, _ = hook_common.graph(root, state_dir, session_id, fp)
+        g = hook_common.graph(root, state_dir, session_id, fp)
+        files, links, ranks, packages = g.files, g.links, g.ranks, g.packages
         if rel not in files or rel in packages:
             return None
         blast = _without_seed(rank.blast([rel], files, links, ranks, hidden=packages), rel)
@@ -132,6 +130,6 @@ def check(payload: dict, state_dir: Path) -> str | None:
             symbol_lines = edit_symbols.lines(payload, root, rel, state_dir, session_id, fp)
         except (XrayError, ValueError, OSError):
             symbol_lines = []  # the deny still fires; only the symbol lines are lost
-        return _render(rel, blast, symbol_lines)
+        return _render(rel, blast, direct_importers(rel, g), symbol_lines)
     except (XrayError, ValueError, OSError):
         return None
