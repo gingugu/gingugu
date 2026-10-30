@@ -132,26 +132,32 @@ def test_a_worktree_is_never_guarded(repos):
     assert _check(worktree, "git reset --hard") is None
 
 
+# Paths go into a command the way a shell user writes them: forward slashes.
+# An unquoted Windows backslash is an escape to the shell, and to the guard.
+
+
 def test_cd_into_a_worktree_first_passes(repos):
     primary, worktree = repos
-    assert _check(primary, f"cd {worktree} && git checkout -b feature/y") is None
+    assert _check(primary, f"cd {worktree.as_posix()} && git checkout -b feature/y") is None
 
 
 def test_cd_into_the_primary_first_is_denied(repos):
     primary, worktree = repos
-    assert _check(worktree, f"cd {primary} && git switch main") is not None
+    assert _check(worktree, f"cd {primary.as_posix()} && git switch main") is not None
 
 
 def test_git_dash_c_names_the_checkout(repos):
     primary, worktree = repos
-    assert _check(primary, f"git -C {worktree} switch -c feature/y") is None
-    assert _check(worktree, f"git -C {primary} switch main") is not None
+    assert _check(primary, f"git -C {worktree.as_posix()} switch -c feature/y") is None
+    assert _check(worktree, f"git -C {primary.as_posix()} switch main") is not None
 
 
 def test_cd_flags_and_home_are_understood(repos, monkeypatch):
     primary, worktree = repos
-    assert _check(worktree, f"cd -P {primary} && git switch main") is not None
+    assert _check(worktree, f"cd -P {primary.as_posix()} && git switch main") is not None
+    # expanduser reads HOME on POSIX and USERPROFILE on Windows.
     monkeypatch.setenv("HOME", str(primary))
+    monkeypatch.setenv("USERPROFILE", str(primary))
     assert _check(worktree, "git -C ~ switch main") is not None
     assert _check(worktree, "cd ~ && git switch main") is not None
     assert _check(worktree, "cd && git switch main") is not None
