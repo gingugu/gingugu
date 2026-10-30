@@ -72,6 +72,7 @@ brief passes the session to `graph()` so a killed build is not retried, mail mar
 shown only after rendering, the watch brief is capped at 3500. Follow-up: the watch
 `text` fence (`"""` + raw body) can be closed by a body - pre-dates X20; fixing it
 changes the `text` format consumers read. Switch: `MEMORY_XRAY_BOARD=off`. Never raises.
+The deny's user-facing `systemMessage` names what X-ray did (`tool_hook._emit_xray`: "asked a board post for its range" vs "stopped an edit").
 Tests: `tests/test_xray_board_brief.py`, `_safety.py`, `tests/test_xray_board_nudge.py`.
 
 **X-ray brief, X19 (feature/xray-brief, released in 0.34.0, #157; 2026-10-29).** An agent that never
@@ -87,7 +88,7 @@ it, the proxy (`proxy_xray`) answers it locally. For reviews, handoffs and
 `gingugu board watch --exec`. Tests: `tests/test_xray_brief.py`,
 `tests/test_xray_brief_tool.py`.
 
-**Checkout guard (feature/checkout-guard, unreleased).** Several sessions sharing a
+**Checkout guard (shipped 0.33.0, #156).** Several sessions sharing a
 repo's primary checkout kept moving its branch under each other, carrying uncommitted
 edits onto the wrong branch. `gingugu hook tool` now denies, every time, a Bash git
 command that would move or empty the primary checkout (`switch`, `checkout` unless
@@ -101,7 +102,7 @@ worktree from the start. Not built: a SessionStart warning (the gate makes it
 redundant, and a template change needs `init --force`); `sudo`/`bash -c`/subshell
 forms are not followed - the guard stops habits, it is not a sandbox.
 
-**Docs audit is mandatory on every PR (docs/mandatory-doc-audit, unreleased).** The
+**Docs audit is mandatory on every PR (shipped 0.33.0, #155).** The
 `/creating-pr` skill - this repo's copy and the template `gingugu harness` installs -
 now runs `ai-docs-auditor` on every PR, confirms each finding against the code, and
 fixes every confirmed line in the same PR. Drift is fixed or it was not drift; it is

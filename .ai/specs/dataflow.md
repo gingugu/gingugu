@@ -640,13 +640,18 @@ post body → board_brief.ref_in: first `xray:` line, ref alone on it, <= 200 ch
   brief._check_range gate (else no brief)
   → attach(body, cwd): MEMORY_XRAY_BOARD off / no cwd / not a repo → nothing
     unknown ref → one short line; else brief.answer(cwd, ref) text
-  → prompt hook mail: appended to the block, first post only, <= 3500 chars
+  → prompt hook mail: appended to the block for the first of the shown posts (<= 5)
+    that names a range, one per prompt, <= 3500 chars; the range is checked by git
+    (10s deadline) before any graph build, and a build the hook killed is not retried
+    in that session
   → board watch: `xray` field + appended to `text` + GINGUGU_POST_XRAY,
     <= 3 posts per batch, from the watcher's cwd
 ```
 
-Nothing is stored and the brain is never asked: stdio answers it in process, the
-proxy claims it and answers it locally, and `gingugu serve` refuses it.
+For `code_xray` `brief` (X19), nothing is stored and the brain is never asked: stdio
+answers it in process, the proxy claims it and answers it locally, and `gingugu serve`
+refuses it. The board brief (X20) uses no tool call at all: it runs in the prompt hook
+or the watch process on the receiver's machine.
 
 ## Warm minions (SubagentStart + the minion fence)
 
