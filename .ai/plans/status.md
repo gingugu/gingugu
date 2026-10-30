@@ -54,7 +54,7 @@ paged; a git `core.fsmonitor`-style check for other config that runs code.
 
 ## Recently Completed
 
-**repo_id roots dedupe (fix/roots-dedupe, unreleased; 2026-10-30).** A live check of
+**repo_id roots dedupe (fix/roots-dedupe, released in 0.36.1, #162; 2026-10-30).** A live check of
 0.36.0 from a non-repo dir resolved `gingugu/gingugu` to `~/GIT/gingugu` and rendered
 the brief, but `repo_id.roots()` listed `~/GIT` and `~/git` (one folder on macOS:
 `resolve()` keeps the given case). Roots now dedupe on `(st_dev, st_ino)`. Test:
