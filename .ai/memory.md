@@ -465,7 +465,10 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.37.0** (PyPI, 2026-10-30). Minor: X15 writes from any tool - a
+- Current version: **0.38.0** (PyPI, 2026-10-30). Minor: X16 incremental refresh - the
+  hooks' X-ray graph re-parses only files whose bytes changed (`xray/parse_cache`,
+  adapters split into parse/valid/link) (#164). No migration; plain upgrade.
+- 0.37.0 (PyPI, 2026-10-30). Minor: X15 writes from any tool - a
   Bash call's writes get their X-ray (`xray/bash_hook`, new doorway `post_bash_xray.py`,
   `gingugu hook bash`) (#163). **Upgrading:** `gingugu init` in each repo.
 - 0.36.1 (PyPI, 2026-10-30). Patch: the receiver's repo search
