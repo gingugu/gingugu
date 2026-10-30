@@ -113,4 +113,4 @@ def test_a_test_seed_is_not_counted_as_its_own_dependent(tmp_path, state):
         },
     )
     reason = edit_hook.check(_payload(repo, "tests/helpers.py"), state)
-    assert "imported by 1 file" in reason
+    assert "imported directly by 1 file" in reason

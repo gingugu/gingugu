@@ -26,6 +26,7 @@ from ._files import read_template, safe_read, write_file
 from .harness_migrate import migrate_settings, retire_legacy
 from .harness_prune import prune
 from .harness_settings import wire_harness_settings
+from .settings import _HOOKS as _SETTINGS_HOOKS
 from .settings import is_user_level, load_settings, write_settings
 
 HARNESS_BEGIN = "<!-- BEGIN GINGUGU HARNESS -->"
@@ -46,16 +47,9 @@ _MANAGED = [
     ),
     ("skills/creating-pr/stacking-prs.md", ".claude/skills/creating-pr/stacking-prs.md"),
 ]
-_INIT_HOOKS = (
-    "session_start.py",
-    "stop.py",
-    "user_prompt_recall.py",
-    "pre_tool_tripwire.py",
-    "post_tool_xray.py",
-    "post_bash_xray.py",
-    "subagent_warmup.py",
-)
-# Every hook --migrate overwrites with ours: init's seven plus the harness's own.
+# The hooks init wires, read from its own table so a new doorway is listed once.
+_INIT_HOOKS = tuple(entry[3] for entry in _SETTINGS_HOOKS)
+# Every hook --migrate overwrites with ours: init's plus the harness's own.
 _HOOKS = frozenset([*_INIT_HOOKS, *(Path(d).name for _, d in _MANAGED if "/hooks/" in d)])
 _AI_FILES = (
     "memory.md",
@@ -87,7 +81,7 @@ def _install_managed(
 ) -> None:
     """``force_hooks`` force-replaces only hook scripts (``--migrate``).
 
-    That covers init's seven hooks too: migrate runs init without force so init's
+    That covers init's hooks too: migrate runs init without force so init's
     skill (``sink-the-ship``, which a repo may have made its own) is never
     replaced, then forces init's hooks here.
     """

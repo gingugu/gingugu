@@ -145,6 +145,16 @@
             "timeout": 15
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/post_edit_xray.py",
+            "timeout": 15
+          }
+        ]
       }
     ],
     "PostToolUseFailure": [

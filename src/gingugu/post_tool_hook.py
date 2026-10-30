@@ -1,6 +1,7 @@
-"""PostToolUse hook: the X-ray map and a read file's neighbourhood.
+"""PostToolUse hook: the X-ray map, a read file's neighbourhood, the note after an edit.
 
-Invoked as ``gingugu hook read`` for Read, Grep and Glob. The text rides
+Invoked as the ``read`` hook for Read, Grep and Glob, ``bash`` for Bash (changes
+a command made, and the test ledger) and ``edit`` for Edit, Write and MultiEdit. The text rides
 ``additionalContext`` next to the tool result; it informs and never blocks.
 """
 
@@ -10,20 +11,24 @@ import json
 import sys
 
 _READ_TOOLS = ("Read", "Grep", "Glob")
+_EDIT_TOOLS = ("Edit", "Write", "MultiEdit")
 
 
 def run(payload: dict) -> int:
     """Decide and print. Returns the process exit code (always 0)."""
     try:
         tool = payload.get("tool_name")
-        if tool not in _READ_TOOLS and tool != "Bash":
+        if tool not in _READ_TOOLS and tool not in _EDIT_TOOLS and tool != "Bash":
             return 0
         from .config import load_config
-        from .xray import bash_hook, read_hook
+        from .xray import bash_hook, edit_note, ledger, read_hook
 
         state = load_config().db_path.parent / "hook-sessions"
         if tool == "Bash":
+            ledger.observe(payload, state)  # records test runs; never raises
             text = bash_hook.after(payload, state)  # gated by the edit switch inside
+        elif tool in _EDIT_TOOLS:
+            text = edit_note.check(payload, state)  # gated by the edit switch inside
         elif read_hook.enabled():
             text = read_hook.check(payload, state)
         else:

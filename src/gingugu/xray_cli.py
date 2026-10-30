@@ -1,7 +1,8 @@
-"""``gingugu xray brief``: the X-ray brief from a shell, for agents and humans.
+"""``gingugu xray``: the X-ray brief and the test-prediction score, from a shell.
 
-Same answer as ``code_xray`` action ``brief``, computed on this machine from the
-cached hook graph. Exit 0 ok, 1 on a git/X-ray failure, 2 on bad usage.
+``brief`` is the same answer as ``code_xray`` action ``brief``, computed on this
+machine from the cached hook graph; ``score`` reads the local prediction ledger.
+Exit 0 ok, 1 on a git/X-ray failure, 2 on bad usage.
 """
 
 from __future__ import annotations
@@ -22,7 +23,18 @@ def _parser() -> argparse.ArgumentParser:
     b.add_argument("--files", help="comma-separated files instead of a range")
     b.add_argument("--path", help="any directory in the checkout (default: cwd)")
     b.add_argument("--json", action="store_true", help="the full answer as JSON")
+    s = sub.add_parser("score", help="how the post-edit test predictions fared against pytest")
+    s.add_argument("--json", action="store_true", help="the score as JSON")
     return parser
+
+
+def _score(as_json: bool) -> int:
+    from .config import load_config
+    from .xray import ledger
+
+    result = ledger.score(load_config().db_path.parent / "hook-sessions")
+    print(json.dumps(result, indent=2) if as_json else ledger.render(result))
+    return 0
 
 
 def main(argv: list[str]) -> int:
@@ -31,6 +43,8 @@ def main(argv: list[str]) -> int:
         args = parser.parse_args(argv)
     except SystemExit as exc:  # argparse exits 0 on --help, 2 on a usage error
         return exc.code if isinstance(exc.code, int) else 2
+    if args.cmd == "score":
+        return _score(args.json)
     if args.cmd != "brief":
         parser.print_usage(sys.stderr)
         return 2

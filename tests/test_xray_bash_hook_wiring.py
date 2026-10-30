@@ -102,6 +102,7 @@ def test_init_wires_a_posttooluse_entry_for_bash_beside_the_read_one():
     by_script = {
         ("post_bash_xray.py" if "post_bash_xray.py" in g["hooks"][0]["command"] else "read"): g
         for g in groups
+        if "post_edit_xray.py" not in g["hooks"][0]["command"]  # the edit note has its own test
     }
     assert by_script["post_bash_xray.py"]["matcher"] == "Bash"
     assert set(by_script["read"]["matcher"].split("|")) == {"Read", "Grep", "Glob"}
