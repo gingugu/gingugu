@@ -827,7 +827,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   already-initialised repo; a plain `gingugu init` adds it. Switch: `MEMORY_XRAY_TRIPWIRE`
   turns both off. Limit: a repo the session never touched, reached only by a `cd` hidden
   inside a script, is not watched.
-- **Codebase X-ray: incremental refresh (X16, built on `feature/xray-incremental`, unreleased).**
+- **Codebase X-ray: incremental refresh (X16, released in 0.38.0, #164).**
   Parsing is about 80% of a graph build and depends on nothing but a file's bytes and
   extension, so the hooks' local build caches it. Each adapter is split into `parse`
   (pure, JSON-safe), `valid` and `link` (resolution, tests, entry points, packages,

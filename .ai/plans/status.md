@@ -21,17 +21,11 @@ are not resolved; a go.mod `module ( ... )` block reads as malformed.
 **Board #5 Codebase X-ray - X14 map on arrival RELEASED in 0.32.0 (#153); X19
 X-ray brief RELEASED in 0.34.0 (#157); X20 brief on the board RELEASED in 0.35.0
 (#158), live-test fixes in 0.35.1 (#159), not-available note in 0.35.2 (#160), repo on
-the line in 0.36.0 (#161); X15 writes from any tool RELEASED in 0.37.0 (#163); X16 incremental refresh built on
-feature/xray-incremental (unreleased, PR pending); X17 next** (2026-10-30). The
+the line in 0.36.0 (#161); X15 writes from any tool RELEASED in 0.37.0 (#163); X16 incremental refresh
+RELEASED in 0.38.0 (#164); X17 next** (2026-10-30). The
 end goal was restated: a sophisticated map before any work starts, so the map
 reaches the agent on reads and on any write, not only through the edit tools. New
 items X14-X20 (section 19); build order X14, X19, X20, X15, X16, X17, then X3.
-
-**X16 incremental refresh (feature/xray-incremental, built, unreleased).** Commits `f442c65`
-(tests: a cached parse must equal a cold build), `3ccf9ef` (implementation), then a
-hardening commit from the security review. Pending: PR and release. gingugu.com needs no
-change (it links to the changelog and makes no X-ray timing claims). Next on the board: X17 symbol graph. Details
-under Recently Completed.
 
 X14: a PostToolUse hook matched `Read|Grep|Glob` (`gingugu hook read`,
 `xray/read_hook.py`) adds the repo map on a session's first touch of a repo and a
@@ -61,7 +55,7 @@ paged; a git `core.fsmonitor`-style check for other config that runs code.
 
 ## Recently Completed
 
-**X16 incremental refresh (feature/xray-incremental, built, unreleased; 2026-10-30).** The
+**X16 incremental refresh (RELEASED in 0.38.0, #164; 2026-10-30).** The
 hooks' local graph build parses only files whose bytes changed. Each language adapter
 (`xray/lang/__init__.py` `Adapter`) is split into `parse(rel, data)` (what the file alone
 says, JSON-safe, a function of the bytes and extension only), `valid(raw)` (strict shape
@@ -1621,7 +1615,7 @@ every row moved up one.
 | 2 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
 | 3 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
 | 4 | **A referee for rival memory tools** | 17 | Only a fair comparison once 3 exists |
-| 5 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival shipped in 0.32.0; X15 writes from any tool shipped in 0.37.0; X16 incremental refresh built (unreleased); X17 next | 19 | Standalone; picked 2026-10-26. A 20-part roadmap (X1-X20) in its section below |
+| 5 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival shipped in 0.32.0; X15 writes from any tool shipped in 0.37.0; X16 incremental refresh shipped in 0.38.0; X17 next | 19 | Standalone; picked 2026-10-26. A 20-part roadmap (X1-X20) in its section below |
 | 6 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
 | 7 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
 | 8 | Session flight recorder (low priority) | 18 | Check prior art first |
@@ -2336,7 +2330,7 @@ slices alongside them. IDs are stable references, not the order.
 | X13 | **Code fingerprints** - embed code units; near-duplicate logic across repos, and provenance of copied code | embeddings, hybrid search | |
 | X14 | **Map on arrival (SHIPPED in 0.32.0, #153)** - a short repo overview (size, languages, top-ranked files, entry points) on the session's first touch of a repo, then an up-to-4-line neighbourhood (rank, importers, reach, imports) on a file's first `Read` | X1 graph cache, hooks | PostToolUse context, non-blocking. Leaf files stay silent. First touch, not session start, so a session that never touches code pays nothing |
 | X15 | **Writes from any tool (RELEASED in 0.37.0)** - before a Bash call `gingugu hook tool` snapshots the dirty set of up to 8 candidate checkouts (cwd repo, repos the session touched, repos of paths in the command); after it `gingugu hook bash` (new doorway `post_bash_xray.py`, matcher `Bash`) diffs it and X-rays the changed source files, and a deleted file's old importers from the cached graph | X2, hooks | Command parsing can never be complete; watching the checkout catches every write path, and any harness that edits through a shell. Informs, cannot deny; shares the edit tripwire's once-per-file claim; a repo reached only by a `cd` inside a script is not watched |
-| X16 | **Incremental refresh (BUILT, unreleased)** - the hooks' graph build caches each file's parse by content (`xray/parse_cache.py`, `xray-parse-<sha16(root)>.json`; adapters split into `parse`/`valid`/`link`) and re-parses only files whose bytes changed; linking always reruns. Refresh after writes stays lazy (the next hook call pays only for what changed); the nightly dream pass was dropped - the brain cannot read a client's checkout. Measured: django (3,050 files) one edit 0.82s instead of 4.3s, unchanged 0.37s; vite (1,639 TS/JS files) one edit 0.48s, cold 1.0s | X1, hooks | A full re-extract grows with the repo: 4.3s on django |
+| X16 | **Incremental refresh (RELEASED in 0.38.0, #164)** - the hooks' graph build caches each file's parse by content (`xray/parse_cache.py`, `xray-parse-<sha16(root)>.json`; adapters split into `parse`/`valid`/`link`) and re-parses only files whose bytes changed; linking always reruns. Refresh after writes stays lazy (the next hook call pays only for what changed); the nightly dream pass was dropped - the brain cannot read a client's checkout. Measured: django (3,050 files) one edit 0.82s instead of 4.3s, unchanged 0.37s; vite (1,639 TS/JS files) one edit 0.48s, cold 1.0s | X1, hooks | A full re-extract grows with the repo: 4.3s on django |
 | X17 | **Symbol graph** - functions, classes, definitions and call sites, not just files and imports | `xray/lang/` adapters, tree-sitter | The resolution X7 needs to name the function an entry point reaches, not just the file |
 | X19 | **X-ray brief (SHIPPED in 0.34.0, #157)** - the changed files by rank with importer counts, plus their combined blast (code and candidate tests), for an agent that fires no hooks | X1, X14 graph cache | `code_xray` `brief` (`range`, `files`, `path`) and `gingugu xray brief [--range R \| --files a,b] [--path P] [--json]`. Computed on the caller's machine from the hook graph cache; nothing stored, the brain never asked; `gingugu serve` refuses it, the proxy answers it locally. Compact `text` <= 8800 chars, for reviews, handoffs and `board watch --exec`. `xray/brief.py`, `xray_cli.py` |
 | X20 | **Brief on the board (RELEASED in 0.35.0)** - a handoff carries its X-ray brief without anyone asking. Why next: the agents X19 is for fire no hooks, so a brief they must request is a brief they rarely see | X19, agent board | When a board post names a range (`xray: <range>`), the RECEIVING side renders `xray brief` for it and attaches the text: the prompt hook's board mail (Claude Code) and `board watch --exec` (Codex). Rendered on the receiver's machine from its own checkout; the post itself carries only the ref, never paths or the brief. BUILT as a line of its own `xray: <range>` in the body: board mail appends at most one per prompt (<= 3500 chars, the prompt's cwd); `board watch` adds an `xray` field, appends to `text` and sets `GINGUGU_POST_XRAY` (<= 3 per batch, the watcher's cwd). Same range gate as `brief`, ref <= 200 chars. Sender nudge: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line (`xray/board_nudge.py`). A receiver with no cwd or outside a repo gets one line naming `gingugu xray brief --range <ref>` (0.35.2). Part 2: `xray: <repo> <range>` names the repo, found locally via `xray/repo_id` (0.36.0). Switch `MEMORY_XRAY_BOARD`. `xray/board_brief.py` |
