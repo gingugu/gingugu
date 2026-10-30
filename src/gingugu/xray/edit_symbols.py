@@ -67,13 +67,15 @@ def _line(sym: symbols.Symbols, rel: str, qual: str) -> str | None:
     )
 
 
-def lines(payload: dict, root: Path, rel: str, state_dir: Path, session_id: str) -> list[str]:
+def lines(
+    payload: dict, root: Path, rel: str, state_dir: Path, session_id: str, fp: str | None = None
+) -> list[str]:
     """The symbol lines for this edit; empty when it names none or cannot be read."""
     olds = _olds(payload)
     if not olds:
         return []
     text = (root / rel).read_text(encoding="utf-8", errors="replace")
-    sym = hook_common.symbols(root, state_dir, session_id)
+    sym = hook_common.symbols(root, state_dir, session_id, fp)
     quals = _quals(sym, rel, text, olds)
     out = [ln for q in quals[:MAX_NAMED] if (ln := _line(sym, rel, q))]
     if len(quals) > MAX_NAMED:

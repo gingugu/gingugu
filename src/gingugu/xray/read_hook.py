@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from . import bash_state, hook_common, local, rank, symbols
+from . import bash_state, extract, hook_common, local, rank, symbols
 from .hook_common import Graph, _claim, _show, _sweep
 from .scan import XrayError
 
@@ -146,12 +146,14 @@ def _most_called(rel: str, sym: symbols.Symbols) -> str | None:
     return f"Most called: {named}"
 
 
-def _with_symbols(near: str, rel: str, root: Path, state_dir: Path, session_id: str) -> str:
+def _with_symbols(
+    near: str, rel: str, root: Path, state_dir: Path, session_id: str, fp: str
+) -> str:
     """``near`` plus the most-called line for a Python file; unchanged on any failure."""
     if not rel.endswith(".py"):
         return near
     try:
-        line = _most_called(rel, hook_common.symbols(root, state_dir, session_id))
+        line = _most_called(rel, hook_common.symbols(root, state_dir, session_id, fp))
     except (XrayError, ValueError, OSError):
         return near
     return f"{near}\n{line}" if line else near
@@ -187,7 +189,8 @@ def check(payload: dict, state_dir: Path) -> str | None:
         want_read = rel is not None and not read_claim.exists()
         if not (want_map or want_read):
             return None
-        g = hook_common.graph(root, state_dir, session_id)
+        fp = extract.fingerprint(root)  # once: the graph and the symbols share it
+        g = hook_common.graph(root, state_dir, session_id, fp)
         # Claimed whether or not there is anything to say: silence is an answer
         # too, and an unclaimed silent file would cost a fingerprint every read.
         parts = []
@@ -198,7 +201,7 @@ def check(payload: dict, state_dir: Path) -> str | None:
         if want_read and rel is not None and _claim(read_claim):
             near = _render_neighbourhood(rel, g)
             if near:
-                parts.append(_with_symbols(near, rel, root, state_dir, session_id))
+                parts.append(_with_symbols(near, rel, root, state_dir, session_id, fp))
         if not parts:
             return None
         _sweep(state_dir)
