@@ -91,15 +91,29 @@ def test_a_ref_this_checkout_does_not_know_is_one_short_line(branched, state):  
     assert "no-such-branch" in text and "\n" not in text and len(text) < 300
 
 
-def test_attach_is_silent_without_a_ref_outside_a_repo_or_switched_off(
+def test_attach_is_silent_without_a_ref_or_switched_off(
     branched, state, tmp_path, monkeypatch  # noqa: F811
 ):
     (tmp_path / "plain").mkdir()
     assert board_brief.attach("no marker here", str(branched), 4000) is None
-    assert board_brief.attach("xray: HEAD~1..HEAD", str(tmp_path / "plain"), 4000) is None
-    assert board_brief.attach("xray: HEAD~1..HEAD", None, 4000) is None
+    assert board_brief.attach("no marker here", str(tmp_path / "plain"), 4000) is None
     monkeypatch.setenv("MEMORY_XRAY_BOARD", "off")
     assert board_brief.attach("xray: HEAD~1..HEAD", str(branched), 4000) is None
+    assert board_brief.attach("xray: HEAD~1..HEAD", str(tmp_path / "plain"), 4000) is None
+
+
+@pytest.mark.parametrize("where", ["plain", None])
+def test_a_ref_with_no_checkout_here_says_how_to_get_the_brief(where, state, tmp_path):
+    """A watcher run outside a repo (a Codex thread dir) must not drop the ref silently."""
+    cwd = None
+    if where:
+        (tmp_path / where).mkdir()
+        cwd = str(tmp_path / where)
+    text = board_brief.attach("xray: main..feature/x", cwd, 4000)
+    assert text is not None
+    assert "\n" not in text and len(text) < 300
+    assert "not available here" in text
+    assert "`gingugu xray brief --range main..feature/x`" in text
 
 
 # --- the prompt hook's board mail -----------------------------------------
@@ -140,6 +154,7 @@ def test_board_mail_outside_a_repo_still_arrives(local, tmp_path):  # noqa: F811
     (tmp_path / "plain").mkdir()
     ctx = _hook(str(tmp_path / "plain"))
     assert "GINGUGU BOARD" in ctx and "X-RAY BRIEF" not in ctx
+    assert "gingugu xray brief --range HEAD~1..HEAD" in ctx
 
 
 # --- board watch -----------------------------------------------------------
@@ -179,6 +194,16 @@ def test_the_watch_line_carries_the_brief(branched, state):  # noqa: F811
     lines = [json.loads(x) for x in out.getvalue().splitlines()]
     assert "GINGUGU X-RAY BRIEF:" in lines[0]["xray"]
     assert lines[1]["xray"] is None
+
+
+def test_the_watch_line_outside_a_repo_carries_the_note(state, tmp_path):
+    (tmp_path / "plain").mkdir()
+    out = io.StringIO()
+    em = board_watch_emit.Emitter(out, io.StringIO(), cwd=str(tmp_path / "plain"))
+    em.emit([_p(1, "review\nxray: HEAD~1..HEAD")])
+    line = json.loads(out.getvalue())
+    assert "gingugu xray brief --range HEAD~1..HEAD" in line["xray"]
+    assert line["text"].endswith(line["xray"])
 
 
 def test_briefs_are_capped_per_batch(branched, state):  # noqa: F811
