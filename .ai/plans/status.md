@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-10-29 (docs audit mandatory on every PR)_
+_Last updated: 2026-10-29 (checkout guard)_
 
 ## In Flight
 
@@ -51,6 +51,20 @@ mid-capture; `overview.top` and the payload's `skipped` are bounded but not
 paged; a git `core.fsmonitor`-style check for other config that runs code.
 
 ## Recently Completed
+
+**Checkout guard (feature/checkout-guard, unreleased).** Several sessions sharing a
+repo's primary checkout kept moving its branch under each other, carrying uncommitted
+edits onto the wrong branch. `gingugu hook tool` now denies, every time, a Bash git
+command that would move or empty the primary checkout (`switch`, `checkout` unless
+paths follow `--`, `rebase` but `--abort`/`--quit`, `reset --hard/--merge/--keep`,
+`stash` but `list`/`show`) and points at a worktree; linked worktrees pass. The parse
+is quote- and heredoc-aware, so prose in a commit message is never read as a command.
+`GINGUGU_PRIMARY_OK=1` passes one command; `MEMORY_CHECKOUT_GUARD=off` disables it.
+Reaches every wired repo with the package upgrade; a plain `gingugu init` adds the
+`.claude/worktrees/` ignore and the managed "Concurrent sessions" rule. Built in a
+worktree from the start. Not built: a SessionStart warning (the gate makes it
+redundant, and a template change needs `init --force`); `sudo`/`bash -c`/subshell
+forms are not followed - the guard stops habits, it is not a sandbox.
 
 **Docs audit is mandatory on every PR (docs/mandatory-doc-audit, unreleased).** The
 `/creating-pr` skill - this repo's copy and the template `gingugu harness` installs -

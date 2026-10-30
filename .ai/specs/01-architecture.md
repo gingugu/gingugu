@@ -53,7 +53,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `context`, `relations`, `consolidation`, `decay`, `stats`, `namespaces`,
    `portability`, `capability`, `grants` (the per-call grant every chokepoint
    consults), `serve_tokens`, `tripwire` (the memory-tripwire decision half of the `PreToolUse` hook; its other half is
-   `xray/edit_hook`; see Key Decisions), `post_tool_hook` (`gingugu hook read`, the `PostToolUse` entry; hands off to `xray/read_hook`), `board` + `board_events` (the agent board store and its
+   `xray/edit_hook`; see Key Decisions), `post_tool_hook` (`gingugu hook read`, the `PostToolUse` entry; hands off to `xray/read_hook`), `checkout_guard` (denies moves of a shared primary checkout from `gingugu hook tool`), `board` + `board_events` (the agent board store and its
    `subscriptions/listen` bus; see Key Decisions), `board_delivery` (the post/reply
    delivery receipt: can the recipient persona's known clients read the namespace),
    `xray/` (Codebase X-ray: `scan` + `extract` + `lang/` (one adapter per language: `python`
@@ -759,10 +759,29 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   state is saved, so a failed write can never block an edit forever. File
   names with control characters are quoted in the deny text. Own switch
   `MEMORY_XRAY_TRIPWIRE` (default on), independent of `MEMORY_TRIPWIRES` and
-  `MEMORY_MINION_FENCE`. Order in `tool_hook.run`: minion fence, X-ray, memory
-  tripwires; when a memory tripwire and the X-ray both fire on one call they
+  `MEMORY_MINION_FENCE`. Order in `tool_hook.run`: minion fence, checkout
+  guard, X-ray, memory tripwires; when a memory tripwire and the X-ray both fire on one call they
   share one deny (tripwire reason, blank line, X-ray reason). X-ray denies are
   not logged to `query_log`.
+- **Checkout guard (unreleased).** `checkout_guard.py`, called from
+  `tool_hook.run` right after the minion fence: a Bash git command that would
+  move or empty the PRIMARY checkout (`switch`; `checkout` unless paths follow `--`;
+  `rebase` other than `--abort`/`--quit`; `reset --hard`/`--merge`/`--keep`;
+  `stash` other than `list`/`show`) is denied every time, never once per
+  session, with a pointer to `EnterWorktree` or `git worktree add
+  .claude/worktrees/<name>`. Primary = `git rev-parse --git-dir` equals
+  `--git-common-dir`, asked of the directory the git call runs in (payload
+  `cwd`, moved by a preceding `cd` segment or `git -C`, with `~` and `$VAR`
+  expanded; one `rev-parse` per distinct directory). Shallow parse: heredoc
+  bodies dropped, then one quote-aware `shlex` pass split on `; & | newline`,
+  so prose in a commit message or PR body is never read as a command; only a
+  segment whose first word after `env`/`command`/`VAR=value` is `git` counts
+  (`sudo`, `bash -c`, subshells are not followed - it stops habits, it is not
+  a sandbox). `GINGUGU_PRIMARY_OK=1` as a prefix passes one
+  command; `MEMORY_CHECKOUT_GUARD=off` disables it. Any failure passes. Lives in
+  the package, so every repo already wired to `gingugu hook tool` gets it with
+  an upgrade; `init` also git-ignores `.claude/worktrees/` and the managed
+  protocol block carries a "Concurrent sessions" rule.
 - **Codebase X-ray: map on arrival (X14, unreleased).** A non-blocking
   `PostToolUse` hook (`gingugu hook read`, `post_tool_hook` + `xray/read_hook`)
   puts the shape of the code in front of the agent while it reads: the first
@@ -936,7 +955,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   non-destructively (`settings.py`), allowing `mcp__brain` there and in the
   user-level `~/.claude/settings.json` (`init_user_permissions`) and appending the hooks' runtime artifacts
   (`logs/`, `.claude/data/`, `.claude/settings.local.json`,
-  `.claude/hooks/**/__pycache__/`, `.claude/**/*.bak`, `CLAUDE.md.bak`,
+  `.claude/worktrees/`, `.claude/hooks/**/__pycache__/`, `.claude/**/*.bak`, `CLAUDE.md.bak`,
   `AGENTS.md.bak`) to the target's `.gitignore` so transcripts never get
   committed (`bootstrap/gitignore.py`; a rerun adds missing rules under the
   block an earlier run wrote, never a second block under the same header). Output is a themed 90s boot sequence

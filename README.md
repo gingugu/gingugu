@@ -846,6 +846,16 @@ It installs:
   files that import it and the tests worth running; re-issue the edit and it
   passes. It reads your checkout locally and never asks the brain. Set
   `MEMORY_XRAY_TRIPWIRE=off` to disable it.
+  It also runs the **checkout guard**, for repos where several sessions share
+  one checkout: a Bash `git switch`, `git checkout` (unless paths follow
+  `--`), `rebase` (other than `--abort`/`--quit`),
+  `reset --hard`/`--merge`/`--keep` or `stash` (other than `list`/`show`) in
+  the *primary* checkout is denied every time, because it would move or take
+  away every other session's uncommitted edits. The reason points at a
+  worktree (`EnterWorktree`, or `git worktree add .claude/worktrees/<name>`).
+  Linked worktrees are never guarded, and commits, pull, push and reads pass.
+  Prefix one command with `GINGUGU_PRIMARY_OK=1` to let it through, or set
+  `MEMORY_CHECKOUT_GUARD=off` to disable the guard.
 - **`.claude/hooks/post_tool_xray.py`** — a `PostToolUse` hook (matched to
   `Read|Grep|Glob`) that gives the agent the **X-ray map on arrival**: the first
   Read, Grep or Glob in a repo in a session adds a compact repo map (size,
@@ -876,7 +886,8 @@ It installs:
   fenced minion's calls to its own `brain` server are not denied or prompted in
   any repo. The server enforces the grant; the allow grants nothing beyond it.
 - The runtime artifacts the hooks generate (`logs/`, `.claude/data/`,
-  `.claude/settings.local.json`), and the `.bak` copies `init` itself saves,
+  `.claude/settings.local.json`), in-repo worktrees (`.claude/worktrees/`),
+  and the `.bak` copies `init` itself saves,
   appended to your `.gitignore` — so a session transcript never gets
   committed, which matters most on a public repo.
 - **The memory protocol in your user-level `~/.claude/CLAUDE.md`**, inside a
@@ -1179,6 +1190,7 @@ Environment variables (all optional):
 | `MEMORY_XRAY_TRIPWIRE` | `on` | Set `off` to disable the X-ray edit tripwire in `gingugu hook tool` (the first edit of an imported Python, TypeScript/JavaScript or Go file per session is denied with its dependents) |
 | `MEMORY_XRAY_MAP` | `on` | Set `off` to disable the X-ray map on arrival in `gingugu hook read` (the repo map on a session's first Read/Grep/Glob of a repo, and each Read source file's importers and imports, once per session) |
 | `MEMORY_MINION_FENCE` | `on` | Set `off` to disable the subagent fence in `gingugu hook tool` (data-dir file/shell access and inherited-server writes) |
+| `MEMORY_CHECKOUT_GUARD` | `on` | Set `off` to disable the checkout guard in `gingugu hook tool` (branch moves, `reset --hard` and `stash` in a repo's primary checkout are denied with a pointer to a worktree). One command passes with a `GINGUGU_PRIMARY_OK=1` prefix |
 | `MEMORY_SERVE_HOST` | `127.0.0.1` | Bind host for `gingugu serve` (set `0.0.0.0` to accept remote connections) |
 | `MEMORY_SERVE_PORT` | `8765` | Bind port for `gingugu serve` |
 | `MEMORY_SERVE_TOKEN` | *(unset)* | The owner's Bearer token for `gingugu serve` (full access). If unset, a token is read from `<db-dir>/serve_token`, or generated and saved `0600` (its path is logged, never the token). Other clients get scoped tokens from `gingugu token add` |
