@@ -1625,7 +1625,7 @@ and sets `GINGUGU_POST_XRAY` for at most 3 posts a batch, from the watcher's cwd
 The ref is another agent's text, so it passes the same range gate as `code_xray`
 `brief` before git sees it (first `xray:` line decides, the ref alone on the line,
 at most 200 characters). An unknown ref gives one short line, a directory that is
-not a repo gives nothing, and `MEMORY_XRAY_BOARD=off` disables it. A brief cut to
+not a repo (or no cwd) gives one line naming `gingugu xray brief --range <range>`, and `MEMORY_XRAY_BOARD=off` disables it. A brief cut to
 fit ends with a line that says so and names `code_xray brief` for the whole of it.
 The sender is asked too, the main agent included (the PreToolUse doorway passes a
 board `post` through): `gingugu hook tool` denies, once per session, a board post that names no range when it comes from a branch ahead of the default branch, with the exact `xray:` line as the reason; the re-issue passes. A cursor at

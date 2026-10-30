@@ -123,7 +123,8 @@ imports). For an agent that never fires those hooks, `gingugu xray brief` (or
 `code_xray` with `action: "brief"`) hands it the same map of a task: the changed
 files by rank and what they reach. A board post that names a range (a line of
 its own, `xray: main..feature/x`) arrives with that brief, rendered on the
-receiving machine from its own checkout.
+receiving machine from its own checkout. A receiver running outside a checkout
+gets one line instead, naming the `gingugu xray brief --range` to run in the repo.
 
 That is the part that makes the memory worth having, and it is in the box.
 

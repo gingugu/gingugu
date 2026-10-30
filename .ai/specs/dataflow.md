@@ -642,7 +642,8 @@ sender: board post with no `xray:` line, from a branch ahead of the default bran
   → gingugu hook tool → board_nudge.check → deny once per session with the exact line
 post body → board_brief.ref_in: first `xray:` line, ref alone on it, <= 200 chars,
   brief._check_range gate (else no brief)
-  → attach(body, cwd): MEMORY_XRAY_BOARD off / no cwd / not a repo → nothing
+  → attach(body, cwd): MEMORY_XRAY_BOARD off → nothing
+    no cwd / not a repo → one line: not available here, run `gingugu xray brief --range <ref>`
     unknown ref → one short line; else brief.answer(cwd, ref) text
   → prompt hook mail: appended to the block for the first of the shown posts (<= 5)
     that names a range, one per prompt, <= 3500 chars (a cut ends with
