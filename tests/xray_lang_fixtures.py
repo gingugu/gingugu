@@ -22,7 +22,13 @@ class FakeAdapter:
     manifests = ("fake.mod",)
     seen_manifests: dict[str, bytes] = {}
 
+    def parse(self, rel, data):
+        return data.decode()
+
     def extract(self, sources, manifests):
+        return self.link({rel: self.parse(rel, data) for rel, data in sources.items()}, manifests)
+
+    def link(self, sources, manifests):
         FakeAdapter.seen_manifests = dict(manifests)
         out = LangResult()
         dirs: dict[str, list[str]] = {}
@@ -35,8 +41,8 @@ class FakeAdapter:
             node = f"fake:{d}"
             out.files.append(FileInfo(node, False, False, "fake", "package"))
             out.edges += [Edge(node, m, "member", True) for m in members]
-        for rel, data in sources.items():
-            for line in data.decode().splitlines():
+        for rel, text in sources.items():
+            for line in text.splitlines():
                 word, _, arg = line.partition(" ")
                 if word == "import":
                     out.edges.append(Edge(rel, arg, "module", True))
