@@ -818,8 +818,8 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   most one per prompt (3500 chars, the prompt's cwd); `board_watch_emit` adds the
   `xray` field, appends to `text` and sets `GINGUGU_POST_XRAY` (<= 3 per batch,
   the watcher's cwd). A brief over budget is cut on a line and ends with
-  `board_brief.CLIPPED`, inside the budget. Unknown ref: one short line; not a
-  repo: nothing; never raises, so a brief cannot cost the mail. The sender's half
+  `board_brief.CLIPPED`, inside the budget. Unknown ref: one short line; no cwd or not a
+  repo: one line naming `gingugu xray brief --range <ref>`; never raises, so a brief cannot cost the mail. The sender's half
   (`xray/board_nudge`, from `gingugu hook tool`; the tripwire doorway passes a
   main-thread board `post` through to it) denies once per session a board post
   from a branch ahead of the default branch that names no range, with the exact
