@@ -22,6 +22,7 @@ import time
 from pathlib import Path
 
 from . import local
+from .hook_common import _show
 
 MAX_BYTES = 5_000_000
 KINDS = ("calls", "imports")
@@ -34,7 +35,9 @@ MAX_MISSES = 10
 _RUN = re.compile(
     r"(?:^|&&|\|\||[;|]|\brun|\s-m)\s*(?:\w+=\S*\s+)*(?:\S*/)?(?:pytest|py\.test)(?=\s|$)"
 )
-_FAILED = re.compile(r"^(?:FAILED|ERROR) (\S+?)(?:::|\s|$)", re.MULTILINE)
+# Only a test file's path is kept from output: a log line that happens to start
+# with ERROR must not put its next word (a host, a token) on disk for good.
+_FAILED = re.compile(r"^(?:FAILED|ERROR) ([\w./\\-]+?\.py)(?:::|\s|$)", re.MULTILINE)
 
 
 def path(state_dir: Path) -> Path:
@@ -93,7 +96,9 @@ def failed_tests(text: str) -> list[str]:
 def observe(payload: dict, state_dir: Path) -> None:
     """Record the outcome of a finished ``pytest`` run (Bash PostToolUse)."""
     try:
-        if payload.get("tool_name") != "Bash":
+        from .edit_hook import enabled
+
+        if payload.get("tool_name") != "Bash" or not enabled():
             return
         tool_input, response = payload.get("tool_input"), payload.get("tool_response")
         session_id = payload.get("session_id")
@@ -115,7 +120,7 @@ def observe(payload: dict, state_dir: Path) -> None:
                 "t": "o",
                 "s": _hash(session_id),
                 "r": _hash(root),
-                "failed": failed_tests(text),
+                "failed": failed_tests(text)[:MAX_TESTS],
                 "ts": time.time(),
             },
         )
@@ -134,8 +139,16 @@ def _records(state_dir: Path) -> list[dict]:
             row = json.loads(line)
         except (ValueError, RecursionError):
             continue
-        if isinstance(row, dict) and row.get("t") in ("p", "o"):
-            out.append(row)
+        if not isinstance(row, dict):
+            continue
+        # The ledger is a file anyone with the owner's access can edit: a row of the
+        # wrong shape is skipped, never trusted into a KeyError.
+        if row.get("t") == "p" and isinstance(row.get("file"), str):
+            tests = row.get("tests")
+            if isinstance(tests, list) and row.get("kind") in KINDS:
+                out.append({**row, "tests": [t for t in tests if isinstance(t, str)]})
+        elif row.get("t") == "o" and isinstance(row.get("failed"), list):
+            out.append({**row, "failed": [t for t in row["failed"] if isinstance(t, str)]})
     return out
 
 
@@ -162,7 +175,7 @@ def score(state_dir: Path) -> dict:
         if row["t"] == "p":
             seen.setdefault(key, []).append(row)
             continue
-        failed = [t for t in row.get("failed", []) if isinstance(t, str)]
+        failed = row["failed"]
         out["runs"] += 1
         out["failing_runs"] += bool(failed)
         out["failed"] += len(failed)
@@ -205,5 +218,7 @@ def render(result: dict) -> str:
     if result["unpredicted"]:
         lines.append(f"Unpredicted (no edit note in that session): {result['unpredicted']}")
     for miss in result["misses"][-5:]:
-        lines.append(f"Missed: {miss['test']} (after editing {', '.join(miss['edited'])})")
+        # Both came from disk and stdout: quoted if unprintable, like every X-ray path.
+        edited = ", ".join(_show(p) for p in miss["edited"])
+        lines.append(f"Missed: {_show(miss['test'])} (after editing {edited})")
     return "\n".join(lines)

@@ -235,3 +235,51 @@ def test_the_cli_prints_the_score(calls, state, monkeypatch, tmp_path):
     with redirect_stdout(out):
         assert xray_cli.main(["score", "--json"]) == 0
     assert json.loads(out.getvalue())["failed"] == 1
+
+
+# --- hostile output and a hostile ledger ------------------------------------------
+
+
+def test_only_test_file_paths_are_recorded_from_output():
+    text = (
+        "ERROR connection refused to db.internal:5432\n"
+        "FAILED tests/test_ok.py::t - x\n"
+        "FAILED \x1b]0;pwned\x07tests/test_bad.py::t - x\n"
+        "ERROR token=abc123\n"
+    )
+    assert ledger.failed_tests(text) == ["tests/test_ok.py"]
+
+
+def test_one_run_records_at_most_the_cap(calls, state, monkeypatch):
+    monkeypatch.setattr(ledger, "MAX_TESTS", 3)
+    out = "".join(f"FAILED tests/test_{i}.py::t - x\n" for i in range(50))
+    ledger.observe(_bash(calls, "pytest", stdout=out), state)
+    row = json.loads(ledger.path(state).read_text().splitlines()[-1])
+    assert len(row["failed"]) == 3
+
+
+def test_the_ledger_is_switched_off_with_the_tripwire(calls, state, monkeypatch):
+    monkeypatch.setenv("MEMORY_XRAY_TRIPWIRE", "off")
+    ledger.observe(_bash(calls, "pytest", stdout=PYTEST_FAIL), state)
+    assert not ledger.path(state).exists()
+
+
+def test_a_ledger_with_wrong_field_types_still_scores(state):
+    ledger.path(state).parent.mkdir(parents=True, exist_ok=True)
+    rows = [
+        {"t": "p", "s": "a", "r": "b", "file": 7, "kind": "calls", "tests": "nope"},
+        {"t": "p", "s": "a", "r": "b"},
+        {"t": "o", "s": "a", "r": "b", "failed": "tests/test_x.py"},
+        {"t": "o", "s": "a", "r": "b", "failed": ["tests/test_x.py", 3]},
+    ]
+    ledger.path(state).write_text("".join(json.dumps(r) + "\n" for r in rows))
+    s = ledger.score(state)
+    assert s["runs"] == 1 and s["failed"] == 1  # only the last row is an outcome
+    ledger.render(s)
+
+
+def test_render_never_prints_a_control_character(state):
+    s = ledger.score(state)
+    s["misses"] = [{"test": "tests/test_\x1b[2Jx.py", "edited": ["src/a\x07.py"]}]
+    text = ledger.render(s)
+    assert "\x1b" not in text and "\x07" not in text

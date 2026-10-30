@@ -143,10 +143,11 @@ def check(payload: dict, state_dir: Path) -> str | None:
         if target is None or not isinstance(session_id, str) or not session_id:
             return None
         root, rel = target
+        # The file is seen now, by whoever wrote it, in any X-ray language: the
+        # blind-edit deny stands down. Only Python has a symbol graph to say more.
+        _claim(hook_common.claim_path(state_dir, "xray-read", session_id, root, rel))
         if not rel.endswith(".py"):
             return None
-        # The file is seen now, by whoever wrote it: the blind-edit deny stands down.
-        _claim(hook_common.claim_path(state_dir, "xray-read", session_id, root, rel))
         news = _news(payload)
         if not news:
             return None
