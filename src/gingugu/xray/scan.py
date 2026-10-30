@@ -23,7 +23,8 @@ class XrayError(Exception):
     """The path cannot be X-rayed (not a git repo, git missing, unreadable)."""
 
 
-def git(cwd: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
+def git(cwd: Path, *args: str, timeout: float | None = None) -> subprocess.CompletedProcess[bytes]:
+    """``timeout`` is for a git call whose size someone else chose (a brief's range)."""
     env = {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}
     try:
         return subprocess.run(
@@ -32,7 +33,10 @@ def git(cwd: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
             env=env,
             capture_output=True,
             check=False,
+            timeout=timeout,
         )
+    except subprocess.TimeoutExpired as exc:
+        raise XrayError(f"git {args[0] if args else ''} took over {timeout}s") from exc
     except OSError as exc:
         raise XrayError(f"cannot run git in {cwd}: {exc}") from exc
 

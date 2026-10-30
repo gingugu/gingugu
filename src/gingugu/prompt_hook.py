@@ -219,7 +219,7 @@ def run(payload: dict) -> int:
     from .config import load_config
 
     app = load_config()
-    letters = mail(app.db_path, session_id)  # every prompt: a bare "go" still gets its mail
+    letters = mail(app.db_path, session_id, cwd)  # every prompt: a bare "go" still gets its mail
     try:
         found = _recall(prompt, session_id, cwd, app)
     except Exception:  # noqa: BLE001 - a recall bug must not swallow the mail too

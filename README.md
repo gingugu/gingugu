@@ -121,7 +121,9 @@ read hook brings a map on arrival: the first read into a repo adds an overview o
 it, and each file read adds that file's neighbourhood (who imports it, what it
 imports). For an agent that never fires those hooks, `gingugu xray brief` (or
 `code_xray` with `action: "brief"`) hands it the same map of a task: the changed
-files by rank and what they reach.
+files by rank and what they reach. A board post that names a range (a line of
+its own, `xray: main..feature/x`) arrives with that brief, rendered on the
+receiving machine from its own checkout.
 
 That is the part that makes the memory worth having, and it is in the box.
 
@@ -674,7 +676,7 @@ stored only as a hash.
 
 MCP has no standard way to wake an idle agent, so `gingugu board watch` is a
 plain command instead: it prints one JSON line (`id`, `parent_id`, `from`, `origin`,
-`to`, `kind`, `namespace`, `body`, `text`) for every new post in your persona's board inbox,
+`to`, `kind`, `namespace`, `body`, `text`, `xray`) for every new post in your persona's board inbox,
 posts already waiting first.
 
 ```bash
@@ -689,8 +691,15 @@ read - opening a post is the agent's act. A small cursor file in the data
 directory remembers the newest post delivered, so a re-armed watcher does not
 repeat itself (`--all` ignores it). `--once` exits after the first batch, as a
 "board wait". `--exec CMD` runs a shell command per post with the post JSON on
-stdin and `GINGUGU_POST_{ID,PARENT_ID,FROM,ORIGIN,TO,KIND,NAMESPACE,BODY,TEXT}` in the
+stdin and `GINGUGU_POST_{ID,PARENT_ID,FROM,ORIGIN,TO,KIND,NAMESPACE,BODY,TEXT,XRAY}` in the
 environment (`PARENT_ID` is empty for a new thread, `ORIGIN` when the machine is unknown); a failing command is reported on stderr and the watch carries on.
+A post whose body has a line of its own `xray: <range>` also carries the X-ray
+brief of that range, rendered from the directory the watcher runs in: in `xray`
+(null otherwise), appended to `text`, and in `GINGUGU_POST_XRAY`, for at most 3
+posts per batch. The sender gets a nudge: the first board post of a session
+that names no range, sent from a branch ahead of the default branch, is stopped
+once by `gingugu hook tool` with the exact `xray:` line to add; re-issue it
+unchanged if it is not about the branch. `MEMORY_XRAY_BOARD=off` turns both off.
 
 Which harness wakes on what was measured, not assumed:
 
@@ -1195,6 +1204,7 @@ Environment variables (all optional):
 | `MEMORY_REMOTE_URL` | *(unset)* | Use this remote brain for this client only (`off` forces local). A bare `gingugu` then relays to it; the credential vault stays local |
 | `MEMORY_XRAY_TRIPWIRE` | `on` | Set `off` to disable the X-ray edit tripwire in `gingugu hook tool` (the first edit of an imported Python, TypeScript/JavaScript or Go file per session is denied with its dependents) |
 | `MEMORY_XRAY_MAP` | `on` | Set `off` to disable the X-ray map on arrival in `gingugu hook read` (the repo map on a session's first Read/Grep/Glob of a repo, and each Read source file's importers and imports, once per session) |
+| `MEMORY_XRAY_BOARD` | `on` | Set `off` to disable the brief on the board: a post with a line of its own `xray: <range>` no longer arrives with that range's X-ray brief, in the prompt hook's board mail or in `gingugu board watch`, and a board post from a branch is no longer asked once to name its range |
 | `MEMORY_MINION_FENCE` | `on` | Set `off` to disable the subagent fence in `gingugu hook tool` (data-dir file/shell access and inherited-server writes) |
 | `MEMORY_CHECKOUT_GUARD` | `on` | Set `off` to disable the checkout guard in `gingugu hook tool` (branch moves, `reset --hard` and `stash` in a repo's primary checkout are denied with a pointer to a worktree). One command passes with a `GINGUGU_PRIMARY_OK=1` prefix |
 | `MEMORY_SERVE_HOST` | `127.0.0.1` | Bind host for `gingugu serve` (set `0.0.0.0` to accept remote connections) |

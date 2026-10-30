@@ -109,6 +109,9 @@ def register(mcp, ctx: ServerContext) -> None:
         given), "claim" (post_id of an open task: exactly one agent wins), "done"
         (post_id: by its author or claimer).
 
+        A post body with a line of its own ``xray: <range>`` (e.g. ``xray: main..feature/x``)
+        arrives with the receiver's X-ray brief of that range.
+
         A reply goes to the session that asked; other sessions of that persona see it
         once it has gone unread for an hour.
 

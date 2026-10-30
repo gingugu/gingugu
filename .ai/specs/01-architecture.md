@@ -59,7 +59,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `xray/` (Codebase X-ray: `scan` + `extract` + `lang/` (one adapter per language: `python`
    on `ast` with `resolve`; `typescript` + `ts_*` + `jsonc` and `golang` on tree-sitter) +
    `model` + `local` on the client, `validate` +
-   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), the hook side that builds the graph itself and never
+   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), `board_nudge` (X20 sender: asks a board post from a branch ahead of the default branch for its range, once per session, from `gingugu hook tool`), `board_brief` (X20: the brief a board post's `xray:` line asks for, rendered on the receiver), the hook side that builds the graph itself and never
    touches the brain; see Key Decisions), `proxy_xray` (the proxy's local half of `code_xray`),
    `board_watch` +
    `board_watch_remote`, `board_watch_emit` (the `gingugu board watch` wake-up command; see Key
@@ -763,7 +763,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   guard, X-ray, memory tripwires; when a memory tripwire and the X-ray both fire on one call they
   share one deny (tripwire reason, blank line, X-ray reason). X-ray denies are
   not logged to `query_log`.
-- **Checkout guard (unreleased).** `checkout_guard.py`, called from
+- **Checkout guard (shipped 0.33.0).** `checkout_guard.py`, called from
   `tool_hook.run` right after the minion fence: a Bash git command that would
   move or empty the PRIMARY checkout (`switch`; `checkout` unless paths follow `--`;
   `rebase` other than `--abort`/`--quit`; `reset --hard`/`--merge`/`--keep`;
@@ -782,7 +782,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   the package, so every repo already wired to `gingugu hook tool` gets it with
   an upgrade; `init` also git-ignores `.claude/worktrees/` and the managed
   protocol block carries a "Concurrent sessions" rule.
-- **Codebase X-ray: map on arrival (X14, unreleased).** A non-blocking
+- **Codebase X-ray: map on arrival (X14, shipped 0.32.0).** A non-blocking
   `PostToolUse` hook (`gingugu hook read`, `post_tool_hook` + `xray/read_hook`)
   puts the shape of the code in front of the agent while it reads: the first
   Read/Grep/Glob of a repo in a session adds a repo map, and each source file
@@ -797,7 +797,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   capped under 9000 characters (the harness cap is 10,000). Own switch
   `MEMORY_XRAY_MAP` (default on). Wired by `gingugu init` with a 15s timeout and
   matcher `Read|Grep|Glob`; it coexists with the harness's own PostToolUse logger.
-- **Codebase X-ray: the brief (X19, unreleased).** An agent that fires neither
+- **Codebase X-ray: the brief (X19, shipped 0.34.0).** An agent that fires neither
   hook (Codex reading via a shell, editing via `apply_patch`) still gets the map
   when handed it: `code_xray` `action: "brief"` / `gingugu xray brief` (`xray/brief`,
   `xray_cli`) lists the changed files (git range, named files, or the working tree
@@ -808,6 +808,21 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `gingugu serve` refuses it (it cannot read the caller's checkout) and the proxy
   claims it and answers it locally. A range is checked before git sees it (no
   option, whitespace or control characters).
+- **Codebase X-ray: the brief on the board (X20, unreleased).** The agents the
+  brief is for fire no hooks, so a handoff carries one unasked. A post body with a
+  line of its own `xray: <range>` arrives with the brief of that range, rendered by
+  the RECEIVER from its own checkout (`xray/board_brief`): the post carries only
+  the ref, so no paths or stale text cross the board. The ref is another agent's
+  text and goes through the same range gate as `brief` before git sees it (first
+  `xray:` line decides, alone on the line, <= 200 chars). `board_hook` appends at
+  most one per prompt (3500 chars, the prompt's cwd); `board_watch_emit` adds the
+  `xray` field, appends to `text` and sets `GINGUGU_POST_XRAY` (<= 3 per batch,
+  the watcher's cwd). Unknown ref: one short line; not a repo: nothing; never
+  raises, so a brief cannot cost the mail. The sender's half (`xray/board_nudge`,
+  from `gingugu hook tool`) denies once per session a board post from a branch
+  ahead of the default branch that names no range, with the exact line to add -
+  shipped in the hook `init` already wires, so every install gets it, where a
+  personal tripwire would reach one brain. `MEMORY_XRAY_BOARD=off`.
 - **Destructive tools ask the user, not the model (shipped 0.25.0).** Five paths
   confirm through MCP elicitation (SDK 2.x `Resolve` + `Elicit`): a hard
   `memory_forget`, a cascading `memory_namespaces` delete of a non-empty
