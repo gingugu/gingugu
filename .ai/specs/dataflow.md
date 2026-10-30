@@ -643,6 +643,9 @@ sender: board post with no `xray:` line, from a branch ahead of the default bran
 post body → board_brief.ref_in: first `xray:` line, ref alone on it, <= 200 chars,
   brief._check_range gate (else no brief)
   → attach(body, cwd): MEMORY_XRAY_BOARD off → nothing
+    `xray: <repo> <range>` → repo_id.find: cwd checkout if it matches, else exactly
+      <root>/<name> under MEMORY_XRAY_REPOS / default folders, origin-verified;
+      none → one line naming the repo; found → the brief from that checkout
     no cwd / not a repo → one line: not available here, run `gingugu xray brief --range <ref>`
     unknown ref → one short line; else brief.answer(cwd, ref) text
   → prompt hook mail: appended to the block for the first of the shown posts (<= 5)
