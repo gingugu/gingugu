@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from . import board_brief, hook_common, local, scan
+from . import board_brief, hook_common, local, repo_id, scan
 from .hook_common import _show
 from .scan import XrayError
 
@@ -81,7 +81,8 @@ def check(payload: dict, state_dir: Path) -> str | None:
     claim = hook_common.claim_path(state_dir, "xray-board-nudge", session_id, repo)
     if not hook_common._claim(claim):
         return None  # already asked this session
-    line = f"xray: {_show(base)}..{_show(branch)}"
+    name = repo_id.of(repo)
+    line = f"xray: {_show(name) + ' ' if name else ''}{_show(base)}..{_show(branch)}"
     commits = "commit" if n == 1 else "commits"
     return (
         f"GINGUGU X-RAY: this board post comes from {_show(branch)}, {n} {commits} ahead "
