@@ -458,7 +458,11 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.33.0** (PyPI, 2026-10-29). Minor: checkout guard - `gingugu
+- Current version: **0.34.0** (PyPI, 2026-10-29). Minor: X-ray brief (X19) -
+  `code_xray` `brief` and `gingugu xray brief` give the changed files by rank and
+  their combined blast, computed locally, for agents no hook fires for (#157).
+  Nothing to do beyond the upgrade.
+- 0.33.0 (PyPI, 2026-10-29). Minor: checkout guard - `gingugu
   hook tool` denies a git command that moves or empties a shared primary checkout
   and points at a worktree (#156); `/creating-pr` makes the docs audit mandatory
   (#155). The guard arms with the upgrade; a plain `gingugu init` adds the
