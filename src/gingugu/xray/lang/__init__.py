@@ -28,7 +28,26 @@ class Adapter(Protocol):
     # in the repo, handed over by repo path.
     manifests: tuple[str, ...]
 
-    def extract(self, sources: dict[str, bytes], manifests: dict[str, bytes]) -> LangResult: ...
+    def parse(self, rel: str, data: bytes) -> object:
+        """What the file alone determines, JSON-safe. A function of the bytes and
+        the extension only - never the rest of the path, never other files - because
+        it is cached by content. A cached copy comes back through JSON (tuples are
+        lists)."""
+        ...
+
+    def valid(self, raw: object) -> bool:
+        """Whether a cached ``raw`` has exactly the shape ``parse`` returns. The
+        cache is untrusted, so one that fails is parsed again, never linked."""
+        ...
+
+    def link(self, raws: dict[str, object], manifests: dict[str, bytes]) -> LangResult:
+        """Everything that depends on the path or the whole repo: resolution,
+        tests, entry points, packages, the parse-error list. Cheap; always rerun."""
+        ...
+
+    def extract(self, sources: dict[str, bytes], manifests: dict[str, bytes]) -> LangResult:
+        """The uncached path: ``link`` of ``parse`` over every source."""
+        ...
 
 
 def _registry() -> tuple[Adapter, ...]:

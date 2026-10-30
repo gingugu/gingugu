@@ -25,6 +25,10 @@ class FakeAdapter:
     def parse(self, rel, data):
         return data.decode()
 
+    @staticmethod
+    def valid(raw):
+        return isinstance(raw, str)
+
     def extract(self, sources, manifests):
         return self.link({rel: self.parse(rel, data) for rel, data in sources.items()}, manifests)
 

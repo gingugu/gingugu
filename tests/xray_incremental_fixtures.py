@@ -23,16 +23,22 @@ FILES: dict[str, str] = {
     "app/run.py": "import app.util\nif __name__ == '__main__':\n    pass\n",
     "app/broken.py": "def (:\n",
     "tests/test_core.py": "from app.core import util\n",
-    "web/tsconfig.json": '{"compilerOptions": {"baseUrl": ".", "paths": {"@lib/*": ["src/lib/*"]}}}',
+    "web/tsconfig.json": (
+        '{"compilerOptions": {"baseUrl": ".", "paths": {"@lib/*": ["src/lib/*"]}}}'
+    ),
     "web/package.json": '{"name": "web", "main": "src/index.ts"}',
-    "web/src/index.ts": 'import { a } from "@lib/a";\nimport "./side";\nconst m = import("./lazy");\n',
+    "web/src/index.ts": (
+        'import { a } from "@lib/a";\nimport "./side";\nconst m = import("./lazy");\n'
+    ),
     "web/src/lib/a.ts": "export const a = 1;\n",
     "web/src/side.ts": "export const side = 2;\n",
     "web/src/lazy.ts": "export default 1;\n",
     "web/src/broken.ts": "import { from ;\n",
     "web/src/a.test.ts": 'import { a } from "./lib/a";\n',
     "svc/go.mod": "module example.com/svc\n\ngo 1.22\n",
-    "svc/main.go": 'package main\n\nimport "example.com/svc/store"\n\nfunc main() { store.Get() }\n',
+    "svc/main.go": (
+        'package main\n\nimport "example.com/svc/store"\n\nfunc main() { store.Get() }\n'
+    ),
     "svc/store/store.go": "package store\n\nfunc Get() {}\n",
     "svc/store/db.go": "package store\n\nvar db = 1\n",
     "svc/store/bad.go": "package store\n\nfunc {\n",
