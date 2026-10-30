@@ -65,7 +65,7 @@ def _dependents(rel: str, blast: dict, direct: list[str]) -> list[str]:
     if direct:
         lines.append(f"Direct importers by rank: {hook_common.named(direct, TOP_N)}")
     if blast["tests"]:
-        nearest = hook_common.nearest_tests(blast["tests"])
+        nearest = hook_common.nearest_tests(blast["tests"], seed=rel)
         lines.append(f"Nearest tests: {hook_common.named(nearest, TOP_N)}")
     return lines
 

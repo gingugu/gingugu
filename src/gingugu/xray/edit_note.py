@@ -56,13 +56,14 @@ def _quals(sym: symbols.Symbols, rel: str, text: str, news: list[str]) -> list[s
     return out
 
 
-def _tests(found: dict) -> list[str]:
+def _tests(found: dict, rel: str) -> list[str]:
     """Distinct test files among everything that reaches the definition, nearest first."""
     nearest: dict[str, int] = {}
     for row in found["reach"]:
         if is_test(row["path"]):
             nearest[row["path"]] = min(row["hops"], nearest.get(row["path"], row["hops"]))
-    return sorted(nearest, key=lambda p: (nearest[p], p))
+    rows = [{"path": p, "hops": h} for p, h in nearest.items()]
+    return hook_common.nearest_tests(rows, seed=rel)
 
 
 def _line(qual: str, found: dict, rel: str) -> tuple[str, list[str]] | None:
@@ -78,7 +79,7 @@ def _line(qual: str, found: dict, rel: str) -> tuple[str, list[str]] | None:
         f"`{symbols.label(qual)}` (L{found['line']}): {n} caller{'' if n == 1 else 's'} "
         f"in {len(files)} other file{'' if len(files) == 1 else 's'} - {named}{more}."
     )
-    tests = _tests(found)
+    tests = _tests(found, rel)
     if tests:
         text += f" Tests: {hook_common.named(tests, _NAMED)}."
     return text, tests
@@ -100,7 +101,7 @@ def _import_tests(root: Path, rel: str, state_dir: Path) -> list[str]:
     blast = edit_hook._without_seed(
         rank.blast([rel], g.files, g.links, g.ranks, hidden=g.packages), rel
     )
-    return hook_common.nearest_tests(blast["tests"])
+    return hook_common.nearest_tests(blast["tests"], seed=rel)
 
 
 def _lines(root: Path, rel: str, state_dir: Path, session_id: str, news: list[str]) -> list[str]:

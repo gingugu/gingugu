@@ -112,7 +112,7 @@ def _render_neighbourhood(rel: str, g: Graph) -> str | None:
         blast = rank.blast([rel], g.files, g.links, g.ranks, hidden=g.packages)
         tests = [r for r in blast["tests"] if r["path"] != rel]
         if tests:
-            lines.append(f"Nearest tests: {_names(hook_common.nearest_tests(tests))}")
+            lines.append(f"Nearest tests: {_names(hook_common.nearest_tests(tests, seed=rel))}")
     if imports:
         lines.append(f"Imports {len(imports)}: {_names(imports)}")
     return "\n".join(lines)
