@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import io
 import json
+import sys
 from contextlib import redirect_stdout
 
 import pytest
@@ -107,6 +108,7 @@ def test_the_post_edit_note_records_both_predictors(calls, state):
     assert str(calls) not in ledger.path(state).read_text()  # no absolute paths
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX file modes")
 def test_the_ledger_is_owner_only(calls, state):
     _edit(calls, "pkg/core.py", "    return 1", "    return 2", state)
     assert ledger.path(state).stat().st_mode & 0o777 == 0o600
