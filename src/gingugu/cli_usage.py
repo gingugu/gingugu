@@ -30,10 +30,11 @@ Usage:
                                board inbox (pushed from a remote brain, polled
                                locally). --once exits on the first; --exec runs
                                a command per post. For Monitor / codex queue.
-  gingugu xray brief [options]  Handoff brief for a change: the changed files by rank
-                               and the code and tests they reach. --range main..HEAD,
-                               --files a,b, or the working tree; --json. Local only.
-  gingugu embed               Finish embedding the whole store in one run (the
+  gingugu xray brief [opts]    Handoff brief for a change: the changed files by
+                               rank and the code and tests they reach. --range
+                               main..HEAD, --files a,b, or the working tree;
+                               --json. Local only.
+  gingugu embed                Finish embedding the whole store in one run (the
                                server does one small batch per startup).
   gingugu hook prompt          Involuntary recall: reads a UserPromptSubmit
                                event on stdin and surfaces memories the prompt

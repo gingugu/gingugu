@@ -24,6 +24,7 @@ CAVEAT = (
     "candidates to inspect, not proven dead."
 )
 _STATUSES = ("A", "M", "D", "R")
+_WORDS = {"A": "added", "M": "modified", "D": "deleted", "R": "renamed"}
 
 
 class Change(NamedTuple):
@@ -142,7 +143,7 @@ def render(data: dict, name: str) -> str:
     fit, the changed-file list gives way (with a count), never a line mid-way."""
     counts = data["counts"]
     total = sum(counts.values())
-    summary = ", ".join(f"{counts[s]} {s}" for s in _STATUSES if counts[s])
+    summary = ", ".join(f"{counts[s]} {_WORDS[s]}" for s in _STATUSES if counts[s])
     head = f"GINGUGU X-RAY BRIEF: {_show(name)} - " + (
         f"{total} changed ({summary})" if total else "no changes"
     )
