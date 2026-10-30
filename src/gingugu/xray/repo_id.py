@@ -72,17 +72,19 @@ def roots() -> list[Path]:
         cands = [Path.home() / d for d in _DEFAULT_ROOTS]
     else:
         cands = [Path(p).expanduser() for p in env.split(os.pathsep) if p]
-    seen: set[Path] = set()
+    seen: set[tuple[int, int]] = set()
     out: list[Path] = []
     for c in cands:
         try:
             if not c.is_dir():
                 continue
-            real = c.resolve()
+            st = c.stat()
         except OSError:
             continue
-        if real not in seen:  # macOS: ~/GIT and ~/git can be one folder
-            seen.add(real)
+        # One folder, one entry: macOS folds case (~/GIT is ~/git) and resolve()
+        # keeps the case it was given, so compare the inode, not the path.
+        if (st.st_dev, st.st_ino) not in seen:
+            seen.add((st.st_dev, st.st_ino))
             out.append(c)
     return out
 
