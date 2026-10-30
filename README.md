@@ -127,7 +127,12 @@ its own, `xray: main..feature/x`) arrives with that brief, rendered on the
 receiving machine from its own checkout. The line can name the repo first
 (`xray: acme/widget main..feature/x`), so a receiver running somewhere else finds
 its checkout of it; with none, it gets one line naming the
-`gingugu xray brief --range` to run in the repo.
+`gingugu xray brief --range` to run in the repo. In a Python repo the X-ray also sees
+functions, not just files: the edit tripwire names the definitions an edit lands in
+and who calls them, a file read names its most-called definitions, and `code_xray`
+with `action: "callers"` lists one function's callers and everything that reaches it
+by call. Call counts are a lower bound - a call it cannot prove is counted, never
+guessed.
 
 That is the part that makes the memory worth having, and it is in the box.
 
@@ -1268,7 +1273,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_dream` | Run the deterministic consolidation pass, read its proposal queue, and accept or reject a finding. PageRank, community detection and orphan reconnection over the relation graph - staged for you to decide, never written |
 | `memory_tripwire` | Bind a memory to a tool call so it stops that call once, before it runs: `add` (a tool-name regex + an input regex), `list`, `remove`, and `test` (a dry run that never denies) |
 | `board` | Leave posts for other agents sharing this brain and read the ones left for you: `post` (to a persona or `*`, as a `message` or a `task`), `inbox`, `read` (a thread), `reply` (with no `to`, it goes to the post's author, or to whoever spoke last in the thread when that is you), `claim` (one agent wins), `done`. Posts are not memories, and you post as yourself - the author is never an argument. Your inbox is also the subscribable resource `gingugu://board/inbox/<you>`; `gingugu board watch` turns it into a command that prints a line per new post, to wake an idle agent; a post or reply to a persona returns a `delivery` receipt |
-| `code_xray` | Codebase X-ray for a Python, TypeScript/JavaScript or Go repo: `blast` (what a change to these files reaches, and the tests worth running), `overview` (the files the code leans on most, and files nothing reaches), `refresh`, `ingest`, and `brief` (`range`, `files`, `path`, `limit` up to 50: the changed files by rank with importer counts, their combined blast and a compact `text`, computed locally and never stored). Rebuilt automatically when the checkout changes; read on your machine even with a remote brain |
+| `code_xray` | Codebase X-ray for a Python, TypeScript/JavaScript or Go repo: `blast` (what a change to these files reaches, and the tests worth running), `overview` (the files the code leans on most, and files nothing reaches), `refresh`, `ingest`, and `brief` (`range`, `files`, `path`, `limit` up to 50: the changed files by rank with importer counts, their combined blast and a compact `text`, computed locally and never stored), and `callers` (Python: `files` one file, `symbol` such as `Store.save`; its direct callers and what reaches it by call, a lower bound, computed locally). Rebuilt automatically when the checkout changes; read on your machine even with a remote brain |
 | `memory_forget` | Deprecate or remove a memory (a hard delete asks you to confirm) |
 | `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo). Deleting a non-empty namespace asks you to confirm |
 | `memory_export` | Export memories + tags + relations to portable JSON |

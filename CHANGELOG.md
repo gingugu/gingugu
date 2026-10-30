@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **X-ray sees functions, not just files (X17 symbol graph, Python).** The hooks' local
+  build now also records every definition (function, method, class, with its line span)
+  and every call site, and resolves calls to definitions through what static reading can
+  prove: a definition in scope, an import binding, a class named in scope by a
+  constructor call, annotation or `with`, and `self`/`cls`. Three surfaces use it:
+  - the **edit tripwire** names the definitions an `Edit`/`MultiEdit` lands in and their
+    callers (`Edit lands in `f` (L1-2): 2 callers - ...; reaches 5 definitions in 4
+    files.`), beside the file's importers; when it fires is unchanged;
+  - the **read neighbourhood** names a Python file's most-called definitions;
+  - **`code_xray` action `callers`** (`files`: one file, `symbol`: a qualified name such
+    as `Store.save`, `path`, `limit`, `offset`) returns direct callers with call-site
+    counts and everything that reaches the symbol by call, with hop counts. Answered on
+    your machine from the hook cache; `gingugu serve` refuses it and the proxy answers it
+    locally, so the brain is never asked.
+
+  Call counts are a **lower bound**: a call through an untyped value or an inherited
+  method is counted as unresolved, never guessed, and the file blast radius stays the
+  upper bound. On gingugu itself 64.7% of calls into code that is not a builtin or a
+  third-party package resolve; `grants.require_write_id` has 8 direct callers and
+  reaches 72 files by call, where a change to `grants.py` reaches 262 by import. The symbol graph
+  stays on the client (`xray-symbols-<sha16(root)>.json` beside the graph cache) and is
+  not part of the snapshot sent to the brain; the extractor version moves to 3, so every
+  cache rebuilds once. TypeScript/JavaScript and Go symbols come later.
+
 ---
 
 ## [0.38.0] - 2026-10-30

@@ -19,13 +19,13 @@ from __future__ import annotations
 import logging
 
 from .. import grants
-from ..xray import brief, extract, local, store
+from ..xray import brief, callers_tool, extract, local, store
 from . import ServerContext
 from .helpers import _err
 
 logger = logging.getLogger(__name__)
 
-_ACTIONS = ("blast", "overview", "refresh", "ingest", "brief")
+_ACTIONS = ("blast", "overview", "refresh", "ingest", "brief", "callers")
 _CAVEAT = brief.CAVEAT
 _NO_DISK = (
     "under `gingugu serve` the brain cannot read your checkout; call through the "
@@ -77,6 +77,7 @@ def register(mcp, ctx: ServerContext) -> None:
         offset: int = 0,
         top: int = 20,
         range: str | None = None,
+        symbol: str | None = None,
     ) -> dict:
         """X-ray a repository's import graph (Python, TypeScript/JavaScript, Go): what a
         change reaches, and what the code leans on. Use before editing a file to see its
@@ -89,7 +90,9 @@ def register(mcp, ctx: ServerContext) -> None:
         (rebuild now, replacing a stored snapshot whose graph differs), "ingest" (payload:
         a client-extracted graph; ``replace`` as refresh does), "brief" (a handoff: the changed
         files by rank plus their combined blast, for ``range`` such as main..HEAD, the named
-        files, or the working tree; computed locally, nothing stored).
+        files, or the working tree; computed locally, nothing stored), "callers" (files: one
+        Python file; symbol: a function, class or ``Class.method`` in it; returns its direct
+        callers and everything that reaches it by call, a lower bound; computed locally).
 
         ``path`` is any directory in the git checkout (default: the working directory).
         The snapshot is rebuilt automatically when the checkout's source content changed,
@@ -104,6 +107,10 @@ def register(mcp, ctx: ServerContext) -> None:
                 if ctx.transport != "stdio":
                     return _err(_NO_DISK)
                 return brief.answer(path, range, files, limit)
+            if action == "callers":
+                if ctx.transport != "stdio":
+                    return _err(_NO_DISK)
+                return callers_tool.answer(path, files, symbol, limit, offset)
             ns_id = ctx.namespaces.get_or_create(ctx.namespaces.resolve_name(namespace)).id
             if action == "ingest":
                 if payload is None:
