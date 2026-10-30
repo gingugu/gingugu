@@ -233,7 +233,7 @@ Generated sets hold real memory content and stay in `bench/local/`.
   0.38.0): the hooks' local graph build caches each file's parse by content
   (`xray-parse-<sha16(root)>.json`), so a rebuild after an edit re-parses only the
   changed bytes; linking always reruns, the `code_xray` tool path is unchanged. X17 symbol
-  graph (Python, built, unreleased): the same build records definitions and resolved call
+  graph (Python, released in 0.39.0): the same build records definitions and resolved call
   edges, client-side only; the edit tripwire names the definitions an edit lands in and
   their callers, the read neighbourhood a file's most-called definitions, and `callers`
   one symbol's callers and reach - a lower bound. Brain tables for it are owed (X21).
@@ -469,7 +469,12 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.38.0** (PyPI, 2026-10-30). Minor: X16 incremental refresh - the
+- Current version: **0.39.0** (PyPI, 2026-10-30). Minor: X17 symbol graph (Python) - the
+  X-ray records definitions and resolved call edges client-side; the edit tripwire names the
+  definitions an edit lands in and their callers, the read neighbourhood the most-called ones,
+  and `code_xray` gains `callers` (#165). No migration; extractor version 3 rebuilds caches
+  once. Restart MCP clients for the new action.
+- 0.38.0 (PyPI, 2026-10-30). Minor: X16 incremental refresh - the
   hooks' X-ray graph re-parses only files whose bytes changed (`xray/parse_cache`,
   adapters split into parse/valid/link) (#164). No migration; plain upgrade.
 - 0.37.0 (PyPI, 2026-10-30). Minor: X15 writes from any tool - a
