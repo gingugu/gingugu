@@ -14,7 +14,8 @@ from . import hook_common
 from .scan import XrayError, git
 
 MAX_REPOS = 8
-_HASH_LIMIT = 2 * 1024 * 1024
+# Hashed small, stat-compared big: this runs before and after every Bash call.
+_HASH_LIMIT = 64 * 1024
 
 
 def _dir(state_dir: Path, session_id: str) -> Path:
