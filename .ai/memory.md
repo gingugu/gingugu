@@ -454,7 +454,12 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.32.0** (PyPI, 2026-10-29). Minor: X-ray map on arrival
+- Current version: **0.33.0** (PyPI, 2026-10-29). Minor: checkout guard - `gingugu
+  hook tool` denies a git command that moves or empties a shared primary checkout
+  and points at a worktree (#156); `/creating-pr` makes the docs audit mandatory
+  (#155). The guard arms with the upgrade; a plain `gingugu init` adds the
+  `.claude/worktrees/` ignore and the "Concurrent sessions" protocol rule.
+- 0.32.0 (PyPI, 2026-10-29). Minor: X-ray map on arrival
   (X14) - a `PostToolUse` hook (`gingugu hook read`, `Read|Grep|Glob`) adds a repo
   map on the first read into a repo and each file's neighbourhood on its first
   read (#153); X-ray roadmap X14-X18 (#152). Each repo needs a plain `gingugu
