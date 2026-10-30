@@ -56,7 +56,9 @@ def _fit(text: str, max_chars: int) -> str:
     return "\n".join(kept)[:max_chars] if kept else text[:max_chars]
 
 
-def attach(body: object, cwd: str | None, max_chars: int) -> str | None:
+def attach(
+    body: object, cwd: str | None, max_chars: int, session_id: str | None = None
+) -> str | None:
     """The brief for the range ``body`` names, rendered from ``cwd``; None when
     there is nothing to say. Never raises."""
     try:
@@ -68,9 +70,10 @@ def attach(body: object, cwd: str | None, max_chars: int) -> str | None:
         except (XrayError, ValueError, OSError):
             return None  # not a repo: stay silent
         try:
-            data = brief.answer(cwd, ref, None)
-        except (XrayError, ValueError):
-            return f"X-ray brief: {json.dumps(ref)} is not a range this checkout knows."
+            data = brief.answer(cwd, ref, None, session_id=session_id)
+        except (XrayError, ValueError) as exc:
+            why = json.dumps(str(exc)[:120])
+            return f"X-ray brief: {json.dumps(ref)} is not available from this checkout ({why})."
         head = f"X-ray brief for {json.dumps(ref)}, rendered on this machine from this checkout:"
         return _fit(head + "\n" + data["text"], max_chars)
     except Exception:  # noqa: BLE001 - a brief must never cost the mail

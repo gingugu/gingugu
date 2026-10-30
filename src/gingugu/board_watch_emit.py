@@ -25,6 +25,8 @@ from typing import TextIO
 MAX_EXEC_PER_BATCH = 10
 EXEC_TIMEOUT_S = 120
 MAX_BRIEFS_PER_BATCH = 3
+# Same as the prompt hook's board mail; it also rides --exec's environment twice.
+BRIEF_CHARS = 3500
 _FIELDS = ("id", "parent_id", "from", "origin", "to", "kind", "namespace", "body", "text", "xray")
 
 
@@ -172,9 +174,9 @@ class Emitter:
             text = None
             if briefs < MAX_BRIEFS_PER_BATCH:
                 try:
-                    from .xray import board_brief, brief
+                    from .xray import board_brief
 
-                    text = board_brief.attach(post["body"], self.cwd, brief.MAX_CHARS)
+                    text = board_brief.attach(post["body"], self.cwd, BRIEF_CHARS)
                 except Exception:  # noqa: BLE001 - a brief must never stop the emit loop
                     text = None
                 briefs += text is not None

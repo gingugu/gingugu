@@ -137,13 +137,15 @@ def _mail(db_path: Path, session_id: str, cwd: str | None) -> tuple[str, int] | 
         posts = unread_local(db_path, me, names, shown, agent=agent_session.key(session_id))
     if not posts:
         return None
-    save_suppressed(db_path, key, shown | {p["id"] for p in posts[:MAX_SHOWN]})
     block = render(posts)
     for p in posts[:MAX_SHOWN]:  # one brief per prompt: the first post that names a range
         if board_brief.ref_in(p.get("body")) is None:
             continue
-        text = board_brief.attach(p.get("body"), cwd, BRIEF_CHARS)
+        text = board_brief.attach(p.get("body"), cwd, BRIEF_CHARS, session_id)
         if text:
             block += f"\n\n(for post {p['id']})\n{text}"
             break
+    # Marked shown only now: a hook killed mid-brief printed nothing, so the post
+    # must come back on the next prompt.
+    save_suppressed(db_path, key, shown | {p["id"] for p in posts[:MAX_SHOWN]})
     return block, len(posts)
