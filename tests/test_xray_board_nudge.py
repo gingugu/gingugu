@@ -82,8 +82,14 @@ def test_is_post_tolerates_bad_input():
 def test_a_post_from_a_branch_ahead_is_asked_for_its_range(ahead, hook_env):
     reason = board_nudge.check(_payload(ahead), hook_env)
     assert reason is not None
-    assert "xray: main..feature/x" in reason
+    assert "xray: repo main..feature/x" in reason
     assert "1 commit" in reason
+
+
+def test_the_line_names_the_repo_by_its_origin(ahead, hook_env):
+    _git(ahead, "remote", "add", "origin", "https://github.com/Acme/Widget.git")
+    reason = board_nudge.check(_payload(ahead), hook_env)
+    assert reason is not None and "xray: acme/widget main..feature/x" in reason
 
 
 def test_it_asks_once_per_session(ahead, hook_env):
@@ -117,7 +123,7 @@ def test_master_is_a_default_branch_too(tmp_path, hook_env):
     (r / "pkg/leaf.py").write_text("Y = 3\n")
     _git(r, "commit", "-q", "-am", "fix")
     reason = board_nudge.check(_payload(r), hook_env)
-    assert reason is not None and "xray: master..fix/y" in reason
+    assert reason is not None and "xray: repo master..fix/y" in reason
 
 
 def test_silent_outside_a_repo_without_a_session_or_switched_off(
@@ -135,7 +141,7 @@ def test_a_branch_name_is_quoted_if_it_needs_it(repo, hook_env):
     (repo / "pkg/leaf.py").write_text("Y = 4\n")
     _git(repo, "commit", "-q", "-am", "x")
     reason = board_nudge.check(_payload(repo), hook_env)
-    assert reason is not None and "xray: main..feat/ok" in reason
+    assert reason is not None and "xray: repo main..feat/ok" in reason
 
 
 # --- wired into gingugu hook tool ------------------------------------------------
@@ -146,7 +152,7 @@ def test_the_hook_denies_the_first_post_and_passes_the_reissue(ahead, hook_env, 
     out = json.loads(capsys.readouterr().out)
     spec = out["hookSpecificOutput"]
     assert spec["permissionDecision"] == "deny"
-    assert "xray: main..feature/x" in spec["permissionDecisionReason"]
+    assert "xray: repo main..feature/x" in spec["permissionDecisionReason"]
     assert "board post" in out["systemMessage"]
     tool_hook.run(_payload(ahead))
     assert capsys.readouterr().out == ""

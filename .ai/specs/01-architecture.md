@@ -59,7 +59,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `xray/` (Codebase X-ray: `scan` + `extract` + `lang/` (one adapter per language: `python`
    on `ast` with `resolve`; `typescript` + `ts_*` + `jsonc` and `golang` on tree-sitter) +
    `model` + `local` on the client, `validate` +
-   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), `board_nudge` (X20 sender: asks a board post from a branch ahead of the default branch for its range, once per session, from `gingugu hook tool`), `board_brief` (X20: the brief a board post's `xray:` line asks for, rendered on the receiver), the hook side that builds the graph itself and never
+   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), `board_nudge` (X20 sender: asks a board post from a branch ahead of the default branch for its range, once per session, from `gingugu hook tool`), `board_brief` (X20: the brief a board post's `xray:` line asks for, rendered on the receiver), `repo_id` (X20: a checkout's identity and where the repo a post names is checked out here), the hook side that builds the graph itself and never
    touches the brain; see Key Decisions), `proxy_xray` (the proxy's local half of `code_xray`),
    `board_watch` +
    `board_watch_remote`, `board_watch_emit` (the `gingugu board watch` wake-up command; see Key
@@ -819,11 +819,11 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `xray` field, appends to `text` and sets `GINGUGU_POST_XRAY` (<= 3 per batch,
   the watcher's cwd). A brief over budget is cut on a line and ends with
   `board_brief.CLIPPED`, inside the budget. Unknown ref: one short line; no cwd or not a
-  repo: one line naming `gingugu xray brief --range <ref>`; never raises, so a brief cannot cost the mail. The sender's half
+  repo: one line naming `gingugu xray brief --range <ref>`; never raises, so a brief cannot cost the mail. The line may name the repo first, `xray: <repo> <range>` (the sender's nudge stamps its origin as `owner/name`): the receiver then uses its cwd only if that checkout is the repo, else exactly `<root>/<name>` under `MEMORY_XRAY_REPOS` or the usual folders (`~/GIT`, `~/src`, `~/code`, ...), and only a checkout whose origin matches. (`xray/repo_id`: the repo is another agent's text, so it is gated - `[A-Za-z0-9._-]`, at most one `/`, no leading `.`/`-`, no `..` - before it is part of a path; no glob, no walk; a cwd in another repo is never used.) The sender's half
   (`xray/board_nudge`, from `gingugu hook tool`; the tripwire doorway passes a
   main-thread board `post` through to it) denies once per session a board post
   from a branch ahead of the default branch that names no range, with the exact
-  line to add -
+  line to add (`xray: <repo> <base>..<branch>`) -
   shipped in the hook `init` already wires, so every install gets it, where a
   personal tripwire would reach one brain. `MEMORY_XRAY_BOARD=off`.
 - **Destructive tools ask the user, not the model (shipped 0.25.0).** Five paths

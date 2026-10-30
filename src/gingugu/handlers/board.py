@@ -110,7 +110,9 @@ def register(mcp, ctx: ServerContext) -> None:
         (post_id: by its author or claimer).
 
         A post body with a line of its own ``xray: <range>`` (e.g. ``xray: main..feature/x``)
-        arrives with the receiver's X-ray brief of that range.
+        arrives with the receiver's X-ray brief of that range. The line may name the
+        repo first: ``xray: <repo> <range>`` (e.g. ``xray: acme/widget main..feature/x``);
+        the receiver finds that checkout.
 
         A reply goes to the session that asked; other sessions of that persona see it
         once it has gone unread for an hour.
