@@ -71,7 +71,9 @@ def _command_roots(command: str, cwd: Path, found: list[Path], deadline: float) 
     try:
         tokens = shlex.split(command)
     except ValueError:
-        tokens = command.split()
+        tokens = []
+    # POSIX splitting eats the backslashes of a Windows path; the plain words keep them.
+    tokens += [t for t in command.split() if t not in tokens]
     tried: set[Path] = set()
     for token in tokens[:_MAX_TOKENS]:
         if len(found) >= MAX_REPOS or time.monotonic() > deadline:
