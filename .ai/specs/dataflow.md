@@ -555,6 +555,9 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
           claim it atomically (O_EXCL; lost race or failed write → skip), then the
           X-ray reason: importer count, top 5 dependents with hops, up to 5
           candidate tests, import-based-estimate caveat
+      → X-ray Bash snapshot (xray/tool_xray.reason → xray/bash_hook.before; same
+        switch MEMORY_XRAY_TRIPWIRE; never denies, prints nothing)
+          see "X-ray of a shell command's writes (X15)" below
       → MEMORY_TRIPWIRES=off: skip memory tripwires (not the X-ray above)
       → namespaces_for(cwd) (narrowed by the client's grant; [] → exit before any lookup)
       → load_tripwires(crow + <persona> + <cwd-derived project>)   read-only SQLite
@@ -664,6 +667,51 @@ answers it in process, the proxy claims it and answers it locally, and `gingugu 
 refuses it. The board brief (X20) uses no tool call at all: it runs in the prompt hook
 or the watch process on the receiver's machine.
 
+## X-ray of a shell command's writes (X15)
+
+```
+PreToolUse event (Bash)  →  pre_tool_tripwire.py (already passes Bash)
+  → `gingugu hook tool` → xray/tool_xray.reason → xray/bash_hook.before
+      MEMORY_XRAY_TRIPWIRE=off, no session id / tool_use_id / command: skip
+      candidate checkouts, at most 8, in order:
+        the command's cwd repo (recorded as touched)
+        every repo this session touched: hook-sessions/xray-repos-<session>/,
+          one owner-only record per repo, written by the read hook, the edit
+          hook and this hook, most recent first
+        the checkout of every existing path token in the command (first 8 KiB,
+          <= 64 tokens; stops at the cap or the 4s deadline)
+      per candidate, until the 4s budget runs out:
+        dirty set = git status --porcelain=v1 -z --untracked-files=all
+          {path: [status, sha256 of the file if <= 64 KiB else size:mtime_ns]}
+          (a symlink is compared by where it points, never followed)
+          more than 500 dirty paths, or git failing → skip that repo
+      → hook-sessions/xray-bash-<session>/ snapshot keyed by tool_use_id (owner-only)
+      → never denies, prints nothing
+
+PostToolUse event (Bash)  →  .claude/hooks/post_bash_xray.py (pure stdlib; settings 15s, its child 10s)
+  → `gingugu hook bash` (post_tool_hook) → xray/bash_hook.after
+      MEMORY_XRAY_TRIPWIRE=off or no snapshot: skip; the snapshot is consumed (deleted)
+      the diff has a 6s budget across repos
+      per snapshotted repo: dirty set again; a source file (lang.for_path) whose
+        hash differs, appeared, or vanished is changed or deleted
+      deleted file → its importers from hook_common.cached_graph (the cache as it
+        stood before the command), minus the other deleted files
+      changed files → hook_common.graph (rebuilt locally on a fingerprint miss), then
+        per file the edit tripwire's blast lines (top dependents, candidate tests)
+      a file already claimed in xray-shown-<session>/ is skipped, else claimed
+        (so the edit tripwire does not deny it later); at most 5 files in full,
+        the rest counted ("+N more changed source files not shown")
+  → additionalContext "GINGUGU X-RAY: that command changed source in <repo>: ..."
+    (<= 8800 chars), beside the tool result
+```
+
+**Snapshot, then diff; inform, never block.** The write already happened by the time
+the result lands, so the text can only point at callers to check. The claim is the
+edit tripwire's own `xray-shown` one, taken from both sides, so a file reaches the
+agent once per session whichever tool changed it. Entirely local, identical in remote
+mode. Not covered: a repo the session never touched, reached only by a `cd` inside a
+script.
+
 ## Warm minions (SubagentStart + the minion fence)
 
 ```
@@ -735,8 +783,8 @@ UserPromptSubmit → `gingugu hook prompt`
 
 PreToolUse → `gingugu hook tool`
   → minion fence + spawn stash (local, unchanged)
-  → X-ray edit check: entirely local (checkout, graph cache, tripped state);
-    no request to the brain, so it is identical in remote mode
+  → X-ray edit check and the X15 Bash snapshot: entirely local (checkout, graph
+    cache, tripped state); no request to the brain, so it is identical in remote mode
   → rules: hook-sessions/tripwire-rules-<sha(url, namespaces)>.json if < 60s old,
            else POST /hook/tripwires {namespaces}; on failure the stale copy
            (namespaces grant-narrowed and _sendable-filtered, as for recall)
@@ -744,9 +792,10 @@ PreToolUse → `gingugu hook tool`
   → on a trip: POST /hook/trip {session_id, text, ids, namespaces}
       brain: query_log row (tool='tripwire')
 
-PostToolUse → `gingugu hook read`
-  → X-ray map on arrival: entirely local (checkout, graph cache, claim dirs);
-    no request to the brain, so it is identical in remote mode
+PostToolUse → `gingugu hook read` / `gingugu hook bash`
+  → X-ray map on arrival, and the X-ray of a shell command's writes (X15): entirely
+    local (checkout, graph cache, claim dirs); no request to the brain, so both are
+    identical in remote mode
 
 SubagentStart → `gingugu hook subagent`
   → take the stashed task + read the agent file's grant (local), narrowed to
