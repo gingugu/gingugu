@@ -59,7 +59,11 @@ class TypeScriptAdapter:
             and raw["dyn"] >= 0
             and isinstance(raw["specs"], list)
             and all(
-                isinstance(s, list) and len(s) == 2 and isinstance(s[0], str) and s[1] in _STRENGTH
+                isinstance(s, list)
+                and len(s) == 2
+                and isinstance(s[0], str)
+                and isinstance(s[1], str)  # before ``in``: a list there is unhashable
+                and s[1] in _STRENGTH
                 for s in raw["specs"]
             )
         )

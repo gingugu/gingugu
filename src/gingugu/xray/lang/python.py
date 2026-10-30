@@ -51,7 +51,10 @@ def is_test(path: str) -> bool:
 
 def _is_rec(rec: object) -> bool:
     """One import record as ``resolve_walk.walk`` writes it, after a JSON round trip."""
-    if not isinstance(rec, list) or len(rec) < 3 or rec[1] not in KIND_RANK:
+    # isinstance before ``in``: a list or dict where a str belongs is unhashable.
+    if not isinstance(rec, list) or len(rec) < 3 or not isinstance(rec[1], str):
+        return False
+    if rec[1] not in KIND_RANK:
         return False
     if rec[0] == "i":
         return len(rec) == 3 and isinstance(rec[2], str)

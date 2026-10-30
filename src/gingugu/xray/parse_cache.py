@@ -20,16 +20,24 @@ import json
 import os
 import sys
 import threading
-from pathlib import Path, PurePosixPath
+from importlib import metadata
+from pathlib import Path
 
 FORMAT = 1
+# Past this the cache costs more to read on every miss than it saves: a repo of
+# tiny import-only files serialises to more than its sources. Not written then.
+MAX_BYTES = 64_000_000
+# Parsers whose output a cached parse depends on; pinned by range, not by gingugu.
+_PARSERS = ("tree-sitter", "tree-sitter-javascript", "tree-sitter-typescript", "tree-sitter-go")
 
 Raws = dict[str, dict[str, object]]
 
 
-def slot(rel: str, data: bytes) -> str:
-    """Extension and content: the same bytes as ``.ts`` and ``.tsx`` parse differently."""
-    return f"{PurePosixPath(rel).suffix}:{hashlib.sha256(data).hexdigest()}"
+def slot(ext: str, data: bytes) -> str:
+    """Extension and content: the same bytes as ``.ts`` and ``.tsx`` parse differently.
+    ``ext`` is the adapter extension the name ends with, not ``Path.suffix``: a file
+    named just ``.tsx`` has no suffix, and its grammar is still chosen by ending."""
+    return f"{ext}:{hashlib.sha256(data).hexdigest()}"
 
 
 def header(extractor_version: int) -> dict:
@@ -40,7 +48,15 @@ def header(extractor_version: int) -> dict:
         "gingugu": gingugu.__version__,
         "python": f"{sys.version_info.major}.{sys.version_info.minor}",
         "extractor": extractor_version,
+        "parsers": {name: _version(name) for name in _PARSERS},
     }
+
+
+def _version(name: str) -> str | None:
+    try:
+        return metadata.version(name)
+    except metadata.PackageNotFoundError:
+        return None
 
 
 def load(path: str | Path, extractor_version: int) -> Raws:
@@ -62,6 +78,9 @@ def save(path: str | Path, extractor_version: int, raws: Raws) -> None:
     tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     try:
         text = json.dumps({"header": header(extractor_version), "raws": raws})
+        if len(text) > MAX_BYTES:
+            path.unlink(missing_ok=True)  # an older, smaller copy would be read for nothing
+            return
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
         fd = os.open(tmp, flags, 0o600)
