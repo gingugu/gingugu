@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.39.0] - 2026-10-30
+
 ### Added
 
 - **X-ray sees functions, not just files (X17 symbol graph, Python).** The hooks' local
