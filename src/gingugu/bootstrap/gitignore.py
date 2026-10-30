@@ -12,6 +12,7 @@ GITIGNORE_ENTRIES = [
     "logs/",
     ".claude/data/",
     ".claude/settings.local.json",
+    ".claude/worktrees/",
     ".claude/hooks/**/__pycache__/",
     ".claude/**/*.bak",
     "CLAUDE.md.bak",

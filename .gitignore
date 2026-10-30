@@ -113,3 +113,4 @@ for-later/
 .claude/**/*.bak
 CLAUDE.md.bak
 AGENTS.md.bak
+.claude/worktrees/
