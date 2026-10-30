@@ -2150,7 +2150,9 @@ do, and files nothing imports. No file is added to the target repository.
 
 **An MCP tool, not a CLI command** - the user's call, and the right one: the
 agent is the one that needs the answer before a change, and it should be able
-to run or refresh the X-ray itself rather than ask for it. Decided in X1:
+to run or refresh the X-ray itself rather than ask for it. The one CLI is
+`gingugu xray brief` (X19), for agents that work through a shell and for
+`board watch --exec`. Decided in X1:
 
 - **Transport.** The brain never reads a path. The local stdio server or the
   proxy reads the caller's checkout and sends names and edges; under

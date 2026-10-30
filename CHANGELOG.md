@@ -24,7 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   --exec` command. It is computed on your machine from the per-repo graph cache
   the X-ray hooks already share; nothing is stored and the brain is never asked.
   Under `gingugu serve` the brain refuses it (it cannot read your checkout);
-  through the proxy it is answered locally.
+  through the proxy it is answered locally. The blast lists page at `limit`
+  (at most 50); a file name that is not UTF-8 arrives in the JSON fields with
+  U+FFFD in place of the bad bytes, and quoted in `text`.
 
 ---
 
