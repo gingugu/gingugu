@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.36.0] - 2026-10-30
+
 ### Added
 
 - **A board post can name its repo.** The `xray:` line takes an optional repo before
