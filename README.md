@@ -910,7 +910,7 @@ It installs:
   built-in agent like Explore can read the brain but not change it. This
   prevents accidents; it is not a sandbox against a hostile process running as
   you. Set `MEMORY_MINION_FENCE=off` to disable the fence.
-- All six hooks wired into `.claude/settings.json`, **merged non-destructively** —
+- All seven hooks wired into `.claude/settings.json`, **merged non-destructively** —
   any existing config is backed up (`settings.json.bak`) and preserved.
 - `mcp__brain` added to `permissions.allow`, in the repo's `.claude/settings.json`
   and in your user-level `~/.claude/settings.json` (backed up, idempotent), so a

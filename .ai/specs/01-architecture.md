@@ -1003,7 +1003,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   Anthropic's docs steer new work to; the legacy `.claude/commands/` copy is
   retired with a `.bak` only when it is byte-identical to the template we would
   have written, and kept when it differs - the marker says we once wrote a file,
-  not that the user left it alone) - plus a `SubagentStart` hook (minion warm-up, `.claude/hooks/subagent_warmup.py`) - merging all six hooks into `.claude/settings.json`
+  not that the user left it alone) - plus a `SubagentStart` hook (minion warm-up, `.claude/hooks/subagent_warmup.py`) - merging all seven hooks into `.claude/settings.json`
   non-destructively (`settings.py`), allowing `mcp__brain` there and in the
   user-level `~/.claude/settings.json` (`init_user_permissions`) and appending the hooks' runtime artifacts
   (`logs/`, `.claude/data/`, `.claude/settings.local.json`,
