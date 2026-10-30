@@ -460,7 +460,12 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.34.0** (PyPI, 2026-10-30). Minor: X-ray brief (X19) -
+- Current version: **0.35.0** (PyPI, 2026-10-30). Minor: brief on the board (X20) -
+  a board post with an `xray: <range>` line arrives with the receiver's X-ray
+  brief (board mail, `board watch`), and `gingugu hook tool` asks a post from a
+  branch ahead of the default branch for its range once per session (#158).
+  Nothing to do beyond the upgrade.
+- 0.34.0 (PyPI, 2026-10-30). Minor: X-ray brief (X19) -
   `code_xray` `brief` and `gingugu xray brief` give the changed files by rank and
   their combined blast, computed locally, for agents no hook fires for (#157).
   Nothing to do beyond the upgrade.
