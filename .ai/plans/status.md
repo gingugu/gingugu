@@ -1583,7 +1583,7 @@ every row moved up one.
 | 2 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
 | 3 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
 | 4 | **A referee for rival memory tools** | 17 | Only a fair comparison once 3 exists |
-| 5 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival shipped in 0.32.0; X15 next | 19 | Standalone; picked 2026-10-26. An 18-part roadmap (X1-X18) in its section below |
+| 5 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival shipped in 0.32.0; X15 writes from any tool built (unreleased); X16 next | 19 | Standalone; picked 2026-10-26. An 18-part roadmap (X1-X18) in its section below |
 | 6 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
 | 7 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
 | 8 | Session flight recorder (low priority) | 18 | Check prior art first |
