@@ -668,7 +668,24 @@ post body → board_brief.ref_in: first `xray:` line, ref alone on it, <= 200 ch
 
 For `code_xray` `brief` (X19), nothing is stored and the brain is never asked: stdio
 answers it in process, the proxy claims it and answers it locally, and `gingugu serve`
-refuses it. The board brief (X20) uses no tool call at all: it runs in the prompt hook
+refuses it.
+
+**The symbol graph (X17) rides the same build.** The Python parse carries
+`symbols_walk` records (`"sym"` in each cached raw); linking resolves them into call
+edges, and the build writes `xray-symbols-<sha16(root)>.json` beside the graph cache,
+same fingerprint:
+
+```
+python raw "sym" (defs, binds, calls, types; cached by content, X16)
+  → symbols.link over the ModuleIndex: scoped defs → import bindings → typed
+    variables in scope → self/cls; each call resolved | external | unresolved
+  → hook-sessions/xray-symbols-<sha16(root)>.json (never in the brain payload)
+  → edit tripwire: old_string → line span → symbols.enclosing → symbols.callers
+  → read neighbourhood: distinct direct callers per definition, top 3
+  → code_xray callers: symbols.callers for one (file, symbol), stdio/proxy only
+```
+
+The hooks hash the checkout once and hand that fingerprint to both cache reads. The board brief (X20) uses no tool call at all: it runs in the prompt hook
 or the watch process on the receiver's machine.
 
 ## X-ray of a shell command's writes (X15)
