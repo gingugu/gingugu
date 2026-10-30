@@ -1625,7 +1625,7 @@ and sets `GINGUGU_POST_XRAY` for at most 3 posts a batch, from the watcher's cwd
 The ref is another agent's text, so it passes the same range gate as `code_xray`
 `brief` before git sees it (first `xray:` line decides, the ref alone on the line,
 at most 200 characters). An unknown ref gives one short line, a directory that is
-not a repo gives nothing, and `MEMORY_XRAY_BOARD=off` disables it. A cursor at
+not a repo gives nothing, and `MEMORY_XRAY_BOARD=off` disables it. The sender is asked too: `gingugu hook tool` denies, once per session, a board post that names no range when it comes from a branch ahead of the default branch, with the exact `xray:` line as the reason; the re-issue passes. A cursor at
 `<data dir>/board-watch/<persona>-<sha256(brain)[:12]>.json` holds the newest
 delivered `(created_at, id)` so a re-armed watcher does not re-deliver
 (delivered is not read); `--all` ignores it and a corrupt one is ignored.
@@ -2078,7 +2078,7 @@ src/gingugu/
 ├── proxy_vault.py          # Remote mode: the machine's credential vault, screened (reveal refused) and exposed as a server
 ├── proxy_vault_link.py     # Remote mode: runs that vault behind an in-memory MCP session so it can ask the user
 ├── proxy_xray.py           # Remote mode: code_xray reads the checkout here, asks the brain by fingerprint
-├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only), board_brief (X20: the brief a board post's `xray: <range>` line asks for, rendered on the receiver)
+├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only), board_nudge (X20 sender: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line), board_brief (X20: the brief a board post's `xray: <range>` line asks for, rendered on the receiver)
 ├── xray_cli.py             # `gingugu xray brief`: the X-ray brief from a shell (--range / --files / --path / --json)
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine

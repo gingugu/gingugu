@@ -634,6 +634,8 @@ changed files: git diff --name-status over --range, the named --files, or the
 own `xray: <range>`. The receiver renders the brief from its own checkout:
 
 ```
+sender: board post with no `xray:` line, from a branch ahead of the default branch
+  → gingugu hook tool → board_nudge.check → deny once per session with the exact line
 post body → board_brief.ref_in: first `xray:` line, ref alone on it, <= 200 chars,
   brief._check_range gate (else no brief)
   → attach(body, cwd): MEMORY_XRAY_BOARD off / no cwd / not a repo → nothing

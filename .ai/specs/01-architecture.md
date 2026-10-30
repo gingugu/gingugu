@@ -59,7 +59,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `xray/` (Codebase X-ray: `scan` + `extract` + `lang/` (one adapter per language: `python`
    on `ast` with `resolve`; `typescript` + `ts_*` + `jsonc` and `golang` on tree-sitter) +
    `model` + `local` on the client, `validate` +
-   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), `board_brief` (X20: the brief a board post's `xray:` line asks for, rendered on the receiver), the hook side that builds the graph itself and never
+   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), `board_nudge` (X20 sender: asks a board post from a branch ahead of the default branch for its range, once per session, from `gingugu hook tool`), `board_brief` (X20: the brief a board post's `xray:` line asks for, rendered on the receiver), the hook side that builds the graph itself and never
    touches the brain; see Key Decisions), `proxy_xray` (the proxy's local half of `code_xray`),
    `board_watch` +
    `board_watch_remote`, `board_watch_emit` (the `gingugu board watch` wake-up command; see Key
@@ -818,7 +818,11 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   most one per prompt (3500 chars, the prompt's cwd); `board_watch_emit` adds the
   `xray` field, appends to `text` and sets `GINGUGU_POST_XRAY` (<= 3 per batch,
   the watcher's cwd). Unknown ref: one short line; not a repo: nothing; never
-  raises, so a brief cannot cost the mail. `MEMORY_XRAY_BOARD=off`.
+  raises, so a brief cannot cost the mail. The sender's half (`xray/board_nudge`,
+  from `gingugu hook tool`) denies once per session a board post from a branch
+  ahead of the default branch that names no range, with the exact line to add -
+  shipped in the hook `init` already wires, so every install gets it, where a
+  personal tripwire would reach one brain. `MEMORY_XRAY_BOARD=off`.
 - **Destructive tools ask the user, not the model (shipped 0.25.0).** Five paths
   confirm through MCP elicitation (SDK 2.x `Resolve` + `Elicit`): a hard
   `memory_forget`, a cascading `memory_namespaces` delete of a non-empty

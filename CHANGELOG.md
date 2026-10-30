@@ -25,6 +25,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the checkout does not know becomes one short line; outside a git repository
   nothing is added. Set `MEMORY_XRAY_BOARD=off` to disable it. The `board`
   tool's description names the marker.
+  The sender is reminded too: `gingugu hook tool`, which `gingugu init` already
+  wires, stops the first board post of a session that names no range when it
+  comes from a checkout on a branch ahead of the default branch (origin's HEAD,
+  else `main`, else `master`), with the exact line to add - `xray:
+  main..feature/x` - as the reason. The re-issued post passes, so a post that is
+  not about the branch costs one retry per session. A brief inside board mail
+  checks the range with git before building any graph, gives git 10 seconds,
+  is not rebuilt in a session whose build the hook timeout killed, and a post is
+  marked shown only once its mail has been rendered.
 
 ---
 
