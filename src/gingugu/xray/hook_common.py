@@ -66,14 +66,37 @@ def _show(path: str) -> str:
     return path if path.isprintable() else json.dumps(path)
 
 
-def nearest_tests(tests: list[dict]) -> list[str]:
+def _words(path: str) -> list[str]:
+    name = path.rsplit("/", 1)[-1].removesuffix(".py")
+    return [w for w in name.removeprefix("test_").split("_") if w]
+
+
+def _named_for(test: str, stem: list[str]) -> int:
+    """0: ``test_<stem>...``; 1: the stem's words appear in order; 2: neither."""
+    words = _words(test)
+    if not stem:
+        return 2
+    if words[: len(stem)] == stem:
+        return 0
+    n = len(stem)
+    return 1 if any(words[i : i + n] == stem for i in range(len(words) - n + 1)) else 2
+
+
+def nearest_tests(tests: list[dict], seed: str | None = None) -> list[str]:
     """Candidate test paths, nearest first. Rank says little about tests (fixtures
-    and helpers outrank them), so: ``test_*`` files, then fewer hops, then path."""
-    rows = sorted(
-        tests,
-        key=lambda r: (not r["path"].rsplit("/", 1)[-1].startswith("test_"), r["hops"], r["path"]),
-    )
-    return [r["path"] for r in rows]
+    and helpers outrank them), and hops tie constantly, so: ``test_*`` files; then,
+    given the changed file, a test named for it (its stem as whole words); then
+    fewer hops, then path. A package ``__init__`` is named for its directory."""
+    stem: list[str] = []
+    if seed:
+        parts = seed.removesuffix(".py").split("/")
+        stem = _words(parts[-2] if parts[-1] == "__init__" and len(parts) > 1 else parts[-1])
+
+    def key(r: dict) -> tuple:
+        is_test = r["path"].rsplit("/", 1)[-1].startswith("test_")
+        return (not is_test, _named_for(r["path"], stem) if is_test else 2, r["hops"], r["path"])
+
+    return [r["path"] for r in sorted(tests, key=key)]
 
 
 def named(paths: list[str], top: int) -> str:
