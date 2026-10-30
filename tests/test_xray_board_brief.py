@@ -67,6 +67,24 @@ def test_attach_respects_max_chars(branched, state):  # noqa: F811
     assert text is not None and len(text) <= 200
 
 
+def test_a_clipped_brief_says_so_on_its_last_line():
+    text = "\n".join(f"- line {i:03d}" for i in range(100))
+    out = board_brief._fit(text, 300)
+    assert len(out) <= 300
+    assert out.splitlines()[-1] == board_brief.CLIPPED
+    assert out.startswith("- line 000\n")
+    assert all(line.startswith("- line ") for line in out.splitlines()[:-1])
+
+
+def test_a_brief_that_fits_carries_no_clip_line():
+    assert board_brief._fit("a\nb", 300) == "a\nb"
+
+
+def test_a_budget_too_small_for_the_clip_line_is_still_respected():
+    out = board_brief._fit("x" * 500, 20)
+    assert len(out) <= 20
+
+
 def test_a_ref_this_checkout_does_not_know_is_one_short_line(branched, state):  # noqa: F811
     text = board_brief.attach("xray: HEAD..no-such-branch", str(branched), 4000)
     assert text is not None

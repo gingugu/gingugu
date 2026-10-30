@@ -43,17 +43,25 @@ def ref_in(body: object) -> str | None:
     return m.group(1)
 
 
+CLIPPED = "(brief clipped to fit; code_xray brief or `gingugu xray brief` has all of it)"
+
+
 def _fit(text: str, max_chars: int) -> str:
+    """``text`` within ``max_chars``, cut on a line; a cut says so on its last line."""
     if len(text) <= max_chars:
         return text
+    budget = max_chars - len(CLIPPED) - 1
+    if budget <= 0:
+        return text[:max_chars]
     kept: list[str] = []
     used = 0
     for line in text.split("\n"):
-        if used + len(line) + 1 > max_chars:
+        if used + len(line) + 1 > budget:
             break
         kept.append(line)
         used += len(line) + 1
-    return "\n".join(kept)[:max_chars] if kept else text[:max_chars]
+    body = "\n".join(kept) if kept else text[:budget]
+    return body + "\n" + CLIPPED
 
 
 def attach(

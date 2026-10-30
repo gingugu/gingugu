@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The board nudge reaches the main agent.** The `xray:` nudge for a board post
+  sent from a branch now fires for the main agent in Claude Code, not only for
+  subagents. The installed PreToolUse hook used to drop every main-thread
+  `mcp__gingugu__*` call before `gingugu hook tool` saw it, and that included
+  board posts. A board `post` now goes through; the other gingugu calls are still
+  dropped. **Upgrading:** run `gingugu init --force` in each repo to pick up the
+  new hook.
+- **A clipped brief on the board says it was clipped.** A brief longer than the
+  3,500-character board budget used to be cut at a line break with no notice.
+  The lines lost included the note that the lists are paged and the repo's top
+  files. A clipped brief now ends with a line saying so and naming
+  `code_xray brief` / `gingugu xray brief` for the full brief. Briefs that fit are
+  unchanged.
+
 ---
 
 ## [0.35.0] - 2026-10-30

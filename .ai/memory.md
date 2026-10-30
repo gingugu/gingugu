@@ -227,7 +227,7 @@ Generated sets hold real memory content and stay in `bench/local/`.
   `xray_cli.py`) hands an agent that fires no hooks the changed files by rank and their
   combined blast, computed locally from the same graph cache; a board post with a
   line of its own `xray: <range>` arrives with that brief, rendered by the receiver
-  (X20, unreleased; `MEMORY_XRAY_BOARD`). Multi-language
+  (X20, released in 0.35.0; `MEMORY_XRAY_BOARD`). Multi-language
   + migration 021 (shipped 0.30.0).
 - **Board:** `board` (`post` / `inbox` / `read` / `reply` / `claim` / `done`) -
   posts agents leave each other; the author is derived server-side (HTTP token

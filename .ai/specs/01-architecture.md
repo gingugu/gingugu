@@ -681,7 +681,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `MEMORY_MINION_FENCE=off`, independent of `MEMORY_TRIPWIRES` and of
   `MEMORY_XRAY_TRIPWIRE` (the X-ray edit check's switch). The tripwire
   doorway passes `mcp__gingugu__*` through when `agent_id` is set so the fence
-  decides.
+  decides, and passes a main-thread board `post` through for the X20 nudge.
 - **Threat model:** prevents accidents, not a hostile same-user process. An OS
   sandbox and an audit-trigger undo log were considered and declined.
 
@@ -808,7 +808,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `gingugu serve` refuses it (it cannot read the caller's checkout) and the proxy
   claims it and answers it locally. A range is checked before git sees it (no
   option, whitespace or control characters).
-- **Codebase X-ray: the brief on the board (X20, unreleased).** The agents the
+- **Codebase X-ray: the brief on the board (X20, released in 0.35.0).** The agents the
   brief is for fire no hooks, so a handoff carries one unasked. A post body with a
   line of its own `xray: <range>` arrives with the brief of that range, rendered by
   the RECEIVER from its own checkout (`xray/board_brief`): the post carries only
@@ -817,10 +817,13 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `xray:` line decides, alone on the line, <= 200 chars). `board_hook` appends at
   most one per prompt (3500 chars, the prompt's cwd); `board_watch_emit` adds the
   `xray` field, appends to `text` and sets `GINGUGU_POST_XRAY` (<= 3 per batch,
-  the watcher's cwd). Unknown ref: one short line; not a repo: nothing; never
-  raises, so a brief cannot cost the mail. The sender's half (`xray/board_nudge`,
-  from `gingugu hook tool`) denies once per session a board post from a branch
-  ahead of the default branch that names no range, with the exact line to add -
+  the watcher's cwd). A brief over budget is cut on a line and ends with
+  `board_brief.CLIPPED`, inside the budget. Unknown ref: one short line; not a
+  repo: nothing; never raises, so a brief cannot cost the mail. The sender's half
+  (`xray/board_nudge`, from `gingugu hook tool`; the tripwire doorway passes a
+  main-thread board `post` through to it) denies once per session a board post
+  from a branch ahead of the default branch that names no range, with the exact
+  line to add -
   shipped in the hook `init` already wires, so every install gets it, where a
   personal tripwire would reach one brain. `MEMORY_XRAY_BOARD=off`.
 - **Destructive tools ask the user, not the model (shipped 0.25.0).** Five paths
