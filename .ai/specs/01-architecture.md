@@ -58,7 +58,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    delivery receipt: can the recipient persona's known clients read the namespace),
    `xray/` (Codebase X-ray: `scan` + `extract` + `lang/` (one adapter per language: `python`
    on `ast` with `resolve`; `typescript` + `ts_*` + `jsonc` and `golang` on tree-sitter) +
-   `model` + `local` on the client, `validate` +
+   `model` + `local` + `parse_cache` + `resolve_walk` on the client, `validate` +
    `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check), `tool_xray` (the PreToolUse X-ray decision, apart from `tool_hook`), `bash_hook` + `bash_state` (X15: a shell command's writes get their X-ray; the repos a session touched) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), `board_nudge` (X20 sender: asks a board post from a branch ahead of the default branch for its range, once per session, from `gingugu hook tool`), `board_brief` (X20: the brief a board post's `xray:` line asks for, rendered on the receiver), `repo_id` (X20: a checkout's identity and where the repo a post names is checked out here), the hook side that builds the graph itself and never
    touches the brain; see Key Decisions), `proxy_xray` (the proxy's local half of `code_xray`),
    `board_watch` +
@@ -699,7 +699,8 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   query fingerprints first (0.07s on this repo) and extracts + ingests only on
   a miss, so results match the working tree without the agent asking. *Full
   ingest, no deltas*: an unchanged file can resolve differently when another
-  file appears. *Directed PageRank*, unlike `dream.centrality`: rank flows
+  file appears, so the graph is always linked whole; only the parsing is cached
+  by content (X16), linking is not. *Directed PageRank*, unlike `dream.centrality`: rank flows
   importer -> imported (undirected ranked `server` second). *Implicit edges*
   (parent initializers, and the package in `from pkg import submodule`) count
   for blast radius but not rank; without that an empty `__init__.py` ranked
@@ -714,8 +715,11 @@ A subagent gets its own fenced brain and arrives already knowing the task.
 - **Codebase X-ray: one adapter per language (shipped 0.30.0).** `xray/lang/`
   holds an adapter per language family: the file extensions it parses, the
   manifest basename patterns it needs (`pyproject.toml`, `go.mod`,
-  `tsconfig*.json`, `package.json`, `index.html`), and a pure function from
-  bytes to files + edges. The scan reads every source and manifest once,
+  `tsconfig*.json`, `package.json`, `index.html`), and a parse/link split
+  (X16): `parse(rel, data)` is a pure function of a file's bytes and extension
+  to a JSON-safe raw, `valid(raw)` checks a cached raw's shape, and
+  `link(raws, manifests)` turns raws into files + edges (`extract` = `link` of
+  `parse`). The scan reads every source and manifest once,
   under the same symlink / containment / size checks, and an adapter never
   touches the disk. *Python stays on `ast`* (the running interpreter's exact
   grammar); TypeScript/JavaScript and Go parse with **tree-sitter** from pinned
@@ -749,11 +753,13 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   git checkout with the same extractor as `code_xray` and caches it per repo by
   content fingerprint, so it works the same with a remote brain. Measured on
   this repo (356 `.py` files): 1.46s for the whole hook process on the first
-  edit with a graph rebuild, 0.5s cached. State lives beside the DB in
-  `hook-sessions/`: `xray-graph-<sha16(root)>.json` (cache) and
+  edit with a graph rebuild, 0.5s cached (X16 later made the rebuild after an
+  edit incremental; numbers under that entry). State lives beside the DB in
+  `hook-sessions/`: `xray-graph-<sha16(root)>.json` (cache),
+  `xray-parse-<sha16(root)>.json` (X16 per-file parse cache) and
   `xray-shown-<session>/` (one claim file per shown file, created atomically
   with `O_EXCL` so parallel hooks cannot lose a record); owner-only 0600,
-  swept after 7 days untouched. *Silent by construction*: a file
+  swept after 7 days untouched (the parse cache too). *Silent by construction*: a file
   nothing imports, a new file, a file no adapter parses, a path outside a git repo, a
   missing session id or any failure passes; it denies only once its "shown"
   state is saved, so a failed write can never block an edit forever. File
@@ -793,7 +799,8 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   (`xray-map-<session>/` per repo, `xray-read-<session>/` per file), so a read
   never silences the edit deny and the reverse. `xray/hook_common` holds what
   both hooks share: owner-only state writes, the sweep, path quoting, and one
-  per-repo graph cache (now also carrying language and entry points). Output is
+  per-repo graph cache (now also carrying language and entry points) and, since
+  X16, the per-file parse cache its graph build reads. Output is
   capped under 9000 characters (the harness cap is 10,000). Own switch
   `MEMORY_XRAY_MAP` (default on). Wired by `gingugu init` with a 15s timeout and
   matcher `Read|Grep|Glob`; it coexists with the harness's own PostToolUse logger.
@@ -820,6 +827,34 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   already-initialised repo; a plain `gingugu init` adds it. Switch: `MEMORY_XRAY_TRIPWIRE`
   turns both off. Limit: a repo the session never touched, reached only by a `cd` hidden
   inside a script, is not watched.
+- **Codebase X-ray: incremental refresh (X16, built on `feature/xray-incremental`, unreleased).**
+  Parsing is about 80% of a graph build and depends on nothing but a file's bytes and
+  extension, so the hooks' local build caches it. Each adapter is split into `parse`
+  (pure, JSON-safe), `valid` and `link` (resolution, tests, entry points, packages,
+  the parse-error list: path- and repo-dependent, always rerun); the Python adapter's
+  AST walk became `resolve_walk` (import records) applied by `resolve.resolve_records`.
+  `xray/parse_cache.py` keeps one file per repo, `xray-parse-<sha16(root)>.json` beside
+  the graph cache, `{header, raws: {adapter: {"<ext>:<sha256>": raw}}}`, passed by
+  `hook_common.graph()` to `extract.extract(path, parse_cache=...)`. *The cache is never
+  trusted*: any header difference (cache format, gingugu version, Python major.minor,
+  extractor version, tree-sitter parser versions) empties it, any load problem reads as
+  empty, every cached entry is re-validated and a bad one re-parsed, a cached record
+  with an unhashable field is re-parsed rather than raised, and the key uses the adapter
+  extension the name ends with so a file named just `.tsx` keeps its grammar. It is
+  pruned to the live sources on every save, written owner-only 0600 by temp file +
+  rename, skipped past 64 MB and on any write failure. *Linking is not cached*: an
+  unchanged file can resolve differently when another file appears, so a miss
+  re-links the whole repo; the payload, fingerprint, brain store and ranking are
+  unchanged and there is no migration, no tool change and no new switch. The edit
+  tripwire, map on arrival, bash hook, X-ray brief and board brief all reach it through
+  `hook_common.graph()`; `handlers/xray.py` (`code_xray`) and `proxy_xray` do not use it.
+  Measured through `hook_common.graph` on one Mac: django (3,050 files) cold 4.3s,
+  unchanged 0.37s, one edit 0.82s (a full 4.3s before); vite (1,639 TS/JS files) cold
+  1.0s, one edit 0.48s; a cold build costs the same as before (4.05s vs 4.03s on django);
+  django's parse cache is 1.1 MB. *Dropped from the roadmap: refresh in the nightly dream
+  pass.* The dream runs on the brain, which may be a remote server, and the brain cannot
+  read a client's checkout (X1: parsing is client-side). Refresh after writes stays lazy:
+  the next hook call pays only for what changed.
 - **Codebase X-ray: the brief (X19, shipped 0.34.0).** An agent that fires neither
   hook (Codex reading via a shell, editing via `apply_patch`) still gets the map
   when handed it: `code_xray` `action: "brief"` / `gingugu xray brief` (`xray/brief`,

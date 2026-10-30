@@ -548,7 +548,9 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
           git root + content fingerprint of the checkout
           graph cache hook-sessions/xray-graph-<sha16(root)>.json (shared with
           the map hook below; lives in xray/hook_common); rebuilt
-          locally with the code_xray extractor on a fingerprint miss
+          locally with the code_xray extractor on a fingerprint miss,
+          re-parsing only files whose bytes changed (parse cache
+          hook-sessions/xray-parse-<sha16(root)>.json, X16; linking reruns)
           blast radius of the file (rank.blast, walking through package nodes
           but never listing one); nothing imports it → skip
           already claimed in hook-sessions/xray-shown-<session>/ → skip
@@ -603,7 +605,8 @@ PostToolUse event (Read | Grep | Glob)  →  .claude/hooks/post_tool_xray.py (pu
       MEMORY_XRAY_MAP=off, no session id, or no git root: skip
       graph: xray/hook_common cache hook-sessions/xray-graph-<sha16(root)>.json
         (shared with the edit hook); on a fingerprint miss, rebuilt locally
-        with the code_xray extractor. A build that never finished leaves a
+        with the code_xray extractor, re-parsing only files whose bytes changed
+        (xray-parse cache, X16). A build that never finished leaves a
         marker in hook-sessions/xray-build-<session>/ and is not retried this session.
         Nothing parseable in the repo → skip
       first Read/Grep/Glob of the repo this session
@@ -631,7 +634,8 @@ hook, `code_xray` `action: "brief"` (or `gingugu xray brief`) runs
 changed files: git diff --name-status over --range, the named --files, or the
   working tree against HEAD plus untracked files
   → graph: xray/hook_common cache hook-sessions/xray-graph-<sha16(root)>.json
-    (the one the hooks share; rebuilt locally on a fingerprint miss)
+    (the one the hooks share; rebuilt locally on a fingerprint miss, re-parsing
+    only files whose bytes changed: xray-parse cache, X16)
   → rows: path, status, rank, importers; blast of the changed source files
     (code + candidate tests); repo top-5
   → data + compact `text` (<= 8800 chars)
@@ -696,7 +700,8 @@ PostToolUse event (Bash)  →  .claude/hooks/post_bash_xray.py (pure stdlib; set
         hash differs, appeared, or vanished is changed or deleted
       deleted file → its importers from hook_common.cached_graph (the cache as it
         stood before the command), minus the other deleted files
-      changed files → hook_common.graph (rebuilt locally on a fingerprint miss), then
+      changed files → hook_common.graph (rebuilt locally on a fingerprint miss, re-parsing only files
+        whose bytes changed: xray-parse cache, X16), then
         per file the edit tripwire's blast lines (top dependents, candidate tests)
       a file already claimed in xray-shown-<session>/ is skipped, else claimed
         (so the edit tripwire does not deny it later); at most 5 files in full,
