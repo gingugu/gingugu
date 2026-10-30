@@ -76,7 +76,7 @@ def register(mcp, ctx: ServerContext) -> None:
         limit: int = 50,
         offset: int = 0,
         top: int = 20,
-        range: str | None = None,  # noqa: A002 - the tool's argument name
+        range: str | None = None,
     ) -> dict:
         """X-ray a repository's import graph (Python, TypeScript/JavaScript, Go): what a
         change reaches, and what the code leans on. Use before editing a file to see its
