@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from . import hook_common, lang, rank
+from . import bash_state, hook_common, lang, rank
 from .hook_common import _claim, _show, _sweep
 from .scan import XrayError
 
@@ -49,13 +49,14 @@ def _claim_path(state_dir: Path, session_id: str, root: Path, rel: str) -> Path:
     return hook_common.claim_path(state_dir, "xray-shown", session_id, root, rel)
 
 
-def _render(rel: str, blast: dict) -> str:
+def _dependents(rel: str, blast: dict) -> list[str]:
+    """The lines naming what imports ``rel``; shared with the Bash X-ray."""
     code, tests = blast["code"], blast["tests"]
     code_total, tests_total = blast["code_total"], blast["tests_total"]
     n_files = code_total + tests_total
     noun = "candidate test" if tests_total == 1 else "candidate tests"
     lines = [
-        f"GINGUGU X-RAY: {_show(rel)} is imported by {n_files} file{'' if n_files == 1 else 's'} "
+        f"{_show(rel)} is imported by {n_files} file{'' if n_files == 1 else 's'} "
         f"({tests_total} {noun})."
     ]
     if code:
@@ -79,6 +80,12 @@ def _render(rel: str, blast: dict) -> str:
         listed = ", ".join(_show(row["path"]) for row in tests[:TOP_N])
         more = f" (+{tests_total - TOP_N} more)" if tests_total > TOP_N else ""
         lines.append(f"Candidate tests: {listed}{more}")
+    return lines
+
+
+def _render(rel: str, blast: dict) -> str:
+    lines = _dependents(rel, blast)
+    lines[0] = "GINGUGU X-RAY: " + lines[0]
     lines.append(
         "Import-based estimate: strings, fixtures and subprocesses are not edges. "
         "Check the callers, then re-issue the edit unchanged - the X-ray fires "
@@ -105,6 +112,7 @@ def check(payload: dict, state_dir: Path) -> str | None:
         if not isinstance(session_id, str) or not session_id:
             return None  # a shared "unknown" would let one session silence another
         root, rel = target
+        bash_state.remember(state_dir, session_id, root)
         claim = _claim_path(state_dir, session_id, root, rel)
         if claim.exists():
             return None
