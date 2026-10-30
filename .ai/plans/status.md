@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-10-30 (X17 symbol graph released in 0.39.0)_
+_Last updated: 2026-10-30 (X-ray tuned for the agent: blind-only deny, post-edit note, X11 ledger)_
 
 ## In Flight
 
@@ -23,10 +23,27 @@ X-ray brief RELEASED in 0.34.0 (#157); X20 brief on the board RELEASED in 0.35.0
 (#158), live-test fixes in 0.35.1 (#159), not-available note in 0.35.2 (#160), repo on
 the line in 0.36.0 (#161); X15 writes from any tool RELEASED in 0.37.0 (#163); X16 incremental refresh
 RELEASED in 0.38.0 (#164); X17 symbol graph (Python)
-RELEASED in 0.39.0 (#165); X21 symbols on the brain owed** (2026-10-30). The
+RELEASED in 0.39.0 (#165); X-ray tuned for the agent BUILT on `feature/xray-tuned`,
+unreleased; X21 symbols on the brain owed** (2026-10-30). The
 end goal was restated: a sophisticated map before any work starts, so the map
 reaches the agent on reads and on any write, not only through the edit tools. New
 items X14-X21 (section 19); build order X14, X19, X20, X15, X16, X17, then X3.
+
+X-ray tuned for the agent (2026-10-30; he asked the agent that uses X-ray what does not
+work, then: change it, build what you need). Measured in the X17 sail: about 10 edit
+denies, every one re-issued unread, none changed a decision; transitive reach in a
+hub-heavy repo named ~185 files for nearly every file. Built: (1) the deny fires only
+on a blind edit (no X14 read claim, no own write this session) - the proposed size gate
+was dropped, blindness was the signal; (2) a PostToolUse note after an Edit/MultiEdit
+(`xray/edit_note.py`, doorway `post_edit_xray.py`, `gingugu hook edit`) names the
+cross-file callers of the definitions touched and their nearest tests, from the cached
+symbol graph (~30 ms); (3) direct importers and nearest tests lead everywhere, no
+transitive line in the neighbourhood, dot-dirs out of the map's entry points, and a test
+named for the changed file ranks first (`hook_common.nearest_tests`); (4) X11 lean: a
+local ledger (`xray/ledger.py`) records each note's predictions by call and by import and
+each pytest run's failures; `gingugu xray score` compares them. Reverses the 2026-10-27
+X2 call (deny every first edit) for every non-blind edit, on his instruction. `harness.py`
+now derives its hook list from `settings._HOOKS` (was 302 lines, now 296).
 
 X17 (design approved 2026-10-30): the Python parse also records definitions (qualified
 name, kind, line span from the first decorator), import bindings, call sites and
@@ -2341,7 +2358,7 @@ slices alongside them. IDs are stable references, not the order.
 | # | Sub-item | Reuses | Notes |
 |---|---|---|---|
 | X1 | **Blast radius** (SHIPPED in 0.29.0, #139) - persisted import graph keyed by repo + commit; the agent builds or refreshes it when missing or stale; spreading activation over reverse imports, ranked by directed PageRank | dream graph math, spreading activation | The foundation. Persist outside `memories` so the store's own graph is not flooded |
-| X2 | **Tripwire on edit (SHIPPED in 0.29.0, #142)** - a hook that names a file's dependents, top ranked first, before the edit lands | tripwires, hooks | The first edit of an imported `.py` file is denied once per file per session with its blast radius; the re-issued edit passes. Own switch `MEMORY_XRAY_TRIPWIRE` |
+| X2 | **Tripwire on edit (SHIPPED in 0.29.0, #142)** - a hook that names a file's dependents, top ranked first, before the edit lands | tripwires, hooks | Since the X-ray tuning only a blind edit (an imported file this session never read or wrote) is denied, once, with direct importers, reach and nearest tests; an informed edit gets the post-edit callers note instead. Own switch `MEMORY_XRAY_TRIPWIRE` |
 | X3 | **Scar tissue** - link memories (bugs, decisions, gotchas) to the files they are about; an edit surfaces both what depends on the file and what it has cost before | memory store, relations, recall | The part no code-analysis tool can have, because none holds the history |
 | X4 | **History as a second graph** - co-change coupling (files that change together without importing each other), churn x centrality x authors as hotspots, per-commit X-ray diffs as architectural drift | git log, dream proposal queue | Drift can run in the nightly dream pass and stage proposals |
 | X5 | **Module boundaries** - communities that hold up on import graphs | dream clusters | Label propagation fails as-is (see above); needs a decided approach, not a knob |
@@ -2350,7 +2367,7 @@ slices alongside them. IDs are stable references, not the order.
 | X8 | **Dependency X-ray** - third-party packages on the graph: which are load-bearing, how deep, what a compromised package could reach | X1, X7 | Upgrade priority, pinning, incident-day exposure |
 | X9 | **Fleet X-ray** - every repo into one central brain; cross-repo callers and cross-repo blast radius | central brain, scoped tokens | |
 | X10 | **Graph-aware fences** - approval scales with blast radius: leaf edits free, edits reaching top-ranked files need the user's go | X1, hooks, minion grants | |
-| X11 | **Predict, then score** - the agent predicts failing tests and broken files before a change; the calibration ledger scores it after | X1, calibration ledger (#2) | |
+| X11 | **Predict, then score** - the agent predicts failing tests and broken files before a change; the calibration ledger scores it after | X1, calibration ledger (#2) | Lean version BUILT (unreleased): X-ray's own test predictions (by call, by import) vs pytest failures in a local ledger, `gingugu xray score`. The agent's own predictions and the brain-side calibration ledger are still to do |
 | X12 | **Board-driven upkeep** - the nightly X-ray posts findings (dead files, new cycles, drift) to the agent board for agents to claim | X4, agent board | |
 | X13 | **Code fingerprints** - embed code units; near-duplicate logic across repos, and provenance of copied code | embeddings, hybrid search | |
 | X14 | **Map on arrival (SHIPPED in 0.32.0, #153)** - a short repo overview (size, languages, top-ranked files, entry points) on the session's first touch of a repo, then an up-to-4-line neighbourhood (rank, importers, reach, imports; X17 adds a fifth, `Most called`, for Python) on a file's first `Read` | X1 graph cache, hooks | PostToolUse context, non-blocking. Leaf files stay silent. First touch, not session start, so a session that never touches code pays nothing |

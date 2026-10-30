@@ -9,6 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The X-ray edit tripwire stops only a blind edit.** It denied the first edit of every
+  imported file, and the agent that uses it re-issued those denies without reading them:
+  the file's importers were already in front of it from the read neighbourhood. It now
+  denies only an edit of an imported file this session never read and never wrote.
+- **X-ray leads with what is directly connected.** The deny and the shell-write X-ray
+  open with `X is imported directly by D files; a change reaches N files (M candidate
+  tests).`, then `Direct importers by rank:` and `Nearest tests:`. The read neighbourhood
+  names the nearest tests instead of a transitive total, and the repo map's entry points
+  leave out dot-directories such as `.claude/hooks`.
+- **Nearest tests put the test named for the file first.** Among test files, one whose
+  name carries the changed file's stem as whole words (`test_grants.py` for `grants.py`)
+  goes ahead of the rest, which follow by hops. Before, a change to `grants.py` named
+  `test_aboutness.py` and `test_board.py` first.
+
+### Added
+
+- **A note after each edit (Python).** Right after an `Edit`/`MultiEdit`, X-ray names the
+  callers in other files of the definitions the edit touched and the tests nearest them,
+  once per definition per session - `` `require_write_id` (L181): 7 callers in 3 other
+  files - ... Tests: ...`` - from the cached symbol graph, in about 30 ms. New
+  `PostToolUse` doorway `post_edit_xray.py` and `gingugu hook edit`.
+- **X-ray scores its own test predictions (X11).** Each note records the tests it
+  predicted, by call and by import, in a local ledger (`xray-ledger.jsonl` beside the
+  hook state, owner-only, hashed ids); each `pytest` run in that session records which
+  test files failed. `gingugu xray score [--json]` says, per predictor, how many failed
+  test files it named in its top 5, further down, or missed. Nothing leaves the machine.
+
+**Upgrading:** run `gingugu init` in each repo to install the new doorway.
+
 ---
 
 ## [0.39.0] - 2026-10-30
