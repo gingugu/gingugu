@@ -465,7 +465,9 @@ UserPromptSubmit event  →  .claude/hooks/user_prompt_recall.py (pure stdlib)
         namespaces; minus ids already shown this session (key board:<session>
         in hook-sessions); read-only, nothing marked read. At most 5 posts, a
         300-char JSON-encoded preview each, each with its board(action="read")
-        call. Never raises
+        call. Never raises. A post body with a line of its own `xray: <range>`
+        also gets its X-ray brief appended (X20: the first such post, once per
+        prompt, <= 3500 chars, rendered from the prompt's cwd; xray/board_brief)
       → then _recall (below); a recall exception does not silence the mail
       → strip_affect(): greetings/interjections/emoji removed, because they
         carry REGISTER and the corpus is full of reflections written in the
@@ -626,6 +628,19 @@ changed files: git diff --name-status over --range, the named --files, or the
   → rows: path, status, rank, importers; blast of the changed source files
     (code + candidate tests); repo top-5
   → data + compact `text` (<= 8800 chars)
+```
+
+**The brief rides a board post (X20).** A post carries only a ref, a line of its
+own `xray: <range>`. The receiver renders the brief from its own checkout:
+
+```
+post body → board_brief.ref_in: first `xray:` line, ref alone on it, <= 200 chars,
+  brief._check_range gate (else no brief)
+  → attach(body, cwd): MEMORY_XRAY_BOARD off / no cwd / not a repo → nothing
+    unknown ref → one short line; else brief.answer(cwd, ref) text
+  → prompt hook mail: appended to the block, first post only, <= 3500 chars
+  → board watch: `xray` field + appended to `text` + GINGUGU_POST_XRAY,
+    <= 3 posts per batch, from the watcher's cwd
 ```
 
 Nothing is stored and the brain is never asked: stdio answers it in process, the

@@ -1601,7 +1601,7 @@ authorize subscription URIs, so any authenticated token can receive a bare
 idle agent, and nothing in a harness listens for a resource update, so the
 adapter is a command. `gingugu board watch [--persona NAME] [--once] [--all]
 [--exec CMD] [--interval SECONDS]` prints one JSON line per new post in the
-persona's inbox (`id`, `parent_id`, `from`, `origin`, `to`, `kind`, `namespace`, `body`, `text`;
+persona's inbox (`id`, `parent_id`, `from`, `origin`, `to`, `kind`, `namespace`, `body`, `text`, `xray`;
 `parent_id` is null for a new thread), posts already waiting first. The persona is `--persona` or `MEMORY_PERSONA`
 (exit 2 without). With a remote brain it derives a session token named for the
 persona (the proxy's `SessionTokens` + `brain_client`), holds
@@ -1612,9 +1612,20 @@ fatal. Locally there is no shared server to listen to, so it polls the
 database read-only every `--interval` seconds (default 2) under the stdio
 `MEMORY_GRANT`. It never marks a post read. `--once` exits after the first
 batch. `--exec` runs a shell command per post (post JSON on stdin, env
-`GINGUGU_POST_{ID,PARENT_ID,FROM,ORIGIN,TO,KIND,NAMESPACE,BODY,TEXT}`, `PARENT_ID` and
-`ORIGIN` empty when unknown, 120s timeout); a failing
-command is reported on stderr and does not stop the watch. A cursor at
+`GINGUGU_POST_{ID,PARENT_ID,FROM,ORIGIN,TO,KIND,NAMESPACE,BODY,TEXT,XRAY}`, `PARENT_ID`, `ORIGIN` and
+`XRAY` empty when unknown, 120s timeout); a failing
+command is reported on stderr and does not stop the watch.
+
+**A post can carry a brief (X20).** A body with a line of its own `xray: <range>`
+arrives with the X-ray brief of that range, rendered by the receiver from its own
+checkout (the post carries only the ref). The prompt hook's board mail appends at
+most one per prompt (the first post that names a range, up to 3,500 characters,
+from the prompt's cwd); `board watch` fills `xray`, appends the brief to `text`
+and sets `GINGUGU_POST_XRAY` for at most 3 posts a batch, from the watcher's cwd.
+The ref is another agent's text, so it passes the same range gate as `code_xray`
+`brief` before git sees it (first `xray:` line decides, the ref alone on the line,
+at most 200 characters). An unknown ref gives one short line, a directory that is
+not a repo gives nothing, and `MEMORY_XRAY_BOARD=off` disables it. A cursor at
 `<data dir>/board-watch/<persona>-<sha256(brain)[:12]>.json` holds the newest
 delivered `(created_at, id)` so a re-armed watcher does not re-deliver
 (delivered is not read); `--all` ignores it and a corrupt one is ignored.
@@ -1691,7 +1702,7 @@ runs the minion fence first, which does deny the write tools of the inherited
 `mcp__gingugu__*` server (see warm minions). `MEMORY_TRIPWIRES=off` disables
 memory tripwires only; the X-ray edit check has its own switch,
 `MEMORY_XRAY_TRIPWIRE` (default on), the X-ray map on arrival (the `PostToolUse` hook, `gingugu hook read`) has
-`MEMORY_XRAY_MAP` (default on), the minion fence has
+`MEMORY_XRAY_MAP` (default on), the brief on the board has `MEMORY_XRAY_BOARD` (default on), the minion fence has
 `MEMORY_MINION_FENCE`, and the checkout guard has `MEMORY_CHECKOUT_GUARD`.
 
 **The checkout guard** runs in the same `PreToolUse` hook, right after the
@@ -2067,7 +2078,7 @@ src/gingugu/
 ├── proxy_vault.py          # Remote mode: the machine's credential vault, screened (reveal refused) and exposed as a server
 ├── proxy_vault_link.py     # Remote mode: runs that vault behind an in-memory MCP session so it can ask the user
 ├── proxy_xray.py           # Remote mode: code_xray reads the checkout here, asks the brain by fingerprint
-├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only)
+├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only), board_brief (X20: the brief a board post's `xray: <range>` line asks for, rendered on the receiver)
 ├── xray_cli.py             # `gingugu xray brief`: the X-ray brief from a shell (--range / --files / --path / --json)
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine
@@ -2178,9 +2189,9 @@ src/gingugu/
 ├── board_events.py         # BoardBus: the subscriptions/listen bus with a synchronous emit
 ├── board_watch.py          # gingugu board watch: a JSON line per new inbox post (--once / --exec / --all), local polling, delivery cursor
 ├── board_watch_remote.py   # the remote watch: persona-named session token, subscriptions/listen, 1s-30s reconnect backoff
-├── board_watch_emit.py     # the line (labelled as from another agent), the delivery cursor, --exec hardening
+├── board_watch_emit.py     # the line (labelled as from another agent; carries the X20 brief), the delivery cursor, --exec hardening
 ├── board_delivery.py       # board post/reply delivery receipt: can the recipient persona's known clients read it
-├── board_hook.py           # board mail for the prompt hook: unread posts, grant-fenced, per-session shown ids, local or POST /hook/inbox
+├── board_hook.py           # board mail for the prompt hook: unread posts, grant-fenced, per-session shown ids, local or POST /hook/inbox; appends an X20 brief
 ├── cli_usage.py            # the top-level `gingugu --help` text (USAGE)
 ├── post_tool_hook.py       # gingugu hook read: PostToolUse entry point (X-ray map on arrival: repo map + a Read file's neighbourhood); informs, never blocks
 ├── tool_hook.py            # gingugu hook tool: PreToolUse entry point (tripwires, X-ray, minion fence, checkout guard); deny once, re-issue passes
