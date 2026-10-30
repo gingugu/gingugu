@@ -119,7 +119,9 @@ def test_find_looks_for_exactly_root_slash_name(repo, tmp_path, monkeypatch):  #
     assert repo_id.find("nope", None) is None
 
 
-def test_find_never_uses_a_checkout_whose_identity_differs(repo, tmp_path, monkeypatch):  # noqa: F811
+def test_find_never_uses_a_checkout_whose_identity_differs(
+    repo, tmp_path, monkeypatch  # noqa: F811
+):
     _git(repo, "remote", "add", "origin", "git@github.com:acme/repo.git")
     monkeypatch.setenv("MEMORY_XRAY_REPOS", str(tmp_path))
     assert repo_id.find("acme/repo", None) == repo
