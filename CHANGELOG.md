@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A board post can name its repo.** The `xray:` line takes an optional repo before
+  the range, `xray: acme/widget main..feature/x`, and the sender's nudge now stamps it
+  (the checkout's origin as `owner/name`, else its folder name). The receiver renders
+  the brief from a checkout of that repo even when it runs somewhere else, as a Codex
+  agent's `board watch` does: its own cwd if that is the repo, else exactly
+  `<root>/<name>` under the folders in `MEMORY_XRAY_REPOS` (`os.pathsep`-separated;
+  empty turns the search off) or, unset, `~/GIT`, `~/git`, `~/src`, `~/code`,
+  `~/projects`, `~/dev`, `~/repos` and `~/Developer`. A candidate is used only when its
+  origin matches. No checkout found: one line naming the repo and the
+  `gingugu xray brief --range` to run. A plain `xray: <range>` works as before.
+
+### Security
+
+- **The not-available line suggests only a shell-safe command.** The range in a board
+  post is another agent's text and its gate keeps git safe, not a shell. The
+  `gingugu xray brief --range` the line suggests now carries the range only when it is
+  made of shell-safe characters, and `<range>` otherwise; the range is still named,
+  quoted.
+
 ---
 
 ## [0.35.2] - 2026-10-30

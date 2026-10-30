@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-10-30 (X20 not-available note)_
+_Last updated: 2026-10-30 (X20 part 2: repo on the board line)_
 
 ## In Flight
 
@@ -20,8 +20,8 @@ are not resolved; a go.mod `module ( ... )` block reads as malformed.
 
 **Board #5 Codebase X-ray - X14 map on arrival RELEASED in 0.32.0 (#153); X19
 X-ray brief RELEASED in 0.34.0 (#157); X20 brief on the board RELEASED in 0.35.0
-(#158), live-test fixes in 0.35.1 (#159), not-available note on fix/brief-not-here;
-X15 next** (2026-10-30). The
+(#158), live-test fixes in 0.35.1 (#159), not-available note in 0.35.2 (#160), repo on
+the line on feature/xray-repo-id; X15 next** (2026-10-30). The
 end goal was restated: a sophisticated map before any work starts, so the map
 reaches the agent on reads and on any write, not only through the edit tools. New
 items X14-X20 (section 19); build order X14, X19, X20, X15, X16, X17, then X3.
@@ -54,7 +54,17 @@ paged; a git `core.fsmonitor`-style check for other config that runs code.
 
 ## Recently Completed
 
-**X20 not-available note (fix/brief-not-here, unreleased; 2026-10-30).** A live
+**X20 part 2, repo on the board line (feature/xray-repo-id, unreleased;
+2026-10-30).** `xray: <repo> <range>`: the sender nudge stamps the checkout's origin as
+`owner/name` (else its folder name); the receiver uses its cwd only if it is that repo,
+else exactly `<root>/<name>` under `MEMORY_XRAY_REPOS` or `~/GIT`, `~/git`, `~/src`,
+`~/code`, `~/projects`, `~/dev`, `~/repos`, `~/Developer`, origin-verified; none found
+= one line naming the repo. New `xray/repo_id.py`; the repo token is gated before it
+is part of a path. Rejected: the brain's namespace `path` (central brain, per-machine
+paths, and `board watch` renders without the brain) and a config-file map. Tests:
+`tests/test_xray_repo_id.py`, `tests/test_xray_board_nudge.py`.
+
+**X20 not-available note (fix/brief-not-here, released in 0.35.2, #160; 2026-10-30).** A live
 test found the brief never reached a Codex agent: its `board watch` runs with cwd =
 the Codex thread directory, not a checkout, and `board_brief.attach` returned None
 there, so the ref was dropped without a word. With no cwd or outside a repo it now
@@ -2267,7 +2277,7 @@ slices alongside them. IDs are stable references, not the order.
 | X16 | **Incremental refresh** - per-file content hashes; re-parse only what changed; refresh after writes and in the nightly dream pass | X1, dream | A full re-extract is 0.4s here and grows with the repo |
 | X17 | **Symbol graph** - functions, classes, definitions and call sites, not just files and imports | `xray/lang/` adapters, tree-sitter | The resolution X7 needs to name the function an entry point reaches, not just the file |
 | X19 | **X-ray brief (SHIPPED in 0.34.0, #157)** - the changed files by rank with importer counts, plus their combined blast (code and candidate tests), for an agent that fires no hooks | X1, X14 graph cache | `code_xray` `brief` (`range`, `files`, `path`) and `gingugu xray brief [--range R \| --files a,b] [--path P] [--json]`. Computed on the caller's machine from the hook graph cache; nothing stored, the brain never asked; `gingugu serve` refuses it, the proxy answers it locally. Compact `text` <= 8800 chars, for reviews, handoffs and `board watch --exec`. `xray/brief.py`, `xray_cli.py` |
-| X20 | **Brief on the board (RELEASED in 0.35.0)** - a handoff carries its X-ray brief without anyone asking. Why next: the agents X19 is for fire no hooks, so a brief they must request is a brief they rarely see | X19, agent board | When a board post names a range (`xray: <range>`), the RECEIVING side renders `xray brief` for it and attaches the text: the prompt hook's board mail (Claude Code) and `board watch --exec` (Codex). Rendered on the receiver's machine from its own checkout; the post itself carries only the ref, never paths or the brief. BUILT as a line of its own `xray: <range>` in the body: board mail appends at most one per prompt (<= 3500 chars, the prompt's cwd); `board watch` adds an `xray` field, appends to `text` and sets `GINGUGU_POST_XRAY` (<= 3 per batch, the watcher's cwd). Same range gate as `brief`, ref <= 200 chars. Sender nudge: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line (`xray/board_nudge.py`). A receiver with no cwd or outside a repo gets one line naming `gingugu xray brief --range <ref>` (fix/brief-not-here). Switch `MEMORY_XRAY_BOARD`. `xray/board_brief.py` |
+| X20 | **Brief on the board (RELEASED in 0.35.0)** - a handoff carries its X-ray brief without anyone asking. Why next: the agents X19 is for fire no hooks, so a brief they must request is a brief they rarely see | X19, agent board | When a board post names a range (`xray: <range>`), the RECEIVING side renders `xray brief` for it and attaches the text: the prompt hook's board mail (Claude Code) and `board watch --exec` (Codex). Rendered on the receiver's machine from its own checkout; the post itself carries only the ref, never paths or the brief. BUILT as a line of its own `xray: <range>` in the body: board mail appends at most one per prompt (<= 3500 chars, the prompt's cwd); `board watch` adds an `xray` field, appends to `text` and sets `GINGUGU_POST_XRAY` (<= 3 per batch, the watcher's cwd). Same range gate as `brief`, ref <= 200 chars. Sender nudge: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line (`xray/board_nudge.py`). A receiver with no cwd or outside a repo gets one line naming `gingugu xray brief --range <ref>` (0.35.2). Part 2: `xray: <repo> <range>` names the repo, found locally via `xray/repo_id` (feature/xray-repo-id). Switch `MEMORY_XRAY_BOARD`. `xray/board_brief.py` |
 | X18 | **X-ray Explorer** - a view in the Memory Explorer: repo as a 3D city (height = rank, colour = churn or tests, districts = X5 boundaries), animated blast radius, X7 attack paths, X6 blind-spot heat, X3 scar markers linking into the memory drawer, X4 drift slider over snapshots | `ui/`, `ui_api/` read-only observer | Ships in slices; city + blast radius first |
 
 ### Standing rules
