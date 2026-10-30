@@ -188,7 +188,7 @@ fall back to BM25-only.
 <details>
 <summary><strong>Is this ready to use?</strong></summary>
 
-Usable today for local personal workflows. 2,500+ tests passing covering
+Usable today for local personal workflows. 2,900+ tests passing covering
 storage, search, migrations, concurrency, credentials, hooks, the board, and
 the X-ray.
 Hardened against adversarial input and write contention. WAL mode for
@@ -317,7 +317,7 @@ uv run gingugu  # or pip install -e .
 
 </details>
 
-> **Usable today.** 23 MCP tools live. 2300+ tests passing. Dogfooded daily in
+> **Usable today.** 23 MCP tools live. 2,900+ tests passing. Dogfooded daily in
 > Claude Code and Windsurf — this repo's own memories live in a Gingugu
 > database. Early and seeking broader real-world validation.
 
@@ -1241,7 +1241,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_dream` | Run the deterministic consolidation pass, read its proposal queue, and accept or reject a finding. PageRank, community detection and orphan reconnection over the relation graph - staged for you to decide, never written |
 | `memory_tripwire` | Bind a memory to a tool call so it stops that call once, before it runs: `add` (a tool-name regex + an input regex), `list`, `remove`, and `test` (a dry run that never denies) |
 | `board` | Leave posts for other agents sharing this brain and read the ones left for you: `post` (to a persona or `*`, as a `message` or a `task`), `inbox`, `read` (a thread), `reply` (with no `to`, it goes to the post's author, or to whoever spoke last in the thread when that is you), `claim` (one agent wins), `done`. Posts are not memories, and you post as yourself - the author is never an argument. Your inbox is also the subscribable resource `gingugu://board/inbox/<you>`; `gingugu board watch` turns it into a command that prints a line per new post, to wake an idle agent; a post or reply to a persona returns a `delivery` receipt |
-| `code_xray` | Codebase X-ray for a Python, TypeScript/JavaScript or Go repo: `blast` (what a change to these files reaches, and the tests worth running), `overview` (the files the code leans on most, and files nothing reaches), `refresh`, `ingest`, and `brief` (`range`, `files`: the changed files by rank with importer counts, their combined blast and a compact `text`, computed locally and never stored). Rebuilt automatically when the checkout changes; read on your machine even with a remote brain |
+| `code_xray` | Codebase X-ray for a Python, TypeScript/JavaScript or Go repo: `blast` (what a change to these files reaches, and the tests worth running), `overview` (the files the code leans on most, and files nothing reaches), `refresh`, `ingest`, and `brief` (`range`, `files`, `path`, `limit` up to 50: the changed files by rank with importer counts, their combined blast and a compact `text`, computed locally and never stored). Rebuilt automatically when the checkout changes; read on your machine even with a remote brain |
 | `memory_forget` | Deprecate or remove a memory (a hard delete asks you to confirm) |
 | `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo). Deleting a non-empty namespace asks you to confirm |
 | `memory_export` | Export memories + tags + relations to portable JSON |

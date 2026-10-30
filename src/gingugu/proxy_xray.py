@@ -82,7 +82,7 @@ def _checked(result: CallToolResult) -> CallToolResult:
 
 def _limit(args: dict) -> int:
     limit = args.get("limit")
-    return limit if isinstance(limit, int) and not isinstance(limit, bool) else 10
+    return limit if isinstance(limit, int) and not isinstance(limit, bool) else 50
 
 
 def _cancelled_id(msg):
