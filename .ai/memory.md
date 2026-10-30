@@ -460,7 +460,11 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.35.0** (PyPI, 2026-10-30). Minor: brief on the board (X20) -
+- Current version: **0.35.1** (PyPI, 2026-10-30). Patch: X20 live-test fixes - the
+  board nudge reaches the main agent (the PreToolUse doorway passes a main-thread
+  board `post` through) and a clipped brief ends with a line saying so (#159).
+  **Upgrading:** run `gingugu init --force` in each repo for the new doorway.
+- 0.35.0 (PyPI, 2026-10-30). Minor: brief on the board (X20) -
   a board post with an `xray: <range>` line arrives with the receiver's X-ray
   brief (board mail, `board watch`), and `gingugu hook tool` asks a post from a
   branch ahead of the default branch for its range once per session (#158).
