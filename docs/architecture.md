@@ -425,8 +425,10 @@ Read by the `PreToolUse` hook (`gingugu hook tool`), which denies the first
 matching call per session per memory and logs the trip to `query_log`
 (`tool='tripwire'`). Per-session suppression lives beside the DB in
 `hook-sessions/tripwires-<session_id>.json`, not in SQLite. The X-ray edit
-check keeps two more files there: `xray-graph-<sha16(root)>.json` (the import
-graph, cached per repo by fingerprint, shared with the map-on-arrival hook) and `xray-shown-<session>/`
+check keeps three more entries there: `xray-graph-<sha16(root)>.json` (the import
+graph, cached per repo by fingerprint, shared with the map-on-arrival hook),
+`xray-parse-<sha16(root)>.json` (each file's parse, cached by content so a rebuild
+after an edit re-parses only what changed) and `xray-shown-<session>/`
 (one claim file per file already shown this session). The map hook adds three
 more directories: `xray-map-<session>/` (the repo map, once per session),
 `xray-read-<session>/` (one claim per file whose neighbourhood was shown) and
@@ -1703,7 +1705,9 @@ Answers are import-based estimates and carry a `caveat`.
 
 The `PreToolUse` hook runs the same blast radius on the first edit of an
 imported source file (see `memory_tripwire` below for the hook); it builds its
-own graph locally and does not call this tool.
+own graph locally and does not call this tool. That local build reuses a per-file
+parse cache, so after an edit only the changed files are parsed again; the
+`code_xray` tool path does not use the cache.
 
 ### `memory_tripwire`
 Bind a memory to a tool call so it is put in front of the agent at the moment

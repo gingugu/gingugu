@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **X-ray refreshes after an edit by re-parsing only what changed (X16).** The hooks'
+  local graph build (edit tripwire, map on arrival, shell-write X-ray, X-ray brief,
+  board brief) now keeps a per-file parse cache beside its graph cache
+  (`xray-parse-<sha16(root)>.json`, owner-only, swept after 7 days untouched), keyed by
+  each file's bytes. After an edit only that file is parsed again; linking - path
+  resolution, tests, entry points - always reruns, so results are identical to a cold
+  build. Measured on one Mac: django (3,050 files) rebuilds after one edit in 0.82s
+  instead of a full 4.3s (0.37s unchanged); vite (1,639 TS/JS files) in 0.48s after one
+  edit, 1.0s cold. A cold build costs the same as before. The cache is never trusted: a
+  new gingugu, Python or tree-sitter version empties it, a damaged one is ignored and
+  every entry is re-validated. No migration, no new tool or switch; the `code_xray` tool
+  path is unchanged.
+
 ---
 
 ## [0.37.0] - 2026-10-30
