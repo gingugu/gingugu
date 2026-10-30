@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **X-ray brief.** An agent that never fires the Read or Edit hooks - Codex
+  reading through a shell and editing with `apply_patch`, say - still gets the
+  X-ray map of a task when it is handed one. `code_xray` gains `action: "brief"`
+  and a `range` argument, and `gingugu xray brief [--range R | --files a,b]
+  [--path P] [--json]` prints the same answer from a shell. It takes the changed
+  files (a git range, named files, or the working tree against HEAD with
+  untracked files), places each by rank with its importer count, and adds the
+  combined blast radius of the changed source files (code plus candidate tests),
+  a small repo top-5 and a compact `text` render of at most 8,800 characters,
+  ready to paste into a review or a handoff - or into a `gingugu board watch
+  --exec` command. It is computed on your machine from the per-repo graph cache
+  the X-ray hooks already share; nothing is stored and the brain is never asked.
+  Under `gingugu serve` the brain refuses it (it cannot read your checkout);
+  through the proxy it is answered locally. The blast lists page at `limit`
+  (at most 50); a file name that is not UTF-8 arrives in the JSON fields with
+  U+FFFD in place of the bad bytes, and quoted in `text`.
+
 ---
 
 ## [0.33.0] - 2026-10-29

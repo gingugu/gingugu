@@ -128,6 +128,8 @@ graph LR
     C -->|add · list · remove · test| W
     C -->|post · inbox · read · claim · done| BP
     C -->|ingest · refresh · blast · overview| XR
+    C -->|brief, stdio only: nothing stored| XG
+    X -->|brief, answered on this machine| XG
     A -->|each pending tool call| Y
     Y -->|reads matches| W
     Y -->|logs each trip| T
@@ -1641,6 +1643,15 @@ tests, each with minimum hops, rank and `certain`. `overview` (`top`, `limit`,
 `imported_by`, `lang` and `kind`, the file count per language (`languages`), and
 files no test or entry point reaches. `refresh` rebuilds
 (replacing a snapshot whose graph differs); `ingest` stores a `payload`.
+`brief` (`range`, `files`, `path`, `limit`) is the handoff for an agent that
+fires no hooks: the changed files (a git range, named files, or the working tree
+against HEAD with untracked files) by rank with importer counts, the combined
+blast of the changed source files (code and candidate tests), a repo top-5 and a
+compact `text` of at most 8,800 characters. It is computed on the caller's
+machine from the hook graph cache; nothing is stored and the brain is never
+asked, so under `gingugu serve` it is refused and through the proxy it is
+answered locally. `gingugu xray brief [--range R | --files a,b] [--path P]
+[--json]` prints the same answer.
 
 The snapshot is the checkout at `path` (default: the working directory),
 fingerprinted on every call and re-extracted when its content changed
@@ -2042,7 +2053,7 @@ src/gingugu/
 ├── __init__.py             # Package init + version
 │
 │   # ── Entry points ──────────────────────────────────────────────
-├── server.py               # MCP server; stdio / serve / token / remote / promote / init / harness / ui / dream / board watch / embed / hook dispatch, plus the remote-proxy branch of bare `gingugu`
+├── server.py               # MCP server; stdio / serve / token / remote / promote / init / harness / ui / dream / board watch / embed / xray / hook dispatch, plus the remote-proxy branch of bare `gingugu`
 ├── serve.py                # gingugu serve: streamable HTTP + Bearer auth + /healthz + POST /token/derive + TLS; build_app
 ├── serve_tls.py            # serve's TLS: auto (https off loopback) / on / off, generated self-signed leaf or your own
 ├── serve_tokens.py         # Serve tokens: hashed store, scoped + per-machine owner tokens
@@ -2056,7 +2067,8 @@ src/gingugu/
 ├── proxy_vault.py          # Remote mode: the machine's credential vault, screened (reveal refused) and exposed as a server
 ├── proxy_vault_link.py     # Remote mode: runs that vault behind an in-memory MCP session so it can ask the user
 ├── proxy_xray.py           # Remote mode: code_xray reads the checkout here, asks the brain by fingerprint
-├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), read_hook (PostToolUse map on arrival)
+├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only)
+├── xray_cli.py             # `gingugu xray brief`: the X-ray brief from a shell (--range / --files / --path / --json)
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine
 ├── remote_args.py          # usage text + argparse for `gingugu remote`, mint ssh argv
@@ -2219,7 +2231,7 @@ src/gingugu/
     ├── credentials.py      # credential_store / get / list / delete (delete asks the user)
     ├── tripwires.py        # memory_tripwire: add / list / remove / test
     ├── board.py            # board tool + gingugu://board/inbox/{persona} resource; derives the author
-    ├── xray.py             # code_xray tool: snapshot selection, blast, overview, refresh, ingest
+    ├── xray.py             # code_xray tool: snapshot selection, blast, overview, refresh, ingest, brief
     ├── admin.py            # namespaces, export, import (cascade delete and overwriting import ask the user)
     ├── summaries.py        # Payload shapes: full summary, compact summary, the picker
     ├── choices.py          # Enum argument parsing, shared error wording

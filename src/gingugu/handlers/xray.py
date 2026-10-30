@@ -19,18 +19,14 @@ from __future__ import annotations
 import logging
 
 from .. import grants
-from ..xray import extract, local, store
+from ..xray import brief, extract, local, store
 from . import ServerContext
 from .helpers import _err
 
 logger = logging.getLogger(__name__)
 
-_ACTIONS = ("blast", "overview", "refresh", "ingest")
-_CAVEAT = (
-    "Import-based estimate: strings, fixtures, subprocesses, config and data "
-    "dependencies are not edges. Tests are candidates to run; unreachable files are "
-    "candidates to inspect, not proven dead."
-)
+_ACTIONS = ("blast", "overview", "refresh", "ingest", "brief")
+_CAVEAT = brief.CAVEAT
 _NO_DISK = (
     "under `gingugu serve` the brain cannot read your checkout; call through the "
     "gingugu proxy, pass a fingerprint, or send action='ingest' with a payload"
@@ -80,6 +76,7 @@ def register(mcp, ctx: ServerContext) -> None:
         limit: int = 50,
         offset: int = 0,
         top: int = 20,
+        range: str | None = None,
     ) -> dict:
         """X-ray a repository's import graph (Python, TypeScript/JavaScript, Go): what a
         change reaches, and what the code leans on. Use before editing a file to see its
@@ -90,7 +87,9 @@ def register(mcp, ctx: ServerContext) -> None:
         count and rank, paged by limit/offset), "overview" (top: the most load-bearing
         files by directed PageRank, plus files no test or entry point reaches), "refresh"
         (rebuild now, replacing a stored snapshot whose graph differs), "ingest" (payload:
-        a client-extracted graph; ``replace`` as refresh does).
+        a client-extracted graph; ``replace`` as refresh does), "brief" (a handoff: the changed
+        files by rank plus their combined blast, for ``range`` such as main..HEAD, the named
+        files, or the working tree; computed locally, nothing stored).
 
         ``path`` is any directory in the git checkout (default: the working directory).
         The snapshot is rebuilt automatically when the checkout's source content changed,
@@ -101,6 +100,10 @@ def register(mcp, ctx: ServerContext) -> None:
         try:
             if action not in _ACTIONS:
                 return _err(f"unknown action {action!r}; valid actions: {', '.join(_ACTIONS)}")
+            if action == "brief":
+                if ctx.transport != "stdio":
+                    return _err(_NO_DISK)
+                return brief.answer(path, range, files, limit)
             ns_id = ctx.namespaces.get_or_create(ctx.namespaces.resolve_name(namespace)).id
             if action == "ingest":
                 if payload is None:
