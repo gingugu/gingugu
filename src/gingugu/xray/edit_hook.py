@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from . import bash_state, hook_common, lang, rank
+from . import bash_state, edit_symbols, hook_common, lang, rank
 from .hook_common import _claim, _show, _sweep
 from .scan import XrayError
 
@@ -83,9 +83,10 @@ def _dependents(rel: str, blast: dict) -> list[str]:
     return lines
 
 
-def _render(rel: str, blast: dict) -> str:
+def _render(rel: str, blast: dict, symbol_lines: list[str] | None = None) -> str:
     lines = _dependents(rel, blast)
     lines[0] = "GINGUGU X-RAY: " + lines[0]
+    lines.extend(symbol_lines or [])
     lines.append(
         "Import-based estimate: strings, fixtures and subprocesses are not edges. "
         "Check the callers, then re-issue the edit unchanged - the X-ray fires "
@@ -126,6 +127,10 @@ def check(payload: dict, state_dir: Path) -> str | None:
         if not _claim(claim):
             return None
         _sweep(state_dir)
-        return _render(rel, blast)
+        try:
+            symbol_lines = edit_symbols.lines(payload, root, rel, state_dir, session_id)
+        except (XrayError, ValueError, OSError):
+            symbol_lines = []  # the deny still fires; only the symbol lines are lost
+        return _render(rel, blast, symbol_lines)
     except (XrayError, ValueError, OSError):
         return None
