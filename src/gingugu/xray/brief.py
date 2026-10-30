@@ -184,7 +184,7 @@ def render(data: dict, name: str) -> str:
     return text[:MAX_CHARS]
 
 
-def answer(path: str | None, rev_range: str | None, files, limit: int = 10) -> dict:
+def answer(path: str | None, rev_range: str | None, files, limit: int = MAX_LIMIT) -> dict:
     """The whole brief for one checkout; shared by the handler, the proxy and the CLI."""
     from ..config import load_config
 

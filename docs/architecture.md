@@ -128,6 +128,8 @@ graph LR
     C -->|add · list · remove · test| W
     C -->|post · inbox · read · claim · done| BP
     C -->|ingest · refresh · blast · overview| XR
+    C -->|brief, stdio only: nothing stored| XG
+    X -->|brief, answered on this machine| XG
     A -->|each pending tool call| Y
     Y -->|reads matches| W
     Y -->|logs each trip| T
@@ -2051,7 +2053,7 @@ src/gingugu/
 ├── __init__.py             # Package init + version
 │
 │   # ── Entry points ──────────────────────────────────────────────
-├── server.py               # MCP server; stdio / serve / token / remote / promote / init / harness / ui / dream / board watch / embed / hook dispatch, plus the remote-proxy branch of bare `gingugu`
+├── server.py               # MCP server; stdio / serve / token / remote / promote / init / harness / ui / dream / board watch / embed / xray / hook dispatch, plus the remote-proxy branch of bare `gingugu`
 ├── serve.py                # gingugu serve: streamable HTTP + Bearer auth + /healthz + POST /token/derive + TLS; build_app
 ├── serve_tls.py            # serve's TLS: auto (https off loopback) / on / off, generated self-signed leaf or your own
 ├── serve_tokens.py         # Serve tokens: hashed store, scoped + per-machine owner tokens
