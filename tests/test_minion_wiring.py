@@ -205,6 +205,24 @@ def test_tripwire_doorway_still_drops_the_main_threads_gingugu_call(doorways):
 
 
 @posix_only
+def test_tripwire_doorway_passes_the_main_threads_board_post(doorways):
+    # X20's sender nudge lives in `gingugu hook tool`; a board post must reach it.
+    hooks, log, env = doorways
+    payload = {"tool_name": "mcp__gingugu__board", "tool_input": {"action": "post", "body": "x"}}
+    assert _door(hooks / "pre_tool_tripwire.py", payload, env).strip() == '{"ok": 1}'
+    assert log.read_text().split() == ["hook", "tool"]
+
+
+@posix_only
+@pytest.mark.parametrize("tool_input", [{"action": "inbox"}, {"action": "reply"}, "post", None])
+def test_tripwire_doorway_drops_the_main_threads_other_board_calls(doorways, tool_input):
+    hooks, log, env = doorways
+    payload = {"tool_name": "mcp__gingugu__board", "tool_input": tool_input}
+    assert _door(hooks / "pre_tool_tripwire.py", payload, env) == ""
+    assert not log.exists()
+
+
+@posix_only
 def test_warmup_doorway_hands_subagentstart_to_the_package(doorways):
     hooks, log, env = doorways
     payload = {"hook_event_name": "SubagentStart", "agent_type": "probe", "agent_id": "a1"}

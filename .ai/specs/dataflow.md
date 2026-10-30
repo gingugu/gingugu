@@ -467,7 +467,8 @@ UserPromptSubmit event  →  .claude/hooks/user_prompt_recall.py (pure stdlib)
         300-char JSON-encoded preview each, each with its board(action="read")
         call. Never raises. A post body with a line of its own `xray: <range>`
         also gets its X-ray brief appended (X20: the first such post, once per
-        prompt, <= 3500 chars, rendered from the prompt's cwd; xray/board_brief)
+        prompt, <= 3500 chars, rendered from the prompt's cwd; xray/board_brief;
+        a cut brief ends with board_brief.CLIPPED)
       → then _recall (below); a recall exception does not silence the mail
       → strip_affect(): greetings/interjections/emoji removed, because they
         carry REGISTER and the corpus is full of reflections written in the
@@ -522,7 +523,9 @@ governs truth status governs this.
 PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
   → on the main thread, drops mcp__gingugu__* HERE, before the package is
     imported: our own tools are how a bad tripwire gets repaired, so they never
-    trip (inside a subagent they pass through - see "Warm minions" below)
+    trip (inside a subagent they pass through - see "Warm minions" below).
+    Exception: a board call with action "post" passes, for the X20 nudge;
+    tool_hook still skips memory tripwires for it (_SELF_PREFIX)
   → survivors piped to `gingugu hook tool`
       → minion fence / spawn stash first (see "Warm minions"; independent of
         MEMORY_TRIPWIRES)
@@ -635,13 +638,15 @@ own `xray: <range>`. The receiver renders the brief from its own checkout:
 
 ```
 sender: board post with no `xray:` line, from a branch ahead of the default branch
+  → pre_tool_tripwire.py passes the board post (main thread too)
   → gingugu hook tool → board_nudge.check → deny once per session with the exact line
 post body → board_brief.ref_in: first `xray:` line, ref alone on it, <= 200 chars,
   brief._check_range gate (else no brief)
   → attach(body, cwd): MEMORY_XRAY_BOARD off / no cwd / not a repo → nothing
     unknown ref → one short line; else brief.answer(cwd, ref) text
   → prompt hook mail: appended to the block for the first of the shown posts (<= 5)
-    that names a range, one per prompt, <= 3500 chars; the range is checked by git
+    that names a range, one per prompt, <= 3500 chars (a cut ends with
+    board_brief.CLIPPED); the range is checked by git
     (10s deadline) before any graph build, and a build the hook killed is not retried
     in that session
   → board watch: `xray` field + appended to `text` + GINGUGU_POST_XRAY,

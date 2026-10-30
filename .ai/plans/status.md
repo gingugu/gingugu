@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-10-30 (brief on the board)_
+_Last updated: 2026-10-30 (X20 live-test fixes)_
 
 ## In Flight
 
@@ -19,8 +19,8 @@ trips on JSX `class=` (9 of vite's 1,638 files report a parse error, edges recov
 are not resolved; a go.mod `module ( ... )` block reads as malformed.
 
 **Board #5 Codebase X-ray - X14 map on arrival RELEASED in 0.32.0 (#153); X19
-X-ray brief RELEASED in 0.34.0 (#157); X20 brief on the board built, unreleased;
-X15 next** (2026-10-30). The
+X-ray brief RELEASED in 0.34.0 (#157); X20 brief on the board RELEASED in 0.35.0
+(#158), live-test fixes on fix/xray-brief-clip; X15 next** (2026-10-30). The
 end goal was restated: a sophisticated map before any work starts, so the map
 reaches the agent on reads and on any write, not only through the edit tools. New
 items X14-X20 (section 19); build order X14, X19, X20, X15, X16, X17, then X3.
@@ -53,7 +53,19 @@ paged; a git `core.fsmonitor`-style check for other config that runs code.
 
 ## Recently Completed
 
-**Brief on the board, X20 (feature/xray-board-brief, unreleased; 2026-10-30).** A board
+**X20 live-test fixes (fix/xray-brief-clip, unreleased; 2026-10-30).** A live run of
+0.35.0 (board watch and prompt-hook mail as a test persona; happy, unknown and
+option-injection refs all behaved) found two gaps, both fixed red-first.
+(1) `board_brief._fit` cut an oversize brief on a line with no marker, so the
+paging note and top-files line fell off unannounced; a cut now ends with
+`board_brief.CLIPPED` inside the budget. (2) The PreToolUse doorway
+(`pre_tool_tripwire.py` + its init template) dropped every main-thread
+`mcp__gingugu__*` call, so the sender nudge never saw a main-agent board post;
+a board `post` now goes through to `gingugu hook tool` (other gingugu calls
+still dropped). Existing repos need `gingugu init --force` for (2). Tests:
+`tests/test_xray_board_brief.py` (clip), `tests/test_minion_wiring.py` (doorway).
+
+**Brief on the board, X20 (feature/xray-board-brief, released in 0.35.0, #158; 2026-10-30).** A board
 post whose body has a line of its own `xray: <range>` arrives with the X-ray brief of
 that range, rendered by the receiver from its own checkout (the post carries only the
 ref). `xray/board_brief.py` (`ref_in`, `attach`): the first `xray:` line decides, the ref
