@@ -21,7 +21,7 @@ are not resolved; a go.mod `module ( ... )` block reads as malformed.
 **Board #5 Codebase X-ray - X14 map on arrival RELEASED in 0.32.0 (#153); X19
 X-ray brief RELEASED in 0.34.0 (#157); X20 brief on the board RELEASED in 0.35.0
 (#158), live-test fixes in 0.35.1 (#159), not-available note in 0.35.2 (#160), repo on
-the line in 0.36.0 (#161); X15 writes from any tool BUILT, unreleased; X16 next** (2026-10-30). The
+the line in 0.36.0 (#161); X15 writes from any tool RELEASED in 0.37.0 (#163); X16 next** (2026-10-30). The
 end goal was restated: a sophisticated map before any work starts, so the map
 reaches the agent on reads and on any write, not only through the edit tools. New
 items X14-X20 (section 19); build order X14, X19, X20, X15, X16, X17, then X3.
@@ -54,7 +54,7 @@ paged; a git `core.fsmonitor`-style check for other config that runs code.
 
 ## Recently Completed
 
-**X15 writes from any tool (feature/xray-bash, unreleased; 2026-10-30).** A `Bash` call's
+**X15 writes from any tool (feature/xray-bash, released in 0.37.0, #163; 2026-10-30).** A `Bash` call's
 writes get their X-ray: a `sed -i`, a codegen script or a `git checkout` changes source
 behind the edit tripwire. `gingugu hook tool` (`xray/tool_xray.reason` ->
 `xray/bash_hook.before`, through the existing `pre_tool_tripwire.py` doorway) snapshots the
@@ -1583,7 +1583,7 @@ every row moved up one.
 | 2 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
 | 3 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
 | 4 | **A referee for rival memory tools** | 17 | Only a fair comparison once 3 exists |
-| 5 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival shipped in 0.32.0; X15 writes from any tool built (unreleased); X16 next | 19 | Standalone; picked 2026-10-26. An 18-part roadmap (X1-X18) in its section below |
+| 5 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival shipped in 0.32.0; X15 writes from any tool shipped in 0.37.0; X16 next | 19 | Standalone; picked 2026-10-26. An 18-part roadmap (X1-X18) in its section below |
 | 6 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
 | 7 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
 | 8 | Session flight recorder (low priority) | 18 | Check prior art first |
@@ -2297,7 +2297,7 @@ slices alongside them. IDs are stable references, not the order.
 | X12 | **Board-driven upkeep** - the nightly X-ray posts findings (dead files, new cycles, drift) to the agent board for agents to claim | X4, agent board | |
 | X13 | **Code fingerprints** - embed code units; near-duplicate logic across repos, and provenance of copied code | embeddings, hybrid search | |
 | X14 | **Map on arrival (SHIPPED in 0.32.0, #153)** - a short repo overview (size, languages, top-ranked files, entry points) on the session's first touch of a repo, then an up-to-4-line neighbourhood (rank, importers, reach, imports) on a file's first `Read` | X1 graph cache, hooks | PostToolUse context, non-blocking. Leaf files stay silent. First touch, not session start, so a session that never touches code pays nothing |
-| X15 | **Writes from any tool (BUILT, unreleased)** - before a Bash call `gingugu hook tool` snapshots the dirty set of up to 8 candidate checkouts (cwd repo, repos the session touched, repos of paths in the command); after it `gingugu hook bash` (new doorway `post_bash_xray.py`, matcher `Bash`) diffs it and X-rays the changed source files, and a deleted file's old importers from the cached graph | X2, hooks | Command parsing can never be complete; watching the checkout catches every write path, and any harness that edits through a shell. Informs, cannot deny; shares the edit tripwire's once-per-file claim; a repo reached only by a `cd` inside a script is not watched |
+| X15 | **Writes from any tool (RELEASED in 0.37.0)** - before a Bash call `gingugu hook tool` snapshots the dirty set of up to 8 candidate checkouts (cwd repo, repos the session touched, repos of paths in the command); after it `gingugu hook bash` (new doorway `post_bash_xray.py`, matcher `Bash`) diffs it and X-rays the changed source files, and a deleted file's old importers from the cached graph | X2, hooks | Command parsing can never be complete; watching the checkout catches every write path, and any harness that edits through a shell. Informs, cannot deny; shares the edit tripwire's once-per-file claim; a repo reached only by a `cd` inside a script is not watched |
 | X16 | **Incremental refresh** - per-file content hashes; re-parse only what changed; refresh after writes and in the nightly dream pass | X1, dream | A full re-extract is 0.4s here and grows with the repo |
 | X17 | **Symbol graph** - functions, classes, definitions and call sites, not just files and imports | `xray/lang/` adapters, tree-sitter | The resolution X7 needs to name the function an entry point reaches, not just the file |
 | X19 | **X-ray brief (SHIPPED in 0.34.0, #157)** - the changed files by rank with importer counts, plus their combined blast (code and candidate tests), for an agent that fires no hooks | X1, X14 graph cache | `code_xray` `brief` (`range`, `files`, `path`) and `gingugu xray brief [--range R \| --files a,b] [--path P] [--json]`. Computed on the caller's machine from the hook graph cache; nothing stored, the brain never asked; `gingugu serve` refuses it, the proxy answers it locally. Compact `text` <= 8800 chars, for reviews, handoffs and `board watch --exec`. `xray/brief.py`, `xray_cli.py` |
