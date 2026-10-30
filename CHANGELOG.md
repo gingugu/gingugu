@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Checkout guard.** When several sessions share one repo, a branch switch in
+  the primary checkout carries every other session's uncommitted edits onto the
+  new branch. `gingugu hook tool` (the `PreToolUse` hook `gingugu init` already
+  wires) now denies, every time, a Bash git command that would move or empty the
+  primary checkout - `switch`, `checkout <branch>`/`-b`, `rebase`,
+  `reset --hard`/`--merge`/`--keep`, `stash` other than `list`/`show` - and
+  points at a worktree (`EnterWorktree`, or
+  `git worktree add .claude/worktrees/<name> -b <branch>`). Linked worktrees are
+  never guarded; commits, pull, push and reads pass. A `GINGUGU_PRIMARY_OK=1`
+  prefix lets one command through, and `MEMORY_CHECKOUT_GUARD=off` disables
+  the guard. Every wired repo gets it with the package upgrade. A plain
+  `gingugu init` also git-ignores `.claude/worktrees/` and adds a "Concurrent
+  sessions" rule to the managed protocol block.
+
 ### Changed
 
 - **The `/creating-pr` skill makes the docs audit mandatory.** `gingugu harness`
