@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import threading
 import time
 from pathlib import Path
 from typing import NamedTuple
@@ -26,7 +27,8 @@ def _write_json(path: Path, data: object) -> bool:
     """Owner-only, written whole to a fresh temp file and renamed into place,
     so a parallel hook never reads half a file and a link planted at the temp
     name is refused. False when it could not be written."""
-    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    # pid and thread: the proxy builds briefs on worker threads of one process.
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     try:
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)

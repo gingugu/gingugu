@@ -42,5 +42,8 @@ def main(argv: list[str]) -> int:
     except (XrayError, ValueError) as exc:
         print(f"gingugu xray brief: {exc}", file=sys.stderr)
         return 1
+    except Exception as exc:  # noqa: BLE001 - a message and exit 1, never a traceback
+        print(f"gingugu xray brief: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 1
     print(json.dumps(data, indent=2) if args.json else data["text"])
     return 0

@@ -114,6 +114,58 @@ async def test_brief_through_the_proxy_never_asks_the_brain(
     assert out["text"].startswith("GINGUGU X-RAY BRIEF:")
 
 
+def test_a_non_utf8_name_still_serialises_on_stdio(repo, tmp_path, monkeypatch):
+    """git hands back raw bytes; a lone surrogate must not reach the JSON encoder."""
+    from pydantic_core import to_json
+
+    from gingugu.xray import brief, hook_common
+
+    monkeypatch.setenv("MEMORY_DB_PATH", str(tmp_path / "x.db"))
+    g = hook_common.graph(repo, tmp_path / "hook-sessions")
+    bad = b"pkg/bad\xff.py".decode("utf-8", "surrogateescape")
+    data = brief.build(g, [brief.Change("R", bad, bad)])
+    to_json(data)  # raises on a lone surrogate
+    assert "�" in data["changed"][0]["path"]
+
+
+def test_a_dot_file_name_is_not_a_change(repo, tmp_path, monkeypatch):
+    from gingugu.xray import brief
+
+    monkeypatch.setenv("MEMORY_DB_PATH", str(tmp_path / "x.db"))
+    out = brief.answer(str(repo), None, ".,pkg/a.py")
+    assert [c["path"] for c in out["changed"]] == ["pkg/a.py"]
+
+
+def test_limit_is_clamped(repo, tmp_path, monkeypatch):
+    from gingugu.xray import brief
+
+    monkeypatch.setenv("MEMORY_DB_PATH", str(tmp_path / "x.db"))
+    seen = {}
+    real = brief.build
+
+    def spy(g, changes, limit=10):
+        seen["limit"] = limit
+        return real(g, changes, limit)
+
+    monkeypatch.setattr(brief, "build", spy)
+    brief.answer(str(repo), None, "pkg/core.py", limit=10_000)
+    assert seen["limit"] == brief.MAX_LIMIT
+
+
+def test_cli_turns_any_failure_into_exit_1(repo, tmp_path, monkeypatch, capsys):
+    from gingugu import xray_cli
+    from gingugu.xray import brief
+
+    monkeypatch.setenv("MEMORY_DB_PATH", str(tmp_path / "x.db"))
+
+    def boom(*a, **k):
+        raise OSError("disk on fire")
+
+    monkeypatch.setattr(brief, "answer", boom)
+    assert xray_cli.main(["brief", "--path", str(repo)]) == 1
+    assert "disk on fire" in capsys.readouterr().err
+
+
 def test_the_proxy_claims_brief_with_or_without_a_path():
     from mcp.types import JSONRPCRequest
 
