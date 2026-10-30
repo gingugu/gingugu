@@ -797,7 +797,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   capped under 9000 characters (the harness cap is 10,000). Own switch
   `MEMORY_XRAY_MAP` (default on). Wired by `gingugu init` with a 15s timeout and
   matcher `Read|Grep|Glob`; it coexists with the harness's own PostToolUse logger.
-- **Codebase X-ray: writes from any tool (X15, unreleased).** The edit tripwire cannot
+- **Codebase X-ray: writes from any tool (X15, released in 0.37.0).** The edit tripwire cannot
   see a `sed -i`, a codegen script or a `git checkout`, so a `Bash` call gets its own
   X-ray. *Snapshot, then diff*: `gingugu hook tool` (the existing
   `pre_tool_tripwire.py` doorway already passes Bash) calls `xray/bash_hook.before`,
