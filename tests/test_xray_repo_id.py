@@ -91,6 +91,16 @@ def test_roots_come_from_the_env_and_drop_what_is_missing(tmp_path, monkeypatch)
     assert repo_id.roots() == [tmp_path / "a"]
 
 
+def test_roots_that_are_one_folder_by_another_name_count_once(tmp_path, monkeypatch):
+    """macOS folds case: ~/GIT and ~/git are one folder, and resolve() keeps the case."""
+    (tmp_path / "Repos").mkdir()
+    if not (tmp_path / "repos").exists():
+        pytest.skip("case-sensitive filesystem")
+    env = os.pathsep.join([str(tmp_path / "Repos"), str(tmp_path / "repos")])
+    monkeypatch.setenv("MEMORY_XRAY_REPOS", env)
+    assert repo_id.roots() == [tmp_path / "Repos"]
+
+
 def test_an_empty_env_switches_the_search_off(monkeypatch):
     monkeypatch.setenv("MEMORY_XRAY_REPOS", "")
     assert repo_id.roots() == []
