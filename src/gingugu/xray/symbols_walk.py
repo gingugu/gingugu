@@ -32,11 +32,23 @@ def _str_at(rec: list, *idx: int) -> bool:
     return all(isinstance(rec[i], str) for i in idx)
 
 
+def is_qual(name: object, module_ok: bool = False) -> bool:
+    """A dotted Python identifier, as ``walk`` writes a qualified name (or the
+    module caller). Names are rendered into the agent's context, and a cache that
+    could hold a newline could hold an instruction."""
+    if not isinstance(name, str):
+        return False
+    if module_ok and name == MODULE:
+        return True
+    return all(part.isidentifier() for part in name.split("."))
+
+
 def _is_def(rec: object) -> bool:
     return (
         isinstance(rec, list)
         and len(rec) == 4
         and _str_at(rec, 0, 1)
+        and is_qual(rec[0])
         and rec[1] in _KINDS
         and _is_int(rec[2])
         and _is_int(rec[3])
@@ -56,6 +68,7 @@ def _is_call(rec: object) -> bool:
         isinstance(rec, list)
         and len(rec) == 5
         and _str_at(rec, 0, 1, 2, 3)
+        and is_qual(rec[0], module_ok=True)
         and rec[1] in ("n", "a", "s")
         and _is_int(rec[4])
     )
@@ -66,6 +79,7 @@ def _is_type(rec: object) -> bool:
         isinstance(rec, list)
         and len(rec) == 5
         and _str_at(rec, 0, 1, 2, 3, 4)
+        and is_qual(rec[0], module_ok=True)
         and rec[2] in ("n", "a")
     )
 

@@ -17,6 +17,8 @@ from . import hook_common, symbols
 from .hook_common import _show
 
 MAX_NAMED = 3
+# The scan's own per-file cap: a file that grew past it since the scan is not read.
+MAX_READ_BYTES = 2_000_000
 _BOUND = (
     "Call counts are a lower bound: calls through untyped values and inherited "
     "methods are not resolved."
@@ -54,11 +56,11 @@ def _line(sym: symbols.Symbols, rel: str, qual: str) -> str | None:
     found = symbols.callers(sym, rel, qual, limit=MAX_NAMED)
     if found is None:
         return None
-    head = f"Edit lands in `{qual}` (L{found['line']}-{found['end']}): "
+    head = f"Edit lands in `{symbols.label(qual)}` (L{found['line']}-{found['end']}): "
     n = found["direct_total"]
     if not n:
         return head + "no resolved callers."
-    named = ", ".join(_show(f"{d['path']}:{d['symbol']}") for d in found["direct"])
+    named = ", ".join(f"{_show(d['path'])}:{symbols.label(d['symbol'])}" for d in found["direct"])
     more = f" (+{n - MAX_NAMED} more)" if n > MAX_NAMED else ""
     d, f = found["reach_total"], len(found["reach_files"])
     return (
@@ -74,7 +76,11 @@ def lines(
     olds = _olds(payload)
     if not olds:
         return []
-    text = (root / rel).read_text(encoding="utf-8", errors="replace")
+    with open(root / rel, "rb") as handle:
+        data = handle.read(MAX_READ_BYTES + 1)
+    if len(data) > MAX_READ_BYTES:
+        return []
+    text = data.decode("utf-8", errors="replace")
     sym = hook_common.symbols(root, state_dir, session_id, fp)
     quals = _quals(sym, rel, text, olds)
     out = [ln for q in quals[:MAX_NAMED] if (ln := _line(sym, rel, q))]

@@ -69,7 +69,7 @@ def _show(path: str) -> str:
 def _read_json(path: Path) -> object:
     try:
         return json.loads(path.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):  # deep nesting is not a ValueError
         return None
 
 

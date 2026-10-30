@@ -141,7 +141,8 @@ def _most_called(rel: str, sym: symbols.Symbols) -> str | None:
     if not top:
         return None
     named = ", ".join(
-        f"`{q}` ({len(callers[q])} caller{'' if len(callers[q]) == 1 else 's'})" for q in top
+        f"`{symbols.label(q)}` ({len(callers[q])} caller{'' if len(callers[q]) == 1 else 's'})"
+        for q in top
     )
     return f"Most called: {named}"
 
