@@ -41,6 +41,11 @@ _HEREDOC = re.compile(r"<<-?[ \t]*(['\"]?)(\w+)\1[^\n]*\n(?:.*?\n)??[ \t]*\2[ \t
 # Global options that take a value as the next word.
 _GLOBAL_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
 
+# Words that may stand before `git` and still run it: `env`, `command`, and
+# `VAR=value` assignments (which `env` also takes).
+_LAUNCHERS = {"env", "command"}
+_ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
+
 _RESET_MOVES = {"--hard", "--merge", "--keep"}
 _STASH_READS = {"list", "show"}
 _REBASE_EXITS = {"--abort", "--quit"}
@@ -74,13 +79,19 @@ def _segments(command: str) -> list[list[str]]:
     return segments
 
 
+def _expand(path: str) -> str:
+    """``~`` and ``$VAR`` as the shell would; ``$(...)`` stays literal and misses."""
+    return os.path.expanduser(os.path.expandvars(path))
+
+
 def _moves_checkout(sub: str, args: list[str]) -> bool:
     """True when ``git <sub> <args>`` moves or empties the working tree."""
     if sub == "switch":
         return True
     if sub == "checkout":
-        # `checkout -- path` / `checkout <rev> -- path` restores files in place.
-        return "--" not in args
+        # `checkout -- path` / `checkout <rev> -- path` restores files in place;
+        # `checkout main --` names no path and still switches.
+        return "--" not in args[:-1]
     if sub == "rebase":
         return not _REBASE_EXITS & set(args)
     if sub == "reset":
@@ -93,7 +104,7 @@ def _moves_checkout(sub: str, args: list[str]) -> bool:
 def _git_call(words: list[str], cwd: Path) -> tuple[str, Path] | None:
     """``(rendered command, directory)`` for a guarded git call, else None."""
     env: dict[str, str] = {}
-    while words and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", words[0]):
+    while words and (words[0] in _LAUNCHERS or _ASSIGNMENT.fullmatch(words[0])):
         key, _, value = words.pop(0).partition("=")
         env[key] = value
     if not words or os.path.basename(words[0]) != "git":
@@ -105,7 +116,7 @@ def _git_call(words: list[str], cwd: Path) -> tuple[str, Path] | None:
         flag = words[i]
         if flag in _GLOBAL_WITH_VALUE and i + 1 < len(words):
             if flag == "-C":
-                cwd = cwd / words[i + 1]
+                cwd = cwd / _expand(words[i + 1])
             i += 2
             continue
         i += 1
@@ -128,7 +139,8 @@ def _primary_top(directory: Path) -> Path | None:
             text=True,
             timeout=5,
         )
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, ValueError, subprocess.SubprocessError):
+        # ValueError: a NUL in the path. Any failure means "not provably primary".
         return None
     lines = out.stdout.splitlines()
     if out.returncode != 0 or len(lines) != 3:
@@ -164,15 +176,20 @@ def check(payload: dict) -> str | None:
     if not isinstance(command, str) or "git" not in command:
         return None
     cwd = Path(payload.get("cwd") or os.getcwd())
+    tops: dict[Path, Path | None] = {}
     for words in _segments(command):
-        if len(words) >= 2 and words[0] == "cd":
-            cwd = cwd / os.path.expanduser(words[1])
+        if words and words[0] == "cd":
+            # `cd -P dir` takes the first operand; a bare `cd` goes home.
+            operands = [w for w in words[1:] if not w.startswith("-")]
+            cwd = cwd / _expand(operands[0] if operands else "~")
             continue
         call = _git_call(words, cwd)
         if call is None:
             continue
         rendered, directory = call
-        top = _primary_top(directory)
+        if directory not in tops:
+            tops[directory] = _primary_top(directory)
+        top = tops[directory]
         if top is not None:
             return _reason(rendered, top)
     return None

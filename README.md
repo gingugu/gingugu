@@ -847,7 +847,8 @@ It installs:
   passes. It reads your checkout locally and never asks the brain. Set
   `MEMORY_XRAY_TRIPWIRE=off` to disable it.
   It also runs the **checkout guard**, for repos where several sessions share
-  one checkout: a Bash `git switch`, `git checkout <branch>`/`-b`, `rebase`,
+  one checkout: a Bash `git switch`, `git checkout` (unless paths follow
+  `--`), `rebase` (other than `--abort`/`--quit`),
   `reset --hard`/`--merge`/`--keep` or `stash` (other than `list`/`show`) in
   the *primary* checkout is denied every time, because it would move or take
   away every other session's uncommitted edits. The reason points at a

@@ -73,6 +73,11 @@ def _check(cwd, command):
         "git status | cat && git stash",
         "git log <<'EOF'\nbody\nEOF\ngit switch main",
         "FOO=1 git switch main",
+        "git checkout main --",
+        "git checkout -f main --",
+        "env git switch main",
+        "env FOO=1 git switch main",
+        "command git switch main",
     ],
 )
 def test_branch_moves_in_the_primary_checkout_are_denied(repos, command):
@@ -141,6 +146,26 @@ def test_git_dash_c_names_the_checkout(repos):
     primary, worktree = repos
     assert _check(primary, f"git -C {worktree} switch -c feature/y") is None
     assert _check(worktree, f"git -C {primary} switch main") is not None
+
+
+def test_cd_flags_and_home_are_understood(repos, monkeypatch):
+    primary, worktree = repos
+    assert _check(worktree, f"cd -P {primary} && git switch main") is not None
+    monkeypatch.setenv("HOME", str(primary))
+    assert _check(worktree, "git -C ~ switch main") is not None
+    assert _check(worktree, "cd ~ && git switch main") is not None
+    assert _check(worktree, "cd && git switch main") is not None
+
+
+def test_env_vars_in_a_path_are_expanded(repos, monkeypatch):
+    primary, worktree = repos
+    monkeypatch.setenv("GUARD_TEST_REPO", str(primary))
+    assert _check(worktree, "git -C $GUARD_TEST_REPO switch main") is not None
+
+
+def test_a_bad_segment_does_not_hide_a_later_one(repos):
+    primary, _ = repos
+    assert _check(primary, 'git -C "a\x00b" switch x; git switch main') is not None
 
 
 def test_outside_a_repo_nothing_is_guarded(tmp_path, monkeypatch):

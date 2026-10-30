@@ -172,7 +172,7 @@ src/gingugu/
   board_watch_remote.py → the remote half: session token named for the persona, subscriptions/listen, reconnect with backoff
   board_watch_emit.py → the line (labelled as from another agent), the delivery cursor, --exec (env only, stdout to stderr, 10 per batch, group-killed at 120s)
   cli_usage.py       → the top-level `gingugu --help` text (USAGE), kept out of server.py
-  tool_hook.py       → `gingugu hook tool` (PreToolUse): denies the first matching call per session; re-issue passes; also the X-ray deny on the first edit of an imported `.py` file
+  tool_hook.py       → `gingugu hook tool` (PreToolUse): denies the first matching call per session; re-issue passes; also the X-ray deny on the first edit of an imported source file (Python, TS/JS, Go), and the checkout guard's deny, every time, of a git command that moves or empties the shared primary checkout
   storage.py         → memory CRUD (store/update/forget)
   search.py          → hybrid BM25 (FTS5) + semantic ranking
   embeddings.py      → semantic vector generation
