@@ -553,6 +553,8 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
           hook-sessions/xray-parse-<sha16(root)>.json, X16; linking reruns)
           blast radius of the file (rank.blast, walking through package nodes
           but never listing one); nothing imports it → skip
+          read claim hook-sessions/xray-read-<session>/ (X14 neighbourhood shown,
+          or the file written by this session) → skip: not a blind edit
           already claimed in hook-sessions/xray-shown-<session>/ → skip
           claim it atomically (O_EXCL; lost race or failed write → skip), then the
           X-ray reason: importer count, top 5 dependents with hops, up to 5
@@ -617,8 +619,8 @@ PostToolUse event (Read | Grep | Glob)  →  .claude/hooks/post_tool_xray.py (pu
         rank with importer counts, entry points
       Read of a source file an adapter parses, once per file per session
         (claim hook-sessions/xray-read-<session>/) →
-        up to 4 lines: rank k of N, direct importers, transitive reach with
-        candidate tests, direct imports; a Python file adds `Most called: ...`
+        up to 4 lines: rank k of N, direct importers, nearest tests, direct
+        imports; a Python file adds `Most called: ...`
         (X17 symbol cache); silent for a file with no edges
   → emit additionalContext beside the tool result (output capped under 9000 chars)
 ```
@@ -688,7 +690,29 @@ python raw "sym" (defs, binds, calls, types; cached by content, X16)
   → code_xray callers: symbols.callers for one (file, symbol), stdio/proxy only
 ```
 
-The hooks hash the checkout once and hand that fingerprint to both cache reads. The board brief (X20) uses no tool call at all: it runs in the prompt hook
+The hooks hash the checkout once and hand that fingerprint to both cache reads.
+
+**After an edit, and the test ledger.** The note after an edit and the ledger that
+scores it:
+
+```
+PostToolUse Edit|Write|MultiEdit → post_edit_xray.py → gingugu hook edit
+  → xray/edit_note.check: Python file in a repo, MEMORY_XRAY_TRIPWIRE on
+      claim hook-sessions/xray-read-<session>/ for the file (seen: no blind deny later)
+      Write → stop; Edit/MultiEdit → each new_string's start line in the file now
+      symbols: cached xray-symbols-<sha16(root)>.json, fingerprint NOT checked (no
+        rebuild; callers of a definition do not change with its body)
+      → symbols.enclosing → symbols.callers → cross-file direct callers, tests in
+        reach (hook_common.nearest_tests, seeded with the file)
+      → once per (session, file, definition): hook-sessions/xray-edit-<session>/
+      → ledger.predict: kind calls (those tests) and kind imports (import-blast
+        nearest tests from the cached graph)
+PostToolUse Bash → gingugu hook bash → xray/ledger.observe (independent of the X15
+  snapshot): a pytest command, not interrupted → FAILED/ERROR test files from
+  tool_response stdout + stderr → outcome row
+gingugu xray score → predictions before each outcome in the same (session, repo)
+  → per predictor: top5 | listed | missed; no prediction in that session: unpredicted
+``` The board brief (X20) uses no tool call at all: it runs in the prompt hook
 or the watch process on the receiver's machine.
 
 ## X-ray of a shell command's writes (X15)

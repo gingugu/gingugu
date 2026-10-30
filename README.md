@@ -116,8 +116,11 @@ once, never ranked. `gingugu board watch` wakes an idle agent when one arrives.
 TypeScript/JavaScript and Go: before an edit, an agent asks what the change
 reaches and which tests to run, and which files the rest of the code leans on. It reads your checkout on your machine, even when the
 brain is remote, and rebuilds itself whenever the code changes. The tool hook also
-tells the agent on its first edit of an imported file what depends on it (and, after a
-shell command, what the source files it wrote reach), and a
+tells the agent what an edit reached: right after an edit of a Python file it names the
+callers in other files of the functions the edit touched and the tests nearest them, and
+it stops an edit only when it is blind - a file other files import that the agent never
+read this session. After a shell command it says what the source files it wrote reach,
+and a
 read hook brings a map on arrival: the first read into a repo adds an overview of
 it, and each file read adds that file's neighbourhood (who imports it, what it
 imports). For an agent that never fires those hooks, `gingugu xray brief` (or
@@ -862,10 +865,11 @@ It installs:
   memory tools never trip, so a bad tripwire can always be fixed. (Inside a
   subagent the minion fence still denies their write tools - that is a separate
   check, not a tripwire.) Each trip is recorded in `query_log`. Set `MEMORY_TRIPWIRES=off` to disable memory tripwires.
-  The same hook also runs the **X-ray edit tripwire**: the first edit of a source
-  file (Python, TypeScript/JavaScript, Go) that other files import is denied once per file per session, with the
-  files that import it and the tests worth running; re-issue the edit and it
-  passes. It reads your checkout locally and never asks the brain. Set
+  The same hook also runs the **X-ray edit tripwire**: a *blind* edit - of a source
+  file (Python, TypeScript/JavaScript, Go) that other files import, which this session
+  never read and never wrote - is denied once, with its direct importers, how far a
+  change reaches and the nearest tests; re-issue the edit and it passes. An edit of a
+  file already read gets a note after it instead (`gingugu hook edit`, see below). It reads your checkout locally and never asks the brain. Set
   `MEMORY_XRAY_TRIPWIRE=off` to disable it.
   It also runs the **checkout guard**, for repos where several sessions share
   one checkout: a Bash `git switch`, `git checkout` (unless paths follow
@@ -894,6 +898,14 @@ It installs:
   imported it). It watches the command's own repo, every repo the session has
   touched and the repo of any path the command names, describes at most 5 files
   in full and counts the rest, and shares the edit tripwire's once-per-file claim.
+  After a `pytest` run it also records which test files failed, for the test ledger.
+- **`.claude/hooks/post_edit_xray.py`** — a `PostToolUse` hook (matched to
+  `Edit|Write|MultiEdit`) that gives the agent the **note after an edit**: for each
+  definition an edit of a Python file landed in, its callers in other files and the
+  tests nearest them, once per definition per session, from the cached symbol graph.
+  Each note records the tests it named in a local ledger (`xray-ledger.jsonl`, beside
+  the hook state); `gingugu xray score` says how often the tests that then failed were
+  among them. Set `MEMORY_XRAY_TRIPWIRE=off` to disable it.
   It informs and never blocks. Run `gingugu init` in each repo to add it; set
   `MEMORY_XRAY_TRIPWIRE=off` to disable it.
   For an agent that fires neither hook, `gingugu xray brief [--range R |
@@ -1223,7 +1235,7 @@ Environment variables (all optional):
 | `MEMORY_GRANT` | *(unset)* | Fence a stdio server like a scoped token: `ns=read\|write,...` (e.g. `my-project=read,minions=write`). Unset is full access. A bad spec, an empty value, or `*=write` refuses to start. Used by a subagent's own `brain` server in its agent file. The client's hooks follow it too, whether it is set in the MCP server's `env` block (the server publishes it) or in the hooks' own environment: recall, tripwires and minion warm-up stay inside it, and an unusable value or a disagreement keeps them quiet |
 | `MEMORY_PERSONA` | *(unset)* | This agent's own namespace (e.g. `research`). Recall, tripwires and the SessionStart contract load `crow`, then the persona, then the repo (recall and tripwires narrowed by `MEMORY_GRANT` when set). A malformed value is ignored |
 | `MEMORY_REMOTE_URL` | *(unset)* | Use this remote brain for this client only (`off` forces local). A bare `gingugu` then relays to it; the credential vault stays local |
-| `MEMORY_XRAY_TRIPWIRE` | `on` | Set `off` to disable the X-ray edit tripwire in `gingugu hook tool` (the first edit of an imported Python, TypeScript/JavaScript or Go file per session is denied with its dependents); it also turns off the X-ray of a Bash command's writes (`gingugu hook bash`) |
+| `MEMORY_XRAY_TRIPWIRE` | `on` | Set `off` to disable the X-ray edit tripwire in `gingugu hook tool` (a blind edit of an imported Python, TypeScript/JavaScript or Go file is denied once with its direct importers and nearest tests); it also turns off the X-ray of a Bash command's writes (`gingugu hook bash`), the post-edit note (`gingugu hook edit`) and the test ledger |
 | `MEMORY_XRAY_MAP` | `on` | Set `off` to disable the X-ray map on arrival in `gingugu hook read` (the repo map on a session's first Read/Grep/Glob of a repo, and each Read source file's importers and imports, once per session) |
 | `MEMORY_XRAY_REPOS` | `~/GIT`, `~/git`, `~/src`, `~/code`, `~/projects`, `~/dev`, `~/repos`, `~/Developer` | Folders (`os.pathsep`-separated) where a receiver looks for the repo an `xray: <repo> <range>` board line names: exactly `<folder>/<name>`, used only when its origin matches. Empty turns the search off |
 | `MEMORY_XRAY_BOARD` | `on` | Set `off` to disable the brief on the board: a post with a line of its own `xray: <range>` no longer arrives with that range's X-ray brief, in the prompt hook's board mail or in `gingugu board watch`, and a board post from a branch is no longer asked once to name its range |
