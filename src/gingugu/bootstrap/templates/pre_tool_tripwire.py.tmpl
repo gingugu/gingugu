@@ -14,8 +14,9 @@ access to the database, no writes through the inherited gingugu server. The deci
 The pre-filter here is pure stdlib so the common case costs bare interpreter
 startup: a payload with no tool name, and gingugu's own mcp__gingugu__ tools
 on the main thread (which must never trip), are dropped before the package is
-ever loaded. Inside a subagent (`agent_id` set) those same tools are the
-inherited full brain, so they go through to the minion fence.
+ever loaded - except a board post, which the X-ray asks for its range. Inside
+a subagent (`agent_id` set) those same tools are the inherited full brain, so
+they go through to the minion fence.
 
 Never blocks on failure. Any error exits 0 and the call proceeds in silence.
 """
@@ -37,7 +38,13 @@ def main() -> None:
         if not tool_name:
             sys.exit(0)
         if tool_name.startswith("mcp__gingugu__") and not payload.get("agent_id"):
-            sys.exit(0)
+            # A board post still goes through: the X-ray asks it for its range.
+            tool_input = payload.get("tool_input")
+            is_post = tool_name == "mcp__gingugu__board" and (
+                isinstance(tool_input, dict) and tool_input.get("action") == "post"
+            )
+            if not is_post:
+                sys.exit(0)
 
         if shutil.which("gingugu") is None:
             sys.exit(0)
