@@ -4,7 +4,9 @@ The brain cannot read the caller's repository - under `gingugu serve` a path is
 the host's disk, and the tool there refuses one. So the proxy claims every
 ``code_xray`` call that would need the disk (``blast``, ``overview``,
 ``refresh`` without a ``fingerprint`` or ``payload``) and does that part on
-this machine, through ``xray.local``, the same code the local server runs:
+this machine. It also claims every ``brief`` (changed files and their combined
+blast, answered whole from the local checkout; the brain is never asked). The rest goes through
+``xray.local``, the same code the local server runs:
 
 1. fingerprint the checkout (cheap: no parsing) and ask the brain by fingerprint;
 2. if the brain has no snapshot of that content, extract it, ``ingest`` the
@@ -34,10 +36,11 @@ from mcp.types import CallToolResult, JSONRPCNotification, JSONRPCRequest, TextC
 from .proxy_auth import SessionTokens, brain_client
 from .proxy_session import CLIENT_GONE
 from .proxy_vault import _refused, _reply
-from .xray import extract, local
+from .xray import brief, extract, local
 
 NAME = "code_xray"
 _LOCAL = ("blast", "overview", "refresh")
+BRIEF = "brief"  # answered here whole: the brain is never asked
 
 
 def claims(msg) -> bool:
@@ -46,6 +49,8 @@ def claims(msg) -> bool:
         return False
     params = msg.params or {}
     args = params.get("arguments") or {}
+    if params.get("name") == NAME and args.get("action") == BRIEF:
+        return True
     return (
         params.get("name") == NAME
         and args.get("action") in _LOCAL
@@ -73,6 +78,11 @@ def _checked(result: CallToolResult) -> CallToolResult:
     if isinstance(structured, dict) and structured.get("freshness") == "exact":
         structured = {**structured, "freshness": "current"}
     return result.model_copy(update={"content": content, "structured_content": structured})
+
+
+def _limit(args: dict) -> int:
+    limit = args.get("limit")
+    return limit if isinstance(limit, int) and not isinstance(limit, bool) else 50
 
 
 def _cancelled_id(msg):
@@ -145,7 +155,15 @@ class XrayRelay:
             sent["namespace"] = namespace
         return await self._call(sent), x.fingerprint
 
+    async def _brief(self, args: dict) -> CallToolResult:
+        data = await _thread(
+            brief.answer, args.get("path"), args.get("range"), args.get("files"), _limit(args)
+        )
+        return CallToolResult(content=[TextContent(type="text", text=json.dumps(data, indent=2))])
+
     async def _answer(self, args: dict) -> CallToolResult:
+        if args.get("action") == BRIEF:
+            return await self._brief(args)
         repo = await _thread(local.root, args.pop("path", None))
         namespace = args.get("namespace")
         if args["action"] == "refresh":

@@ -59,7 +59,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `xray/` (Codebase X-ray: `scan` + `extract` + `lang/` (one adapter per language: `python`
    on `ast` with `resolve`; `typescript` + `ts_*` + `jsonc` and `golang` on tree-sitter) +
    `model` + `local` on the client, `validate` +
-   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check) and `read_hook` (map on arrival), the hook side that builds the graph itself and never
+   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), the hook side that builds the graph itself and never
    touches the brain; see Key Decisions), `proxy_xray` (the proxy's local half of `code_xray`),
    `board_watch` +
    `board_watch_remote`, `board_watch_emit` (the `gingugu board watch` wake-up command; see Key
@@ -797,6 +797,17 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   capped under 9000 characters (the harness cap is 10,000). Own switch
   `MEMORY_XRAY_MAP` (default on). Wired by `gingugu init` with a 15s timeout and
   matcher `Read|Grep|Glob`; it coexists with the harness's own PostToolUse logger.
+- **Codebase X-ray: the brief (X19, unreleased).** An agent that fires neither
+  hook (Codex reading via a shell, editing via `apply_patch`) still gets the map
+  when handed it: `code_xray` `action: "brief"` / `gingugu xray brief` (`xray/brief`,
+  `xray_cli`) lists the changed files (git range, named files, or the working tree
+  against HEAD with untracked files) by rank with importer counts, plus the
+  combined blast of the changed source and a repo top-5, as data and as a compact
+  `text` (<= 8800 chars). *Local only*: it reads the checkout and the hook graph
+  cache (`hook-sessions/`), stores nothing and never asks the brain, so
+  `gingugu serve` refuses it (it cannot read the caller's checkout) and the proxy
+  claims it and answers it locally. A range is checked before git sees it (no
+  option, whitespace or control characters).
 - **Destructive tools ask the user, not the model (shipped 0.25.0).** Five paths
   confirm through MCP elicitation (SDK 2.x `Resolve` + `Elicit`): a hard
   `memory_forget`, a cascading `memory_namespaces` delete of a non-empty

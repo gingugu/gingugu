@@ -104,6 +104,7 @@ def main() -> None:
     ``gingugu harness`` → `init` plus the Claude Code harness (hooks, minions, skill, .ai/).
     ``gingugu ui``      → launch the Memory Explorer web UI in a browser.
     ``gingugu dream``   → run the consolidation pass; stages proposals only.
+    ``gingugu xray``    → X-ray brief: changed files by rank and what they reach.
     ``gingugu embed``   → run the embedding backfill to completion.
     """
     import sys
@@ -160,6 +161,10 @@ def main() -> None:
         from .webui import main as ui_main
 
         raise SystemExit(ui_main(sys.argv[2:]))
+    if cmd == ["xray"]:
+        from .xray_cli import main as xray_main
+
+        raise SystemExit(xray_main(sys.argv[2:]))
     if cmd == ["dream"]:
         from .dream_cli import main as dream_main
 

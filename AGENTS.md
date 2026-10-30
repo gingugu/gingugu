@@ -161,8 +161,10 @@ src/gingugu/
   recall_sweep.py    → involuntary recall, I/O half: read-only cosine sweep + BM25
   prompt_hook.py     → `gingugu hook prompt` (UserPromptSubmit): involuntary recall entry point; also injects board mail on every prompt for persona agents
   board_delivery.py  → the board post/reply delivery receipt (visible true/false/null)
-  xray/              → Codebase X-ray: scan/extract/resolve/local (client), validate/rank/store (brain), edit_hook (PreToolUse edit tripwire)
-  proxy_xray.py      → the proxy reads the checkout for code_xray, asks the brain by fingerprint
+  xray/              → Codebase X-ray: scan/extract/resolve/local (client), validate/rank/store (brain), lang/ (per-language adapters), hook_common + edit_hook (PreToolUse edit tripwire) + read_hook (PostToolUse map on arrival), brief (X19 handoff brief)
+  proxy_xray.py      → the proxy reads the checkout for code_xray, asks the brain by fingerprint; answers `brief` here whole
+  xray_cli.py        → `gingugu xray brief`: the X-ray brief from a shell
+  post_tool_hook.py  → `gingugu hook read` (PostToolUse): the X-ray map on arrival
   board_hook.py      → board mail for the prompt hook: unread posts (max 5, labelled with the author's machine when known), fenced by the client's grant, local or POST /hook/inbox, nothing marked read
   tripwire.py        → tripwire matching (pure regex) + load_tripwires, the seam a remote brain would replace
   agent_session.py   → which agent session is speaking (hashed CLAUDE_CODE_SESSION_ID, X-Gingugu-Agent-Session header); routes board replies to the asking session
