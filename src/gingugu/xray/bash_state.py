@@ -8,6 +8,8 @@ never raises: it runs on every Read and Edit, and before every Bash call.
 from __future__ import annotations
 
 import hashlib
+import os
+import stat
 from pathlib import Path
 
 from . import hook_common
@@ -51,12 +53,15 @@ def touched(state_dir: Path, session_id: str) -> list[Path]:
 
 
 def current_hash(root: Path, rel: str) -> str | None:
-    """sha256 of a small file, ``size:mtime_ns`` of a big one, None when missing."""
+    """sha256 of a small file, ``size:mtime_ns`` of a big one, None when missing.
+    A symlink is compared by where it points, never followed out of the checkout."""
     path = root / rel
     try:
-        if not path.is_file():
+        st = path.lstat()
+        if stat.S_ISLNK(st.st_mode):
+            return "link:" + os.readlink(path)
+        if not stat.S_ISREG(st.st_mode):
             return None
-        st = path.stat()
         if st.st_size > _HASH_LIMIT:
             return f"{st.st_size}:{st.st_mtime_ns}"
         return hashlib.sha256(path.read_bytes()).hexdigest()

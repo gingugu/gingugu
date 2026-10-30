@@ -32,6 +32,8 @@ MAX_DIRTY = 500
 MAX_REPOS = bash_state.MAX_REPOS
 _MAX_TOKENS = 64
 _BUDGET_S = 4.0  # snapshot time per Bash call, all repos together
+_AFTER_BUDGET_S = 6.0  # the diff's share of the doorway's 10s
+_MAX_COMMAND = 8192
 _FULL = 5  # files described in full; the rest are counted
 _NAMED = 3
 # Claude Code caps additionalContext at 10,000 characters.
@@ -62,15 +64,18 @@ def _root_of(where: Path) -> Path | None:
         return None
 
 
-def _command_roots(command: str, cwd: Path) -> list[Path]:
-    """The checkout of every token that names an existing path."""
+def _command_roots(command: str, cwd: Path, found: list[Path], deadline: float) -> None:
+    """Add the checkout of each token that names an existing path to ``found``,
+    until the repo cap or the deadline: every lookup is a git call."""
+    command = command[:_MAX_COMMAND]  # a path worth watching is near the front
     try:
         tokens = shlex.split(command)
     except ValueError:
         tokens = command.split()
-    out: list[Path] = []
     tried: set[Path] = set()
     for token in tokens[:_MAX_TOKENS]:
+        if len(found) >= MAX_REPOS or time.monotonic() > deadline:
+            return
         if not token or token.startswith("-"):
             continue
         try:
@@ -84,20 +89,21 @@ def _command_roots(command: str, cwd: Path) -> list[Path]:
             continue
         tried.add(where)
         root = _root_of(where)
-        if root is not None:
-            out.append(root)
-    return out
+        if root is not None and root not in found:
+            found.append(root)
 
 
-def _candidates(state_dir: Path, session_id: str, command: str, cwd: Path) -> list[Path]:
+def _candidates(
+    state_dir: Path, session_id: str, command: str, cwd: Path, deadline: float
+) -> list[Path]:
     found: list[Path] = []
     here = _root_of(cwd)
     if here is not None:
         remember(state_dir, session_id, here)
         found.append(here)
-    found.extend(touched(state_dir, session_id))
-    found.extend(_command_roots(command, cwd))
-    return list(dict.fromkeys(found))[:MAX_REPOS]
+    found.extend(r for r in touched(state_dir, session_id) if r not in found)
+    _command_roots(command, cwd, found, deadline)
+    return found[:MAX_REPOS]
 
 
 def _snapshot_path(state_dir: Path, session_id: str, use_id: str) -> Path:
@@ -114,7 +120,7 @@ def before(payload: dict, state_dir: Path) -> None:
         snapshot = {}
         # The PreToolUse hook has 15s for everything, memory tripwires included.
         deadline = time.monotonic() + _BUDGET_S
-        for root in _candidates(state_dir, session_id, command, cwd):
+        for root in _candidates(state_dir, session_id, command, cwd, deadline):
             if time.monotonic() > deadline:
                 break
             found = bash_state.dirty(root, MAX_DIRTY)
@@ -208,7 +214,10 @@ def after(payload: dict, state_dir: Path) -> str | None:
         if not isinstance(snapshot, dict):
             return None
         sections = []
+        deadline = time.monotonic() + _AFTER_BUDGET_S
         for raw, was in snapshot.items():
+            if time.monotonic() > deadline:
+                break
             root = Path(raw)
             if not isinstance(was, dict) or not root.is_dir():
                 continue

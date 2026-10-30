@@ -178,6 +178,58 @@ def test_a_huge_dirty_set_is_skipped(repo, state, monkeypatch):
     assert _run(state, repo, lambda: (repo / "pkg/core.py").write_text("X = 2\n")) is None
 
 
+# --- the snapshot stays cheap and inside the checkout -------------------------------------------
+
+
+@pytest.mark.skipif(os.name == "nt", reason="symlinks need privileges on Windows")
+def test_a_symlink_in_the_checkout_is_never_followed(repo, tmp_path, monkeypatch):
+    secret = tmp_path / "outside.txt"
+    secret.write_text("private\n")
+    (repo / "link.py").symlink_to(secret)
+    read = []
+    real = type(secret).read_bytes
+    monkeypatch.setattr(type(secret), "read_bytes", lambda p: read.append(p) or real(p))
+    from gingugu.xray import bash_state
+
+    bash_state.dirty(repo, 100)
+    assert secret not in read and (repo / "link.py") not in read
+
+
+def test_a_huge_command_is_cut_before_it_is_split(repo, state, monkeypatch):
+    import shlex
+
+    seen = []
+    real = shlex.split
+    monkeypatch.setattr(shlex, "split", lambda s, *a, **k: seen.append(len(s)) or real(s, *a, **k))
+    bash_hook.before(_bash(repo, "echo " + "x " * 500_000), state)
+    assert seen and max(seen) <= 8192
+
+
+def test_candidate_lookup_stops_at_the_repo_cap(tmp_path, state, monkeypatch):
+    repos = [_repo(tmp_path / f"r{i}", BASIC) for i in range(12)]
+    calls = []
+    real = bash_hook._root_of
+    monkeypatch.setattr(bash_hook, "_root_of", lambda w: calls.append(w) or real(w))
+    bash_hook.before(_bash(tmp_path, " ".join(str(r / "pkg") for r in repos)), state)
+    assert len(calls) <= bash_hook.MAX_REPOS + 1  # the cwd, then tokens until the cap
+
+
+def test_after_stops_at_its_budget(tmp_path, state, monkeypatch):
+    repos = [_repo(tmp_path / f"r{i}", BASIC) for i in range(3)]
+    bash_hook.before(_bash(tmp_path, " ".join(str(r / "pkg") for r in repos)), state)
+    clock = iter(range(0, 1000, 5))  # every look at the clock is 5s later
+    monkeypatch.setattr(bash_hook.time, "monotonic", lambda: next(clock))
+    from gingugu.xray import bash_state
+
+    calls = []
+    real = bash_state.dirty
+    monkeypatch.setattr(bash_state, "dirty", lambda *a: calls.append(a) or real(*a))
+    bash_hook.after(
+        _bash(tmp_path, " ".join(str(r / "pkg") for r in repos), event="PostToolUse"), state
+    )
+    assert len(calls) < 3
+
+
 # --- the snapshot itself ----------------------------------------------------------------------
 
 
