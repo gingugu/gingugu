@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.34.0] - 2026-10-30
+
 ### Added
 
 - **X-ray brief.** An agent that never fires the Read or Edit hooks - Codex
