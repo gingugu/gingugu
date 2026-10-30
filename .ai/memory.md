@@ -460,7 +460,10 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.35.1** (PyPI, 2026-10-30). Patch: X20 live-test fixes - the
+- Current version: **0.35.2** (PyPI, 2026-10-30). Patch: a board post's `xray:` ref
+  reaching a receiver with no checkout (a Codex thread dir) arrives as one line naming
+  `gingugu xray brief --range <ref>`, not silence (#160).
+- 0.35.1 (PyPI, 2026-10-30). Patch: X20 live-test fixes - the
   board nudge reaches the main agent (the PreToolUse doorway passes a main-thread
   board `post` through) and a clipped brief ends with a line saying so (#159).
   **Upgrading:** run `gingugu init --force` in each repo for the new doorway.
