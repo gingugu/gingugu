@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.35.1] - 2026-10-30
+
 ### Fixed
 
 - **The board nudge reaches the main agent.** The `xray:` nudge for a board post
