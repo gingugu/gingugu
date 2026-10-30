@@ -556,7 +556,9 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
           already claimed in hook-sessions/xray-shown-<session>/ → skip
           claim it atomically (O_EXCL; lost race or failed write → skip), then the
           X-ray reason: importer count, top 5 dependents with hops, up to 5
-          candidate tests, import-based-estimate caveat
+          candidate tests; for an Edit/MultiEdit, `Edit lands in` lines for the
+          definitions each old_string sits in (X17, xray/edit_symbols) and a
+          lower-bound line; import-based-estimate caveat last
       → X-ray Bash snapshot (xray/tool_xray.reason → xray/bash_hook.before; same
         switch MEMORY_XRAY_TRIPWIRE; never denies, prints nothing)
           see "X-ray of a shell command's writes (X15)" below
@@ -616,7 +618,8 @@ PostToolUse event (Read | Grep | Glob)  →  .claude/hooks/post_tool_xray.py (pu
       Read of a source file an adapter parses, once per file per session
         (claim hook-sessions/xray-read-<session>/) →
         up to 4 lines: rank k of N, direct importers, transitive reach with
-        candidate tests, direct imports; silent for a file with no edges
+        candidate tests, direct imports; a Python file adds `Most called: ...`
+        (X17 symbol cache); silent for a file with no edges
   → emit additionalContext beside the tool result (output capped under 9000 chars)
 ```
 
