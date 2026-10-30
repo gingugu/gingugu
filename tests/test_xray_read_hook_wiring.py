@@ -116,9 +116,9 @@ def test_cli_dispatches_hook_read():
 def test_init_wires_posttooluse_for_reads_and_searches_only():
     settings, added, _ = merge_settings({})
     assert "PostToolUse" in added
-    (group,) = settings["hooks"]["PostToolUse"]
+    # X15 adds its own Bash entry beside this one (test_xray_bash_hook_wiring).
+    (group,) = [g for g in settings["hooks"]["PostToolUse"] if "post_tool_xray.py" in json.dumps(g)]
     assert set(group["matcher"].replace(" ", "").split("|")) == {"Read", "Grep", "Glob"}
-    assert "post_tool_xray.py" in group["hooks"][0]["command"]
 
 
 def test_init_installs_the_doorway(tmp_path):

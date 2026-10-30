@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A shell command's writes get their X-ray (X15).** The edit tripwire speaks before an
+  `Edit` or `Write`; a `sed -i`, a codegen script or a `git checkout` writes behind its
+  back. Now, after a `Bash` call, the agent is told what each source file the command
+  changed reaches - its top dependents and the candidate tests - and, for a file the
+  command deleted, who imported it. At most 5 files are described in full, the rest are
+  counted. It informs and never blocks (the write already happened), and shares the
+  edit tripwire's once-per-file claim, so a file is reported once per session whichever
+  way it changed. It watches the command's own repo, every repo the session has
+  touched and the repo of any path the command names; a repo with more than 500 dirty
+  files is skipped. `gingugu init` in each repo adds the doorway
+  (`.claude/hooks/post_bash_xray.py`, matched to `Bash`); `MEMORY_XRAY_TRIPWIRE=off`
+  turns it off with the edit tripwire.
+
 ---
 
 ## [0.36.1] - 2026-10-30

@@ -142,23 +142,6 @@ def _emit(reason: str, count: int) -> None:
     )
 
 
-def _xray(payload: dict, tool_name: str) -> str | None:
-    """The X-ray reason for an edit, or None. A bug in it never breaks the hook."""
-    try:
-        from .xray import board_nudge, edit_hook
-
-        # Every tool call passes through here: rule out the rest before any I/O.
-        nudge = board_nudge.is_post(tool_name, payload.get("tool_input"))
-        if not nudge and (tool_name not in edit_hook.EDIT_TOOLS or not edit_hook.enabled()):
-            return None
-        from .config import load_config
-
-        state = load_config().db_path.parent / "hook-sessions"
-        return board_nudge.check(payload, state) if nudge else edit_hook.check(payload, state)
-    except Exception:  # noqa: BLE001
-        return None
-
-
 def _emit_xray(reason: str, tool_name: str = "") -> None:
     what = (
         "asked a board post for its range"
@@ -208,7 +191,9 @@ def run(payload: dict) -> int:
     """Decide and print. Returns the process exit code (always 0)."""
     if _minion_and_spawn(payload) or _checkout_guard(payload):
         return 0
-    xray = _xray(payload, payload.get("tool_name") or "")
+    from .xray.tool_xray import reason as xray_reason
+
+    xray = xray_reason(payload, payload.get("tool_name") or "")
     try:
         trip = _memory_trip(payload)
     except Exception:  # noqa: BLE001 - the X-ray already marked this file shown
