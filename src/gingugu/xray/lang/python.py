@@ -10,6 +10,7 @@ import ast
 import tomllib
 from pathlib import PurePosixPath
 
+from .. import symbols, symbols_walk
 from ..model import Edge, FileInfo, LangResult
 from ..resolve import KIND_RANK, ModuleIndex, resolve_records
 from ..resolve_walk import is_main_guard, walk
@@ -85,21 +86,34 @@ class PythonAdapter:
         try:
             tree = ast.parse(data)
         except (SyntaxError, ValueError, UnicodeDecodeError, RecursionError):
-            return {"err": True, "main": False, "dyn": 0, "recs": []}
+            return {
+                "err": True,
+                "main": False,
+                "dyn": 0,
+                "recs": [],
+                "sym": symbols_walk.walk(ast.parse("")),
+            }
         recs, dynamic = walk(tree)
-        return {"err": False, "main": is_main_guard(tree), "dyn": dynamic, "recs": recs}
+        return {
+            "err": False,
+            "main": is_main_guard(tree),
+            "dyn": dynamic,
+            "recs": recs,
+            "sym": symbols_walk.walk(tree),
+        }
 
     @staticmethod
     def valid(raw: object) -> bool:
         """Whether ``raw`` has exactly the shape ``parse`` returns (a cache is untrusted)."""
         return (
             isinstance(raw, dict)
-            and set(raw) == {"err", "main", "dyn", "recs"}
+            and set(raw) == {"err", "main", "dyn", "recs", "sym"}
             and isinstance(raw["err"], bool)
             and isinstance(raw["main"], bool)
             and _is_int(raw["dyn"])
             and isinstance(raw["recs"], list)
             and all(_is_rec(r) for r in raw["recs"])
+            and symbols_walk.valid(raw["sym"])
         )
 
     def extract(self, sources: dict[str, bytes], manifests: dict[str, bytes]) -> LangResult:
@@ -122,6 +136,7 @@ class PythonAdapter:
             out.edges.extend(Edge(rel, dst, k, c, i) for dst, (k, c, i) in res.edges.items())
             entry = is_entry or raw["main"]
             out.files.append(FileInfo(rel, is_test(rel), entry, self.name))
+        out.symbols = symbols.link({rel: raw["sym"] for rel, raw in raws.items()}, idx)
         return out
 
 

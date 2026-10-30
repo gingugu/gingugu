@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .symbols import Symbols
+
 FILE = "file"
 PACKAGE = "package"
 
@@ -43,3 +45,4 @@ class LangResult:
     external: int = 0
     parse_errors: list[str] = field(default_factory=list)
     skipped: list[tuple[str, str]] = field(default_factory=list)
+    symbols: Symbols = field(default_factory=Symbols)  # client-side only, never in a payload
