@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import posixpath
+from collections.abc import Container
 
 from .ts_config import Config, Manifests, leaves
 from .ts_paths import join, resolve_file
@@ -43,7 +44,7 @@ def _prefixes(spec: str):
 
 
 class Resolver:
-    def __init__(self, files: dict[str, bytes], manifests: Manifests) -> None:
+    def __init__(self, files: Container[str], manifests: Manifests) -> None:
         self.files = files
         self.manifests = manifests
         self.workspace = manifests.workspace()
