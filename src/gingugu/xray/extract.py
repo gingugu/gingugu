@@ -25,11 +25,13 @@ from . import parse_cache as _pc
 from .model import Edge, FileInfo, LangResult
 from .scan import XrayError as XrayError
 from .scan import commit, is_manifest, read_sources, toplevel
+from .symbols import Symbols
 
 __all__ = ["EXTRACTOR_VERSION", "Edge", "Extraction", "FileInfo", "XrayError", "extract"]
 
 # 2: every language in ``lang/``, nodes carry lang + kind, package nodes.
-EXTRACTOR_VERSION: int = 2
+# 3: the Python parse also carries symbol records (X17).
+EXTRACTOR_VERSION: int = 3
 MAX_FILE_BYTES: int = 2_000_000  # real source is far smaller; read at call time
 MAX_TOTAL_BYTES: int = 256_000_000  # vite's sources are ~10MB; read at call time
 
@@ -46,6 +48,7 @@ class Extraction:
     external: int = 0
     parse_errors: list[str] = field(default_factory=list)
     skipped: list[tuple[str, str]] = field(default_factory=list)
+    symbols: Symbols = field(default_factory=Symbols)  # who calls what; never in ``payload``
 
     def payload(self) -> dict:
         """JSON-safe wire form. Omits ``root``: a client path never leaves the client."""
@@ -162,6 +165,8 @@ def extract(path: str | Path, parse_cache: str | Path | None = None) -> Extracti
         out.dynamic += res.dynamic
         out.external += res.external
         out.parse_errors.extend(res.parse_errors)
+        if res.symbols.defs:  # only Python produces one
+            out.symbols = res.symbols
         skipped.extend(res.skipped)
 
     # The brain refuses a payload whole over one dangling or repeated edge, so an

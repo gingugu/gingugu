@@ -36,11 +36,12 @@ from mcp.types import CallToolResult, JSONRPCNotification, JSONRPCRequest, TextC
 from .proxy_auth import SessionTokens, brain_client
 from .proxy_session import CLIENT_GONE
 from .proxy_vault import _refused, _reply
-from .xray import brief, extract, local
+from .xray import brief, callers_tool, extract, local
 
 NAME = "code_xray"
 _LOCAL = ("blast", "overview", "refresh")
 BRIEF = "brief"  # answered here whole: the brain is never asked
+CALLERS = "callers"  # likewise
 
 
 def claims(msg) -> bool:
@@ -49,7 +50,7 @@ def claims(msg) -> bool:
         return False
     params = msg.params or {}
     args = params.get("arguments") or {}
-    if params.get("name") == NAME and args.get("action") == BRIEF:
+    if params.get("name") == NAME and args.get("action") in (BRIEF, CALLERS):
         return True
     return (
         params.get("name") == NAME
@@ -83,6 +84,11 @@ def _checked(result: CallToolResult) -> CallToolResult:
 def _limit(args: dict) -> int:
     limit = args.get("limit")
     return limit if isinstance(limit, int) and not isinstance(limit, bool) else 50
+
+
+def _offset(args: dict) -> int:
+    offset = args.get("offset")
+    return offset if isinstance(offset, int) and not isinstance(offset, bool) else 0
 
 
 def _cancelled_id(msg):
@@ -161,9 +167,22 @@ class XrayRelay:
         )
         return CallToolResult(content=[TextContent(type="text", text=json.dumps(data, indent=2))])
 
+    async def _callers(self, args: dict) -> CallToolResult:
+        data = await _thread(
+            callers_tool.answer,
+            args.get("path"),
+            args.get("files"),
+            args.get("symbol"),
+            _limit(args),
+            _offset(args),
+        )
+        return CallToolResult(content=[TextContent(type="text", text=json.dumps(data, indent=2))])
+
     async def _answer(self, args: dict) -> CallToolResult:
         if args.get("action") == BRIEF:
             return await self._brief(args)
+        if args.get("action") == CALLERS:
+            return await self._callers(args)
         repo = await _thread(local.root, args.pop("path", None))
         namespace = args.get("namespace")
         if args["action"] == "refresh":

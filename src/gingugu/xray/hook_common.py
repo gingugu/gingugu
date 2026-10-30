@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from . import extract, local, rank
+from . import symbols as _sym
 from .scan import XrayError
 
 _STATE_TTL_SECONDS = 7 * 24 * 3600
@@ -146,16 +147,23 @@ def cached_graph(root: Path, state_dir: Path) -> Graph | None:
     return _load_cache(_cache_path(root, state_dir), None)
 
 
-def graph(root: Path, state_dir: Path, session_id: str | None = None) -> Graph:
-    """The checkout's graph, cached by fingerprint.
+def _symbols_path(root: Path, state_dir: Path) -> Path:
+    return state_dir / f"xray-symbols-{_digest(root)}.json"
 
-    With a session, a build that never finished - the doorway's timeout killed
-    it - is not started again in that session: a checkout too big to build in
-    time would otherwise pay the whole build on every tool call."""
-    fp = extract.fingerprint(root)
-    cached = _load_cache(_cache_path(root, state_dir), fp)
-    if cached is not None:
-        return cached
+
+def _load_symbols(cache: Path, fingerprint: str) -> _sym.Symbols | None:
+    """The cached symbol graph, only if it is this checkout's and well-formed."""
+    data = _read_json(cache)
+    if not isinstance(data, dict) or data.get("fingerprint") != fingerprint:
+        return None
+    return _sym.from_json({k: v for k, v in data.items() if k != "fingerprint"})
+
+
+def _build(root: Path, state_dir: Path, session_id: str | None) -> tuple[Graph, _sym.Symbols]:
+    """One extraction, both caches written. With a session, a build that never
+    finished - the doorway's timeout killed it - is not started again in that
+    session: a checkout too big to build in time would otherwise pay the whole
+    build on every tool call."""
     marker = claim_path(state_dir, "xray-build", session_id, root) if session_id else None
     if marker is not None and not _claim(marker):
         # A fresh marker is a parallel hook mid-build: build too, as before. One
@@ -185,6 +193,23 @@ def graph(root: Path, state_dir: Path, session_id: str | None = None) -> Graph:
             "entries": sorted(entries),
         },
     )
+    _write_json(
+        _symbols_path(root, state_dir),
+        {"fingerprint": ex.fingerprint, **_sym.to_json(ex.symbols)},
+    )
     if marker is not None:
         marker.unlink(missing_ok=True)
-    return Graph(files, links, ranks, packages, langs, entries)
+    return Graph(files, links, ranks, packages, langs, entries), ex.symbols
+
+
+def graph(root: Path, state_dir: Path, session_id: str | None = None) -> Graph:
+    """The checkout's graph, cached by fingerprint (see ``_build`` for the marker)."""
+    cached = _load_cache(_cache_path(root, state_dir), extract.fingerprint(root))
+    return cached if cached is not None else _build(root, state_dir, session_id)[0]
+
+
+def symbols(root: Path, state_dir: Path, session_id: str | None = None) -> _sym.Symbols:
+    """The checkout's symbol graph (who calls what), cached beside the import
+    graph by the same fingerprint; one build writes both."""
+    cached = _load_symbols(_symbols_path(root, state_dir), extract.fingerprint(root))
+    return cached if cached is not None else _build(root, state_dir, session_id)[1]
