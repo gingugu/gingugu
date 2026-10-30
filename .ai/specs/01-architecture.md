@@ -756,7 +756,8 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   edit with a graph rebuild, 0.5s cached (X16 later made the rebuild after an
   edit incremental; numbers under that entry). State lives beside the DB in
   `hook-sessions/`: `xray-graph-<sha16(root)>.json` (cache),
-  `xray-parse-<sha16(root)>.json` (X16 per-file parse cache) and
+  `xray-parse-<sha16(root)>.json` (X16 per-file parse cache),
+  `xray-symbols-<sha16(root)>.json` (X17 symbol graph, written by the same build) and
   `xray-shown-<session>/` (one claim file per shown file, created atomically
   with `O_EXCL` so parallel hooks cannot lose a record); owner-only 0600,
   swept after 7 days untouched (the parse cache too). *Silent by construction*: a file

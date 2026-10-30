@@ -5,7 +5,8 @@ the host's disk, and the tool there refuses one. So the proxy claims every
 ``code_xray`` call that would need the disk (``blast``, ``overview``,
 ``refresh`` without a ``fingerprint`` or ``payload``) and does that part on
 this machine. It also claims every ``brief`` (changed files and their combined
-blast, answered whole from the local checkout; the brain is never asked). The rest goes through
+blast) and every ``callers`` (one symbol's callers, X17), each answered whole from
+the local checkout; the brain is never asked. The rest goes through
 ``xray.local``, the same code the local server runs:
 
 1. fingerprint the checkout (cheap: no parsing) and ask the brain by fingerprint;

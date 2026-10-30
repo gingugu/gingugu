@@ -94,7 +94,7 @@ graph LR
         W[(tripwires<br/>action triggers)]
         BP[(board_posts · board_reads<br/>agent board)]
         XR[(xray_snapshots · files · edges<br/>codebase X-ray)]
-        XG[(hook-sessions/<br/>X-ray graph cache)]
+        XG[(hook-sessions/<br/>X-ray graph + symbol caches)]
     end
 
     subgraph OS Secrets
@@ -128,8 +128,8 @@ graph LR
     C -->|add · list · remove · test| W
     C -->|post · inbox · read · claim · done| BP
     C -->|ingest · refresh · blast · overview| XR
-    C -->|brief, stdio only: nothing stored| XG
-    X -->|brief, answered on this machine| XG
+    C -->|brief · callers, stdio only: nothing stored| XG
+    X -->|brief · callers, answered on this machine| XG
     A -->|each pending tool call| Y
     Y -->|reads matches| W
     Y -->|logs each trip| T
@@ -425,10 +425,11 @@ Read by the `PreToolUse` hook (`gingugu hook tool`), which denies the first
 matching call per session per memory and logs the trip to `query_log`
 (`tool='tripwire'`). Per-session suppression lives beside the DB in
 `hook-sessions/tripwires-<session_id>.json`, not in SQLite. The X-ray edit
-check keeps three more entries there: `xray-graph-<sha16(root)>.json` (the import
+check keeps four more entries there: `xray-graph-<sha16(root)>.json` (the import
 graph, cached per repo by fingerprint, shared with the map-on-arrival hook),
 `xray-parse-<sha16(root)>.json` (each file's parse, cached by content so a rebuild
-after an edit re-parses only what changed) and `xray-shown-<session>/`
+after an edit re-parses only what changed), `xray-symbols-<sha16(root)>.json` (the
+Python symbol graph, written by the same build) and `xray-shown-<session>/`
 (one claim file per file already shown this session). The map hook adds three
 more directories: `xray-map-<session>/` (the repo map, once per session),
 `xray-read-<session>/` (one claim per file whose neighbourhood was shown) and
@@ -2126,7 +2127,7 @@ src/gingugu/
 ├── proxy_vault.py          # Remote mode: the machine's credential vault, screened (reveal refused) and exposed as a server
 ├── proxy_vault_link.py     # Remote mode: runs that vault behind an in-memory MCP session so it can ask the user
 ├── proxy_xray.py           # Remote mode: code_xray reads the checkout here, asks the brain by fingerprint
-├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), tool_xray (the PreToolUse X-ray decision, kept apart from tool_hook), bash_hook + bash_state (X15: a shell command's dirty-set snapshot and diff; the repos a session touched), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only), board_nudge (X20 sender: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line), board_brief (X20: the brief a board post's `xray: <range>` line asks for, rendered on the receiver), repo_id (X20: a checkout's identity, and the local checkout an `xray: <repo> <range>` line names)
+├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), tool_xray (the PreToolUse X-ray decision, kept apart from tool_hook), bash_hook + bash_state (X15: a shell command's dirty-set snapshot and diff; the repos a session touched), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only), board_nudge (X20 sender: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line), board_brief (X20: the brief a board post's `xray: <range>` line asks for, rendered on the receiver), repo_id (X20: a checkout's identity, and the local checkout an `xray: <repo> <range>` line names), resolve_walk + parse_cache (X16: content-only import records, the per-file parse cache), symbols_walk + symbols (X17: the Python symbol graph, client only), edit_symbols (X17: the tripwire's `Edit lands in` lines), callers_tool (X17: `code_xray` `callers`, local only)
 ├── xray_cli.py             # `gingugu xray brief`: the X-ray brief from a shell (--range / --files / --path / --json)
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine
@@ -2290,7 +2291,7 @@ src/gingugu/
     ├── credentials.py      # credential_store / get / list / delete (delete asks the user)
     ├── tripwires.py        # memory_tripwire: add / list / remove / test
     ├── board.py            # board tool + gingugu://board/inbox/{persona} resource; derives the author
-    ├── xray.py             # code_xray tool: snapshot selection, blast, overview, refresh, ingest, brief
+    ├── xray.py             # code_xray tool: snapshot selection, blast, overview, refresh, ingest, brief, callers
     ├── admin.py            # namespaces, export, import (cascade delete and overwriting import ask the user)
     ├── summaries.py        # Payload shapes: full summary, compact summary, the picker
     ├── choices.py          # Enum argument parsing, shared error wording
