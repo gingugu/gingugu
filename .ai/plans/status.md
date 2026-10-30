@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-10-30 (X-ray tuned for the agent: blind-only deny, post-edit note, X11 ledger)_
+_Last updated: 2026-10-30 (X-ray tuned for the agent released in 0.40.0)_
 
 ## In Flight
 
@@ -23,8 +23,8 @@ X-ray brief RELEASED in 0.34.0 (#157); X20 brief on the board RELEASED in 0.35.0
 (#158), live-test fixes in 0.35.1 (#159), not-available note in 0.35.2 (#160), repo on
 the line in 0.36.0 (#161); X15 writes from any tool RELEASED in 0.37.0 (#163); X16 incremental refresh
 RELEASED in 0.38.0 (#164); X17 symbol graph (Python)
-RELEASED in 0.39.0 (#165); X-ray tuned for the agent BUILT on `feature/xray-tuned`,
-unreleased; X21 symbols on the brain owed** (2026-10-30). The
+RELEASED in 0.39.0 (#165); X-ray tuned for the agent
+RELEASED in 0.40.0 (#166); X21 symbols on the brain owed** (2026-10-30). The
 end goal was restated: a sophisticated map before any work starts, so the map
 reaches the agent on reads and on any write, not only through the edit tools. New
 items X14-X21 (section 19); build order X14, X19, X20, X15, X16, X17, then X3.
@@ -2366,7 +2366,7 @@ slices alongside them. IDs are stable references, not the order.
 | X8 | **Dependency X-ray** - third-party packages on the graph: which are load-bearing, how deep, what a compromised package could reach | X1, X7 | Upgrade priority, pinning, incident-day exposure |
 | X9 | **Fleet X-ray** - every repo into one central brain; cross-repo callers and cross-repo blast radius | central brain, scoped tokens | |
 | X10 | **Graph-aware fences** - approval scales with blast radius: leaf edits free, edits reaching top-ranked files need the user's go | X1, hooks, minion grants | |
-| X11 | **Predict, then score** - the agent predicts failing tests and broken files before a change; the calibration ledger scores it after | X1, calibration ledger (#2) | Lean version BUILT (unreleased): X-ray's own test predictions (by call, by import) vs pytest failures in a local ledger, `gingugu xray score`. The agent's own predictions and the brain-side calibration ledger are still to do |
+| X11 | **Predict, then score** - the agent predicts failing tests and broken files before a change; the calibration ledger scores it after | X1, calibration ledger (#2) | Lean version SHIPPED in 0.40.0 (#166): X-ray's own test predictions (by call, by import) vs pytest failures in a local ledger, `gingugu xray score`. The agent's own predictions and the brain-side calibration ledger are still to do |
 | X12 | **Board-driven upkeep** - the nightly X-ray posts findings (dead files, new cycles, drift) to the agent board for agents to claim | X4, agent board | |
 | X13 | **Code fingerprints** - embed code units; near-duplicate logic across repos, and provenance of copied code | embeddings, hybrid search | |
 | X14 | **Map on arrival (SHIPPED in 0.32.0, #153)** - a short repo overview (size, languages, top-ranked files, entry points) on the session's first touch of a repo, then an up-to-4-line neighbourhood (rank, importers, nearest tests since the X-ray tuning, imports; X17 adds a fifth, `Most called`, for Python) on a file's first `Read` | X1 graph cache, hooks | PostToolUse context, non-blocking. Leaf files stay silent. First touch, not session start, so a session that never touches code pays nothing |

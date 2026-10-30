@@ -475,7 +475,13 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.39.0** (PyPI, 2026-10-30). Minor: X17 symbol graph (Python) - the
+- Current version: **0.40.0** (PyPI, 2026-10-30). Minor: X-ray tuned for the agent - the
+  edit tripwire denies only a blind edit; a PostToolUse note after an Edit/MultiEdit names
+  the cross-file callers of the definitions touched and their nearest tests
+  (`xray/edit_note`, doorway `post_edit_xray.py`, `gingugu hook edit`); direct importers and
+  nearest tests lead every surface; X11 lean test ledger + `gingugu xray score` (#166).
+  **Upgrading:** `gingugu init` in each repo.
+- 0.39.0 (PyPI, 2026-10-30). Minor: X17 symbol graph (Python) - the
   X-ray records definitions and resolved call edges client-side; the edit tripwire names the
   definitions an edit lands in and their callers, the read neighbourhood the most-called ones,
   and `code_xray` gains `callers` (#165). No migration; extractor version 3 rebuilds caches
