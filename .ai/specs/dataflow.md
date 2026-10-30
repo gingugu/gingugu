@@ -524,6 +524,13 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
   → survivors piped to `gingugu hook tool`
       → minion fence / spawn stash first (see "Warm minions"; independent of
         MEMORY_TRIPWIRES)
+      → checkout guard (checkout_guard; MEMORY_CHECKOUT_GUARD, own switch)
+          Bash only; per shell segment, a git switch / checkout without -- /
+          rebase / reset --hard|--merge|--keep / stash (not list|show), in the
+          dir that segment runs in (cwd, a prior cd, git -C)
+          that dir is a PRIMARY checkout (git-dir == git-common-dir)
+            → deny EVERY time, pointing at a worktree; the hook exits here
+          GINGUGU_PRIMARY_OK=1 prefix, a linked worktree, or any failure: pass
       → X-ray edit check (xray/edit_hook; its own switch, runs before the
         MEMORY_TRIPWIRES check and does not exit the hook)
           Edit/Write/MultiEdit of a file an X-ray adapter parses (lang.for_path:

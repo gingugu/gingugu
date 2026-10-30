@@ -13,7 +13,9 @@ the agent either changes course or re-issues the call, which then passes. The
 memory is in context by then; firing again would only block the retry.
 
 The first edit of an imported ``.py`` file is denied the same way by the X-ray
-(``xray.edit_hook``), on its own switch, independent of memory tripwires.
+(``xray.edit_hook``), on its own switch, independent of memory tripwires. A git
+command that would move the shared primary checkout is denied every time by the
+checkout guard (``checkout_guard``), also on its own switch.
 
 Like the prompt hook, it must never break a session. Every failure exits 0
 with no output, and no output means the normal permission flow applies.
@@ -170,9 +172,34 @@ def _emit_xray(reason: str) -> None:
     )
 
 
+def _checkout_guard(payload: dict) -> bool:
+    """Deny a move of the shared primary checkout. True = denied."""
+    try:
+        from . import checkout_guard
+
+        reason = checkout_guard.check(payload)
+    except Exception:  # noqa: BLE001 - a guard bug never breaks the hook
+        return False
+    if not reason:
+        return False
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "deny",
+                    "permissionDecisionReason": reason,
+                },
+                "systemMessage": "gingugu: checkout guard stopped a move of the primary checkout",
+            }
+        )
+    )
+    return True
+
+
 def run(payload: dict) -> int:
     """Decide and print. Returns the process exit code (always 0)."""
-    if _minion_and_spawn(payload):
+    if _minion_and_spawn(payload) or _checkout_guard(payload):
         return 0
     xray = _xray(payload, payload.get("tool_name") or "")
     try:

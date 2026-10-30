@@ -1678,8 +1678,19 @@ runs the minion fence first, which does deny the write tools of the inherited
 `mcp__gingugu__*` server (see warm minions). `MEMORY_TRIPWIRES=off` disables
 memory tripwires only; the X-ray edit check has its own switch,
 `MEMORY_XRAY_TRIPWIRE` (default on), the X-ray map on arrival (the `PostToolUse` hook, `gingugu hook read`) has
-`MEMORY_XRAY_MAP` (default on), and the minion fence has
-`MEMORY_MINION_FENCE`.
+`MEMORY_XRAY_MAP` (default on), the minion fence has
+`MEMORY_MINION_FENCE`, and the checkout guard has `MEMORY_CHECKOUT_GUARD`.
+
+**The checkout guard** runs in the same `PreToolUse` hook, right after the
+minion fence. Several sessions often share one repo's primary checkout, and a
+branch switch there carries every other session's uncommitted edits onto the
+new branch. So a Bash call whose git command would move or empty the primary
+checkout (`switch`, `checkout` without `--`, `rebase` other than `--abort`,
+`reset --hard`/`--merge`/`--keep`, `stash` other than `list`/`show`) is denied
+every time, with a pointer to a worktree. Primary means `git rev-parse
+--git-dir` equals `--git-common-dir`; a linked worktree is never guarded. A
+`cd` earlier in the command and `git -C` decide which checkout that is. A
+`GINGUGU_PRIMARY_OK=1` prefix lets one command through.
 
 **Destructive calls ask the user, not the model.** A hard `memory_forget`, a
 cascading `memory_namespaces` delete, `memory_consolidate` with
