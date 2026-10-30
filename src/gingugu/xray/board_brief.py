@@ -77,12 +77,17 @@ def _fit(text: str, max_chars: int) -> str:
     return body + "\n" + CLIPPED
 
 
+# The range gate keeps git safe, not a shell: only these reach a suggested command.
+_SHELL_SAFE = re.compile(r"[A-Za-z0-9._/~^@{}:+=-]+")
+
+
 def _not_here(ref: str, repo: str | None = None) -> str:
     """One line for a receiver with no checkout: a silent None would drop the ref."""
     where = f"no checkout of {repo} found" if repo else "no git checkout"
+    arg = ref if _SHELL_SAFE.fullmatch(ref) else "<range>"
     return (
         f"X-ray brief: {json.dumps(ref)} is not available here ({where}); "
-        f"run `gingugu xray brief --range {ref}` in that repo."
+        f"run `gingugu xray brief --range {arg}` in that repo."
     )
 
 
