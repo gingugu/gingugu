@@ -141,7 +141,7 @@ def test_nested_functions_resolve_innermost_first():
 
 def test_a_name_that_is_a_submodule_is_not_a_call_target():
     sym = _link({**LIB, "app.py": "from pkg import core\n\ncore()\n"})
-    assert not any(d == "pkg/core.py" for _, _, d, _ in _edges(sym))
+    assert not any(s == "app.py" for s, _, _, _ in _edges(sym))
 
 
 def test_recursion_is_not_an_edge():
