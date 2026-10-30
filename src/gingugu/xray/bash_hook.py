@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import shlex
+import time
 from pathlib import Path
 
 from . import bash_state, edit_hook, hook_common, lang, local, rank
@@ -30,6 +31,7 @@ __all__ = ["MAX_DIRTY", "MAX_REPOS", "after", "before", "remember", "touched"]
 MAX_DIRTY = 500
 MAX_REPOS = bash_state.MAX_REPOS
 _MAX_TOKENS = 64
+_BUDGET_S = 4.0  # snapshot time per Bash call, all repos together
 _FULL = 5  # files described in full; the rest are counted
 _NAMED = 3
 # Claude Code caps additionalContext at 10,000 characters.
@@ -110,7 +112,11 @@ def before(payload: dict, state_dir: Path) -> None:
             return None
         session_id, use_id, command, cwd = ours
         snapshot = {}
+        # The PreToolUse hook has 15s for everything, memory tripwires included.
+        deadline = time.monotonic() + _BUDGET_S
         for root in _candidates(state_dir, session_id, command, cwd):
+            if time.monotonic() > deadline:
+                break
             found = bash_state.dirty(root, MAX_DIRTY)
             if found is not None:
                 snapshot[str(root)] = found
