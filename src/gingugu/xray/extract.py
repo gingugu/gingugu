@@ -109,7 +109,7 @@ def _raws(adapter, mine: dict[str, bytes], cached: dict[str, object]):
     raws: dict[str, object] = {}
     kept: dict[str, object] = {}
     for rel, data in mine.items():
-        slot = _pc.slot(rel, data)
+        slot = _pc.slot(max((e for e in adapter.extensions if rel.endswith(e)), key=len), data)
         raw = cached.get(slot)
         if slot not in cached or not adapter.valid(raw):
             raw = adapter.parse(rel, data)
