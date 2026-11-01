@@ -139,6 +139,17 @@ def no_persona(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.fixture(autouse=True)
+def no_scars_from_the_real_brain(monkeypatch: pytest.MonkeyPatch):
+    """X3 scar tissue off for the suite.
+
+    Every X-ray read and edit hook test would otherwise ask the brain at the
+    developer's own ``MEMORY_DB_PATH`` which memories name the file. A test of
+    scar tissue turns it on and points the brain somewhere of its own.
+    """
+    monkeypatch.setenv("MEMORY_XRAY_SCARS", "off")
+
+
+@pytest.fixture(autouse=True)
 def offline_embeddings(monkeypatch: pytest.MonkeyPatch):
     """Keep the suite off the network — the sibling of ``fake_keyring``.
 
