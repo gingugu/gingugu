@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-10-30 (X-ray tuned for the agent released in 0.40.0)_
+_Last updated: 2026-11-01 (board resynced and reordered: X-ray first, X3 next)_
 
 ## In Flight
 
@@ -18,7 +18,7 @@ trips on JSX `class=` (9 of vite's 1,638 files report a parse error, edges recov
 `tsconfig` `extends` to a package (`@tsconfig/...`) is skipped; `exports` star patterns
 are not resolved; a go.mod `module ( ... )` block reads as malformed.
 
-**Board #5 Codebase X-ray - X14 map on arrival RELEASED in 0.32.0 (#153); X19
+**Board #1 (was #5 until 2026-11-01) Codebase X-ray - X14 map on arrival RELEASED in 0.32.0 (#153); X19
 X-ray brief RELEASED in 0.34.0 (#157); X20 brief on the board RELEASED in 0.35.0
 (#158), live-test fixes in 0.35.1 (#159), not-available note in 0.35.2 (#160), repo on
 the line in 0.36.0 (#161); X15 writes from any tool RELEASED in 0.37.0 (#163); X16 incremental refresh
@@ -391,7 +391,7 @@ permanent wiring is live on this Mac (a Codex `SessionStart` hook spawns one
 detached watcher per persona, pointed at the newest thread), and the first
 round trip over the real Pi brain ran 2026-10-26. The Pi's wlan0 now has an
 IPv6 link-local address: without it every client waited out a 5s mDNS AAAA
-lookup per connection (add to the Pi bootstrap, board item).
+lookup per connection (add to the Pi bootstrap, a local script since 2026-11-01).
 
 **Explorer overhaul: MERGED (#129 read API + remote mode, #130 3D brain
 frontend, #131 fictional demo brain), released in 0.26.0.** Remaining Explorer
@@ -1589,7 +1589,7 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-## The Board (current: 2026-10-28)
+## The Board (current: 2026-11-01)
 
 **Resequenced 2026-09-29 into build order.** The table below is the order the
 work gets done in, top first; `#` is that position. Item numbers used to be
@@ -1649,16 +1649,20 @@ every row moved up one.
 
 **2026-10-30:** X17 symbol graph built client-side for Python; X21 (symbols on the brain: tables + ingest) added as an owed follow-up, the condition of the X17 approval.
 
+**2026-10-30 (release):** X17 (#165) shipped in 0.39.0 and the X-ray tuning (#166) in 0.40.0, including the lean X11 test ledger. Every item in the X-ray build order up to X17 has shipped; X3 scar tissue is next. The X-ray row's text (then row 5) now lists everything that has shipped, X19 and X20 included.
+
+**2026-11-01:** reordered to match where the work actually goes. X-ray moves to row 1, with row 1a naming the X-item in progress (X3). The calibration ledger moves to 2, because the lean X11 ledger already feeds it. Governance bands, the paraphrase set, the referee, the secrets broker and the flight recorder keep their relative order below it. The Pi bootstrap (was row 7) comes off the board: gingugu is built for its owner, so it stays a local script under the gitignored `deploy/pi/`. What is still manual there: SSH hardening, the per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`, and a stage 4 that predates `gingugu remote` + the proxy.
+
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
-| 2 | **A calibration ledger** | 14 | Standalone; new tables, so a migration |
-| 3 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
-| 4 | **A referee for rival memory tools** | 17 | Only a fair comparison once 3 exists |
-| 5 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival shipped in 0.32.0; X15 writes from any tool shipped in 0.37.0; X16 incremental refresh shipped in 0.38.0; X17 symbol graph (Python) shipped in 0.39.0; X21 symbols on the brain owed | 19 | Standalone; picked 2026-10-26. A 21-part roadmap (X1-X21) in its section below |
+| 1 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival shipped in 0.32.0; X19 X-ray brief shipped in 0.34.0; X20 brief on the board shipped in 0.35.0 (repo on the line in 0.36.0); X15 writes from any tool shipped in 0.37.0; X16 incremental refresh shipped in 0.38.0; X17 symbol graph (Python) shipped in 0.39.0; X-ray tuned for the agent, with the lean X11 test ledger, shipped in 0.40.0; X3 scar tissue next; X21 symbols on the brain owed | 19 | Every sail since 2026-10-26 has gone here. A 21-part roadmap (X1-X21) in its section below |
+| 1a | **X3 scar tissue** - the X-ray item being built now | 19 | Next in the X-ray build order. This row names whichever X-item is in progress and moves on when it ships |
+| 2 | **A calibration ledger** | 14 | New tables, so a migration. Follows X3: the lean X11 ledger (0.40.0) already records predictions, so it scores real data from day one |
+| 3 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
+| 4 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
+| 5 | **A referee for rival memory tools** | 17 | Only a fair comparison once 4 exists |
 | 6 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
-| 7 | **Pi bootstrap, scripted end to end** | - | Entered 2026-10-03. Rebuild a gingugu Pi from a blank card with no hand steps. `deploy/pi/` (gitignored, local only) covers stages 1-3; still manual: SSH hardening, the restricted per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`. Stage 4 predates `gingugu remote` + the proxy and needs a rewrite. Decide whether it stays local or ships |
-| 8 | Session flight recorder (low priority) | 18 | Check prior art first |
+| 7 | Session flight recorder (low priority) | 18 | Check prior art first |
 | - | **Template/sibling noise in retrieval - PARKED** | 1 | Ten dead fixes and no live hypothesis; see below |
 
 ### Previous board (2026-09-28), kept for its numbering
@@ -2348,7 +2352,7 @@ read never fires, and a write through the shell bypasses X-ray entirely. X1-X13
 describe what is stored; X14-X18 add how the map reaches the agent, how it
 stays current, and how it is seen.
 
-**Build order:** X14, X19, X20, X15, X16, X17, then X3, then X4/X6/X7/X8, with X21 no later
+**Build order:** X14, X19, X20, X15, X16, X17 (all shipped by 0.40.0), then X3 (next), then X4/X6/X7/X8, with X21 no later
 than the first of X7/X9 that needs symbols on the brain. X18 ships in
 slices alongside them. IDs are stable references, not the order.
 
