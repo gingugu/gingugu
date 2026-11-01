@@ -96,6 +96,32 @@ def remote_warmup(
     return context if isinstance(context, str) and context else None
 
 
+def remote_scars(target: RemoteTarget, namespace: str, basename: str) -> list[dict] | None:
+    """X3: the brain's memories in ``namespace`` naming ``basename``, or None."""
+    from .xray.scar_query import valid_basename
+
+    if not _NAME_RE.fullmatch(namespace) or not valid_basename(basename):
+        return None  # the brain would refuse it; nothing to send
+    reply = hook_remote.post(
+        target,
+        "/hook/scars",
+        {"namespace": namespace, "basename": basename},
+        timeout=hook_remote.SCARS_TIMEOUT_S,
+    )
+    hits = reply.get("scars") if isinstance(reply, dict) else None
+    if not isinstance(hits, list):
+        return None
+    for hit in hits:
+        if not isinstance(hit, dict):
+            return None
+        if not all(isinstance(hit.get(k), str) for k in ("id", "type", "title", "created_at")):
+            return None
+        paths = hit.get("paths")
+        if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
+            return None
+    return hits
+
+
 # --- tripwires ---------------------------------------------------------------
 
 
