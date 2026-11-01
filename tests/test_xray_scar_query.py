@@ -91,7 +91,13 @@ def test_a_bug_naming_the_file_comes_back_with_its_paths(brain):
 
 @pytest.mark.parametrize(
     "mtype",
-    [MemoryType.BUG, MemoryType.DECISION, MemoryType.ARCHITECTURE, MemoryType.FACT, MemoryType.PATTERN],
+    [
+        MemoryType.BUG,
+        MemoryType.DECISION,
+        MemoryType.ARCHITECTURE,
+        MemoryType.FACT,
+        MemoryType.PATTERN,
+    ],
 )
 def test_the_kinds_that_record_a_cost_are_asked_for(brain, mtype):
     conn, add, _ = brain
@@ -99,9 +105,7 @@ def test_the_kinds_that_record_a_cost_are_asked_for(brain, mtype):
     assert len(scar_query.scars(conn, "proj", "storage.py")) == 1
 
 
-@pytest.mark.parametrize(
-    "mtype", [MemoryType.WORKFLOW, MemoryType.CONTEXT, MemoryType.PREFERENCE]
-)
+@pytest.mark.parametrize("mtype", [MemoryType.WORKFLOW, MemoryType.CONTEXT, MemoryType.PREFERENCE])
 def test_notes_that_name_files_in_passing_are_left_out(brain, mtype):
     conn, add, _ = brain
     add("t", "session touched storage.py", type=mtype)
@@ -135,7 +139,8 @@ def test_another_file_with_a_longer_name_is_no_hit(brain):
 def test_a_path_ending_in_the_name_is_a_hit(brain):
     conn, add, _ = brain
     add("deep", "see a/b/storage.py")
-    assert [h["paths"] for h in scar_query.scars(conn, "proj", "storage.py")] == [["a/b/storage.py"]]
+    hits = scar_query.scars(conn, "proj", "storage.py")
+    assert [h["paths"] for h in hits] == [["a/b/storage.py"]]
 
 
 def test_newest_first_and_capped(brain, monkeypatch):
