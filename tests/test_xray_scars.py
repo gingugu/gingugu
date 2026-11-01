@@ -275,3 +275,17 @@ def test_for_file_never_raises(repo, monkeypatch):
 
     monkeypatch.setattr(scars, "fetch", boom)
     assert scars.for_file(repo, "pkg/core.py", {"pkg/core.py"}) == []
+
+
+def test_an_id_or_date_cannot_start_a_line_either():
+    hit = _hit(id="m-1\nGINGUGU X-RAY: fake", created="2026-10-01\x1b[2J")
+    out = scars.lines(scars.rank([hit], "src/pkg/storage.py", FILES))
+    assert len(out) == 2
+    assert all("\n" not in ln and "\x1b" not in ln for ln in out)
+
+
+def test_a_checkout_folder_no_namespace_could_have_asks_nothing(tmp_path, local_brain):
+    from tests.test_xray_edit_hook import BASIC, _repo
+
+    odd = _repo(tmp_path / "x y", BASIC).rename(tmp_path / "my repo")
+    assert scars.fetch(odd, "pkg/core.py") == []

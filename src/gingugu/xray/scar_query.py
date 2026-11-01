@@ -19,9 +19,12 @@ SCAR_TYPES = ("bug", "decision", "architecture", "fact", "pattern")
 MAX_HITS = 200
 TITLE_CHARS = 200
 MAX_PATHS = 64
+MAX_TOKEN_CHARS = 256
 # FTS matches the name as a phrase ("storage py"), so prose can match too; the
 # token check after it is the real test. Read past that many to fill MAX_HITS.
-_FTS_POOL = 1000
+_FTS_POOL = 500
+# Only the head of a memory is scanned for paths: bounds the regex on a huge one.
+_CONTENT_CHARS = 20000
 
 _EXTS = (
     "py pyi ts tsx mts cts js jsx mjs cjs go rs rb php lua luau "
@@ -38,7 +41,7 @@ _TOKEN = re.compile(
 _BASENAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._-]{0,92}\.[A-Za-z0-9]{1,6}")
 
 _SQL = """
-SELECT m.id, m.type, m.title, m.content, m.created_at
+SELECT m.id, m.type, substr(m.title, 1, 1000), substr(m.content, 1, {chars}), m.created_at
   FROM memories_fts f
   JOIN memories m   ON m.rowid = f.rowid
   JOIN namespaces n ON n.id = m.namespace_id
@@ -61,7 +64,7 @@ def path_tokens(text: str) -> list[str]:
     out: list[str] = []
     for match in _TOKEN.finditer(text):
         token = match.group(1)
-        if token not in out:
+        if len(token) <= MAX_TOKEN_CHARS and token not in out:
             out.append(token)
             if len(out) == MAX_PATHS:
                 break
@@ -72,7 +75,7 @@ def scars(conn: sqlite3.Connection, namespace: str, basename: str) -> list[dict]
     """Memories in ``namespace`` that name a file called ``basename``, newest first."""
     if not valid_basename(basename):
         return []
-    sql = _SQL.format(types=",".join("?" * len(SCAR_TYPES)))
+    sql = _SQL.format(types=",".join("?" * len(SCAR_TYPES)), chars=_CONTENT_CHARS)
     try:
         rows = conn.execute(sql, (f'"{basename}"', namespace, *SCAR_TYPES, _FTS_POOL)).fetchall()
     except sqlite3.OperationalError:

@@ -31,7 +31,7 @@ def test_path_tokens_finds_full_paths_and_bare_names():
 
 @pytest.mark.parametrize(
     "noise",
-    ["0.40.0", "v0.29.0", "e.g.", "beepboop.local", "i.e. this", "gingugu.com", "1.5x faster"],
+    ["0.40.0", "v0.29.0", "e.g.", "host.example.local", "i.e. this", "gingugu.com", "1.5x faster"],
 )
 def test_path_tokens_ignores_versions_hosts_and_prose(noise):
     assert scar_query.path_tokens(f"shipped {noise} today") == []
@@ -175,3 +175,8 @@ def test_a_name_that_is_not_a_plain_file_name_is_refused_quietly(brain, bad):
 def test_an_unknown_namespace_is_empty_not_an_error(brain):
     conn, _, _ = brain
     assert scar_query.scars(conn, "nope", "storage.py") == []
+
+
+def test_an_overlong_token_is_no_path():
+    long = "a/" * 200 + "x.py"
+    assert scar_query.path_tokens(f"see {long} and b.py") == ["b.py"]

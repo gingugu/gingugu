@@ -17,6 +17,7 @@ no brain, a refused grant or a failed query is no scars.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import NamedTuple
 
@@ -24,6 +25,7 @@ from . import scan
 
 TOP_N = 3
 _TITLE_SHOWN = 120
+_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")  # a namespace name, as the brain takes
 # What a memory of each type costs: a bug is a scar; a decision or the shape of
 # the code is why it is the way it is; a fact or pattern is a note about it.
 WEIGHTS = {"bug": 3.0, "decision": 2.0, "architecture": 2.0, "fact": 1.0, "pattern": 1.0}
@@ -46,7 +48,9 @@ def project_namespace(root: Path) -> str:
     """The checkout's project namespace: its folder name, or for a worktree
     its main checkout's - a worktree's own folder names a branch, not a repo."""
     try:
-        proc = scan.git(root, "rev-parse", "--path-format=absolute", "--git-common-dir")
+        proc = scan.git(
+            root, "rev-parse", "--path-format=absolute", "--git-common-dir", timeout=5.0
+        )
         common = Path(proc.stdout.decode().strip()) if proc.returncode == 0 else None
     except (OSError, ValueError, scan.XrayError):
         common = None
@@ -89,11 +93,11 @@ def rank(hits: list[dict], rel: str, files: set[str]) -> list[Scar]:
     return out
 
 
-def _flat(text: str) -> str:
-    """One line, printable: a title is the user's text and must not start a
-    line of its own in the agent's context."""
-    flat = " ".join("".join(c if c.isprintable() else " " for c in text).split())
-    return flat if len(flat) <= _TITLE_SHOWN else flat[: _TITLE_SHOWN - 3] + "..."
+def _flat(text: str, most: int = _TITLE_SHOWN) -> str:
+    """One line, printable: every field is the brain's text and none may start
+    a line of its own in the agent's context."""
+    flat = " ".join("".join(c if c.isprintable() else " " for c in str(text)).split())
+    return flat if len(flat) <= most else flat[: most - 3] + "..."
 
 
 def lines(found: list[Scar]) -> list[str]:
@@ -103,7 +107,8 @@ def lines(found: list[Scar]) -> list[str]:
     n = len(found)
     out = [f"Scar tissue: {n} memor{'y names' if n == 1 else 'ies name'} this file:"]
     for s in found[:TOP_N]:
-        out.append(f"- {s.type} {s.created_at[:10]}: {_flat(s.title)} [{s.id}]")
+        day, mid = _flat(s.created_at[:10], 10), _flat(s.id, 64)
+        out.append(f"- {s.type} {day}: {_flat(s.title)} [{mid}]")
     if n > TOP_N:
         out.append(f"(+{n - TOP_N} more; memory_search ids=<id> reads one in full)")
     return out
@@ -117,6 +122,8 @@ def fetch(root: Path, rel: str) -> list[dict]:
     if basename == "__init__.py":
         return []  # every package has one; the name says nothing
     namespace = project_namespace(root)
+    if not _NAME.fullmatch(namespace):
+        return []  # a checkout can name its own folder anything; ask for no odd name
     from .. import hook_grant, hook_remote
 
     try:
