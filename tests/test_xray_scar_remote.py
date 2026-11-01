@@ -98,9 +98,9 @@ def test_the_client_asks_for_one_namespace_and_one_name(remote, target):
     from gingugu.hook_remote_flows import remote_scars
 
     _, install = remote
-    brain = install({"/hook/scars": {"scars": [HIT]}})
+    stub = install({"/hook/scars": {"scars": [HIT]}})
     assert remote_scars(target, "proj", "storage.py") == [HIT]
-    assert brain.calls == [("/hook/scars", {"namespace": "proj", "basename": "storage.py"})]
+    assert stub.calls == [("/hook/scars", {"namespace": "proj", "basename": "storage.py"})]
 
 
 @pytest.mark.parametrize(
@@ -127,7 +127,7 @@ def test_a_name_the_brain_would_refuse_is_never_sent(remote, target):
     from gingugu.hook_remote_flows import remote_scars
 
     _, install = remote
-    brain = install({"/hook/scars": {"scars": []}})
+    stub = install({"/hook/scars": {"scars": []}})
     assert remote_scars(target, "My Repo", "storage.py") is None
     assert remote_scars(target, "proj", "a b.py") is None
-    assert brain.calls == []
+    assert stub.calls == []

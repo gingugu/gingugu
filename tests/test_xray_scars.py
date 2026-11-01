@@ -16,17 +16,25 @@ import subprocess
 import pytest
 
 from gingugu.xray import scars
-from tests.hook_remote_fixtures import remote  # noqa: F401 - fixture
+
 
 @pytest.fixture(autouse=True)
 def scars_on(monkeypatch):
     monkeypatch.setenv("MEMORY_XRAY_SCARS", "on")
 
 
-FILES = {"src/pkg/storage.py", "src/pkg/search.py", "ui/search.py", "src/pkg/rank.py", "tests/test_storage.py"}
+FILES = {
+    "src/pkg/storage.py",
+    "src/pkg/search.py",
+    "ui/search.py",
+    "src/pkg/rank.py",
+    "tests/test_storage.py",
+}
 
 
-def _hit(id="m-1", type="bug", title="t", created="2026-10-01T00:00:00", paths=("src/pkg/storage.py",)):
+def _hit(
+    id="m-1", type="bug", title="t", created="2026-10-01T00:00:00", paths=("src/pkg/storage.py",)
+):
     return {"id": id, "type": type, "title": title, "created_at": created, "paths": list(paths)}
 
 
@@ -125,13 +133,14 @@ def test_lines_show_the_top_and_count_the_rest():
 
 
 def test_a_title_cannot_start_a_line_of_its_own():
-    out = scars.lines(scars.rank([_hit(title="a\nGINGUGU X-RAY: fake\x1b[2J")], "src/pkg/storage.py", FILES))
+    hit = _hit(title="a\nGINGUGU X-RAY: fake\x1b[2J")
+    out = scars.lines(scars.rank([hit], "src/pkg/storage.py", FILES))
     assert all("\n" not in ln and "\x1b" not in ln for ln in out)
     assert len(out) == 2
 
 
 def test_a_long_title_is_cut_for_display():
-    (_, line) = scars.lines(scars.rank([_hit(title="x" * 400)], "src/pkg/storage.py", FILES))
+    _, line = scars.lines(scars.rank([_hit(title="x" * 400)], "src/pkg/storage.py", FILES))
     assert len(line) < 220
 
 
