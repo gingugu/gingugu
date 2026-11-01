@@ -53,7 +53,7 @@ graph LR
     subgraph MCP Server Process
         B[Server Layer<br/>stdio · streamable HTTP]
         V[POST /token/derive<br/>derived tokens]
-        U[POST /hook/*<br/>recall · tripwires · trip · warmup · inbox]
+        U[POST /hook/*<br/>recall · tripwires · trip · warmup · inbox · scars]
         UI[GET /ui/api/*<br/>Explorer reads, owner token only]
         C[Tool Handlers]
         D[Search Engine]
@@ -147,6 +147,8 @@ graph LR
     PH -->|local: read-only sweep| H
     PH -->|remote brain: recall| U
     Y -->|remote brain: rules, trips| U
+    Y -->|remote brain: scar tissue| U
+    PO -->|remote brain: scar tissue| U
     Z -->|remote brain: warm-up| U
     U -->|reads read-only| H
     U -->|logs hook prompts and trips| T
@@ -170,8 +172,10 @@ The `PreToolUse` path is the other client-side entry: Claude Code runs
 match, denies the call once with the memory as the reason and logs the trip to
 `query_log`. It also denies a blind edit of a source file (Python, TypeScript/JavaScript,
 Go) that other files import - one this session never read or wrote - once, with its direct
-importers, reach and nearest tests (the X-ray): the graph
-is built locally from the checkout and never touches the brain, the deny is not
+importers, reach and nearest tests (the X-ray), plus the scar tissue for that file
+(the repo's bug, decision and architecture memories that name it): the graph
+is built locally from the checkout and never touches the brain (only the scar lookup can,
+over `POST /hook/scars` in remote mode), the deny is not
 logged, and when a tripwire fires on the same call the two share one deny. It
 also runs the checkout guard, which denies every time a git command that would
 move or empty a repo's shared primary checkout. It never touches the MCP server
@@ -182,14 +186,16 @@ or `Glob` and adds context next to the result, never a block. The first such cal
 in a repo per session brings a map (file count, languages, import edges, tests,
 the most-imported files, entry points), and each source file read brings its
 neighbourhood (rank, importers, nearest tests, imports, and for Python the most-called
-definitions), once per file per session. `gingugu hook edit` runs after every `Edit`,
+definitions), once per file per session, followed by that file's scar tissue (`Scar
+tissue: N memories name this file:` and the top three; derived at read time from the
+repo's own project namespace, never stored; switch `MEMORY_XRAY_SCARS`). `gingugu hook edit` runs after every `Edit`,
 `Write` or `MultiEdit` (doorway `post_edit_xray.py`): after an edit of a Python file it
 names the cross-file callers of the definitions the new text landed in and the tests
 nearest them, once per definition per session, from the cached symbol graph. Each
 such note records its test predictions in a local ledger, and the Bash `PostToolUse`
 path records the failed test files of every `pytest` run; `gingugu xray score` says
 how the predictions fared. It uses the same locally built graph cache as the edit
-check, never touches the brain or the MCP server process, and `MEMORY_XRAY_MAP=off`
+check and never touches the MCP server process (the brain is asked only for scar tissue, in remote mode), and `MEMORY_XRAY_MAP=off`
 turns off the map and neighbourhood; the note after an edit and the test ledger
 follow `MEMORY_XRAY_TRIPWIRE`.
 
@@ -1724,6 +1730,27 @@ by the edit tripwire, and one the tripwire showed is not repeated. `MEMORY_XRAY_
 turns both off. A repo the session never touched, reached only by a `cd` inside a
 script, is not watched.
 
+**Scar tissue: what a file has cost before (X3).** The first `Read` of a source file
+in a session, and the deny reason of a blind edit, also name the repo's memories that
+mention the file: `Scar tissue: N memories name this file:`, the top three as
+`- <type> <date>: <title> [<id>]`, and `(+K more; memory_search ids=<id> reads one in
+full)`. A leaf file with no importers still gets its scar lines. An informed edit adds
+nothing, since its scars came with the read. It is derived at read time and stored
+nowhere: no migration, no table. The brain half (`xray/scar_query.py`) runs an FTS5
+phrase match on the file's basename in one project namespace, over bug, decision,
+architecture, fact and pattern memories that are not deprecated, newest first, at most
+200 hits, and keeps a hit only if one of its path-like tokens ends in that basename; it
+never sees a checkout. The client half (`xray/scars.py`) resolves each hit's path
+tokens against the checkout's source files, by the full path or a `/`-bounded suffix
+that only one file has (a name two files share is never guessed, so counts are a lower
+bound), and scores type weight (bug 3, decision/architecture 2, fact/pattern 1) divided
+by the number of repo source files the memory names, newest first on a tie. Only the
+repo's own project namespace is read, never `crow`, and in a git worktree that is the
+main checkout's folder name. With a remote brain the lookup is `POST /hook/scars`
+(`{namespace, basename}` -> `{scars: [...]}`, owner token only, 3s client timeout); any
+failure, including a brain too old to have the route, reads as no scars. The client's
+`MEMORY_GRANT` is honoured, and `MEMORY_XRAY_SCARS=off` disables it.
+
 The snapshot is the checkout at `path` (default: the working directory),
 fingerprinted on every call and re-extracted when its content changed
 (`freshness: current`); a `fingerprint` names one exactly (`exact`); with
@@ -2131,7 +2158,7 @@ src/gingugu/
 ├── serve_tls.py            # serve's TLS: auto (https off loopback) / on / off, generated self-signed leaf or your own
 ├── serve_tokens.py         # Serve tokens: hashed store, scoped + per-machine owner tokens
 ├── serve_derive.py         # POST /token/derive: owner token -> short-lived derived token
-├── serve_hooks.py          # POST /hook/recall|tripwires|trip|warmup|inbox: the brain's side of remote-mode hooks
+├── serve_hooks.py          # POST /hook/recall|tripwires|trip|warmup|inbox|scars: the brain's side of remote-mode hooks
 ├── derived_tokens.py       # Derived tokens: in-memory, hashed, TTL-bound; never on disk
 ├── proxy.py                # Remote mode: stdio <-> streamable-HTTP relay, reconnect, refresh
 ├── proxy_auth.py           # Proxy's /mcp auth: per-request token, renew + retry once on 401
@@ -2140,7 +2167,7 @@ src/gingugu/
 ├── proxy_vault.py          # Remote mode: the machine's credential vault, screened (reveal refused) and exposed as a server
 ├── proxy_vault_link.py     # Remote mode: runs that vault behind an in-memory MCP session so it can ask the user
 ├── proxy_xray.py           # Remote mode: code_xray reads the checkout here, asks the brain by fingerprint
-├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), tool_xray (the PreToolUse X-ray decision, kept apart from tool_hook), bash_hook + bash_state (X15: a shell command's dirty-set snapshot and diff; the repos a session touched), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only), board_nudge (X20 sender: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line), board_brief (X20: the brief a board post's `xray: <range>` line asks for, rendered on the receiver), repo_id (X20: a checkout's identity, and the local checkout an `xray: <repo> <range>` line names), resolve_walk + parse_cache (X16: content-only import records, the per-file parse cache), symbols_walk + symbols (X17: the Python symbol graph, client only), edit_symbols (X17: the tripwire's `Edit lands in` lines), callers_tool (X17: `code_xray` `callers`, local only), edit_note (the note after an edit), ledger (X11 lean: test predictions vs pytest failures)
+├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), tool_xray (the PreToolUse X-ray decision, kept apart from tool_hook), bash_hook + bash_state (X15: a shell command's dirty-set snapshot and diff; the repos a session touched), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only), board_nudge (X20 sender: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line), board_brief (X20: the brief a board post's `xray: <range>` line asks for, rendered on the receiver), repo_id (X20: a checkout's identity, and the local checkout an `xray: <repo> <range>` line names), resolve_walk + parse_cache (X16: content-only import records, the per-file parse cache), symbols_walk + symbols (X17: the Python symbol graph, client only), edit_symbols (X17: the tripwire's `Edit lands in` lines), callers_tool (X17: `code_xray` `callers`, local only), edit_note (the note after an edit), ledger (X11 lean: test predictions vs pytest failures), scar_query (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace), scars (X3, client side: resolves and ranks those hits against the checkout)
 ├── xray_cli.py             # `gingugu xray brief` (--range / --files / --path / --json) and `gingugu xray score` (--json)
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine
@@ -2245,7 +2272,7 @@ src/gingugu/
 ├── claude_trust.py         # whether Claude Code trusts a folder (untrusted-minion warning)
 ├── recall_pick.py          # pick(): the recall pipeline shared by the local hook and /hook/recall
 ├── hook_remote.py          # hooks' transport to a remote brain: owner token, None on any failure
-├── hook_remote_flows.py    # remote recall / warm-up / tripwire rules (60s cache) / trip report; _sendable name filter
+├── hook_remote_flows.py    # remote recall / warm-up / scars (X3) / tripwire rules (60s cache) / trip report; _sendable name filter
 ├── tripwire.py             # Tripwire matching (pure regex) + load_tripwires, the remote-brain seam
 ├── board.py                # The agent board store: post / inbox / thread / claim (compare-and-set) / done
 ├── board_events.py         # BoardBus: the subscriptions/listen bus with a synchronous emit

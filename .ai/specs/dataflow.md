@@ -561,7 +561,9 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
           top 5 direct importers by rank, top 5 nearest tests (a test named for the
           file first); for an Edit/MultiEdit, `Edit lands in` lines for the
           definitions each old_string sits in (X17, xray/edit_symbols) and a
-          lower-bound line; import-based-estimate caveat last
+          lower-bound line; the same scar tissue lines as on a Read (X3: the
+          blind edit is the one that never saw them); import-based-estimate
+          caveat last
       → X-ray Bash snapshot (xray/tool_xray.reason → xray/bash_hook.before; same
         switch MEMORY_XRAY_TRIPWIRE; never denies, prints nothing)
           see "X-ray of a shell command's writes (X15)" below
@@ -623,14 +625,23 @@ PostToolUse event (Read | Grep | Glob)  →  .claude/hooks/post_tool_xray.py (pu
         up to 4 lines: rank k of N, direct importers, nearest tests, direct
         imports; a Python file adds `Most called: ...`
         (X17 symbol cache); silent for a file with no edges
+      scar tissue (X3, MEMORY_XRAY_SCARS; xray/scars.py): the same first Read also
+        looks up the memories that name the file: the repo's own project namespace
+        only (the main checkout's folder name in a worktree; never crow), FTS5
+        phrase match on the basename (xray/scar_query, local DB or POST /hook/scars),
+        hits resolved against the checkout's source files and ranked by type weight
+        over files named; appends `Scar tissue: N memories name this file:` and the
+        top 3, and a leaf file with no neighbourhood gets them under a
+        `GINGUGU X-RAY: <path>.` header. Derived at read time, nothing stored
   → emit additionalContext beside the tool result (output capped under 9000 chars)
 ```
 
 **Inject, never block.** The map is delivered next to the result of a call that
 already ran, so it cannot stop anything and every failure exits 0 silently. Its
 claim directories are separate from `xray-shown-<session>/`; a file's
-`xray-read-<session>/` claim is what tells the edit tripwire the edit is not blind. Entirely local: the checkout
-and the graph cache, no request to the brain, identical in remote mode.
+`xray-read-<session>/` claim is what tells the edit tripwire the edit is not blind. Local: the checkout
+and the graph cache, identical in remote mode; the one brain request is the X3 scar lookup, and a failure
+there is no scars.
 
 **The brief (X19) is the same map, asked for.** For an agent that fires neither
 hook, `code_xray` `action: "brief"` (or `gingugu xray brief`) runs
@@ -833,8 +844,9 @@ UserPromptSubmit → `gingugu hook prompt`
 
 PreToolUse → `gingugu hook tool`
   → minion fence + spawn stash (local, unchanged)
-  → X-ray edit check and the X15 Bash snapshot: entirely local (checkout, graph
-    cache, tripped state); no request to the brain, so it is identical in remote mode
+  → X-ray edit check and the X15 Bash snapshot: local (checkout, graph
+    cache, tripped state); the one request to the brain is the X3 scar lookup,
+    POST /hook/scars {namespace, basename} -> {scars} (3s; any failure = no scars)
   → rules: hook-sessions/tripwire-rules-<sha(url, namespaces)>.json if < 60s old,
            else POST /hook/tripwires {namespaces}; on failure the stale copy
            (namespaces grant-narrowed and _sendable-filtered, as for recall)
@@ -844,9 +856,9 @@ PreToolUse → `gingugu hook tool`
 
 PostToolUse → `gingugu hook read` / `gingugu hook bash` / `gingugu hook edit`
   → X-ray map on arrival, the X-ray of a shell command's writes (X15) plus the test
-    ledger's pytest outcomes, and the note after an edit: entirely local (checkout,
-    caches, claim dirs, ledger); no request to the brain, so all are identical in
-    remote mode
+    ledger's pytest outcomes, and the note after an edit: local (checkout,
+    caches, claim dirs, ledger); the only request to the brain is the X3 scar
+    lookup on a Read, POST /hook/scars, so the rest is identical in remote mode
 
 SubagentStart → `gingugu hook subagent`
   → take the stashed task + read the agent file's grant (local), narrowed to
