@@ -24,7 +24,8 @@ X-ray brief RELEASED in 0.34.0 (#157); X20 brief on the board RELEASED in 0.35.0
 the line in 0.36.0 (#161); X15 writes from any tool RELEASED in 0.37.0 (#163); X16 incremental refresh
 RELEASED in 0.38.0 (#164); X17 symbol graph (Python)
 RELEASED in 0.39.0 (#165); X-ray tuned for the agent
-RELEASED in 0.40.0 (#166); X21 symbols on the brain owed** (2026-10-30). The
+RELEASED in 0.40.0 (#166); X3 scar tissue BUILT on feature/xray-scars, not released
+(2026-11-01); X21 symbols on the brain owed** (2026-10-30). The
 end goal was restated: a sophisticated map before any work starts, so the map
 reaches the agent on reads and on any write, not only through the edit tools. New
 items X14-X21 (section 19); build order X14, X19, X20, X15, X16, X17, then X3.
@@ -76,14 +77,40 @@ session; a graph build killed by the hook timeout is not retried in that session
 later reads 0.5s. Switch: `MEMORY_XRAY_MAP`. Follow-ups: printable file names reach the agent verbatim (quoted
 only when they hold control characters) - the edit hook has the same exposure.
 
-**X3 scar tissue** (design approved 2026-10-28, now after X14-X17; it plugs into
-the X14 read hook). X3 links memories (bugs, decisions, gotchas) to the files they are
-about, so an edit surfaces both what depends on the file and what it has cost before.
-Derived at read time, not stored: the brain FTS-searches the project namespace for a
-file's basename and the client resolves the hits against the checkout; scored by type
-(bug > decision/architecture > fact/pattern; workflow/context dropped), divided by the
-number of repo files a memory names, recency as tiebreak. Measured: 472 of 678 gingugu
-memories name a repo file.
+**X3 scar tissue - BUILT on feature/xray-scars (2026-11-01), not released; version stays
+0.40.0.** (Design approved 2026-10-28; it plugs into the X14 read hook and the X2
+tripwire.) X3 links memories (bugs, decisions, gotchas) to the files they are about, so
+a file surfaces both what depends on it and what it has cost before. On the first Read of
+a source file in a session, and in the deny reason of a blind edit, X-ray appends
+`Scar tissue: N memories name this file:`, the top 3 as `- <type> <date>: <title> [<id>]`
+and `(+K more; memory_search ids=<id> reads one in full)`. A leaf file with no importers
+(no neighbourhood) still gets its scar lines under a `GINGUGU X-RAY: <path>.` header. An
+informed edit gets no extra friction; its scars came with the read. Derived at read time,
+never stored: no migration, no new table, schema unchanged.
+Brain side `xray/scar_query.py` (`scars(conn, namespace, basename)`, `path_tokens`,
+`valid_basename`): an FTS5 phrase match on the basename in ONE project namespace, types
+bug/decision/architecture/fact/pattern only (workflow/context/preference left out),
+non-deprecated, newest first, at most 200 hits; it keeps a hit only if a path-like token
+ends in the basename, and returns id/type/title (<=200)/created_at/paths (<=64 tokens).
+It never sees a checkout. Remote: owner-only `POST /hook/scars` in `serve_hooks.py`,
+client `hook_remote_flows.remote_scars` (3 s `SCARS_TIMEOUT_S`); any failure is no
+scars, never a local fallback. Client side `xray/scars.py`: resolves each hit's path
+tokens against the checkout's source files (the full path, or a `/`-bounded suffix only
+one file has; a name two files share is never guessed, so counts are a lower bound);
+score = type weight (bug 3, decision/architecture 2, fact/pattern 1) / number of repo
+source files the memory names, newest first on a tie; reads only the repo's own project
+namespace, never crow; in a git worktree the namespace is the MAIN checkout's folder
+name (`git rev-parse --git-common-dir`); `__init__.py` skipped; honours `MEMORY_GRANT`
+(no read on the namespace, nothing); never raises. Switch `MEMORY_XRAY_SCARS` (default
+on). Tests: `test_xray_scar_query.py`, `test_xray_scar_remote.py`, `test_xray_scars.py`,
+`test_xray_scars_wiring.py` (101); a security review hardened rendering (every field
+flattened), bounded the scan (first 20,000 characters, FTS pool 500, tokens <= 256) and
+validates the derived namespace; a conftest autouse sets `MEMORY_XRAY_SCARS=off` so no
+test reads the developer's real brain. Measured on the real gingugu brain (760 memories):
+`edit_hook.py` 2 scars, both on point; `database.py` 17, top three real bugs and
+architecture notes; `storage.py` 31; `search.py` 15 FTS hits but 0 scars, because the
+bare name is shared by two files. Remote mode needs the brain on the release that has
+`/hook/scars`; an older brain answers 404, which reads as no scars.
 
 X1 follow-ups (not built): `TYPE_CHECKING` imported under an alias; a module
 present under both the repo root and `src/` (reported, not guessed); git
@@ -2362,7 +2389,7 @@ slices alongside them. IDs are stable references, not the order.
 |---|---|---|---|
 | X1 | **Blast radius** (SHIPPED in 0.29.0, #139) - persisted import graph keyed by repo + commit; the agent builds or refreshes it when missing or stale; spreading activation over reverse imports, ranked by directed PageRank | dream graph math, spreading activation | The foundation. Persist outside `memories` so the store's own graph is not flooded |
 | X2 | **Tripwire on edit (SHIPPED in 0.29.0, #142)** - a hook that names a file's dependents, top ranked first, before the edit lands | tripwires, hooks | Since the X-ray tuning only a blind edit (an imported file this session never read or wrote) is denied, once, with direct importers, reach and nearest tests; an informed edit gets the post-edit callers note instead. Own switch `MEMORY_XRAY_TRIPWIRE` |
-| X3 | **Scar tissue** - link memories (bugs, decisions, gotchas) to the files they are about; an edit surfaces both what depends on the file and what it has cost before | memory store, relations, recall | The part no code-analysis tool can have, because none holds the history |
+| X3 | **Scar tissue (BUILT on feature/xray-scars, 2026-11-01; not released)** - link memories (bugs, decisions, gotchas) to the files they are about; a first Read and a blind-edit deny surface both what depends on the file and what it has cost before | memory store, FTS5, X14 read hook, X2 tripwire | The part no code-analysis tool can have, because none holds the history. Derived at read time, never stored: the brain FTS-matches the file's basename in the project namespace and the client resolves the hits against the checkout's source files, so there is no migration. Own switch `MEMORY_XRAY_SCARS` |
 | X4 | **History as a second graph** - co-change coupling (files that change together without importing each other), churn x centrality x authors as hotspots, per-commit X-ray diffs as architectural drift | git log, dream proposal queue | Drift can run in the nightly dream pass and stage proposals |
 | X5 | **Module boundaries** - communities that hold up on import graphs | dream clusters | Label propagation fails as-is (see above); needs a decided approach, not a knob |
 | X6 | **Blind-spot map** - centrality x low churn x no tests x single author: where a change would reach furthest with the least review | X1, X4 | The attacker's target list, run first by the defender |
