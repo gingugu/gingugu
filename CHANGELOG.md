@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.45.0] - 2026-11-02
+
 ### Added
 
 - **Docs map (X22): which docs cite a file.** A runbook names the scripts and configs it
