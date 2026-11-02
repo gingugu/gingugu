@@ -90,7 +90,7 @@ graph LR
         P[(proposals<br/>queue)]
         Q[(activity<br/>heartbeat)]
         R[(dream_lock)]
-        T[(query_log<br/>questions asked)]
+        T[(query_log · query_acts<br/>questions asked, what came of them)]
         W[(tripwires<br/>action triggers)]
         BP[(board_posts · board_reads<br/>agent board)]
         XR[(xray_snapshots · files · edges<br/>codebase X-ray)]
@@ -124,7 +124,7 @@ graph LR
     K --> H
     K --> J
     C -->|stamps every tool call| Q
-    C -->|records each query| T
+    C -->|records each query, and each fetch · update · relate · forget| T
     C -->|add · list · remove · test| W
     C -->|post · inbox · read · claim · done| BP
     C -->|ingest · refresh · blast · overview| XR
@@ -388,10 +388,12 @@ CREATE TABLE query_log (
     query       TEXT NOT NULL,  -- stripped, capped at MAX_QUERY_CHARS (2000)
     namespaces  TEXT NOT NULL,  -- comma-separated scope searched, or '*' for every namespace
     result_ids  TEXT NOT NULL,  -- JSON array of memory ids, rank order, de-duplicated
-    created_at  TEXT NOT NULL
+    created_at  TEXT NOT NULL,
+    extra_ids   TEXT NOT NULL DEFAULT '[]'  -- returned beside the ranked hits (022)
 );
 
 CREATE INDEX idx_query_log_created ON query_log(created_at);
+CREATE INDEX idx_query_log_session ON query_log(session_id, created_at);  -- 022
 ```
 
 One row per query (migration 015). `access_log` has one row per *returned
@@ -412,6 +414,38 @@ bookkeeping.
 **Retention:** never pruned. `access_log` can be trimmed because its aggregate
 lives on `memories.access_count`; nothing summarises `query_log`, so its rows
 are the only copy.
+
+`extra_ids` (migration 022) holds what `memory_recall` returned beside its ranked
+hits - related extras and capability pointers - never repeating a ranked hit; it is
+written only when non-empty, so a store not yet at 022 still logs everything else.
+The prompt hook strips Claude Code's `<task-notification>` blocks before it searches
+or logs (client and brain), so a finished background command is not a prompt.
+
+#### `query_acts`
+```sql
+CREATE TABLE query_acts (
+    id          TEXT PRIMARY KEY,
+    session_id  TEXT,           -- MCP session id; NULL if unknown
+    act         TEXT NOT NULL,  -- fetch | excerpt | update | relate | forget
+    memory_id   TEXT NOT NULL,  -- no foreign key: a hard delete keeps its acts
+    query_id    TEXT,           -- the query_log row that surfaced it, or NULL
+    rank        INTEGER,        -- its 1-based rank there; NULL if it was an extra
+    created_at  TEXT NOT NULL
+);
+
+CREATE INDEX idx_query_acts_query ON query_acts(query_id);
+CREATE INDEX idx_query_acts_created ON query_acts(created_at);
+```
+
+What a session did with what a query returned (migration 022): the label the
+paraphrase question set needs, tied to its query when the act happens because it
+cannot be recovered afterwards (updates and relations carry no session). Written by
+`memory_search` with `ids` (`fetch`), `memory_excerpt`, `memory_update`,
+`memory_relate` (both ends, single or batch) and `memory_forget`, one row per
+distinct memory. `query_id` is the newest of the session's last 200 queries whose
+ranked hits (`rank` set) or extras (`rank` NULL) held the memory; an act no query
+surfaced is still a row. Best-effort like `query_log`: never commits on its own,
+swallows `sqlite3.Error`. Never pruned.
 
 #### `tripwires`
 ```sql
@@ -2237,7 +2271,7 @@ src/gingugu/
 │   ├── claim_derivation.py # Row migrations + claim backfill
 │   ├── runtime.py          # Coordination tables: activity, dream_lock
 │   ├── fields.py           # Write-time declared fields: provenance, about; FTS5 rebuild
-│   ├── queries.py          # The query log: query_log (migration 015)
+│   ├── queries.py          # The query log: query_log (migration 015); extra_ids + query_acts (022)
 │   ├── tripwires.py        # Tripwire triggers: tripwires (migration 016)
 │   ├── board.py            # The agent board: board_posts, board_reads (migration 017; 018 adds author_origin; 020 adds author_agent, recipient_agent)
 │   └── xray.py             # Codebase X-ray: xray_snapshots, xray_files, xray_edges (019); xray_files.lang/kind (021)
@@ -2245,6 +2279,7 @@ src/gingugu/
 ├── storage.py              # CRUD for the memories row and its transaction boundary
 ├── storage_derived.py      # The four satellite tables a memory drags along, plus the query log
 ├── query_log.py            # record(): one row per query; best-effort, never pruned
+├── query_acts.py           # record(): an act on a memory, tied to the session's query that surfaced it
 ├── tags.py                 # tags / memory_tags
 ├── access.py               # access_log; record (a real hit) vs touch (reactivation)
 ├── transactions.py         # atomic(): one BEGIN IMMEDIATE across components

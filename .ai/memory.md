@@ -95,7 +95,7 @@
 | `migrations/claim_derivation.py` | Row migrations (005-007, 009, 010) + `_backfill_claims`. Claims are stored rows, so improving the extractor changes nothing already on disk - every fix needs a migration that re-reads prose which never changed. Five exist for that one reason |
 | `migrations/runtime.py` | Coordination migrations (012): `activity`, `dream_lock`. Split from `schema.py` on the line between *state about memories* and *state about the processes touching them* - these carry no knowledge, survive no export, and a store that lost them would lose nothing a person put there |
 | `migrations/fields.py` | Migration 014: `provenance` and `about`, two write-time declared columns on `memories`. Both start NULL, no backfill - a guessed provenance would be the model-free-but-invented judgment the field exists to rule out. Rebuilds `memories_fts` (and its three sync triggers) in one transaction to index `about` alongside `title`/`content`, then runs FTS5's `rebuild` command. Re-runnable: checks `pragma_table_info` before each `ADD COLUMN` |
-| `migrations/queries.py` | Migration 015: `query_log`, the questions asked of the store. Its own module because it is neither structure, re-derivation, coordination state, nor a declared field - and because `access_log` cannot hold it: that table has one row per *returned memory*, so it never sees the question or a miss |
+| `migrations/queries.py` | Migration 015: `query_log`, the questions asked of the store; migration 022: `query_log.extra_ids` and `query_acts`, what a session then did with the answers. Its own module because it is neither structure, re-derivation, coordination state, nor a declared field - and because `access_log` cannot hold it: that table has one row per *returned memory*, so it never sees the question or a miss |
 | `migrations/board.py` | Migrations 017, 018 and 020. 017: `board_posts` (id, namespace_id cascade, parent_id cascade, author, author_session, recipient = persona or `*`, kind message\|task, status open\|claimed\|done, claimed_by, body, timestamps; indexes `idx_board_posts_inbox(namespace_id, recipient, status)`, `idx_board_posts_parent`) and `board_reads` (post_id cascade, reader, read_at; PK `(post_id, reader)`). Own tables so posts stay out of the graph and the ranking; `kind`/`status` validated in Python, not `CHECK`. Never pruned. 018 `_migration_018_author_origin`: `ALTER TABLE board_posts ADD COLUMN author_origin TEXT`, nullable, never backfilled (an old post's machine is unknown, and unknown keeps the old rule). 020 `_migration_020_agent_sessions`: nullable `board_posts.author_agent` (hash of the authoring agent session) and `recipient_agent` (the session a reply is routed to), never backfilled. Does not touch `memories` or `memories_fts` |
 | `migrations/tripwires.py` | Migration 016: `tripwires`, explicit per-memory triggers (tool-name regex + input regex) for the `PreToolUse` hook. Its own table because one memory can guard several calls and a trigger has its own lifecycle; `ON DELETE CASCADE` so a hard-deleted memory takes its tripwires with it. Does not touch `memories` or `memories_fts` |
 | `migrations/xray.py` | Migration 019: `xray_snapshots` (namespace cascade, `UNIQUE(namespace_id, fingerprint)`, `graph_digest`, commit, counts, coverage JSON, `last_used_at`; index on `(namespace_id, last_used_at)`), `xray_files` (PK `(snapshot_id, path)`, `is_test`, `is_entry`, `rank`), `xray_edges` (PK `(snapshot_id, src, dst)`, `kind`, `certain`, `implicit`; `(snapshot_id, src)` and `(snapshot_id, dst)` FKs into `xray_files`; index on `(snapshot_id, dst)`). Migration 021: `xray_files.lang` (default `python`) and `kind` (default `file`), resumable. Does not touch `memories` or `memories_fts` |
@@ -110,7 +110,8 @@
 | `board_watch_remote.py` | The remote half of `board watch`: derives a session token named for the persona (`proxy_auth.SessionTokens` + `brain_client`, as the proxy does), holds `subscriptions/listen` on `gingugu://board/inbox/<persona>` and `.../inbox/*` (subscribed before the first fetch, so a post landing between still wakes it), and refetches the inbox through the `board` tool on each update. A dropped stream reconnects with 1s to 30s backoff and refetches (no replay by spec); a refused machine token (`ProxyLost`) is fatal |
 | `board_watch_emit.py` | What `board watch` hands a harness. `line_for`: fields (`_FIELDS`) `id`, `parent_id` (null for a new thread), `from`, `origin` (null when unknown), `to`, `kind`, `namespace`, `body`, `text`, `xray` (the X20 brief, null without one); `text` labels the post `[gingugu board post from another agent]` ("from X on MACHINE" when the origin is known), a reply reads "reply from X in NS (post P, in reply to R)", body last inside `"""`, then the brief when there is one. `Emitter(cwd=)` renders a post's `xray:` brief via `board_brief.attach` from the watcher's cwd (or the named repo's local checkout), at most `MAX_BRIEFS_PER_BATCH` (3) per batch. `Cursor`: per persona + brain `(created_at, id)` in `<data dir>/board-watch/`, per-process tmp name, unreadable = start over. `Emitter`: prints, then execs, then advances the cursor (at-least-once). `--exec` gets the post on stdin + NUL/surrogate-safe `GINGUGU_POST_*` env, never in the command string; its stdout goes to stderr so it cannot forge an event; at most `MAX_EXEC_PER_BATCH` (10) per batch, own process group killed at 120s. In remote mode emit runs off the event loop |
 | `cli_usage.py` | The top-level `gingugu --help` text (`USAGE`), moved out of `server.py` to keep it small; lists `board watch` and `xray brief` |
-| `query_log.py` | `record(conn, *, tool, query, result_ids, namespaces, session_id=None)`: one row per query. Never commits, swallows `sqlite3.Error` (logs a warning) so retrieval never fails over bookkeeping. Blank queries are skipped; text is stripped and capped at `MAX_QUERY_CHARS` (2000). Never pruned |
+| `query_acts.py` | `record(conn, *, act, memory_ids, session_id)`: one `query_acts` row per distinct memory, tied to the newest of the session's last 200 queries that returned it (rank, or NULL for an extra). Never commits, swallows `sqlite3.Error`. `ACTS` = fetch, excerpt, update, relate, forget |
+| `query_log.py` | `record(conn, *, tool, query, result_ids, namespaces, session_id=None, extra_ids=None)`: one row per query. Never commits, swallows `sqlite3.Error` (logs a warning) so retrieval never fails over bookkeeping. Blank queries are skipped; text is stripped and capped at `MAX_QUERY_CHARS` (2000). Never pruned |
 | `models.py` | Memory / namespace / relation data models. Also owns `Provenance` (the `provenance` vocabulary: user-asserted/measured/file-derived/self-concluded, enforced at the application layer, never a SQL `CHECK`) and `MEMORY_COLUMNS` - the one declared `memories` column list - plus `memory_columns_sql()` / `memory_placeholders_sql()`. Every module that reads or inserts a memory row derives its SQL from these; private copies drifted and silently dropped `pinned`. Field normalizers live here too: `normalize_tag`, `normalize_metadata` |
 | `storage.py` | CRUD for the `memories` row itself, and the transaction boundary around it. Owns nothing else |
 | `storage_derived.py` | `DerivedTables`, the delegation surface for the four satellite tables a memory drags along (tags, access log, embeddings, claims), plus `log_query` for the query log (which hangs off a question, not a memory row; it stamps the MCP session id and commits). Mixed into `MemoryStore` ahead of `TransactionParticipant`, so it declares what it borrows under `TYPE_CHECKING` only - a real stub would sit earlier in the MRO and shadow the `_commit` it means to call |
@@ -423,7 +424,18 @@ gap between the count and the rows.
   order is the point. **Never pruned**: `access_log` keeps a 90-day window
   because its aggregate lives on `access_count`, but nothing summarises
   `query_log`, so the rows are the only copy. See `migrations/queries.py`,
-  `query_log.py`.
+  `query_log.py`. Migration 022 adds `extra_ids` (JSON, default `[]`: what a recall
+  returned beside its ranked hits - related extras, capability pointers; written only
+  when non-empty, so a pre-022 store still logs) and `idx_query_log_session`.
+- `query_acts` table (migration 022): `id`, `session_id`, `act` (fetch | excerpt |
+  update | relate | forget), `memory_id` (no FK: a hard delete keeps its acts),
+  `query_id` (the newest of the session's last 200 `query_log` rows whose hits or
+  extras held the memory, else NULL), `rank` (1-based in the ranked hits; NULL for an
+  extra), `created_at`; indexed on `query_id` and `created_at`. Written by
+  `memory_search ids`, `memory_excerpt`, `memory_update`, `memory_relate` (both ends,
+  single or batch) and `memory_forget` via `store.log_act` (`query_acts.py`):
+  best-effort, never commits, never pruned. The paraphrase question set's labels,
+  tied to their query at write time because updates and relations carry no session.
 - `tripwires` table (migration 016): `id`, `memory_id` (`REFERENCES
   memories(id) ON DELETE CASCADE`), `tool_pattern` (regex, full-matched against
   the tool name), `input_pattern` (regex, searched in the call's match text),
@@ -444,8 +456,8 @@ gap between the count and the rows.
   migration 021) and the directed PageRank computed at ingest; edges carry `kind`, `certain`, `implicit`, and both ends are foreign keys into the snapshot's files.
   The 5 most recently used snapshots per namespace are kept. See
   `migrations/xray.py`, `xray/store.py`. Scar tissue (X3) stores nothing: it is an FTS5
-  query over `memories` at read time (`xray/scar_query.py`), so the schema stays at 21.
-- Schema versioned via `PRAGMA user_version` (**currently 21**); migrations
+  query over `memories` at read time (`xray/scar_query.py`); X4/X6 are client caches.
+- Schema versioned via `PRAGMA user_version` (**currently 22**); migrations
   additive by default. Migration 006 adds no schema — it re-runs the claims
   backfill to repair DBs that reached v5 from pre-fix code and so can never
   run 005 again. Migration 007 adds `default_repo` and re-derives every claim
@@ -475,7 +487,8 @@ gap between the count and the rows.
   preserved. Migration 015 adds `query_log` (`migrations/queries.py`), purely
   additive: a store with no rows there behaves exactly as before. Migration 016
   adds `tripwires` (`migrations/tripwires.py`), likewise additive: no rows, no
-  change in behaviour. Migration 017 adds `board_posts` and `board_reads`
+  change in behaviour. Migration 022 adds `query_log.extra_ids` and `query_acts`,
+  likewise additive. Migration 017 adds `board_posts` and `board_reads`
   (`migrations/board.py`), additive too: empty tables, no change in behaviour.
   Migration 018 adds the nullable `board_posts.author_origin`, never backfilled:
   old posts keep the old inbox rule. Migration 019 adds the X-ray tables
