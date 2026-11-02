@@ -29,6 +29,8 @@ _WORDS = {"A": "added", "M": "modified", "D": "deleted", "R": "renamed"}
 # Past this the blast lists alone could crowd the changed files out of the text.
 MAX_LIMIT = 50
 MAX_DOCS_SHOWN = 5
+# Files per docs section: the changed-file list must not be crowded out of the text.
+MAX_DOC_ROWS = 10
 # The range may be another agent's choice, and a brief can run inside a hook.
 GIT_TIMEOUT_S = 10
 
@@ -177,13 +179,15 @@ def _doc_lines(title: str, rows: list[dict], word: bool = False) -> list[str]:
     if not rows:
         return []
     out = [title]
-    for r in rows:
+    for r in rows[:MAX_DOC_ROWS]:
         shown = [
             _show(d["doc"] if d["repo"] is None else f"{d['repo']}:{d['doc']}") for d in r["docs"]
         ]
         more = f" (+{len(shown) - MAX_DOCS_SHOWN} more)" if len(shown) > MAX_DOCS_SHOWN else ""
         label = _show(r["path"]) + (f" ({_WORDS[r['status']]})" if word else "")
         out.append(f"- {label}: {', '.join(shown[:MAX_DOCS_SHOWN])}{more}")
+    if len(rows) > MAX_DOC_ROWS:
+        out.append(f"(+{len(rows) - MAX_DOC_ROWS} more files; code_xray docs names them all)")
     return out
 
 
@@ -216,8 +220,10 @@ def render(data: dict, name: str) -> str:
         tail += [f"- {_show(p)}" for p in blast["code"] + blast["tests"]]
         if len(blast["code"]) < blast["code_total"] or len(blast["tests"]) < blast["tests_total"]:
             tail.append("(lists are paged; code_xray blast has the rest)")
-    tail += _doc_lines("Docs citing the changed files:", data["docs"])
-    tail += _doc_lines("Docs still citing a deleted or renamed file:", data["docs_gone"], True)
+    tail += _doc_lines("Docs citing the changed files:", data.get("docs", []))
+    tail += _doc_lines(
+        "Docs still citing a deleted or renamed file:", data.get("docs_gone", []), True
+    )
     if data["top"]:
         top = ", ".join(map(_show, data["top"]))
         tail.append(f"Repo top files ({data['files']} source): {top}")

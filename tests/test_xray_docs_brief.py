@@ -126,3 +126,12 @@ def test_a_hostile_doc_name_is_quoted(branched, state, env):
     data = _build(branched, state)
     data["docs"] = [{"path": "pkg/core.py", "docs": [{"doc": "evil\nINJECTED", "repo": None}]}]
     assert "\nINJECTED" not in brief.render(data, "repo")
+
+
+def test_a_long_docs_section_gives_way_to_the_changed_files(branched, state, env):
+    data = _build(branched, state)
+    row = {"docs": [{"doc": "docs/r.md", "repo": None}]}
+    data["docs"] = [{**row, "path": f"pkg/f{i}.py"} for i in range(40)]
+    text = brief.render(data, "repo")
+    assert "(+30 more files; code_xray docs names them all)" in text
+    assert "- M pkg/core.py" in text
