@@ -130,7 +130,10 @@ its own, `xray: main..feature/x`) arrives with that brief, rendered on the
 receiving machine from its own checkout. The line can name the repo first
 (`xray: acme/widget main..feature/x`), so a receiver running somewhere else finds
 its checkout of it; with none, it gets one line naming the
-`gingugu xray brief --range` to run in the repo. In a Python repo the X-ray also sees
+`gingugu xray brief --range` to run in the repo. The same hooks add **scar tissue**: when
+an agent first reads a source file, or is stopped before a blind edit of one, the
+memories of the repo that name that file (the bugs, decisions and architecture notes it
+has cost before) arrive with it, top three by weight. In a Python repo the X-ray also sees
 functions, not just files: the edit tripwire names the definitions an edit lands in
 and who calls them, a file read names its most-called definitions, and `code_xray`
 with `action: "callers"` lists one function's callers and everything that reaches it
@@ -259,7 +262,7 @@ or Rust toolchain required to use it. The MCP SDK is first-class in Python.
 | 🪝 **Hooks** | Session-start contract, involuntary recall on a prompt, tripwires that stop a tool call a memory forbids, an X-ray map when an agent first reads into a repo, warm minions for subagents, and a save-discipline stop hook — wired by `gingugu init` |
 | 🌙 **Dream Pass** | Deterministic consolidation over the relation graph (PageRank, label propagation, orphan reconnection), staged to a proposal queue you accept or reject - safe on a cron |
 | 📬 **Agent Board** | Agents sharing a brain leave each other addressed posts and claimable tasks; `gingugu board watch` wakes an idle agent, and a reply goes back to the session that asked |
-| 🩻 **Codebase X-ray** | `code_xray` maps a repo's import graph (Python, TypeScript/JavaScript, Go; parsed, never run): blast radius before an edit (dependents by hop, candidate tests) and the files the code leans on, ranked by directed PageRank. The tool hook says it before a blind edit of an imported file and names the callers right after any other edit, and a read hook brings a repo map on the first read and each file's neighbourhood the first time it is read. `gingugu xray brief` gives the same map of a change to an agent that fires no hooks |
+| 🩻 **Codebase X-ray** | `code_xray` maps a repo's import graph (Python, TypeScript/JavaScript, Go; parsed, never run): blast radius before an edit (dependents by hop, candidate tests) and the files the code leans on, ranked by directed PageRank. The tool hook says it before a blind edit of an imported file and names the callers right after any other edit, and a read hook brings a repo map on the first read and each file's neighbourhood the first time it is read. Both also name the repo's memories that mention the file (scar tissue). `gingugu xray brief` gives the same map of a change to an agent that fires no hooks |
 | 🌐 **Memory Explorer UI** | 3D brain (one lobe per namespace), list, dashboard, timeline, and trust map — a read-only observer ([live demo](https://gingugu.github.io/gingugu/)) |
 | 📡 **Central Brain (optional)** | `gingugu serve` runs the same server over HTTP behind Bearer tokens, each client scoped to its own namespaces; `gingugu promote` harvests a local brain's durable knowledge up to it with provenance stamps |
 
@@ -582,7 +585,8 @@ connection to come back, then fail.
 
 The Claude Code hooks follow the same switch. With a remote brain on,
 involuntary prompt recall, tripwires and minion warm-up ask the brain over
-`POST /hook/recall`, `/hook/tripwires`, `/hook/trip`, `/hook/warmup` and
+`POST /hook/recall`, `/hook/tripwires`, `/hook/trip`, `/hook/warmup`,
+`/hook/scars` (the memories that name a file) and
 `/hook/inbox` (board mail) with the
 machine token (these routes refuse every other token). The brain embeds and
 ranks the prompt; tripwire rules come back to be matched on this machine, cached
@@ -868,8 +872,11 @@ It installs:
   The same hook also runs the **X-ray edit tripwire**: a *blind* edit - of a source
   file (Python, TypeScript/JavaScript, Go) that other files import, which this session
   never read and never wrote - is denied once, with its direct importers, how far a
-  change reaches and the nearest tests; re-issue the edit and it passes. An edit of a
-  file already read gets a note after it instead (`gingugu hook edit`, see below). It reads your checkout locally and never asks the brain. Set
+  change reaches and the nearest tests, plus the scar tissue for that file (see below);
+  re-issue the edit and it passes. An edit of a
+  file already read gets a note after it instead (`gingugu hook edit`, see below), with
+  no extra scar friction, since its scars came with the read. It reads your checkout
+  locally; only the scar lookup can ask a remote brain. Set
   `MEMORY_XRAY_TRIPWIRE=off` to disable it.
   It also runs the **checkout guard**, for repos where several sessions share
   one checkout: a Bash `git switch`, `git checkout` (unless paths follow
@@ -888,7 +895,17 @@ It installs:
   source file Read adds who imports it, what it imports and the nearest tests
   it, once per file. It rides `additionalContext` next to the tool result and
   never blocks. Built locally from your checkout, sharing the edit tripwire's
-  graph cache; the brain is never asked. Set `MEMORY_XRAY_MAP=off` to disable it.
+  graph cache; the brain is never asked for the map. Set `MEMORY_XRAY_MAP=off` to disable it.
+  The same read adds **scar tissue**: `Scar tissue: N memories name this file:` and the
+  top three as `- <type> <date>: <title> [<id>]`, then `(+K more; memory_search ids=<id>
+  reads one in full)`. A leaf file with no importers still gets its scar lines. Only the
+  repo's own project namespace is searched (never `crow`), for bug, decision,
+  architecture, fact and pattern memories that name the file by path; a name two files
+  share is never guessed. Weight is type (bug 3, decision/architecture 2, fact/pattern 1; doubled when the memory's title names the file)
+  divided by how many of the repo's files the memory names, newest first on a tie. It is
+  derived at read time and stored nowhere. With a remote brain the lookup is the one
+  thing the hook asks it (`POST /hook/scars`, owner token only); any failure reads as no
+  scars. Set `MEMORY_XRAY_SCARS=off` to disable it.
 - **`.claude/hooks/post_bash_xray.py`** — a `PostToolUse` hook (matched to `Bash`)
   that gives the agent the **X-ray of a shell command's writes**: a `sed -i`, a
   codegen script or a `git checkout` writes behind the edit tripwire's back, so
@@ -1238,6 +1255,7 @@ Environment variables (all optional):
 | `MEMORY_REMOTE_URL` | *(unset)* | Use this remote brain for this client only (`off` forces local). A bare `gingugu` then relays to it; the credential vault stays local |
 | `MEMORY_XRAY_TRIPWIRE` | `on` | Set `off` to disable the X-ray edit tripwire in `gingugu hook tool` (a blind edit of an imported Python, TypeScript/JavaScript or Go file is denied once with its direct importers and nearest tests); it also turns off the X-ray of a Bash command's writes (`gingugu hook bash`), the post-edit note (`gingugu hook edit`) and the test ledger |
 | `MEMORY_XRAY_MAP` | `on` | Set `off` to disable the X-ray map on arrival in `gingugu hook read` (the repo map on a session's first Read/Grep/Glob of a repo, and each Read source file's importers and imports, once per session) |
+| `MEMORY_XRAY_SCARS` | `on` | Set `off` to disable scar tissue: the repo's memories that name a file, appended to the X-ray read neighbourhood and to the deny of a blind edit. A remote brain needs the release that serves `POST /hook/scars`; an older one answers 404, which reads as no scars |
 | `MEMORY_XRAY_REPOS` | `~/GIT`, `~/git`, `~/src`, `~/code`, `~/projects`, `~/dev`, `~/repos`, `~/Developer` | Folders (`os.pathsep`-separated) where a receiver looks for the repo an `xray: <repo> <range>` board line names: exactly `<folder>/<name>`, used only when its origin matches. Empty turns the search off |
 | `MEMORY_XRAY_BOARD` | `on` | Set `off` to disable the brief on the board: a post with a line of its own `xray: <range>` no longer arrives with that range's X-ray brief, in the prompt hook's board mail or in `gingugu board watch`, and a board post from a branch is no longer asked once to name its range |
 | `MEMORY_MINION_FENCE` | `on` | Set `off` to disable the subagent fence in `gingugu hook tool` (data-dir file/shell access and inherited-server writes) |

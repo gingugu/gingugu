@@ -17,7 +17,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from . import bash_state, edit_symbols, extract, hook_common, lang, rank
+from . import bash_state, edit_symbols, extract, hook_common, lang, rank, scars
 from .hook_common import _claim, _show, _sweep
 from .scan import XrayError
 
@@ -132,6 +132,8 @@ def check(payload: dict, state_dir: Path) -> str | None:
             symbol_lines = edit_symbols.lines(payload, root, rel, state_dir, session_id, fp)
         except (XrayError, ValueError, OSError):
             symbol_lines = []  # the deny still fires; only the symbol lines are lost
+        source = {p for p in files if p not in packages}
+        symbol_lines += scars.for_file(root, rel, source)  # X3; never raises
         return _render(rel, blast, direct_importers(rel, g), symbol_lines)
     except (XrayError, ValueError, OSError):
         return None

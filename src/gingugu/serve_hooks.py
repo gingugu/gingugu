@@ -1,5 +1,6 @@
 """Remote-mode hook routes: ``/hook/recall``, ``/hook/tripwires``, ``/hook/trip``,
-``/hook/warmup`` and ``/hook/inbox`` (all POST, JSON object in, JSON object out).
+``/hook/warmup``, ``/hook/inbox`` and ``/hook/scars`` (all POST, JSON object in,
+JSON object out).
 
 They serve the machine's own hooks, which run with the main thread's full view,
 so only an owner token may call them (403 otherwise, like ``/token/derive``).
@@ -166,6 +167,31 @@ def _run_trip(ctx, args: tuple) -> dict:
     return {"ok": True}
 
 
+# --- scar tissue (X3) --------------------------------------------------------
+
+
+def _parse_scars(body: dict) -> tuple:
+    from .xray.scar_query import valid_basename
+
+    namespace, basename = body.get("namespace"), body.get("basename")
+    if not isinstance(namespace, str) or not _NAME_RE.fullmatch(namespace):
+        raise _BadRequest("namespace must be a name of letters, digits, '.', '_' or '-'")
+    if not valid_basename(basename):
+        raise _BadRequest("basename must be a plain file name with an extension")
+    return namespace, basename
+
+
+def _run_scars(ctx, args: tuple) -> dict:
+    from .recall_sweep import connect_readonly
+    from .xray.scar_query import scars
+
+    conn = connect_readonly(ctx.config.db_path)
+    try:
+        return {"scars": scars(conn, *args)}
+    finally:
+        conn.close()
+
+
 # --- board mail --------------------------------------------------------------
 
 
@@ -252,4 +278,5 @@ def hook_routes(ctx) -> dict[str, Callable]:
         "/hook/trip": _endpoint(_parse_trip, _run_trip, ctx),
         "/hook/warmup": _endpoint(_parse_warmup, _run_warmup, ctx),
         "/hook/inbox": _endpoint(_parse_inbox, _run_inbox, ctx, with_origin=True),
+        "/hook/scars": _endpoint(_parse_scars, _run_scars, ctx),
     }
