@@ -1,8 +1,20 @@
 # Project Status
 
-_Last updated: 2026-11-01 (board resynced and reordered: X-ray first, X3 next)_
+_Last updated: 2026-11-01 (board resynced; X3 scar tissue built; worktree sessions read their repo's memory)_
 
 ## In Flight
+
+**A worktree session reads its repo's memory (fix/worktree-namespace, 2026-11-01; not
+released).** `prompt_hook.namespaces_for` and the SessionStart contract named the project
+namespace after the cwd folder, so in a linked worktree (`.claude/worktrees/fix-y`) prompt
+recall, memory tripwires, minion warm-up and board mail asked for namespace `fix-y`.
+Reproduced live: this repo's worktree gave `['crow', 'beepboop', 'wt-namespace']`. New
+`project_name.py` reads the worktree's `.git` file (`gitdir: <main>/.git/worktrees/<n>`)
+and answers the main checkout's folder, with no git process on the per-prompt and
+per-tool-call path; a submodule keeps its own name; any surprise is the folder. The
+stdlib SessionStart template and this repo's copy carry the same logic as `_project`;
+X3's `scars.project_namespace` now uses it too (no `git rev-parse`). Tests:
+`tests/test_project_name.py`. Repos pick up the template on `gingugu init`.
 
 **Codebase X-ray in every language we can parse - phase 1 MERGED (#150), released in
 0.30.0; phases 2 and 3 not started.** Extraction runs through one adapter per language (`xray/lang/`): Python stays on `ast`;
@@ -100,7 +112,7 @@ one file has; a name two files share is never guessed, so counts are a lower bou
 score = type weight (bug 3, decision/architecture 2, fact/pattern 1; doubled when the memory's title names the file) / number of repo
 source files the memory names, newest first on a tie; reads only the repo's own project
 namespace, never crow; in a git worktree the namespace is the MAIN checkout's folder
-name (`git rev-parse --git-common-dir`); `__init__.py` skipped; honours `MEMORY_GRANT`
+name (`project_name`, the worktree's `.git` file); `__init__.py` skipped; honours `MEMORY_GRANT`
 (no read on the namespace, nothing); never raises. Switch `MEMORY_XRAY_SCARS` (default
 on). Tests: `test_xray_scar_query.py`, `test_xray_scar_remote.py`, `test_xray_scars.py`,
 `test_xray_scars_wiring.py` (103); a security review hardened rendering (every field

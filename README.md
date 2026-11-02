@@ -838,7 +838,8 @@ It installs:
   the memory startup contract into context *every session*. This is the key
   advantage: unlike a rules file (which is **not** guaranteed to be loaded into
   context), a hook fires every time, so the protocol is always present. The
-  project namespace is derived from the repo's folder name automatically.
+  project namespace is derived from the repo's folder name automatically (in a git
+  worktree, the main checkout's folder).
   A folder name that is not a plain name (letters, digits, `.`, `_`, `-`,
   starting with a letter or digit, up to 64 chars) is left out of the
   session-start contract, which then loads `crow` (and the persona) only.
