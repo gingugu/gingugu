@@ -86,6 +86,18 @@ paged; a git `core.fsmonitor`-style check for other config that runs code.
 
 ## Recently Completed
 
+**Minions never spawn minions; harness ships a fenced `researcher` (2026-11-02,
+board task 0790760f).** A Sonnet minion on the built-in general-purpose agent
+spawned a minion of its own (general-purpose carries the Agent tool), and the
+nested findings came back unchecked. `minion_fence.decide` now denies `Agent`/`Task`
+whenever `agent_id` is set - the tool name is a parameter, so it holds for every
+agent type. `gingugu harness` installs `researcher` (sonnet: Read, Grep, Glob,
+WebFetch, WebSearch, the fenced brain, no Bash); the managed block says never to
+use general-purpose for minion work; a test pins that no shipped agent holds Bash.
+Research that needs `gh`/`git` stays on the main thread on purpose: a Bash
+allowlist is a speed bump, not a fence. Tests: `tests/test_minion_fence.py`,
+`tests/test_harness_install.py`.
+
 **Board: an open task stays unread until claimed or done (2026-11-02).** Found
 live: beepboop on one machine posted two tasks for the gingugu session; another
 beepboop session read them 10s later, and the session they were meant for opened

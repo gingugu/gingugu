@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`gingugu harness` ships a fourth minion, `researcher`** (sonnet): read-only
+  research across the repo and the public web - `Read`, `Grep`, `Glob`,
+  `WebFetch`, `WebSearch` and the fenced brain, no shell. It is the fenced choice
+  for work that would otherwise go to Claude Code's built-in `general-purpose`
+  agent, and the managed `CLAUDE.md` block now says never to use
+  `general-purpose` for minion work. No shipped minion holds `Bash`.
+
+### Changed
+
+- **A minion never spawns a minion.** `gingugu hook tool` now denies an `Agent`
+  or `Task` call made inside a subagent. `general-purpose` carries the Agent
+  tool, so a minion spawned on it could start one of its own, whose findings came
+  back unchecked by the minion that asked. The main thread spawns as before;
+  `MEMORY_MINION_FENCE=off` lifts the whole fence.
+
 ---
 
 ## [0.43.1] - 2026-11-02

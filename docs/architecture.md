@@ -221,7 +221,9 @@ meeting it at its nearest ancestor, never above its client), and the hook's own
 fenced server's publication outlives a crash, so a fenced client with no live
 server keeps quiet hooks too. Inside
 a subagent (`agent_id` present) the `PreToolUse` hook also applies the minion
-fence (`minion_fence.py`). A minion's own stdio server is fenced by
+fence (`minion_fence.py`): no file or shell access to the brain's data
+directory, no writes through the inherited full-brain server, and no `Agent` or
+`Task` call - a minion never spawns a minion. A minion's own stdio server is fenced by
 `MEMORY_GRANT` through the same store chokepoints as a scoped serve token.
 
 ---
@@ -2349,7 +2351,7 @@ src/gingugu/
 ├── post_tool_hook.py       # gingugu hook read / hook bash / hook edit: PostToolUse entry point (X-ray map on arrival: repo map + a Read file's neighbourhood; X15: what a shell command's writes reach, plus pytest outcomes for the test ledger; the note after an edit); informs, never blocks
 ├── tool_hook.py            # gingugu hook tool: PreToolUse entry point (tripwires, X-ray edit check and board nudge, minion fence, checkout guard); deny once, re-issue passes
 ├── checkout_guard.py       # Deny, every time, a git command that moves or empties a shared primary checkout; points at a worktree
-├── minion_fence.py         # Inside a subagent: deny data-dir access, CLI, inherited-server writes
+├── minion_fence.py         # Inside a subagent: deny data-dir access, CLI, inherited-server writes, spawns
 ├── subagent_hook.py        # gingugu hook subagent: SubagentStart warm-up; stash/take of the spawn prompt
 ├── subagent_warmup.py      # warmup(): the grant-bound ranking, shared with /hook/warmup
 ├── capability.py           # Capability pointers: block validation, exists check, the recall lane
