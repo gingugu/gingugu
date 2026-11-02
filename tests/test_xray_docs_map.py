@@ -270,6 +270,65 @@ def test_the_cache_is_owner_only(repo, state, roots):
     assert cache.stat().st_mode & 0o077 == 0
 
 
+def test_an_oversized_cache_is_ignored(repo, state, roots, monkeypatch):
+    docs_map.read(repo, state)
+    monkeypatch.setattr(docs_map, "MAX_CACHE_BYTES", 10)
+    (cache,) = state.glob("xray-docs-*.json")
+    assert docs_map._load(repo, state)[0] is None
+    assert cache.exists()
+
+
+# --- hostile input (security review) ------------------------------------------
+
+
+def test_github_links_are_capped(monkeypatch):
+    monkeypatch.setattr(docs_map, "MAX_TOKENS", 3)
+    text = " ".join(f"https://github.com/a/w/blob/main/f{i}.py" for i in range(50))
+    assert len(docs_map.github_paths(text, "a/w")) == 3
+
+
+@pytest.mark.parametrize("name", ["/etc/passwd.md", "../outside.md", "docs/../../x.md", ""])
+def test_a_doc_name_that_leaves_the_checkout_is_refused(tmp_path, name):
+    assert docs_map._inside(tmp_path, name) is None
+
+
+def test_a_doc_name_inside_is_accepted(tmp_path):
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs/a.md").write_text("x")
+    assert docs_map._inside(tmp_path, "docs/a.md") == tmp_path / "docs/a.md"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks")
+def test_a_doc_under_a_symlinked_directory_is_refused(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "a.md").write_text("x")
+    repo = tmp_path / "r"
+    repo.mkdir()
+    (repo / "docs").symlink_to(outside)
+    assert docs_map._inside(repo, "docs/a.md") is None
+
+
+def test_a_sibling_with_an_invalid_identity_is_skipped(repo, state, sibling, tmp_path):
+    odd = tmp_path / "x, evil"
+    sibling.rename(odd)
+    m = docs_map.read(repo, state)
+    assert m.siblings == {}
+
+
+def test_siblings_stop_at_the_time_budget(repo, state, sibling, monkeypatch):
+    monkeypatch.setattr(docs_map, "SIBLING_BUDGET_S", 0.0)
+    m = docs_map.read(repo, state)
+    assert m.siblings == {}  # nothing read, nothing cached, the brief goes on
+
+
+def test_a_sibling_cached_before_the_budget_ran_out_is_kept(repo, state, sibling, monkeypatch):
+    docs_map.read(repo, state)
+    monkeypatch.setattr(docs_map, "SIBLING_BUDGET_S", 0.0)
+    m = docs_map.read(repo, state)
+    assert ("docs/run.md", "ops") in docs_map.citing(m, "pkg/core.py")
+
+
 # --- the switch ---------------------------------------------------------------
 
 

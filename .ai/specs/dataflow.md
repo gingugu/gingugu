@@ -679,7 +679,10 @@ changed files: git diff --name-status over --range, the named --files, or the
     only files whose bytes changed: xray-parse cache, X16)
   → rows: path, status, rank, importers; blast of the changed source files
     (code + candidate tests); repo top-5
-  → data + compact `text` (<= 8800 chars)
+  → docs (X22, MEMORY_XRAY_DOCS): docs_map.read → Docs citing the changed files: /
+    Docs still citing a deleted or renamed file: (D and R old paths); a failure
+    drops the sections, never the brief
+  → data (incl. `docs`, `docs_gone`) + compact `text` (<= 8800 chars)
 ```
 
 **The brief rides a board post (X20).** A post carries only a ref, a line of its
@@ -740,6 +743,24 @@ code_xray history | blindspots (stdio handler, or the proxy; serve refuses)
                 (>= 5 revs, degree >= 30%, `hidden` = no direct import; `files` focus)
   → blindspots: hotspots.blindspots (imported, untested by import or name, rank/authors)
   → lists paged by limit (default 50, cap 100), totals whole; `text` <= 8800 chars
+```
+
+X22 reads docs against the same file list, locally:
+
+```
+code_xray docs (stdio handler, or the proxy; serve refuses)
+  → docs_tool.answer: local.root(path) → docs_map.read(root, state)
+  → file list: ls-files --cached --others --exclude-standard (10s); this repo's docs =
+    files with a doc extension (<= 5000, <= 256 KiB each, <= 1000 path tokens each)
+  → xray-docs-<digest>.json (owner-only, untrusted: type-checked, rebuilt whole on
+    anything off): a local doc re-read only when size or mtime changed
+  → siblings: git checkouts directly under the MEMORY_XRAY_REPOS roots (<= 64; a
+    checkout with this repo's own identity or an invalid one skipped; 3s budget, past it
+    a cached entry is kept unchecked or the sibling skipped), committed docs only, re-read only
+    when its HEAD moved; kept: repo-qualified paths and GitHub links to this origin
+  → docs_cites: token (scar_query._TOKEN) → scars._resolve → exactly one repo file, else
+    no citation; a doc never cites itself
+  → files given: citing docs per file; none: totals + most cited files; `text` <= 8800
 ```
 
 The hooks hash the checkout once and hand that fingerprint to both cache reads.

@@ -74,6 +74,28 @@ def test_a_hostile_doc_name_is_quoted(repo, env):
     assert "\nINJECTED" not in docs_tool.render(data, "repo")
 
 
+def test_a_non_utf8_name_stays_json_safe(repo, env, monkeypatch):
+    from gingugu.xray import docs_map
+
+    bad = "docs/x\udcff.md"
+    real = docs_map.read
+
+    def planted(root, state):
+        m = real(root, state)
+        return m._replace(local={**m.local, bad: ["pkg/core.py"]})
+
+    monkeypatch.setattr(docs_map, "read", planted)
+    out = docs_tool.answer(str(repo), files="pkg/core.py")
+    json.dumps(out)  # a lone surrogate would raise here
+    assert any("�" in d["doc"] for d in out["files"][0]["docs"])
+
+
+def test_a_long_name_is_cut_in_the_text(repo, env):
+    data = docs_tool.answer(str(repo), files="pkg/core.py")
+    data["files"][0]["docs"] = [{"doc": "d/" + "x" * 5000 + ".md", "repo": None}]
+    assert len(docs_tool.render(data, "repo")) < 1000
+
+
 # --- MCP: stdio, serve, proxy --------------------------------------------
 
 

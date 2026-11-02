@@ -9,6 +9,19 @@ from __future__ import annotations
 from typing import NamedTuple
 
 from . import scars
+from .hook_common import _show
+
+# A doc name is another checkout's choice: cut it before it reaches an agent.
+MAX_NAME = 200
+
+
+def label(doc: str, repo: str | None) -> str:
+    """A citation as the agent reads it: ``doc``, or ``repo:doc`` from a sibling,
+    quoted by ``_show`` and cut to ``MAX_NAME``."""
+    name = doc if repo is None else f"{repo}:{doc}"
+    if len(name) > MAX_NAME:
+        name = name[:MAX_NAME] + "..."
+    return _show(name)
 
 
 class Cite(NamedTuple):

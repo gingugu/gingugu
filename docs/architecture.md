@@ -128,8 +128,8 @@ graph LR
     C -->|add · list · remove · test| W
     C -->|post · inbox · read · claim · done| BP
     C -->|ingest · refresh · blast · overview| XR
-    C -->|brief · callers · history · blindspots, stdio only: nothing stored| XG
-    X -->|brief · callers · history · blindspots, answered on this machine| XG
+    C -->|brief · callers · history · blindspots · docs, stdio only: nothing stored| XG
+    X -->|brief · callers · history · blindspots · docs, answered on this machine| XG
     A -->|each pending tool call| Y
     Y -->|reads matches| W
     Y -->|logs each trip| T
@@ -1815,6 +1815,29 @@ the proxy answers them on the caller's machine. The read neighbourhood's `Change
 `MEMORY_XRAY_HISTORY`). Per-commit architectural drift is not built: it needs the
 import graph of past trees, and extraction reads only the working tree.
 
+**Docs map (X22).** A runbook names the scripts and configs it describes, so a change to
+one should name the runbooks to re-read. `xray/docs_map.py` builds a reverse index from a
+repo file to the docs that cite it (`.md .mdx .markdown .rst .txt .adoc`). A citation is a
+path mention resolved to exactly one repo file with X3's matcher (`scar_query._TOKEN` +
+`scars._resolve`, in `xray/docs_cites.py`): an ambiguous name cites nothing, and a doc
+never cites itself. It also reads sibling checkouts - checkouts directly under the
+`MEMORY_XRAY_REPOS` roots (or the default home folders), committed docs only; one with
+this repo's own identity (a worktree or second clone) is skipped. A bare path in a
+sibling's doc means the sibling's own file, so a sibling doc counts only repo-qualified
+paths (`<name>/path`) and GitHub blob/tree/raw links to this repo's origin. Caps: 5000
+docs, 256 KiB per doc, 64 siblings, 1000 path tokens and 1000 GitHub links per doc, and a 3s budget for siblings per read: past it a sibling keeps its cached entry or is skipped, so a slow checkout never stalls a brief. A doc name that is absolute, has `..` or passes through a symlink is never read. The index is cached
+owner-only as `xray-docs-<digest>.json` in the hook state directory and read as
+untrusted input; a local doc is re-read only when its size or mtime changes, a sibling
+only when its HEAD moves. The X-ray brief gains `Docs citing the changed files:` and
+`Docs still citing a deleted or renamed file:` (deleted paths and renamed old paths;
+at most 5 docs per file then `(+N more)`, at most 10 files per section; a sibling doc
+shows as `<repo>:<doc>`; data keys `docs` and `docs_gone`), and a docs failure never costs
+the brief. `code_xray` `docs` (`xray/docs_tool.py`) answers the citing docs per file, or
+without `files` the totals and the most cited files; it answers locally like `history`:
+`gingugu serve` refuses it and the proxy answers it on the caller's machine. Switch
+`MEMORY_XRAY_DOCS` (default on). No migration, no brain change. The hook surfaces (the
+edit note, the Bash X-ray, the read hook) are not built yet.
+
 The snapshot is the checkout at `path` (default: the working directory),
 fingerprinted on every call and re-extracted when its content changed
 (`freshness: current`); a `fingerprint` names one exactly (`exact`); with
@@ -2231,8 +2254,8 @@ src/gingugu/
 ├── proxy_vault.py          # Remote mode: the machine's credential vault, screened (reveal refused) and exposed as a server
 ├── proxy_vault_link.py     # Remote mode: runs that vault behind an in-memory MCP session so it can ask the user
 ├── proxy_xray.py           # Remote mode: code_xray reads the checkout here, asks the brain by fingerprint
-├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), tool_xray (the PreToolUse X-ray decision, kept apart from tool_hook), bash_hook + bash_state (X15: a shell command's dirty-set snapshot and diff; the repos a session touched), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only), board_nudge (X20 sender: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line), board_brief (X20: the brief a board post's `xray: <range>` line asks for, rendered on the receiver), repo_id (X20: a checkout's identity, and the local checkout an `xray: <repo> <range>` line names), resolve_walk + parse_cache (X16: content-only import records, the per-file parse cache), symbols_walk + symbols (X17: the Python symbol graph, client only), edit_symbols (X17: the tripwire's `Edit lands in` lines), callers_tool (X17: `code_xray` `callers`, local only), edit_note (the note after an edit), ledger (X11 lean: test predictions vs pytest failures), scar_query (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace), scars (X3, client side: resolves and ranks those hits against the checkout), history (X4: git log summarized as churn, author counts and co-changed pairs, cached by HEAD), hotspots (X4 hotspots + coupling, X6 blind spots, pure), history_tool (`code_xray` `history` / `blindspots`, local only)
-├── xray_cli.py             # `gingugu xray brief` (--range / --files / --path / --json), `gingugu xray history` (--files / --path / --limit / --json), `gingugu xray blindspots` (--path / --limit / --json) and `gingugu xray score` (--json)
+├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), tool_xray (the PreToolUse X-ray decision, kept apart from tool_hook), bash_hook + bash_state (X15: a shell command's dirty-set snapshot and diff; the repos a session touched), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only), board_nudge (X20 sender: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line), board_brief (X20: the brief a board post's `xray: <range>` line asks for, rendered on the receiver), repo_id (X20: a checkout's identity, and the local checkout an `xray: <repo> <range>` line names), resolve_walk + parse_cache (X16: content-only import records, the per-file parse cache), symbols_walk + symbols (X17: the Python symbol graph, client only), edit_symbols (X17: the tripwire's `Edit lands in` lines), callers_tool (X17: `code_xray` `callers`, local only), edit_note (the note after an edit), ledger (X11 lean: test predictions vs pytest failures), scar_query (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace), scars (X3, client side: resolves and ranks those hits against the checkout), history (X4: git log summarized as churn, author counts and co-changed pairs, cached by HEAD), hotspots (X4 hotspots + coupling, X6 blind spots, pure), history_tool (`code_xray` `history` / `blindspots`, local only), docs_map + docs_cites + docs_tool (X22: which docs cite a file, here and in sibling checkouts; `code_xray` `docs`, local only)
+├── xray_cli.py             # `gingugu xray brief` (--range / --files / --path / --json), `gingugu xray history` (--files / --path / --limit / --json), `gingugu xray blindspots` (--path / --limit / --json), `gingugu xray docs` (--files / --path / --limit / --json) and `gingugu xray score` (--json)
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine
 ├── remote_args.py          # usage text + argparse for `gingugu remote`, mint ssh argv
@@ -2397,7 +2420,7 @@ src/gingugu/
     ├── credentials.py      # credential_store / get / list / delete (delete asks the user)
     ├── tripwires.py        # memory_tripwire: add / list / remove / test
     ├── board.py            # board tool + gingugu://board/inbox/{persona} resource; derives the author
-    ├── xray.py             # code_xray tool: snapshot selection, blast, overview, refresh, ingest, brief, callers, history, blindspots
+    ├── xray.py             # code_xray tool: snapshot selection, blast, overview, refresh, ingest, brief, callers, history, blindspots, docs
     ├── admin.py            # namespaces, export, import (cascade delete and overwriting import ask the user)
     ├── summaries.py        # Payload shapes: full summary, compact summary, the picker
     ├── choices.py          # Enum argument parsing, shared error wording

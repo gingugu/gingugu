@@ -145,6 +145,10 @@ neither imports the other, the dependency no import line shows. A file read name
 top three such partners. `action: "blindspots"` (or `gingugu xray blindspots`) lists the
 imported files no test imports or is named for, by reach over the number of people who
 have touched them: where a change would go furthest with the least review.
+`action: "docs"` (or `gingugu xray docs`) turns a runbook's path mentions into a map: which
+docs cite a file, in this repo and in the sibling checkouts beside it, so a change names the
+runbooks worth re-reading. A path counts only when it resolves to exactly one file; the brief
+adds the docs that cite the changed files, and the docs still citing a deleted or renamed one.
 
 That is the part that makes the memory worth having, and it is in the box.
 
@@ -942,7 +946,11 @@ It installs:
   For an agent that fires none of these hooks, `gingugu xray brief [--range R |
   --files a,b] [--path P] [--json]` prints the changed files by rank with their
   importer counts and the combined blast of the changed source, from the same
-  cache; nothing is stored and the brain is never asked.
+  cache; nothing is stored and the brain is never asked. The brief also names the docs
+  that cite the changed files (`Docs citing the changed files:`) and the docs still
+  citing a deleted or renamed one, from this repo and from sibling checkouts; a doc
+  in a sibling counts only when it cites this repo by a repo-qualified path or a GitHub
+  link. `MEMORY_XRAY_DOCS=off` disables it.
 - **`.claude/skills/sink-the-ship/SKILL.md`** — a `/sink-the-ship` skill to flush
   everything worth keeping before you close a session. If an older install left a
   `.claude/commands/sink-the-ship.md` behind, `gingugu init` retires it and keeps
@@ -1272,6 +1280,7 @@ Environment variables (all optional):
 | `MEMORY_XRAY_TRIPWIRE` | `on` | Set `off` to disable the X-ray edit tripwire in `gingugu hook tool` (a blind edit of an imported Python, TypeScript/JavaScript or Go file is denied once with its direct importers and nearest tests); it also turns off the X-ray of a Bash command's writes (`gingugu hook bash`), the post-edit note (`gingugu hook edit`) and the test ledger |
 | `MEMORY_XRAY_MAP` | `on` | Set `off` to disable the X-ray map on arrival in `gingugu hook read` (the repo map on a session's first Read/Grep/Glob of a repo, and each Read source file's importers and imports, once per session) |
 | `MEMORY_XRAY_HISTORY` | `on` | Set `off` to drop the `Changes with (no import):` line from the X-ray read neighbourhood: up to three files the read file changes with in git history though neither imports the other. The `code_xray` `history` action is unaffected |
+| `MEMORY_XRAY_DOCS` | `on` | Set `off` to drop the docs map: the `Docs citing the changed files:` and `Docs still citing a deleted or renamed file:` sections of the X-ray brief, and the `code_xray` `docs` action, which then refuses. A doc cites a file only by a path that resolves to exactly one file; a sibling checkout's doc only by a repo-qualified path or a GitHub link to this repo |
 | `MEMORY_XRAY_SCARS` | `on` | Set `off` to disable scar tissue: the repo's memories that name a file, appended to the X-ray read neighbourhood and to the deny of a blind edit. A remote brain needs the release that serves `POST /hook/scars`; an older one answers 404, which reads as no scars |
 | `MEMORY_XRAY_REPOS` | `~/GIT`, `~/git`, `~/src`, `~/code`, `~/projects`, `~/dev`, `~/repos`, `~/Developer` | Folders (`os.pathsep`-separated) where a receiver looks for the repo an `xray: <repo> <range>` board line names: exactly `<folder>/<name>`, used only when its origin matches. Empty turns the search off |
 | `MEMORY_XRAY_BOARD` | `on` | Set `off` to disable the brief on the board: a post with a line of its own `xray: <range>` no longer arrives with that range's X-ray brief, in the prompt hook's board mail or in `gingugu board watch`, and a board post from a branch is no longer asked once to name its range |
@@ -1321,7 +1330,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_dream` | Run the deterministic consolidation pass, read its proposal queue, and accept or reject a finding. PageRank, community detection and orphan reconnection over the relation graph - staged for you to decide, never written |
 | `memory_tripwire` | Bind a memory to a tool call so it stops that call once, before it runs: `add` (a tool-name regex + an input regex), `list`, `remove`, and `test` (a dry run that never denies) |
 | `board` | Leave posts for other agents sharing this brain and read the ones left for you: `post` (to a persona or `*`, as a `message` or a `task`), `inbox`, `read` (a thread), `reply` (with no `to`, it goes to the post's author, or to whoever spoke last in the thread when that is you), `claim` (one agent wins), `done`. Posts are not memories, and you post as yourself - the author is never an argument. Your inbox is also the subscribable resource `gingugu://board/inbox/<you>`; `gingugu board watch` turns it into a command that prints a line per new post, to wake an idle agent; a post or reply to a persona returns a `delivery` receipt |
-| `code_xray` | Codebase X-ray for a Python, TypeScript/JavaScript or Go repo: `blast` (what a change to these files reaches, and the tests worth running), `overview` (the files the code leans on most, and files nothing reaches), `refresh`, `ingest`, and `brief` (`range`, `files`, `path`, `limit` up to 50: the changed files by rank with importer counts, their combined blast and a compact `text`, computed locally and never stored), and `callers` (Python: `files` one file, `symbol` such as `Store.save`; its direct callers and what reaches it by call, a lower bound, computed locally), `history` (from git log: hotspots by churn x rank x authors, and files that change together, flagged `hidden` when neither imports the other; `files` focuses the pairs; computed locally), and `blindspots` (imported source no test imports or is named for, by reach over authors; computed locally). Rebuilt automatically when the checkout changes; read on your machine even with a remote brain |
+| `code_xray` | Codebase X-ray for a Python, TypeScript/JavaScript or Go repo: `blast` (what a change to these files reaches, and the tests worth running), `overview` (the files the code leans on most, and files nothing reaches), `refresh`, `ingest`, and `brief` (`range`, `files`, `path`, `limit` up to 50: the changed files by rank with importer counts, their combined blast and a compact `text`, computed locally and never stored), and `callers` (Python: `files` one file, `symbol` such as `Store.save`; its direct callers and what reaches it by call, a lower bound, computed locally), `history` (from git log: hotspots by churn x rank x authors, and files that change together, flagged `hidden` when neither imports the other; `files` focuses the pairs; computed locally), `blindspots` (imported source no test imports or is named for, by reach over authors; computed locally), and `docs` (`files`, `path`, `limit`: the docs that cite each file, here and in sibling checkouts; without `files`, totals and the most cited files; computed locally). Rebuilt automatically when the checkout changes; read on your machine even with a remote brain |
 | `memory_forget` | Deprecate or remove a memory (a hard delete asks you to confirm) |
 | `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo). Deleting a non-empty namespace asks you to confirm |
 | `memory_export` | Export memories + tags + relations to portable JSON |
