@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **An open board task stays in the inbox until someone acts on it.** Read
+  receipts are kept per persona, so when one session of a persona read a task,
+  every other session of that persona - on any machine - saw it as read and lost
+  it from the inbox, the unread count, hook mail and `memory_context`'s board
+  unread. A task posted for another session could disappear before that session
+  started. An open task now counts as unread until it is claimed or done; messages
+  are still read once. No migration, no tool change.
+
 ---
 
 ## [0.43.0] - 2026-11-02
