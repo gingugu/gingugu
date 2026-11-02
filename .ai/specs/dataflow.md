@@ -474,7 +474,7 @@ UserPromptSubmit event  →  .claude/hooks/user_prompt_recall.py (pure stdlib)
       → strip_affect(): greetings/interjections/emoji removed, because they
         carry REGISTER and the corpus is full of reflections written in the
         user's own voice. Matching voice is the dominant false positive.
-      → encode → cosine sweep over crow + <MEMORY_PERSONA, if set> + <cwd-derived project>
+      → encode → cosine sweep over crow + <MEMORY_PERSONA, if set> + <project_name(cwd): the folder, or a worktree's main checkout>
           (namespaces_for: crow, then persona, then the repo, deduped; a
           malformed MEMORY_PERSONA is ignored; any name the CLIENT's grant
           cannot read is dropped - hook_grant.client_grant: what the client's
@@ -569,7 +569,7 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
           see "X-ray of a shell command's writes (X15)" below
       → MEMORY_TRIPWIRES=off: skip memory tripwires (not the X-ray above)
       → namespaces_for(cwd) (narrowed by the client's grant; [] → exit before any lookup)
-      → load_tripwires(crow + <persona> + <cwd-derived project>)   read-only SQLite
+      → load_tripwires(crow + <persona> + <project_name(cwd): the folder, or a worktree's main checkout>)   read-only SQLite
           skips deprecated and superseded memories; pinned ones DO trip
           (a pin loaded at session start is not in front of the agent now)
       → matching: tool_pattern FULL-matched against the tool name,
@@ -630,7 +630,7 @@ PostToolUse event (Read | Grep | Glob)  →  .claude/hooks/post_tool_xray.py (pu
         only (the main checkout's folder name in a worktree; never crow), FTS5
         phrase match on the basename (xray/scar_query, local DB or POST /hook/scars),
         hits resolved against the checkout's source files and ranked by type weight
-        over files named; appends `Scar tissue: N memories name this file:` and the
+        (doubled when the title names the file) over files named; appends `Scar tissue: N memories name this file:` and the
         top 3, and a leaf file with no neighbourhood gets them under a
         `GINGUGU X-RAY: <path>.` header. Derived at read time, nothing stored
   → emit additionalContext beside the tool result (output capped under 9000 chars)
