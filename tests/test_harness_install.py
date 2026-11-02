@@ -1,7 +1,7 @@
 """`gingugu harness` - the Claude Code harness, installed on top of `gingugu init`.
 
 Plain ``init`` stays gingugu-only. ``harness`` runs ``init`` and then adds the
-rest of the kit: a safety guard and event logging, three fenced minions, the
+rest of the kit: a safety guard and event logging, four fenced minions, the
 ``creating-pr`` skill, the ``.ai/`` knowledge base, and a managed block in the
 repo's ``CLAUDE.md``. Nothing it installs calls out to the network.
 """
@@ -22,6 +22,7 @@ AGENTS = {
     "repo-scout.md": "haiku",
     "security-reviewer.md": "sonnet",
     "ai-docs-auditor.md": "sonnet",
+    "researcher.md": "sonnet",
 }
 SKILL_FILES = ("SKILL.md", "ai-assessment-checklist.md", "stacking-prs.md")
 AI_FILES = (
@@ -120,6 +121,29 @@ def test_agents_are_fenced_to_this_repos_namespace(repo):
         assert "disallowedTools: Agent, mcp__gingugu" in text
         assert f"model: {model}" in text
         assert "{{" not in text
+
+
+def test_no_agent_holds_a_shell(repo):
+    # A Bash allowlist is a speed bump, not a wall: an agent with a shell can
+    # write to anything the user can. The fence is not granting it at all.
+    _run(repo)
+    for name in AGENTS:
+        text = (repo / ".claude" / "agents" / name).read_text()
+        tools = next(line for line in text.splitlines() if line.startswith("tools:"))
+        assert "Bash" not in tools, name
+
+
+def test_the_researcher_reads_the_web_and_the_repo(repo):
+    _run(repo)
+    text = (repo / ".claude" / "agents" / "researcher.md").read_text()
+    assert "tools: Read, Grep, Glob, WebFetch, WebSearch, mcp__brain" in text
+
+
+def test_claude_md_steers_minion_work_off_general_purpose(repo):
+    _run(repo)
+    text = (repo / "CLAUDE.md").read_text()
+    assert "`researcher`" in text
+    assert "general-purpose" in text
 
 
 def test_installs_the_creating_pr_skill(repo):
