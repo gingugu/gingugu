@@ -505,7 +505,10 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.43.0** (PyPI, 2026-11-02). Minor: the prompt hook strips Claude
+- Current version: **0.43.1** (PyPI, 2026-11-02). Patch: an open board task stays
+  unread until it is claimed or done, since read receipts are per persona and one
+  session's read hid it from every twin session (#172). No migration.
+- 0.43.0 (PyPI, 2026-11-02). Minor: the prompt hook strips Claude
   Code `<task-notification>` blocks before it searches or logs (client and brain);
   migration 022 adds `query_log.extra_ids` and `query_acts` (fetch/excerpt/update/
   relate/forget tied to the session's query that surfaced the memory) (#171).
