@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.41.0] - 2026-11-01
+
 ### Fixed
 
 - **A session in a git worktree now reads its repo's memory.** The hooks named the
