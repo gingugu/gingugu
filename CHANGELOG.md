@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.43.0] - 2026-11-02
+
 ### Fixed
 
 - **The prompt hook no longer treats a harness notice as a prompt.** Claude Code
