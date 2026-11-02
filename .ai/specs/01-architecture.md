@@ -79,7 +79,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
    it drags along have their own owners (`tags`, `access`, `embedding_sync`,
    `claim_sync`), reached through the `storage_derived.DerivedTables`
    delegation surface, which also carries `log_query` for `query_log` (owned by
-   `query_log.py`; per-query rather than per-memory, so not a satellite). They
+   `query_log.py`; per-query rather than per-memory, so not a satellite) and
+   `log_act` for `query_acts` (owned by `query_acts.py`). They
    are modules over a bare connection rather than methods on `MemoryStore`
    because `portability.import_data` writes memory
    rows too, and an invariant locked inside that class is one the import path
@@ -94,7 +95,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
    processes touching the store rather than the memories in it (`activity`,
    `dream_lock`), `fields.py` for write-time declared fields on the memory
    record (`provenance`, `about`) and the FTS5 rebuild that indexes them,
-   `queries.py` for the query log (`query_log`, migration 015),
+   `queries.py` for the query log (`query_log`, migration 015; `extra_ids` and
+   `query_acts`, migration 022),
    `tripwires.py` for the tripwire triggers (`tripwires`, migration 016),
    `board.py` for the agent board (`board_posts`, `board_reads`, migrations 017, 018, 020),
    `xray.py` for Codebase X-ray (`xray_snapshots`, `xray_files`, `xray_edges`, migration 019;
@@ -302,6 +304,18 @@ where "these belong together" would not be.
 it returned in that session. Rows written by the involuntary-recall hook carry
 Claude Code's session id instead - a different namespace of ids, so hook rows
 do not join to `access_log`.
+
+**What came of a question is tied to it at write time (migration 022).** Measured
+2026-11-02, "the memory the session then acted on" could not be recovered from the
+logs: updates and relations carry no session, so another agent's act reads as this
+one's, and `result_ids` held only the ranked hits. Now `query_log.extra_ids` keeps
+what a recall returned beside them (related extras, capability pointers), and a
+fetch by id, an excerpt, an update, a relation (both ends) or a forget writes a
+`query_acts` row naming the newest of the same session's last 200 queries that
+returned the memory, and its rank there (NULL for an extra). That is the label the
+paraphrase question set needs, deterministic and with no model judging. The prompt
+hook strips Claude Code's `<task-notification>` blocks before it searches or logs
+(client and brain): they were 1,218 of 2,481 hook queries.
 
 Note the ceiling this inherits. `access_log` is pruned to a rolling 90-day
 window, so co-access is a moving picture. Anything built on it has to keep its

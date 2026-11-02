@@ -150,13 +150,15 @@ src/gingugu/
   capability.py      → capability pointers: write validation, read-time exists check, recall lane
   config.py          → config + cross-platform DB path (platformdirs)
   database.py        → SQLite connection, schema, WAL, migrations (PRAGMA user_version), FTS5 triggers
-  migrations/queries.py → migration 015: the query_log table
+  migrations/queries.py → migration 015: the query_log table; 022: query_log.extra_ids + query_acts
   migrations/tripwires.py → migration 016: the tripwires table (triggers for the PreToolUse hook)
   migrations/board.py → migrations 017, 018, 020: board_posts (+ author_origin, author_agent, recipient_agent) + board_reads (the agent board)
   migrations/xray.py → migration 019: xray_snapshots, xray_files, xray_edges (Codebase X-ray)
   models.py          → memory/namespace/relation data models
   query_log.py       → record(): one query_log row per recall/search/context/hook query;
                        best-effort, never prunes
+  query_acts.py      → record(): a fetch/excerpt/update/relate/forget, tied to the session's
+                       query that surfaced the memory; best-effort, never prunes
   recall_gate.py     → involuntary recall, decision half: pure arithmetic, no I/O
   recall_sweep.py    → involuntary recall, I/O half: read-only cosine sweep + BM25
   project_name.py    → `project_name(cwd)`: the project namespace a directory names (its folder; a linked git worktree's main checkout)
