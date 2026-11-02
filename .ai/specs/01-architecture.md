@@ -59,7 +59,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `xray/` (Codebase X-ray: `scan` + `extract` + `lang/` (one adapter per language: `python`
    on `ast` with `resolve`; `typescript` + `ts_*` + `jsonc` and `golang` on tree-sitter) +
    `model` + `local` + `parse_cache` + `resolve_walk` on the client, `validate` +
-   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check), `tool_xray` (the PreToolUse X-ray decision, apart from `tool_hook`), `bash_hook` + `bash_state` (X15: a shell command's writes get their X-ray; the repos a session touched) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), `symbols_walk` + `symbols` (X17: the Python symbol graph - per-file definition/binding/call/type records, resolved to call edges; client only, cached beside the graph), `edit_symbols` (X17: the tripwire's `Edit lands in` lines), `callers_tool` (X17: `code_xray` `callers`, local only), `edit_note` (the PostToolUse note after an edit: cross-file callers of the definitions touched, nearest tests), `ledger` (X11 lean: X-ray's test predictions vs pytest failures, local; `gingugu xray score`), `board_nudge` (X20 sender: asks a board post from a branch ahead of the default branch for its range, once per session, from `gingugu hook tool`), `board_brief` (X20: the brief a board post's `xray:` line asks for, rendered on the receiver), `repo_id` (X20: a checkout's identity and where the repo a post names is checked out here), `scar_query` (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace, bug/decision/architecture/fact/pattern only; never sees a checkout) + `scars` (X3, client side: resolves a hit's path tokens against the checkout's source files, ranks by type weight over files named, reads only the repo's own namespace, never `crow`; derived at read time, no table, no migration; appended to the read neighbourhood and the blind-edit deny), the hook side that builds the graph itself and never
+   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check), `tool_xray` (the PreToolUse X-ray decision, apart from `tool_hook`), `bash_hook` + `bash_state` (X15: a shell command's writes get their X-ray; the repos a session touched) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), `symbols_walk` + `symbols` (X17: the Python symbol graph - per-file definition/binding/call/type records, resolved to call edges; client only, cached beside the graph), `edit_symbols` (X17: the tripwire's `Edit lands in` lines), `callers_tool` (X17: `code_xray` `callers`, local only), `edit_note` (the PostToolUse note after an edit: cross-file callers of the definitions touched, nearest tests), `ledger` (X11 lean: X-ray's test predictions vs pytest failures, local; `gingugu xray score`), `board_nudge` (X20 sender: asks a board post from a branch ahead of the default branch for its range, once per session, from `gingugu hook tool`), `board_brief` (X20: the brief a board post's `xray:` line asks for, rendered on the receiver), `repo_id` (X20: a checkout's identity and where the repo a post names is checked out here), `scar_query` (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace, bug/decision/architecture/fact/pattern only; never sees a checkout) + `scars` (X3, client side: resolves a hit's path tokens against the checkout's source files, ranks by type weight over files named, reads only the repo's own namespace, never `crow`; derived at read time, no table, no migration; appended to the read neighbourhood and the blind-edit deny), `history` (X4: git log summarized as churn, author counts and co-changed pairs, cached by HEAD), `hotspots` (X4 hotspots + coupling, X6 blind spots; pure), `history_tool` (`code_xray` `history`/`blindspots`, local only), the hook side that builds the graph itself and never
    touches the brain; see Key Decisions), `proxy_xray` (the proxy's local half of `code_xray`),
    `board_watch` +
    `board_watch_remote`, `board_watch_emit` (the `gingugu board watch` wake-up command; see Key
@@ -866,7 +866,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   pass.* The dream runs on the brain, which may be a remote server, and the brain cannot
   read a client's checkout (X1: parsing is client-side). Refresh after writes stays lazy:
   the next hook call pays only for what changed.
-- **Codebase X-ray: scar tissue (X3, built on feature/xray-scars, not released).**
+- **Codebase X-ray: scar tissue (X3, released in 0.41.0, #168).**
   A file's X-ray also names what it has cost before: the first Read of a source file
   (X14 neighbourhood, `PostToolUse`) and the deny of a blind edit (X2, `PreToolUse`)
   append `Scar tissue: N memories name this file:` and the top 3 as
@@ -925,6 +925,29 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   neighbourhood's `Most called` line, and `code_xray` `callers` (`xray/callers_tool`,
   refused by `gingugu serve`, answered locally by the proxy). The hooks hash the
   checkout once and pass the fingerprint to both caches.
+- **Codebase X-ray: history and blind spots (X4 + X6, built on feature/xray-history,
+  not released).** The import graph says what leans on what; git history says what
+  moves together. `xray/history` reads the last 1,000 non-merge commits (`git log
+  --no-merges -M --name-status -z`, signature/format/rename options pinned so the
+  repo's config cannot reshape the output, 10s timeout), newest first, following
+  renames onto today's names, and keeps per-file churn, per-file *author counts*
+  (identities never leave the parser) and co-changed pairs, cached owner-only by HEAD
+  (`xray-history-<sha16(root)>.json`). A log that fails (the timeout) is remembered for
+  that HEAD, and the read hook does not rerun it until HEAD moves - one slow history
+  costs one timeout, not one per file read; the tool always retries. Paths decode as
+  `scan` decodes `ls-files` (`errors="replace"`), so history and graph paths match. `xray/hotspots` is pure: hotspots = churn x rank
+  x authors (products only, so no factor needs scaling); coupling = code-maat's logical
+  coupling with its *published defaults* (>= 5 revisions each, >= 5 shared, degree =
+  shared / average revisions >= 30%, changesets > 30 files left out), `hidden` when
+  neither file imports the other; blind spots = imported source no test imports and
+  none is named for (the `nearest_tests` naming rule - measured on httpx, a
+  direct-import-only rule marked 20 of 23 files untested because its tests import the
+  package; with naming, 8), ordered by rank over authors, fewest commits on a tie.
+  *Local only*, like `brief`: `code_xray` `history`/`blindspots` (`xray/history_tool`)
+  are refused by `gingugu serve` and answered by the proxy; the read neighbourhood adds
+  `Changes with (no import):` (`MEMORY_XRAY_HISTORY`). No migration. *Drift* (per-commit
+  X-ray diffs) is not built: it needs the import graph of past trees, and extraction
+  reads only the working tree.
 - **Codebase X-ray: the brief on the board (X20, released in 0.35.0).** The agents the
   brief is for fire no hooks, so a handoff carries one unasked. A post body with a
   line of its own `xray: <range>` arrives with the brief of that range, rendered by

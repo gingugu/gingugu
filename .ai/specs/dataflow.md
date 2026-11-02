@@ -633,6 +633,12 @@ PostToolUse event (Read | Grep | Glob)  →  .claude/hooks/post_tool_xray.py (pu
         (doubled when the title names the file) over files named; appends `Scar tissue: N memories name this file:` and the
         top 3, and a leaf file with no neighbourhood gets them under a
         `GINGUGU X-RAY: <path>.` header. Derived at read time, nothing stored
+      hidden partners (X4, MEMORY_XRAY_HISTORY; xray/history + hotspots.partners),
+        before the scars: history.read (HEAD → cached xray-history-<sha16(root)>.json,
+        else git log --no-merges -M --name-status -z -n 1000 → parse, renames followed →
+        churn, author counts, pairs shared >= 5) → code-maat coupling for this file
+        (>= 5 revs each, degree >= 30%) with no import either way → `Changes with (no
+        import): <file> NN%`, top 3; any failure drops only this line
   → emit additionalContext beside the tool result (output capped under 9000 chars)
 ```
 
@@ -701,6 +707,21 @@ python raw "sym" (defs, binds, calls, types; cached by content, X16)
   → edit tripwire: old_string → line span → symbols.enclosing → symbols.callers
   → read neighbourhood: distinct direct callers per definition, top 3
   → code_xray callers: symbols.callers for one (file, symbol), stdio/proxy only
+```
+
+X4 and X6 read git history against the same graph cache, locally:
+
+```
+code_xray history | blindspots (stdio handler, or the proxy; serve refuses)
+  → history_tool.answer: local.root(path) → hook_common.graph (cached by fingerprint)
+  → history.read(retry=True): HEAD → xray-history-<sha16(root)>.json if HEAD matches,
+    else git log --no-merges -M --name-status -z -n 1000 (10s) → parse (renames
+    followed) → summarize (churn, author counts, pairs shared >= 5; changesets > 30
+    files skipped for pairs) → cache; a failure writes xray-history-failed-<sha16>
+  → history:    hotspots.hotspots (churn x rank x authors) + hotspots.coupling
+                (>= 5 revs, degree >= 30%, `hidden` = no direct import; `files` focus)
+  → blindspots: hotspots.blindspots (imported, untested by import or name, rank/authors)
+  → lists paged by limit (default 50, cap 100), totals whole; `text` <= 8800 chars
 ```
 
 The hooks hash the checkout once and hand that fingerprint to both cache reads.
