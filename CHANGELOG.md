@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **History as a second graph (X4): what changes together, and where work piles up.**
+  `code_xray` action `history` (and `gingugu xray history [--files] [--path] [--limit]
+  [--json]`) reads the last 1,000 non-merge commits of the checkout and returns
+  **hotspots** (source files by churn x rank x authors) and **coupling**: pairs of files
+  that change together, each flagged `hidden` when neither imports the other - the
+  dependency the import graph cannot show. Coupling is code-maat's logical coupling with
+  its published defaults: both files in at least 5 commits, together in at least 5, and a
+  degree (shared commits over the average of the two) of at least 30%; a commit touching
+  more than 30 files counts toward churn but not coupling. `files` focuses the pairs on
+  the files named. Renames are followed, so history lands on today's path.
+- **The read neighbourhood names a file's hidden partners.** On the first Read of a file,
+  X-ray adds `Changes with (no import): <file> 80%, ...` - up to three files it changes
+  with though neither imports the other. Switch: `MEMORY_XRAY_HISTORY` (default on).
+- **Blind-spot map (X6): where a change reaches furthest with the least review.**
+  `code_xray` action `blindspots` (and `gingugu xray blindspots`) lists imported source
+  files no test imports directly and no test file is named for (`test_<name>`), ordered by
+  rank over the number of people who have touched it, fewest commits first on a tie, with
+  importers, commits, authors and a `single_author` flag.
+- Both actions are computed on the caller's machine from the hook graph cache and a
+  `git log` summary cached by HEAD (`xray-history-<hash>.json`, owner-only); the brain is
+  never asked, `gingugu serve` refuses them, and the proxy answers them locally. Author
+  identities never leave the parser: only per-file counts are kept, on disk or in any
+  answer. Measured: the log read takes 0.05-0.11s for 1,000-3,800 commits.
+
 ---
 
 ## [0.41.0] - 2026-11-01

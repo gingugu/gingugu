@@ -6,7 +6,8 @@ the agent has the shape of the code while it reads rather than after it plans an
 edit. The first ``Read``/``Grep``/``Glob`` in a repo brings the repo map; each
 source file ``Read`` brings who imports it and what it imports, once. Both come
 from the same cached graph as the edit hook and never need the brain; the
-file's scar tissue (X3, ``scars``) is the one line that asks it.
+file's scar tissue (X3, ``scars``) is the one line that asks it. The files it
+changes with though neither imports the other (X4) come from the cached git log.
 
 Like every hook it must never break a session: bad input, a non-repo path or an
 extraction failure all return None (stay silent).
@@ -17,7 +18,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from . import bash_state, extract, hook_common, local, rank, scars, symbols
+from . import bash_state, extract, history, hook_common, hotspots, local, rank, scars, symbols
 from .hook_common import Graph, _claim, _show, _sweep
 from .scan import XrayError
 
@@ -154,6 +155,22 @@ def _with_symbols(
     return f"{near}\n{line}" if line else near
 
 
+def _changes_with(root: Path, rel: str, g: Graph, state_dir: Path) -> list[str]:
+    """X4: files ``rel`` changes with that neither file imports - what the import
+    lines above cannot show. Empty on any failure: history never costs the read."""
+    if os.environ.get("MEMORY_XRAY_HISTORY", "on").lower() in ("0", "off", "false"):
+        return []
+    try:
+        found = hotspots.partners(g, history.read(root, state_dir), rel)
+    except (XrayError, ValueError, OSError):
+        return []
+    if not found:
+        return []
+    named = ", ".join(f"{_show(p)} {round(d * 100)}%" for p, d in found[:NAMED])
+    more = f" (+{len(found) - NAMED} more)" if len(found) > NAMED else ""
+    return [f"Changes with (no import): {named}{more}"]
+
+
 def _scars(root: Path, rel: str, g: Graph) -> list[str]:
     """X3: what the memories in this repo's namespace say ``rel`` has cost."""
     if rel not in g.files or rel in g.packages:
@@ -204,9 +221,9 @@ def check(payload: dict, state_dir: Path) -> str | None:
             near = _render_neighbourhood(rel, g)
             if near:
                 near = _with_symbols(near, rel, root, state_dir, session_id, fp)
-            scar = _scars(root, rel, g)
-            if scar:  # a leaf has no neighbourhood, but its history still speaks
-                near = "\n".join([near or f"GINGUGU X-RAY: {_show(rel)}.", *scar])
+            extra = _changes_with(root, rel, g, state_dir) + _scars(root, rel, g)
+            if extra:  # a leaf has no neighbourhood, but its history still speaks
+                near = "\n".join([near or f"GINGUGU X-RAY: {_show(rel)}.", *extra])
             if near:
                 parts.append(near)
         if not parts:

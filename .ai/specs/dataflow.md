@@ -633,6 +633,12 @@ PostToolUse event (Read | Grep | Glob)  →  .claude/hooks/post_tool_xray.py (pu
         (doubled when the title names the file) over files named; appends `Scar tissue: N memories name this file:` and the
         top 3, and a leaf file with no neighbourhood gets them under a
         `GINGUGU X-RAY: <path>.` header. Derived at read time, nothing stored
+      hidden partners (X4, MEMORY_XRAY_HISTORY; xray/history + hotspots.partners),
+        before the scars: history.read (HEAD → cached xray-history-<sha16(root)>.json,
+        else git log --no-merges -M --name-status -z -n 1000 → parse, renames followed →
+        churn, author counts, pairs shared >= 5) → code-maat coupling for this file
+        (>= 5 revs each, degree >= 30%) with no import either way → `Changes with (no
+        import): <file> NN%`, top 3; any failure drops only this line
   → emit additionalContext beside the tool result (output capped under 9000 chars)
 ```
 
