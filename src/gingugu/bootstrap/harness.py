@@ -1,7 +1,7 @@
 """``gingugu harness`` - the Claude Code harness, installed on top of ``gingugu init``.
 
 Plain ``init`` stays gingugu-only. ``harness`` runs ``init`` and then adds the
-rest of the kit: a safety guard and event logging, three fenced minions, the
+rest of the kit: a safety guard and event logging, four fenced minions, the
 ``creating-pr`` skill, the ``.ai/`` knowledge base, and a managed block in the
 repo's ``CLAUDE.md``. Nothing it installs calls out to the network.
 
@@ -40,6 +40,7 @@ _MANAGED = [
     ("agents/repo-scout.md", ".claude/agents/repo-scout.md"),
     ("agents/security-reviewer.md", ".claude/agents/security-reviewer.md"),
     ("agents/ai-docs-auditor.md", ".claude/agents/ai-docs-auditor.md"),
+    ("agents/researcher.md", ".claude/agents/researcher.md"),
     ("skills/creating-pr/SKILL.md", ".claude/skills/creating-pr/SKILL.md"),
     (
         "skills/creating-pr/ai-assessment-checklist.md",

@@ -692,7 +692,9 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   commands naming the data dir, the database file, the sqlite CLI or the
   gingugu CLI in command position (a speed bump), and the write and
   `credential_*` tools of the inherited `mcp__gingugu__` server (reads open),
-  which also covers built-in agents such as Explore. Own switch
+  which also covers built-in agents such as Explore, and every `Agent`/`Task`
+  call: a minion never spawns a minion (general-purpose carries the Agent tool,
+  and a nested minion's findings come back unchecked). Own switch
   `MEMORY_MINION_FENCE=off`, independent of `MEMORY_TRIPWIRES` and of
   `MEMORY_XRAY_TRIPWIRE` (the X-ray edit check's switch). The tripwire
   doorway passes `mcp__gingugu__*` through when `agent_id` is set so the fence
@@ -1151,8 +1153,9 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   under `bootstrap/templates/harness/`) runs `init` and layers on a secrets/`rm`
   guard, one stdlib JSON-lines logger for the remaining hook events (the kit
   it replaces had one near-identical script per event, each rewriting a growing
-  JSON array on every call), a pre-compaction transcript backup, three fenced
-  minions whose `{{namespace}}` is rendered from the folder name, `/creating-pr`,
+  JSON array on every call), a pre-compaction transcript backup, four fenced
+  minions (none with a shell; `researcher` is the fenced stand-in for
+  general-purpose) whose `{{namespace}}` is rendered from the folder name, `/creating-pr`,
   a create-only `.ai/` scaffold, a managed block in the repo `CLAUDE.md` (left
   out when the file already carries its own `## AI Knowledge Base Enforcement`
   section - a repo that wrote its own rules keeps them, without a generic copy

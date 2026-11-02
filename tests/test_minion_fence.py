@@ -1,11 +1,12 @@
 """The minion fence: what a subagent may not do to the brain behind its server.
 
 Claude Code puts ``agent_id`` on a PreToolUse payload only when the call comes
-from inside a subagent, so the main thread is never fenced. Inside one, three
+from inside a subagent, so the main thread is never fenced. Inside one, four
 doors are shut: the file tools on the brain's data directory, shell commands
-that reach for the database or the CLI, and the write tools of the full-brain
-``gingugu`` server every subagent inherits from its parent. The path checks
-hold; the shell check is a speed bump, and the tests say which is which.
+that reach for the database or the CLI, the write tools of the full-brain
+``gingugu`` server every subagent inherits from its parent, and spawning a
+subagent of its own. The path and spawn checks hold; the shell check is a
+speed bump, and the tests say which is which.
 """
 
 from __future__ import annotations
@@ -163,6 +164,23 @@ def test_the_main_thread_is_never_fenced():
     assert decide(_p("mcp__gingugu__memory_store", {}, agent=None), DATA) is None
 
 
+@pytest.mark.parametrize("tool", ["Agent", "Task"])
+def test_a_minion_never_spawns_a_minion(tool):
+    # general-purpose carries the Agent tool; a nested minion's findings come
+    # back unchecked by the one that spawned it.
+    reason = decide(
+        _p(tool, {"prompt": "survey the repos", "subagent_type": "general-purpose"}), DATA
+    )
+    assert reason and "spawn" in reason
+
+
+@pytest.mark.parametrize("tool", ["Agent", "Task"])
+def test_the_main_thread_spawns_freely(tool):
+    assert (
+        decide(_p(tool, {"prompt": "p", "subagent_type": "repo-scout"}, agent=None), DATA) is None
+    )
+
+
 def test_malformed_input_never_raises():
     assert decide(_p("Read", None), DATA) is None  # type: ignore[arg-type]
     assert decide(_p("Bash", {"command": 7}), DATA) is None
@@ -193,6 +211,13 @@ def test_the_hook_denies_a_minions_inherited_write(hook_env, capsys):
     tool_hook.run(_p("mcp__gingugu__memory_store", {"title": "t"}))
     out = json.loads(capsys.readouterr().out)
     assert out["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_the_hook_denies_a_minions_spawn(hook_env, capsys):
+    tool_hook.run(_p("Agent", {"prompt": "p", "subagent_type": "general-purpose"}))
+    out = json.loads(capsys.readouterr().out)
+    assert out["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "yourself" in out["hookSpecificOutput"]["permissionDecisionReason"]
 
 
 def test_the_fence_can_be_switched_off(hook_env, monkeypatch, capsys):
