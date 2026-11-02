@@ -86,6 +86,16 @@ paged; a git `core.fsmonitor`-style check for other config that runs code.
 
 ## Recently Completed
 
+**Board: an open task stays unread until claimed or done (2026-11-02).** Found
+live: beepboop on one machine posted two tasks for the gingugu session; another
+beepboop session read them 10s later, and the session they were meant for opened
+to `unread: 0`. `board_reads` is keyed by persona only, so one session's read was
+every twin's. `_inbox_where` now keeps an open task unread regardless of receipts;
+messages are still read once. Tests: `tests/test_board_open_tasks.py`. Still open:
+`inbox` applies `LIMIT` to an oldest-first list, so past the limit the newest posts
+are the ones dropped; not changed here, because `board watch`'s cursor depends on
+that order (a newest-first window would let it skip undelivered older posts).
+
 **Board #4 groundwork: query acts + harness notices out of the prompt hook (RELEASED
 in 0.43.0, #171; 2026-11-02).** Discovery first (read-only snapshot of
 the Pi brain, 3,408 query_log rows, 2026-09-30 to 2026-11-02): (1) 1,218 of 2,481

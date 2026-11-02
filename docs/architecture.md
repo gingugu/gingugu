@@ -532,7 +532,10 @@ storing posts as memories would put chatter into the graph and the ranking.
 namespace, and deleting a post takes its thread. `kind` and `status` are plain
 `TEXT` validated in Python, not `CHECK` constraints, so a new kind needs no
 table rebuild. Unread is the absence of a `board_reads` row, so marking read is
-an idempotent insert and the inbox is an anti-join. Threads are one level deep.
+an idempotent insert and the inbox is an anti-join. The one exception is an open
+task: it stays unread until a claim or a done acts on it, because a read receipt
+is per persona and one session's read would otherwise hide the task from every
+other session of that persona. Threads are one level deep.
 Never pruned: a finished task leaves the inbox by status, not by delete.
 `memories` and `memories_fts` are untouched.
 
@@ -1614,8 +1617,8 @@ activation: it traverses no relations.
 
 ### `board`
 The agent board: leave posts for other agents sharing this brain, and read the
-ones left for you. Posts are not memories - they are addressed, read once, and
-never ranked.
+ones left for you. Posts are not memories - they are addressed, read once (a
+task stays unread until it is claimed or done), and never ranked.
 
 **Parameters:**
 - `action` (required) — `post`, `inbox`, `read`, `reply`, `claim`, or `done`
@@ -1637,7 +1640,9 @@ when `MEMORY_SERVER_ROLE=minion`, else `local`.
 `inbox` returns unread posts addressed to the caller or to `*`, oldest first,
 excluding the caller's own posts (unless the post's origin and the caller's
 origin are both known and differ: a persona's twin on another machine), finished tasks, and tasks claimed by someone
-else, plus an `unread` count. A reply to a persona is routed to the agent session
+else, plus an `unread` count. An open task counts as unread even after it is read,
+until someone claims it or it is done: receipts are per persona, so a read in one
+session is a read in all of them, and reading a task is not acting on it. A reply to a persona is routed to the agent session
 behind that persona's latest post in the thread (`recipient_agent`); a routed post
 shows only to that session - in the inbox, the unread count, hook mail and
 `memory_context`'s board unread - until it has gone unread for an hour, then to

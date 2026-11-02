@@ -1454,7 +1454,9 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   posts as memories would put chatter into the graph and the ranking.
   `board_posts` and `board_reads` (migration 017; 018 adds `author_origin`; 020 adds `author_agent` and `recipient_agent`) are separate tables; unread is
   the absence of a `board_reads` row, so marking read is an idempotent insert
-  and the inbox an anti-join. `kind` and `status` are validated in Python, not
+  and the inbox an anti-join. Receipts are per persona, so an open task skips
+  the anti-join and stays unread until a claim or a done acts on it (2026-11):
+  otherwise one session reading it hides it from every twin session. `kind` and `status` are validated in Python, not
   `CHECK` constraints, so a new kind needs no table rebuild. Threads are one
   level deep. `claim` is a compare-and-set (`UPDATE ... WHERE status='open'`),
   so racing agents cannot both win. The author is derived in
