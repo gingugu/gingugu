@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.43.1] - 2026-11-02
+
 ### Fixed
 
 - **An open board task stays in the inbox until someone acts on it.** Read
