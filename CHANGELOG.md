@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Scar tissue (X3): an X-rayed file names what it has cost before.** On the first Read
+  of a source file in a session, and in the deny reason of a blind edit, X-ray appends
+  `Scar tissue: N memories name this file:` and the top three memories of the repo that
+  mention it, as `- <type> <date>: <title> [<id>]`, then `(+K more; memory_search
+  ids=<id> reads one in full)`. A leaf file with no importers still gets its scar lines.
+  An edit of a file already read gets no extra friction; its scars came with the read.
+  Memories are ranked by type (bug 3, decision/architecture 2, fact/pattern 1; doubled when the memory's title names the file) divided by
+  how many of the repo's files they name, newest first on a tie. Only the repo's own
+  project namespace is read, never `crow`, and a file name two files share is never
+  guessed. Derived at read time and stored nowhere: no migration, no new table.
+  `MEMORY_XRAY_SCARS=off` disables it.
+- **`POST /hook/scars`**, an owner-only route so a remote brain answers the scar lookup
+  (`{namespace, basename}` -> `{scars: [...]}`, 3 s timeout on the client). Any failure
+  reads as no scars. A remote brain needs this release to serve it; an older one answers
+  404, which reads as no scars.
+
 ---
 
 ## [0.40.0] - 2026-10-30
