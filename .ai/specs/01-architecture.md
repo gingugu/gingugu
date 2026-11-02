@@ -925,8 +925,8 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   neighbourhood's `Most called` line, and `code_xray` `callers` (`xray/callers_tool`,
   refused by `gingugu serve`, answered locally by the proxy). The hooks hash the
   checkout once and pass the fingerprint to both caches.
-- **Codebase X-ray: history and blind spots (X4 + X6, built on feature/xray-history,
-  not released).** The import graph says what leans on what; git history says what
+- **Codebase X-ray: history and blind spots (X4 + X6, released in 0.42.0,
+  #170).** The import graph says what leans on what; git history says what
   moves together. `xray/history` reads the last 1,000 non-merge commits (`git log
   --no-merges -M --name-status -z`, signature/format/rename options pinned so the
   repo's config cannot reshape the output, 10s timeout), newest first, following
