@@ -955,8 +955,9 @@ It installs:
   own `MEMORY_GRANT`, when it has one. Inside a subagent, `gingugu hook
   tool` also keeps it off the brain's data directory and the `gingugu` CLI, and
   denies the write and credential tools of the inherited full-brain server, so a
-  built-in agent like Explore can read the brain but not change it. This
-  prevents accidents; it is not a sandbox against a hostile process running as
+  built-in agent like Explore can read the brain but not change it, and it
+  denies any `Agent` or `Task` call, so a minion never spawns a minion of its
+  own. This prevents accidents; it is not a sandbox against a hostile process running as
   you. Set `MEMORY_MINION_FENCE=off` to disable the fence.
 - All eight hooks wired into `.claude/settings.json`, **merged non-destructively** —
   any existing config is backed up (`settings.json.bak`) and preserved.
@@ -1031,10 +1032,12 @@ On top of everything `init` installs, it adds:
 - **`.claude/hooks/pre_compact.py`** - copies the session transcript to
   `.claude/data/transcript_backups/` (git-ignored, owner-only) before Claude
   Code compacts it.
-- **Three fenced minions** in `.claude/agents/`: `repo-scout` (haiku, search
-  and inventory), `security-reviewer` and `ai-docs-auditor` (sonnet). Each runs
-  its own `brain` server that reads `crow` and this repo's namespace and writes
-  only `minions`.
+- **Four fenced minions** in `.claude/agents/`: `repo-scout` (haiku, search
+  and inventory), `security-reviewer`, `ai-docs-auditor` and `researcher`
+  (sonnet; read-only research across the repo and the web, the fenced stand-in
+  for `general-purpose`). None has a shell. Each runs its own `brain` server
+  that reads `crow` and this repo's namespace and writes only `minions`, and
+  `gingugu hook tool` denies any minion that tries to spawn one of its own.
 - **The `/creating-pr` skill** - opens a PR only after assessing the `.ai/`
   knowledge base and running the `ai-docs-auditor` on every PR; each confirmed
   finding is fixed in that PR.
@@ -1272,7 +1275,7 @@ Environment variables (all optional):
 | `MEMORY_XRAY_SCARS` | `on` | Set `off` to disable scar tissue: the repo's memories that name a file, appended to the X-ray read neighbourhood and to the deny of a blind edit. A remote brain needs the release that serves `POST /hook/scars`; an older one answers 404, which reads as no scars |
 | `MEMORY_XRAY_REPOS` | `~/GIT`, `~/git`, `~/src`, `~/code`, `~/projects`, `~/dev`, `~/repos`, `~/Developer` | Folders (`os.pathsep`-separated) where a receiver looks for the repo an `xray: <repo> <range>` board line names: exactly `<folder>/<name>`, used only when its origin matches. Empty turns the search off |
 | `MEMORY_XRAY_BOARD` | `on` | Set `off` to disable the brief on the board: a post with a line of its own `xray: <range>` no longer arrives with that range's X-ray brief, in the prompt hook's board mail or in `gingugu board watch`, and a board post from a branch is no longer asked once to name its range |
-| `MEMORY_MINION_FENCE` | `on` | Set `off` to disable the subagent fence in `gingugu hook tool` (data-dir file/shell access and inherited-server writes) |
+| `MEMORY_MINION_FENCE` | `on` | Set `off` to disable the subagent fence in `gingugu hook tool` (data-dir file/shell access, inherited-server writes, and a minion spawning a subagent) |
 | `MEMORY_CHECKOUT_GUARD` | `on` | Set `off` to disable the checkout guard in `gingugu hook tool` (branch moves, `reset --hard` and `stash` in a repo's primary checkout are denied with a pointer to a worktree). One command passes with a `GINGUGU_PRIMARY_OK=1` prefix |
 | `MEMORY_SERVE_HOST` | `127.0.0.1` | Bind host for `gingugu serve` (set `0.0.0.0` to accept remote connections) |
 | `MEMORY_SERVE_PORT` | `8765` | Bind port for `gingugu serve` |
