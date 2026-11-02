@@ -860,7 +860,9 @@ It installs:
   margin above the median of its own sweep, a keyword match on the same
   prompt, and not have been surfaced already this session. Pinned memories are
   skipped (they already load every session) and so are superseded ones. On a
-  548-prompt sample it fires on about 5% of turns. Every prompt long enough to
+  548-prompt sample it fires on about 5% of turns. A harness notice (a
+  `<task-notification>` for a finished background command or a monitor event) is
+  not a prompt: it is stripped before the search. Every prompt long enough to
   search on is recorded, with what it surfaced, in the `query_log` table of
   your memory database - the same file as the memories. With a remote brain
   on, that database is the brain's, so the prompt text goes there. An agent

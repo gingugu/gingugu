@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The prompt hook no longer treats a harness notice as a prompt.** Claude Code
+  delivers a finished background command or a monitor event as a
+  `<task-notification>` prompt; on a month of real use they were 1,218 of 2,481
+  prompt-hook queries, each a recall against the brain and a row in the query log.
+  Those blocks are now stripped before the search, on the client and on the brain:
+  a notice alone recalls and logs nothing, and real text around one is what gets
+  searched. Board mail still arrives on every prompt.
+
+### Added
+
+- **What a session did with what it found (migration 022).** A fetch by id
+  (`memory_search ids`), a `memory_excerpt`, a `memory_update`, a `memory_relate`
+  (both ends) or a `memory_forget` now writes a `query_acts` row tied to the newest
+  query of the same session that returned the memory, with its rank there.
+  `query_log` gains `extra_ids`: what a recall returned beside its ranked hits
+  (related extras, capability pointers), so an act on one of those still finds its
+  query. This is the deterministic label a paraphrase question set needs - "asked
+  this, used that" - which the logs could not recover after the fact. Bookkeeping
+  only: never part of an answer, never fails a call.
+
 ---
 
 ## [0.42.0] - 2026-11-01

@@ -20,7 +20,13 @@ import sys
 import time
 from pathlib import Path
 
-from .recall_gate import GateConfig, is_worth_embedding, render, strip_affect
+from .recall_gate import (
+    GateConfig,
+    is_worth_embedding,
+    render,
+    strip_affect,
+    strip_notifications,
+)
 
 GLOBAL_NAMESPACE = "crow"
 _PERSONA_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")  # also the harness's namespace rule
@@ -235,6 +241,7 @@ def run(payload: dict) -> int:
 def _recall(prompt: str, session_id: str, cwd: str, app) -> tuple[str, int] | None:
     """The memories this prompt woke, as ``(block, count)``, or None."""
     cfg = config_from_env()
+    prompt = strip_notifications(prompt)  # a harness notice is not the user talking
     # Stage one, before any expensive import.
     if not is_worth_embedding(prompt, min_chars=cfg.min_chars):
         return None

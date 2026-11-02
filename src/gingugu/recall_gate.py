@@ -135,6 +135,22 @@ def is_worth_embedding(prompt: str, *, min_chars: int = MIN_PROMPT_CHARS) -> boo
     return stripped.lower().strip("!.?, ") not in _ACKS
 
 
+_NOTICE = re.compile(r"<task-notification>.*?(?:</task-notification>|\Z)", re.DOTALL)
+
+
+def strip_notifications(prompt: str) -> str:
+    """Drop the harness's ``<task-notification>`` blocks, keeping any real text.
+
+    Claude Code delivers a finished background command or a monitor event as a
+    prompt. Measured 2026-11-02, they were 1,218 of 2,481 prompt-hook queries;
+    recalling on one injects memories about nothing the user said. Other tags
+    (``<pasted_content>``, ``<ide_opened_file>``) carry the user's own material
+    and are kept. A prompt with no notice comes back unchanged."""
+    if "<task-notification>" not in prompt:
+        return prompt
+    return _NOTICE.sub("", prompt).strip()
+
+
 def strip_affect(prompt: str) -> str:
     """Remove greetings, interjections and emoji before encoding.
 
