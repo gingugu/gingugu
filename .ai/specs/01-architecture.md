@@ -1471,7 +1471,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   in the same `additionalContext` block as recalled memories (at most 5, a
   300-char JSON-encoded preview each, with the `board(action="read")` call);
   nothing is marked read. The inbox is fenced by the client's `MEMORY_GRANT`
-  (`hook_grant.client_grant`), not the recall namespaces (crow, persona, cwd):
+  (`hook_grant.client_grant`), not the recall namespaces (crow, persona, project):
   a reply lives in its thread's namespace, often another agent's. Remote mode
   asks `POST /hook/inbox` (3s timeout); shown ids stay on the machine under
   `board:<session>`. The installed doorway `user_prompt_recall.py` still exits

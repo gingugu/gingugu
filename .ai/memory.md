@@ -246,7 +246,7 @@ Generated sets hold real memory content and stay in `bench/local/`.
   one symbol's callers and reach - a lower bound. Brain tables for it are owed (X21).
   Scar tissue (X3, built on feature/xray-scars, not released): the read neighbourhood and
   the blind-edit deny also name the repo's memories that mention the file (top 3 by type
-  weight over files named; `xray/scars.py` client, `xray/scar_query.py` brain, remote
+  weight, doubled when the title names the file, over files named; `xray/scars.py` client, `xray/scar_query.py` brain, remote
   `POST /hook/scars`; derived at read time, no migration; `MEMORY_XRAY_SCARS`).
   Multi-language + migration 021 (shipped 0.30.0).
 - **Board:** `board` (`post` / `inbox` / `read` / `reply` / `claim` / `done`) -
