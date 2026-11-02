@@ -144,7 +144,6 @@ def register(mcp, ctx: ServerContext) -> None:
             # refreshes last_accessed, writes access_log row).
             ctx.store.record_accesses(seed_ids)
             everywhere = scope.is_all or widened_from is not None
-            ctx.store.log_query("recall", query, seed_ids, None if everywhere else scope.names)
             # Spreading activation: recalling these memories wakes their cluster.
             _spread_activation(ctx, seed_ids)
             # Every read surface stamps a readable per-memory namespace
@@ -164,6 +163,9 @@ def register(mcp, ctx: ServerContext) -> None:
                 )
                 if lane:
                     payload["capabilities"] = lane
+            extras = [s["id"] for s in summaries + payload.get("capabilities", [])]
+            names = None if everywhere else scope.names
+            ctx.store.log_query("recall", query, seed_ids, names, extra_ids=extras)
             if scope.is_all or widened_from is not None:
                 payload["scope"] = "all"
                 if widened_from is not None:

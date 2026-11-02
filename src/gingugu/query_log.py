@@ -41,24 +41,28 @@ def record(
     result_ids: list[str],
     namespaces: list[str] | None,
     session_id: str | None = None,
+    extra_ids: list[str] | None = None,
 ) -> bool:
     """Log one query. Returns whether a row was written.
 
     ``namespaces`` is the scope the query actually ran in; ``None`` means every
-    namespace. ``result_ids`` keeps its rank order, de-duplicated. A blank
-    query is not a question and is not logged.
+    namespace. ``result_ids`` keeps its rank order, de-duplicated. ``extra_ids``
+    are what came back beside the ranked hits (related extras, capability
+    pointers), so an act on one of them still finds this query; they never
+    repeat a ranked hit. A blank query is not a question and is not logged.
     """
     text = (query or "").strip()[:MAX_QUERY_CHARS]
     if not text:
         return False
     scope = ",".join(namespaces) if namespaces else ALL_NAMESPACES
     ranked = list(dict.fromkeys(mid for mid in result_ids if mid))
+    extras = [m for m in dict.fromkeys(m for m in extra_ids or () if m) if m not in ranked]
+    row = [str(uuid.uuid4()), session_id, tool, text, scope, json.dumps(ranked), utcnow_iso()]
+    cols = "id, session_id, tool, query, namespaces, result_ids, created_at"
+    if extras:  # only then: a store before migration 022 still logs everything else
+        cols, row = cols + ", extra_ids", row + [json.dumps(extras)]
     try:
-        conn.execute(
-            "INSERT INTO query_log(id, session_id, tool, query, namespaces, result_ids, "
-            "created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (str(uuid.uuid4()), session_id, tool, text, scope, json.dumps(ranked), utcnow_iso()),
-        )
+        conn.execute(f"INSERT INTO query_log({cols}) VALUES ({', '.join('?' * len(row))})", row)
     except sqlite3.Error as exc:
         logger.warning("query_log write skipped: %s", exc)
         return False
