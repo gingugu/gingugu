@@ -845,6 +845,7 @@ every subagent tool call  →  PreToolUse (agent_id present)
       shell naming data dir / memories.db / sqlite3 /
         running the gingugu CLI in command position    → deny  (speed bump)
       inherited mcp__gingugu__ write tools + credential_* → deny
+      Agent / Task (a minion spawning a minion)        → deny  (holds)
       anything else                                    → tripwires as usual
 ```
 
