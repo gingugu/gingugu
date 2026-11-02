@@ -505,7 +505,12 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.43.1** (PyPI, 2026-11-02). Patch: an open board task stays
+- Current version: **0.44.0** (PyPI, 2026-11-02). Minor: a minion never spawns a
+  minion (`minion_fence` denies `Agent`/`Task` inside a subagent), and `gingugu
+  harness` ships a fourth minion, `researcher` (sonnet, read-only repo + web, no
+  shell) (#173). No migration. **Upgrading:** re-run `gingugu harness` in a repo
+  to get `researcher` and the new `CLAUDE.md` block.
+- 0.43.1 (PyPI, 2026-11-02). Patch: an open board task stays
   unread until it is claimed or done, since read receipts are per persona and one
   session's read hid it from every twin session (#172). No migration.
 - 0.43.0 (PyPI, 2026-11-02). Minor: the prompt hook strips Claude
