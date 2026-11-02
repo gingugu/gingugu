@@ -207,8 +207,11 @@ def _inbox_where(
     cutoff = (datetime.now(UTC) - timedelta(seconds=ROUTE_GRACE_SECONDS)).isoformat()
     params: list[object] = [reader, BROADCAST, reader, origin, origin, reader, agent, agent, cutoff]
     if not include_read:
+        # Receipts are per persona, so one session's read is every twin's. An open
+        # task stays unread until a claim or a done acts on it.
         clauses.append(
-            "NOT EXISTS (SELECT 1 FROM board_reads r WHERE r.post_id = p.id AND r.reader = ?)"
+            "((p.kind = 'task' AND p.status = 'open') OR NOT EXISTS "
+            "(SELECT 1 FROM board_reads r WHERE r.post_id = p.id AND r.reader = ?))"
         )
         params.append(reader)
     scope, scope_params = grants.scope_clause("p.namespace_id")
