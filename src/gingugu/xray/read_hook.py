@@ -161,7 +161,7 @@ def _changes_with(root: Path, rel: str, g: Graph, state_dir: Path) -> list[str]:
     if os.environ.get("MEMORY_XRAY_HISTORY", "on").lower() in ("0", "off", "false"):
         return []
     try:
-        found = hotspots.partners(g, history.read(root, state_dir), rel)
+        found = hotspots.partners(g, history.read(root, state_dir, retry=False), rel)
     except (XrayError, ValueError, OSError):
         return []
     if not found:

@@ -90,10 +90,10 @@ def test_truncated_output_never_raises():
         history.parse(out[:cut])
 
 
-def test_non_utf8_names_survive_as_surrogates():
+def test_non_utf8_names_decode_as_the_scan_decodes_them():
     raw = b"\x01" + SHA.encode() + b"\x1fx@y\0\nM\0caf\xe9.py\0"
     (c,) = history.parse(raw)
-    assert c.files == frozenset({"caf\udce9.py"})
+    assert c.files == frozenset({b"caf\xe9.py".decode("utf-8", errors="replace")})
 
 
 # --- summarize -----------------------------------------------------------
@@ -249,3 +249,27 @@ def test_a_git_timeout_is_an_xray_error(tmp_path, state, monkeypatch):
     monkeypatch.setattr(history.scan, "git", slow)
     with pytest.raises(XrayError):
         history.read(repo, state)
+
+
+def test_a_failed_log_is_not_rerun_by_the_hook_until_head_moves(tmp_path, state, monkeypatch):
+    repo = _repo(tmp_path, {"a.py": "1\n"})
+    calls = []
+
+    def slow(r):
+        calls.append(r)
+        raise XrayError("git log took over 10s")
+
+    real = history._log
+    monkeypatch.setattr(history, "_log", slow)
+    with pytest.raises(XrayError):
+        history.read(repo, state, retry=False)
+    with pytest.raises(XrayError):
+        history.read(repo, state, retry=False)
+    assert len(calls) == 1  # the hook pays one timeout per HEAD, not one per file
+    with pytest.raises(XrayError):
+        history.read(repo, state)  # the tool always tries again
+    assert len(calls) == 2
+    monkeypatch.setattr(history, "_log", real)
+    _commit(repo, {"a.py": "2\n"})
+    assert history.read(repo, state, retry=False).churn["a.py"] == 2
+    assert not list(state.glob("xray-history-failed-*"))

@@ -866,7 +866,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   pass.* The dream runs on the brain, which may be a remote server, and the brain cannot
   read a client's checkout (X1: parsing is client-side). Refresh after writes stays lazy:
   the next hook call pays only for what changed.
-- **Codebase X-ray: scar tissue (X3, built on feature/xray-scars, not released).**
+- **Codebase X-ray: scar tissue (X3, released in 0.41.0, #168).**
   A file's X-ray also names what it has cost before: the first Read of a source file
   (X14 neighbourhood, `PostToolUse`) and the deny of a blind edit (X2, `PreToolUse`)
   append `Scar tissue: N memories name this file:` and the top 3 as
@@ -932,7 +932,10 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   repo's config cannot reshape the output, 10s timeout), newest first, following
   renames onto today's names, and keeps per-file churn, per-file *author counts*
   (identities never leave the parser) and co-changed pairs, cached owner-only by HEAD
-  (`xray-history-<sha16(root)>.json`). `xray/hotspots` is pure: hotspots = churn x rank
+  (`xray-history-<sha16(root)>.json`). A log that fails (the timeout) is remembered for
+  that HEAD, and the read hook does not rerun it until HEAD moves - one slow history
+  costs one timeout, not one per file read; the tool always retries. Paths decode as
+  `scan` decodes `ls-files` (`errors="replace"`), so history and graph paths match. `xray/hotspots` is pure: hotspots = churn x rank
   x authors (products only, so no factor needs scaling); coupling = code-maat's logical
   coupling with its *published defaults* (>= 5 revisions each, >= 5 shared, degree =
   shared / average revisions >= 30%, changesets > 30 files left out), `hidden` when

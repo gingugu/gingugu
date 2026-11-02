@@ -1760,7 +1760,8 @@ each rename's old name onto today's, and summarizes them as per-file churn, per-
 author counts (identities are compared in the parser and never kept) and co-changed
 pairs; a commit past 30 files counts toward churn but not pairs. The summary is cached
 owner-only as `xray-history-<sha16(root)>.json` in the hook state directory and reused
-while HEAD is unchanged. `xray/hotspots.py` reads it against the import graph:
+while HEAD is unchanged; a log that fails is remembered for that HEAD, and the read
+hook does not rerun it until HEAD moves (the tool always retries). `xray/hotspots.py` reads it against the import graph:
 hotspots are source files by churn x rank x authors; coupling is code-maat's logical
 coupling with its published defaults (both files in >= 5 commits, together in >= 5,
 degree = shared / average revisions >= 30%), `hidden` when neither file imports the
@@ -2190,7 +2191,7 @@ src/gingugu/
 ├── proxy_vault_link.py     # Remote mode: runs that vault behind an in-memory MCP session so it can ask the user
 ├── proxy_xray.py           # Remote mode: code_xray reads the checkout here, asks the brain by fingerprint
 ├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), tool_xray (the PreToolUse X-ray decision, kept apart from tool_hook), bash_hook + bash_state (X15: a shell command's dirty-set snapshot and diff; the repos a session touched), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only), board_nudge (X20 sender: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line), board_brief (X20: the brief a board post's `xray: <range>` line asks for, rendered on the receiver), repo_id (X20: a checkout's identity, and the local checkout an `xray: <repo> <range>` line names), resolve_walk + parse_cache (X16: content-only import records, the per-file parse cache), symbols_walk + symbols (X17: the Python symbol graph, client only), edit_symbols (X17: the tripwire's `Edit lands in` lines), callers_tool (X17: `code_xray` `callers`, local only), edit_note (the note after an edit), ledger (X11 lean: test predictions vs pytest failures), scar_query (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace), scars (X3, client side: resolves and ranks those hits against the checkout), history (X4: git log summarized as churn, author counts and co-changed pairs, cached by HEAD), hotspots (X4 hotspots + coupling, X6 blind spots, pure), history_tool (`code_xray` `history` / `blindspots`, local only)
-├── xray_cli.py             # `gingugu xray brief` (--range / --files / --path / --json), `gingugu xray history` / `blindspots` (--files / --path / --limit / --json) and `gingugu xray score` (--json)
+├── xray_cli.py             # `gingugu xray brief` (--range / --files / --path / --json), `gingugu xray history` (--files / --path / --limit / --json), `gingugu xray blindspots` (--path / --limit / --json) and `gingugu xray score` (--json)
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine
 ├── remote_args.py          # usage text + argparse for `gingugu remote`, mint ssh argv
