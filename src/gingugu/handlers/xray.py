@@ -19,13 +19,22 @@ from __future__ import annotations
 import logging
 
 from .. import grants
-from ..xray import brief, callers_tool, extract, history_tool, local, store
+from ..xray import brief, callers_tool, docs_tool, extract, history_tool, local, store
 from . import ServerContext
 from .helpers import _err
 
 logger = logging.getLogger(__name__)
 
-_ACTIONS = ("blast", "overview", "refresh", "ingest", "brief", "callers", *history_tool.ACTIONS)
+_ACTIONS = (
+    "blast",
+    "overview",
+    "refresh",
+    "ingest",
+    "brief",
+    "callers",
+    *history_tool.ACTIONS,
+    *docs_tool.ACTIONS,
+)
 _CAVEAT = brief.CAVEAT
 _NO_DISK = (
     "under `gingugu serve` the brain cannot read your checkout; call through the "
@@ -96,7 +105,10 @@ def register(mcp, ctx: ServerContext) -> None:
         "history" (from git log: hotspots by churn x rank x authors, and files that change
         together, flagged ``hidden`` when neither imports the other; files: focus the pairs
         on those files; computed locally), "blindspots" (imported source no test imports
-        or is named for, ordered by reach over the number of authors; computed locally).
+        or is named for, ordered by reach over the number of authors; computed locally),
+        "docs" (files: which docs cite each file, in this repo and in sibling checkouts on
+        this machine, to re-read after a change; no files: the most cited files; computed
+        locally).
 
         ``path`` is any directory in the git checkout (default: the working directory).
         The snapshot is rebuilt automatically when the checkout's source content changed,
@@ -119,6 +131,10 @@ def register(mcp, ctx: ServerContext) -> None:
                 if ctx.transport != "stdio":
                     return _err(_NO_DISK)
                 return history_tool.answer(path, action, files, limit)
+            if action in docs_tool.ACTIONS:
+                if ctx.transport != "stdio":
+                    return _err(_NO_DISK)
+                return docs_tool.answer(path, files, limit)
             ns_id = ctx.namespaces.get_or_create(ctx.namespaces.resolve_name(namespace)).id
             if action == "ingest":
                 if payload is None:
