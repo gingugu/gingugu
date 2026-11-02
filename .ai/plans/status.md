@@ -1,40 +1,8 @@
 # Project Status
 
-_Last updated: 2026-11-01 (X4 history graph + X6 blind-spot map built; X3 and the worktree fix released in 0.41.0)_
+_Last updated: 2026-11-01 (X4 history graph + X6 blind-spot map released in 0.42.0)_
 
 ## In Flight
-
-**X4 history as a second graph + X6 blind-spot map - BUILT on feature/xray-history
-(2026-11-01), not released.** Built on his "do x4 and x6" with a session-long go; design
-measured first (gingugu, flask, httpx full histories). `xray/history.py` reads the last
-1,000 non-merge commits (`git log --no-merges --no-show-signature -M --name-status -z
---format=%x01%H%x1f%aE`, 10s timeout; measured 0.05-0.11s for 1,000-3,800 commits),
-parsed as a sequence so a path holding the header byte stays a path, renames followed
-newest-first onto today's names; keeps per-file churn, per-file author COUNTS (no
-identity is kept) and pairs shared >= 5 times; cached owner-only by HEAD
-(`xray-history-<sha16(root)>.json`). `xray/hotspots.py` (pure): hotspots = churn x rank x
-authors; coupling = code-maat logical coupling with its published defaults, verified in
-its source (`cmd_line.clj`: min-revs 5, min-shared-revs 5, min-coupling 30,
-max-changeset-size 30; `logical_coupling.clj`: degree = shared / average revisions),
-`hidden` when neither file imports the other; X6 blind spots = imported source (no
-packages, no `__init__.py`) no test imports directly and none is named for (the
-`nearest_tests` rule), by rank over authors, fewest commits on a tie. Measured: a
-direct-import-only "tested" marked 20 of 23 httpx files untested (its tests import the
-package), with naming 8; rank/(commits x authors) put 1-commit example files first on
-flask, rank/authors puts `ctx.py` first. Surfaces: `code_xray` `history` (optional
-`files` focus) and `blindspots` (`xray/history_tool.py`; serve refuses, proxy answers
-locally), `gingugu xray history [--files] [--path] [--limit] [--json]` and `gingugu xray
-blindspots [--path] [--limit] [--json]`, and
-the read neighbourhood's `Changes with (no import): <file> NN%` (top 3, before the
-scars; `MEMORY_XRAY_HISTORY`). On gingugu: hidden pairs `edit_hook`/`read_hook` 67%,
-`database`/`test_migrations` 73%; top blind spots `ui/src/types/index.ts` (17
-importers), `secret_file.py`, `xray/local.py`. Tests: `test_xray_history.py`,
-`test_xray_hotspots.py`, `test_xray_history_tool.py` (68). Security review: a failed
-log is remembered per HEAD so the read hook pays one timeout, not one per file; paths
-decode as `scan` decodes them so non-UTF-8 names match the graph; the git output has no
-byte cap of its own (bounded by the 10s timeout, as `brief`'s diff is). Not built: X4's per-commit
-architectural drift (needs the import graph of past trees; extraction reads only the
-working tree); TS/JS test naming (`*.test.ts`) is not a "named for" match yet.
 
 **Codebase X-ray in every language we can parse - phase 1 MERGED (#150), released in
 0.30.0; phases 2 and 3 not started.** Extraction runs through one adapter per language (`xray/lang/`): Python stays on `ast`;
@@ -57,7 +25,7 @@ the line in 0.36.0 (#161); X15 writes from any tool RELEASED in 0.37.0 (#163); X
 RELEASED in 0.38.0 (#164); X17 symbol graph (Python)
 RELEASED in 0.39.0 (#165); X-ray tuned for the agent
 RELEASED in 0.40.0 (#166); X3 scar tissue RELEASED in 0.41.0 (#168); X4 history + X6
-blind spots BUILT on feature/xray-history, not released (2026-11-01); X21 symbols on the
+blind spots RELEASED in 0.42.0 (#170); X21 symbols on the
 brain owed** (2026-10-30). The
 end goal was restated: a sophisticated map before any work starts, so the map
 reaches the agent on reads and on any write, not only through the edit tools. New
@@ -117,6 +85,38 @@ mid-capture; `overview.top` and the payload's `skipped` are bounded but not
 paged; a git `core.fsmonitor`-style check for other config that runs code.
 
 ## Recently Completed
+
+**X4 history as a second graph + X6 blind-spot map (RELEASED in 0.42.0, #170;
+2026-11-01).** Built on his "do x4 and x6" with a session-long go; design
+measured first (gingugu, flask, httpx full histories). `xray/history.py` reads the last
+1,000 non-merge commits (`git log --no-merges --no-show-signature -M --name-status -z
+--format=%x01%H%x1f%aE`, 10s timeout; measured 0.05-0.11s for 1,000-3,800 commits),
+parsed as a sequence so a path holding the header byte stays a path, renames followed
+newest-first onto today's names; keeps per-file churn, per-file author COUNTS (no
+identity is kept) and pairs shared >= 5 times; cached owner-only by HEAD
+(`xray-history-<sha16(root)>.json`). `xray/hotspots.py` (pure): hotspots = churn x rank x
+authors; coupling = code-maat logical coupling with its published defaults, verified in
+its source (`cmd_line.clj`: min-revs 5, min-shared-revs 5, min-coupling 30,
+max-changeset-size 30; `logical_coupling.clj`: degree = shared / average revisions),
+`hidden` when neither file imports the other; X6 blind spots = imported source (no
+packages, no `__init__.py`) no test imports directly and none is named for (the
+`nearest_tests` rule), by rank over authors, fewest commits on a tie. Measured: a
+direct-import-only "tested" marked 20 of 23 httpx files untested (its tests import the
+package), with naming 8; rank/(commits x authors) put 1-commit example files first on
+flask, rank/authors puts `ctx.py` first. Surfaces: `code_xray` `history` (optional
+`files` focus) and `blindspots` (`xray/history_tool.py`; serve refuses, proxy answers
+locally), `gingugu xray history [--files] [--path] [--limit] [--json]` and `gingugu xray
+blindspots [--path] [--limit] [--json]`, and
+the read neighbourhood's `Changes with (no import): <file> NN%` (top 3, before the
+scars; `MEMORY_XRAY_HISTORY`). On gingugu: hidden pairs `edit_hook`/`read_hook` 67%,
+`database`/`test_migrations` 73%; top blind spots `ui/src/types/index.ts` (17
+importers), `secret_file.py`, `xray/local.py`. Tests: `test_xray_history.py`,
+`test_xray_hotspots.py`, `test_xray_history_tool.py` (68). Security review: a failed
+log is remembered per HEAD so the read hook pays one timeout, not one per file; paths
+decode as `scan` decodes them so non-UTF-8 names match the graph; the git output has no
+byte cap of its own (bounded by the 10s timeout, as `brief`'s diff is). Not built: X4's per-commit
+architectural drift (needs the import graph of past trees; extraction reads only the
+working tree); TS/JS test naming (`*.test.ts`) is not a "named for" match yet.
 
 **X3 scar tissue (RELEASED in 0.41.0, #168; 2026-11-01).** (Design approved 2026-10-28; it plugs into the X14 read hook and the X2
 tripwire.) X3 links memories (bugs, decisions, gotchas) to the files they are about, so
@@ -1726,8 +1726,8 @@ every row moved up one.
 
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival shipped in 0.32.0; X19 X-ray brief shipped in 0.34.0; X20 brief on the board shipped in 0.35.0 (repo on the line in 0.36.0); X15 writes from any tool shipped in 0.37.0; X16 incremental refresh shipped in 0.38.0; X17 symbol graph (Python) shipped in 0.39.0; X-ray tuned for the agent, with the lean X11 test ledger, shipped in 0.40.0; X3 scar tissue shipped in 0.41.0; X4 history + X6 blind spots built (feature/xray-history); X21 symbols on the brain owed | 19 | Every sail since 2026-10-26 has gone here. A 21-part roadmap (X1-X21) in its section below |
-| 1a | **X4 history + X6 blind spots** - the X-ray items being built now (X4 drift still to do) | 19 | Next in the X-ray build order after X3 (0.41.0); X6 needs X4's churn and authors. This row names whichever X-item is in progress and moves on when it ships |
+| 1 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival shipped in 0.32.0; X19 X-ray brief shipped in 0.34.0; X20 brief on the board shipped in 0.35.0 (repo on the line in 0.36.0); X15 writes from any tool shipped in 0.37.0; X16 incremental refresh shipped in 0.38.0; X17 symbol graph (Python) shipped in 0.39.0; X-ray tuned for the agent, with the lean X11 test ledger, shipped in 0.40.0; X3 scar tissue shipped in 0.41.0; X4 history + X6 blind spots shipped in 0.42.0 (X4 drift owed); X21 symbols on the brain owed | 19 | Every sail since 2026-10-26 has gone here. A 21-part roadmap (X1-X21) in its section below |
+| 1a | **Next X-item not yet chosen** - X7 edges beyond imports and X8 dependency X-ray lead the build order; X4 drift is owed | 19 | X4 + X6 shipped in 0.42.0. This row names whichever X-item is in progress and moves on when it ships |
 | 2 | **A calibration ledger** | 14 | New tables, so a migration. Follows X3: the lean X11 ledger (0.40.0) already records predictions, so it scores real data from day one |
 | 3 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
 | 4 | **Paraphrase question set + lexical/semantic arbitration** | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
@@ -2423,7 +2423,7 @@ read never fires, and a write through the shell bypasses X-ray entirely. X1-X13
 describe what is stored; X14-X18 add how the map reaches the agent, how it
 stays current, and how it is seen.
 
-**Build order:** X14, X19, X20, X15, X16, X17 (all shipped by 0.40.0), X3 (0.41.0), X4/X6 (built), then X7/X8, with X21 no later
+**Build order:** X14, X19, X20, X15, X16, X17 (all shipped by 0.40.0), X3 (0.41.0), X4/X6 (0.42.0; X4 drift owed), then X7/X8, with X21 no later
 than the first of X7/X9 that needs symbols on the brain. X18 ships in
 slices alongside them. IDs are stable references, not the order.
 
@@ -2434,9 +2434,9 @@ slices alongside them. IDs are stable references, not the order.
 | X1 | **Blast radius** (SHIPPED in 0.29.0, #139) - persisted import graph keyed by repo + commit; the agent builds or refreshes it when missing or stale; spreading activation over reverse imports, ranked by directed PageRank | dream graph math, spreading activation | The foundation. Persist outside `memories` so the store's own graph is not flooded |
 | X2 | **Tripwire on edit (SHIPPED in 0.29.0, #142)** - a hook that names a file's dependents, top ranked first, before the edit lands | tripwires, hooks | Since the X-ray tuning only a blind edit (an imported file this session never read or wrote) is denied, once, with direct importers, reach and nearest tests; an informed edit gets the post-edit callers note instead. Own switch `MEMORY_XRAY_TRIPWIRE` |
 | X3 | **Scar tissue (SHIPPED in 0.41.0, #168)** - link memories (bugs, decisions, gotchas) to the files they are about; a first Read and a blind-edit deny surface both what depends on the file and what it has cost before | memory store, FTS5, X14 read hook, X2 tripwire | The part no code-analysis tool can have, because none holds the history. Derived at read time, never stored: the brain FTS-matches the file's basename in the project namespace and the client resolves the hits against the checkout's source files, so there is no migration. Own switch `MEMORY_XRAY_SCARS` |
-| X4 | **History as a second graph (coupling + hotspots BUILT on feature/xray-history, 2026-11-01; drift not built)** - co-change coupling (files that change together without importing each other), churn x centrality x authors as hotspots, per-commit X-ray diffs as architectural drift | git log | `code_xray` `history`, `gingugu xray history`, the read line `Changes with (no import):` (`MEMORY_XRAY_HISTORY`). Code-maat's defaults; last 1,000 non-merge commits, cached by HEAD, client only. Drift needs the import graph of past trees (extraction reads only the working tree), and the nightly dream pass cannot read a checkout (see X16) |
+| X4 | **History as a second graph (coupling + hotspots SHIPPED in 0.42.0, #170; drift not built)** - co-change coupling (files that change together without importing each other), churn x centrality x authors as hotspots, per-commit X-ray diffs as architectural drift | git log | `code_xray` `history`, `gingugu xray history`, the read line `Changes with (no import):` (`MEMORY_XRAY_HISTORY`). Code-maat's defaults; last 1,000 non-merge commits, cached by HEAD, client only. Drift needs the import graph of past trees (extraction reads only the working tree), and the nightly dream pass cannot read a checkout (see X16) |
 | X5 | **Module boundaries** - communities that hold up on import graphs | dream clusters | Label propagation fails as-is (see above); needs a decided approach, not a knob |
-| X6 | **Blind-spot map (BUILT on feature/xray-history, 2026-11-01)** - centrality x low churn x no tests x single author: where a change would reach furthest with the least review | X1, X4 | The attacker's target list, run first by the defender. `code_xray` `blindspots`, `gingugu xray blindspots`: imported untested source (no direct test importer, no test named for it) by rank over authors, fewest commits on a tie, `single_author` flagged |
+| X6 | **Blind-spot map (SHIPPED in 0.42.0, #170)** - centrality x low churn x no tests x single author: where a change would reach furthest with the least review | X1, X4 | The attacker's target list, run first by the defender. `code_xray` `blindspots`, `gingugu xray blindspots`: imported untested source (no direct test importer, no test named for it) by rank over authors, fewest commits on a tie, `single_author` flagged |
 | X7 | **Edges beyond imports** - env vars, config keys, HTTP routes, DB tables, IaC resources, MCP tool names; entry-point-to-sensitive-sink paths as an attack-surface map | X1 | Where it becomes a security instrument; the largest piece of work |
 | X8 | **Dependency X-ray** - third-party packages on the graph: which are load-bearing, how deep, what a compromised package could reach | X1, X7 | Upgrade priority, pinning, incident-day exposure |
 | X9 | **Fleet X-ray** - every repo into one central brain; cross-repo callers and cross-repo blast radius | central brain, scoped tokens | |

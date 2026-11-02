@@ -248,7 +248,7 @@ Generated sets hold real memory content and stay in `bench/local/`.
   the blind-edit deny also name the repo's memories that mention the file (top 3 by type
   weight, doubled when the title names the file, over files named; `xray/scars.py` client, `xray/scar_query.py` brain, remote
   `POST /hook/scars`; derived at read time, no migration; `MEMORY_XRAY_SCARS`).
-  History + blind spots (X4 + X6, built on feature/xray-history, not released): `history`
+  History + blind spots (X4 + X6, released in 0.42.0): `history`
   reads the last 1,000 non-merge commits (`xray/history.py`, renames followed, author
   counts only, cached by HEAD as `xray-history-<sha16(root)>.json`) and returns hotspots
   (churn x rank x authors) and code-maat logical coupling (>= 5 revs each, >= 5 shared,
@@ -489,7 +489,12 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.41.0** (PyPI, 2026-11-01). Minor: X3 scar tissue - the first Read of a
+- Current version: **0.42.0** (PyPI, 2026-11-01). Minor: X4 history graph + X6 blind-spot
+  map - `code_xray` `history` (hotspots, code-maat co-change coupling, `hidden` pairs) and
+  `blindspots` (imported untested source by rank over authors), `gingugu xray
+  history|blindspots`, and the read line `Changes with (no import):` (`MEMORY_XRAY_HISTORY`);
+  client only, no migration (#170). **Upgrading:** restart MCP clients for the new actions.
+- 0.41.0 (PyPI, 2026-11-01). Minor: X3 scar tissue - the first Read of a
   source file and a blind edit's deny name the repo's memories about the file (`xray/scars`,
   `xray/scar_query`, owner-only `POST /hook/scars`, `MEMORY_XRAY_SCARS`) (#168); a git
   worktree session reads its repo's memory (`project_name`) (#169); board resynced (#167).
