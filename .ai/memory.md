@@ -507,7 +507,12 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.44.0** (PyPI, 2026-11-02). Minor: a minion never spawns a
+- Current version: **0.45.0** (PyPI, 2026-11-02). Minor: X22 docs map - `code_xray`
+  `docs` / `gingugu xray docs` and the X-ray brief's "Docs citing the changed files" and
+  "Docs still citing a deleted or renamed file" sections, over this repo's docs and
+  sibling checkouts' tracked docs (repo-qualified paths and GitHub links); client only,
+  `MEMORY_XRAY_DOCS` (#174). No migration.
+- 0.44.0 (PyPI, 2026-11-02). Minor: a minion never spawns a
   minion (`minion_fence` denies `Agent`/`Task` inside a subagent), and `gingugu
   harness` ships a fourth minion, `researcher` (sonnet, read-only repo + web, no
   shell) (#173). No migration. **Upgrading:** re-run `gingugu harness` in a repo
