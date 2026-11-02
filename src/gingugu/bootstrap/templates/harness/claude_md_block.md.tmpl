@@ -30,6 +30,11 @@ its own fenced `brain` server, and writes only the `minions` scratch namespace.
 | `repo-scout` | haiku | Mechanical search and inventory: every place X appears, file listings, counts. |
 | `security-reviewer` | sonnet | Secrets, PII, unguarded paths, destructive writes without a backup. Run before every commit that touches credentials or path handling. |
 | `ai-docs-auditor` | sonnet | Audits `.ai/` against the code and reports drift as `path:line`. Run before every PR. |
+| `researcher` | sonnet | Read-only research across the repo and the public web, findings with sources. No shell: `gh`, `git` and authenticated APIs stay on the main thread. |
+
+Never use the built-in `general-purpose` agent for minion work: it carries the
+Agent tool and the main thread's model. Pick one of the agents above and name its
+tier. A minion that tries to spawn its own is denied by `gingugu hook tool`.
 
 ### Logs
 

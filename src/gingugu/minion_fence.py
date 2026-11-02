@@ -14,6 +14,9 @@ hook (``gingugu hook tool``):
 - **Write tools of the inherited ``gingugu`` server.** Every subagent inherits
   its parent's MCP servers, so a built-in agent (Explore, general-purpose) with
   no agent file of ours holds the full brain. Reads stay open; writes do not.
+- **Spawning a subagent.** general-purpose carries the Agent tool, and a nested
+  minion's findings come back unchecked by the minion that asked. The tool is
+  a parameter, so this check holds.
 
 Claude Code sets ``agent_id`` only on a call made inside a subagent, so the
 main thread is never fenced here.
@@ -46,6 +49,8 @@ _WRITES: dict[str, set[str] | None] = {
 
 _FILE_PARAMS = ("file_path", "notebook_path", "path")
 _SHELL_TOOLS = frozenset({"Bash", "PowerShell", "Monitor"})
+_SPAWN_TOOLS = frozenset({"Agent", "Task"})
+_NO_SPAWN = "minions never spawn minions: do the work yourself and report it to your caller"
 
 # Where a shell command starts: the line, or after a separator or an opening
 # paren/backtick. ``gingugu`` counts only in command position there - the first
@@ -180,6 +185,8 @@ def decide(payload: dict, data_dir: Path) -> str | None:
     if not payload.get("agent_id"):
         return None
     tool_name = str(payload.get("tool_name") or "")
+    if tool_name in _SPAWN_TOOLS:
+        return _NO_SPAWN
     tool_input = payload.get("tool_input")
     if not isinstance(tool_input, dict):
         return None
