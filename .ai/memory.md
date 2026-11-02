@@ -481,7 +481,12 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.40.0** (PyPI, 2026-10-30). Minor: X-ray tuned for the agent - the
+- Current version: **0.41.0** (PyPI, 2026-11-01). Minor: X3 scar tissue - the first Read of a
+  source file and a blind edit's deny name the repo's memories about the file (`xray/scars`,
+  `xray/scar_query`, owner-only `POST /hook/scars`, `MEMORY_XRAY_SCARS`) (#168); a git
+  worktree session reads its repo's memory (`project_name`) (#169); board resynced (#167).
+  **Upgrading:** upgrade the brain so it serves `/hook/scars`; `gingugu init` in each repo.
+- 0.40.0 (PyPI, 2026-10-30). Minor: X-ray tuned for the agent - the
   edit tripwire denies only a blind edit; a PostToolUse note after an Edit/MultiEdit names
   the cross-file callers of the definitions touched and their nearest tests
   (`xray/edit_note`, doorway `post_edit_xray.py`, `gingugu hook edit`); direct importers and
