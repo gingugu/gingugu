@@ -378,9 +378,10 @@ copy of what was asked. `query_acts` (migration 022) is never pruned either:
 ```
 memory_search ids | memory_excerpt | memory_update | memory_relate | memory_forget
   → on success: store.log_act(act, ids) → query_acts.record
-    → the same MCP session's last 200 query_log rows, newest first
-    → the first whose result_ids holds the memory: query_id + rank (1-based);
-      else the first whose extra_ids holds it: query_id, rank NULL; else none
+    → the same MCP session's last 200 query_log rows, newest first; the first
+      that returned the memory claims it: in its result_ids → query_id + rank
+      (1-based); in its extra_ids → query_id, rank NULL; none → both NULL
+    → no session: no lookup, the row is still written (session_id NULL)
     → one row per distinct memory (a relation logs both ends); best-effort,
       never commits, swallows sqlite3.Error
 ```
@@ -872,11 +873,13 @@ UserPromptSubmit → `gingugu hook prompt`
     board:<session>. The body also carries agent_session (the raw Claude Code
     session id, hashed by the brain): a post routed to another session of the
     persona is held back until it has gone unread for ROUTE_GRACE_SECONDS (1h). A persona agent's one-liner therefore makes this request
-  → length gate (local; no recall request for a one-liner)
+  → strip_notifications, then the length gate (local; no recall request for a
+    one-liner or a harness notice)
   → namespaces_for(cwd), narrowed by the client's grant ([] → exit), then _sendable
     drops any name the routes would refuse
   → POST /hook/recall {prompt, session_id, namespaces, suppressed, config}
-      brain: strip_affect → embed (model held warm) → sweep + lexical → select
+      brain: strip_notifications → length gate (an older client may send a
+             notice) → strip_affect → embed (model held warm) → sweep + lexical → select
              → query_log row (tool='hook') → {context, ids}
   → emit context; add ids to local hook-sessions/<session>.json
 

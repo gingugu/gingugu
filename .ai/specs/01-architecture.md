@@ -532,7 +532,8 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   `serve_hooks.py` server): with a remote brain on, the three hooks never open
   the local DB or load a local encoder. They POST to owner-token-only routes on
   `gingugu serve` (`build_app(..., ctx=ctx)`; `server.build` returns the MCP app
-  and its `ServerContext`): `/hook/recall` (the brain embeds, sweeps, selects and
+  and its `ServerContext`): `/hook/recall` (the brain strips harness notices and
+  applies the length gate, then embeds, sweeps, selects and
   logs the prompt), `/hook/tripwires` (rules only; matching stays local, cached
   60s per URL + namespace set in a 0600 `hook-sessions/tripwire-rules-*.json`,
   the last copy used while the brain is away), `/hook/trip` (the trip's

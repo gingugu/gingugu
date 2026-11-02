@@ -444,7 +444,7 @@ cannot be recovered afterwards (updates and relations carry no session). Written
 `memory_relate` (both ends, single or batch) and `memory_forget`, one row per
 distinct memory. `query_id` is the newest of the session's last 200 queries whose
 ranked hits (`rank` set) or extras (`rank` NULL) held the memory; an act no query
-surfaced is still a row. Best-effort like `query_log`: never commits on its own,
+surfaced is still a row, and so is one with no session (no lookup, both NULL). Best-effort like `query_log`: never commits on its own,
 swallows `sqlite3.Error`. Never pruned.
 
 #### `tripwires`
@@ -2277,7 +2277,7 @@ src/gingugu/
 │   └── xray.py             # Codebase X-ray: xray_snapshots, xray_files, xray_edges (019); xray_files.lang/kind (021)
 ├── models.py               # Data models + MEMORY_COLUMNS, the one column list
 ├── storage.py              # CRUD for the memories row and its transaction boundary
-├── storage_derived.py      # The four satellite tables a memory drags along, plus the query log
+├── storage_derived.py      # The four satellite tables a memory drags along, plus the query log and query acts
 ├── query_log.py            # record(): one row per query; best-effort, never pruned
 ├── query_acts.py           # record(): an act on a memory, tied to the session's query that surfaced it
 ├── tags.py                 # tags / memory_tags
