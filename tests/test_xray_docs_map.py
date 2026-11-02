@@ -195,6 +195,20 @@ def test_this_repo_is_never_its_own_sibling(repo, state, sibling):
     assert all(c.repo != "repo" for c in docs_map.citing(m, "pkg/core.py"))
 
 
+def test_another_checkout_of_this_repo_is_not_a_sibling(repo, state, sibling, tmp_path):
+    # A worktree or second clone of the same origin is this repo, not a neighbour.
+    _git(repo, "remote", "add", "origin", "https://github.com/acme/repo.git")
+    clone = tmp_path / "repo-2"
+    _git(tmp_path, "clone", "-q", str(repo), str(clone))
+    _git(clone, "remote", "set-url", "origin", "https://github.com/acme/repo.git")
+    (clone / "docs/x.md").write_text("repo/pkg/leaf.py\n")
+    _git(clone, "add", "-A")
+    _git(clone, "commit", "-q", "-m", "x")
+    m = docs_map.read(repo, state)
+    assert "acme/repo" not in m.siblings
+    assert docs_map.citing(m, "pkg/leaf.py") == []
+
+
 # --- the cache ----------------------------------------------------------------
 
 

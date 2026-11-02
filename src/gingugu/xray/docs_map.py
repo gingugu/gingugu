@@ -220,10 +220,13 @@ def _siblings(root: Path, own: str, old: dict) -> tuple[dict[str, dict], dict[st
             if prev and head is not None and prev["head"] == head:
                 entry = prev
             else:
-                head, refs = _sibling(child, own)
-                entry = {"ident": repo_id.of(child) or child.name, "head": head, "refs": refs}
+                ident = repo_id.of(child) or child.name
+                refs = {} if ident == own else _sibling(child, own)[1]
+                entry = {"ident": ident, "head": head, "refs": refs}
         except (scan.XrayError, OSError):
             continue
+        if entry["ident"] == own:
+            continue  # this repo under another path: a worktree or a second clone
         cached[where] = entry
         by_ident.setdefault(entry["ident"], entry["refs"])
     return cached, by_ident
