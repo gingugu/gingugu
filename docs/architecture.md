@@ -1821,11 +1821,11 @@ repo file to the docs that cite it (`.md .mdx .markdown .rst .txt .adoc`). A cit
 path mention resolved to exactly one repo file with X3's matcher (`scar_query._TOKEN` +
 `scars._resolve`, in `xray/docs_cites.py`): an ambiguous name cites nothing, and a doc
 never cites itself. It also reads sibling checkouts - checkouts directly under the
-`MEMORY_XRAY_REPOS` roots (or the default home folders), committed docs only; one with
+`MEMORY_XRAY_REPOS` roots (or the default home folders), tracked docs only; one with
 this repo's own identity (a worktree or second clone) is skipped. A bare path in a
 sibling's doc means the sibling's own file, so a sibling doc counts only repo-qualified
 paths (`<name>/path`) and GitHub blob/tree/raw links to this repo's origin. Caps: 5000
-docs, 256 KiB per doc, 64 siblings, 1000 path tokens and 1000 GitHub links per doc, and a 3s budget for siblings per read: past it a sibling keeps its cached entry or is skipped, so a slow checkout never stalls a brief. A doc name that is absolute, has `..` or passes through a symlink is never read. The index is cached
+docs, 256 KiB per doc, 64 siblings, 1000 path tokens and 1000 GitHub links per doc, and a 3s budget for siblings per read: past it a sibling keeps its cached entry or is skipped, so a slow checkout never stalls a brief. A doc name that is absolute, has `..`, is a symlink or resolves outside the checkout is never read. The index is cached
 owner-only as `xray-docs-<digest>.json` in the hook state directory and read as
 untrusted input; a local doc is re-read only when its size or mtime changes, a sibling
 only when its HEAD moves. The X-ray brief gains `Docs citing the changed files:` and

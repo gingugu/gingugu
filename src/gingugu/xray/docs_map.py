@@ -8,7 +8,7 @@ means the sibling's own file, so a sibling cites this repo only by a
 repo-qualified path (``repo/lib/x.py``) or a GitHub link to this repo.
 
 Client side only: the brain is never asked. The cache is a hint, not a truth:
-it is read as untrusted input and rebuilt whole on anything malformed.
+it is read as untrusted input, and a malformed entry is dropped and re-read.
 """
 
 from __future__ import annotations

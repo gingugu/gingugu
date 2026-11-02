@@ -972,11 +972,11 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   to exactly one repo file with X3's matcher (`scar_query._TOKEN` + `scars._resolve`,
   `xray/docs_cites`); an ambiguous name cites nothing and a doc never cites itself.
   It also reads sibling checkouts - checkouts directly under the `MEMORY_XRAY_REPOS`
-  roots (or the default home folders), committed docs only; one with this repo's own
+  roots (or the default home folders), tracked docs only; one with this repo's own
   identity (a worktree or second clone) is skipped. A bare path in a sibling's doc
   means the sibling's own file, so a sibling doc counts only repo-qualified paths
   (`<name>/path`) and GitHub blob/tree/raw links to this repo's origin. Caps: 5000
-  docs, 256 KiB per doc, 64 siblings, 1000 tokens per doc (path tokens and GitHub links each), and a 3s budget for siblings per read (past it a sibling keeps its cached entry or is skipped). A doc name that is absolute, has `..` or passes through a link is never read; a sibling with an invalid identity is skipped; a cache over 16 MiB is ignored. The cache
+  docs, 256 KiB per doc, 64 siblings, 1000 tokens per doc (path tokens and GitHub links each), and a 3s budget for siblings per read (past it a sibling keeps its cached entry or is skipped). A doc name that is absolute, has `..`, is a symlink or resolves outside the checkout is never read; a sibling with an invalid identity is skipped; a cache over 16 MiB is ignored. The cache
   (`xray-docs-<digest>.json`, owner-only, untrusted on read) re-reads a local doc only
   when its size or mtime changes and a sibling only when its HEAD moves. *Local only*,
   like `history`: `code_xray` `docs` (`xray/docs_tool`) is refused by `gingugu serve`

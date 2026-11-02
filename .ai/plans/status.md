@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-11-02 (prompt hook skips harness notices; query_acts, migration 022 - released in 0.43.0)_
+_Last updated: 2026-11-02 (X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
 
 ## In Flight
 
@@ -25,7 +25,7 @@ the line in 0.36.0 (#161); X15 writes from any tool RELEASED in 0.37.0 (#163); X
 RELEASED in 0.38.0 (#164); X17 symbol graph (Python)
 RELEASED in 0.39.0 (#165); X-ray tuned for the agent
 RELEASED in 0.40.0 (#166); X3 scar tissue RELEASED in 0.41.0 (#168); X4 history + X6
-blind spots RELEASED in 0.42.0 (#170); X21 symbols on the
+blind spots RELEASED in 0.42.0 (#170); X22 docs map RELEASED in 0.45.0; X21 symbols on the
 brain owed** (2026-10-30). The
 end goal was restated: a sophisticated map before any work starts, so the map
 reaches the agent on reads and on any write, not only through the edit tools. New
@@ -93,11 +93,11 @@ A citation is a path mention resolved to exactly one repo file with X3's matcher
 (`scar_query._TOKEN` + `scars._resolve`); an ambiguous name cites nothing and a doc
 never cites itself. Doc extensions `.md .mdx .markdown .rst .txt .adoc`. It also reads
 sibling checkouts (directly under the `MEMORY_XRAY_REPOS` roots or the default home
-folders, committed docs only; another checkout with this repo's own identity, a
+folders, tracked docs only; another checkout with this repo's own identity, a
 worktree or second clone, is skipped): a sibling doc counts only repo-qualified paths
 (`<name>/path`) and GitHub blob/tree/raw links to this repo's origin, since a bare
 path there means the sibling's own file. Caps: `MAX_DOCS` 5000, `MAX_DOC_BYTES` 256
-KiB, `MAX_SIBLINGS` 64, `MAX_TOKENS` 1000 per doc (path tokens and GitHub links each); siblings share a 3s budget per read (`SIBLING_BUDGET_S`; past it a sibling keeps its cached entry or is skipped); a doc name that is absolute, has `..` or passes through a link is refused; a sibling whose identity fails `repo_id.valid` is skipped; a cache over 16 MiB is ignored; shown names are cut at 200 characters. Cache: owner-only
+KiB, `MAX_SIBLINGS` 64, `MAX_TOKENS` 1000 per doc (path tokens and GitHub links each); siblings share a 3s budget per read (`SIBLING_BUDGET_S`; past it a sibling keeps its cached entry or is skipped); a doc name that is absolute, has `..`, is a symlink or resolves outside the checkout is refused; a sibling whose identity fails `repo_id.valid` is skipped; a cache over 16 MiB is ignored; shown names are cut at 200 characters. Cache: owner-only
 `xray-docs-<digest>.json` in the hook-sessions dir, untrusted on read; local docs
 re-read only when size or mtime changes, a sibling only when its HEAD moves. Switch
 `MEMORY_XRAY_DOCS` (default on). Surfaces: the X-ray brief (X19, so `gingugu xray
@@ -2503,7 +2503,7 @@ read never fires, and a write through the shell bypasses X-ray entirely. X1-X13
 describe what is stored; X14-X18 add how the map reaches the agent, how it
 stays current, and how it is seen.
 
-**Build order:** X14, X19, X20, X15, X16, X17 (all shipped by 0.40.0), X3 (0.41.0), X4/X6 (0.42.0; X4 drift owed), then X7/X8, with X21 no later
+**Build order:** X14, X19, X20, X15, X16, X17 (all shipped by 0.40.0), X3 (0.41.0), X4/X6 (0.42.0; X4 drift owed), X22 docs map (0.45.0; hook surfaces next), then X7/X8, with X21 no later
 than the first of X7/X9 that needs symbols on the brain. X18 ships in
 slices alongside them. IDs are stable references, not the order.
 

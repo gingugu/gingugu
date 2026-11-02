@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   returns the docs that cite each file, or without `files` the totals and the most
   cited files. A citation is a path mention in a doc (`.md .mdx .markdown .rst .txt
   .adoc`) that resolves to exactly one repo file with X3's matcher; an ambiguous name
-  cites nothing and a doc never cites itself. It also reads the committed docs of sibling
+  cites nothing and a doc never cites itself. It also reads the tracked docs (`git ls-files --cached`) of sibling
   checkouts under the `MEMORY_XRAY_REPOS` roots (or the default home folders), where only
   a repo-qualified path or a GitHub link to this repo counts. The X-ray brief (and so
   `gingugu xray brief` and the board brief) gains `Docs citing the changed files:` and
