@@ -2266,6 +2266,7 @@ src/gingugu/
 │   # ── Involuntary recall (UserPromptSubmit) + tripwires (PreToolUse) ──
 ├── recall_gate.py          # Decision half: pure arithmetic, built around refusing
 ├── recall_sweep.py         # I/O half: read-only cosine sweep + BM25 lexical matches; sqlite_uri()
+├── project_name.py         # project_name(cwd): the folder, or a git worktree's main checkout (read from its .git file)
 ├── prompt_hook.py          # gingugu hook prompt: the entry point; board mail on every prompt, then recall; log_prompt() is its one write
 ├── hook_grant.py           # the client's grant (its servers' publications + MEMORY_GRANT) applied to hook namespaces and warm-up
 ├── client_grants.py        # each server publishes its grant + ancestor chain; hooks read the ones meeting them

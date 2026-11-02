@@ -21,7 +21,6 @@ import re
 from pathlib import Path
 from typing import NamedTuple
 
-from . import scan
 from .scar_query import path_tokens
 
 TOP_N = 3
@@ -50,18 +49,11 @@ def enabled() -> bool:
 
 
 def project_namespace(root: Path) -> str:
-    """The checkout's project namespace: its folder name, or for a worktree
-    its main checkout's - a worktree's own folder names a branch, not a repo."""
-    try:
-        proc = scan.git(
-            root, "rev-parse", "--path-format=absolute", "--git-common-dir", timeout=5.0
-        )
-        common = Path(proc.stdout.decode().strip()) if proc.returncode == 0 else None
-    except (OSError, ValueError, scan.XrayError):
-        common = None
-    if common is not None and common.name == ".git":
-        return common.parent.name
-    return root.name
+    """The checkout's project namespace, named as every hook names it: its
+    folder, or for a worktree its main checkout's (``project_name``)."""
+    from ..project_name import project_name
+
+    return project_name(str(root))
 
 
 def _resolve(token: str, files: set[str]) -> str | None:

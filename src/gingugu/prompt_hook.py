@@ -136,8 +136,10 @@ def namespaces_for(cwd: str) -> list[str]:
     fenced client's recall inside the same fence. A grant that cannot be
     honoured yields no namespaces - a quiet hook, never the whole brain.
     """
+    from .project_name import project_name
+
     names = [GLOBAL_NAMESPACE]
-    for name in (persona(), Path(cwd).name):
+    for name in (persona(), project_name(cwd)):
         if name and name not in names:
             names.append(name)
     from .hook_grant import client_grant
