@@ -752,11 +752,11 @@ code_xray docs (stdio handler, or the proxy; serve refuses)
   → docs_tool.answer: local.root(path) → docs_map.read(root, state)
   → file list: ls-files --cached --others --exclude-standard (10s); this repo's docs =
     files with a doc extension (<= 5000, <= 256 KiB each, <= 1000 path tokens each)
-  → xray-docs-<digest>.json (owner-only, untrusted: type-checked, rebuilt whole on
-    anything off): a local doc re-read only when size or mtime changed
+  → xray-docs-<digest>.json (owner-only, untrusted: type-checked, a malformed entry dropped and re-read, the rest kept; ignored whole if over 16 MiB or for another identity) -
+    a local doc re-read only when size or mtime changed
   → siblings: git checkouts directly under the MEMORY_XRAY_REPOS roots (<= 64; a
     checkout with this repo's own identity or an invalid one skipped; 3s budget, past it
-    a cached entry is kept unchecked or the sibling skipped), committed docs only, re-read only
+    a cached entry is kept unchecked or the sibling skipped), tracked docs only, re-read only
     when its HEAD moved; kept: repo-qualified paths and GitHub links to this origin
   → docs_cites: token (scar_query._TOKEN) → scars._resolve → exactly one repo file, else
     no citation; a doc never cites itself
