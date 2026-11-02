@@ -891,8 +891,8 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   the number of repo source files the memory names (a memory about ten files says
   little about each), newest first on a tie. *Only the repo's own project namespace is
   read, never `crow`* (a file name in crow is usually another repo's file); in a git
-  worktree the namespace is the MAIN checkout's folder name (`git rev-parse
-  --git-common-dir`). `__init__.py` is skipped. It honours the client grant, so a
+  worktree the namespace is the MAIN checkout's folder name (`project_name`,
+  read from the worktree's `.git` file). `__init__.py` is skipped. It honours the client grant, so a
   fenced client with no read on the namespace gets nothing, and it never raises. Switch
   `MEMORY_XRAY_SCARS` (default on). Measured on a 760-memory brain: `edit_hook.py` 2
   scars, `database.py` 17, `storage.py` 31, `search.py` 15 FTS hits and 0 scars (the

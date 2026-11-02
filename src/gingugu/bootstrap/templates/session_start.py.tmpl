@@ -11,8 +11,8 @@ start of every fresh session (startup / clear / resume). This is what makes the
 memory protocol *reliable*: unlike a rules file (which is not guaranteed to be
 loaded into context), a SessionStart hook re-injects the contract every time.
 
-The project namespace is derived from the working directory name, so this hook
-is fully portable — drop it into any repo and it targets that repo's namespace.
+The project namespace is derived from the working directory name (for a git
+worktree, its main checkout's), so this hook is fully portable — drop it into any repo and it targets that repo's namespace.
 
 Installed by `gingugu init`. Pure stdlib; never crashes (fails soft on any error).
 """
@@ -21,6 +21,35 @@ import json
 import os
 import sys
 from pathlib import Path
+
+
+def _project(cwd):
+    """The project namespace for ``cwd``: its folder, or for a linked git
+    worktree (its ``.git`` a file pointing into ``<main>/.git/worktrees/``) the
+    main checkout's folder, since a worktree's folder names a branch. Mirrors
+    ``gingugu.project_name``; read, never git spawned."""
+    here = Path(cwd)
+    try:
+        text = (here / ".git").read_text(errors="replace").strip()
+        if not text.startswith("gitdir:"):
+            return here.name
+        gitdir = Path(text[len("gitdir:"):].strip())
+        if not gitdir.is_absolute():
+            gitdir = here / gitdir
+    except (OSError, ValueError):
+        return here.name
+    folded = []
+    for p in gitdir.as_posix().split("/"):
+        if p in ("", "."):
+            continue
+        if p == "..":
+            if folded:
+                folded.pop()
+        else:
+            folded.append(p)
+    if len(folded) >= 4 and folded[-2] == "worktrees" and folded[-3] == ".git":
+        return folded[-4]
+    return here.name
 
 
 def _beyond_crow(cwd):
@@ -40,7 +69,7 @@ def _beyond_crow(cwd):
         names.append(persona)
     # The directory name is pasted into an instruction to the model: a hostile
     # clone name (quotes, newlines) is dropped, never pasted.
-    project = Path(cwd).name
+    project = _project(cwd)
     if valid(project) and project not in names:
         names.append(project)
     return ",".join(names) or "crow"
@@ -71,7 +100,7 @@ def _board_watch():
 
 def build_startup_contract(cwd: str) -> str:
     """Imperative Gingugu startup contract, injected fresh every session."""
-    project = Path(cwd).name
+    project = _project(cwd)
     rest = _beyond_crow(cwd)
     return (
         "=== SESSION STARTUP CONTRACT (Gingugu memory protocol - do this FIRST) ===\n"

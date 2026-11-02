@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A session in a git worktree now reads its repo's memory.** The hooks named the
+  project namespace after the session's folder, and a linked worktree's folder
+  (`.claude/worktrees/fix-y`) names a branch, so prompt recall, tripwires, warm-up and
+  board mail, and the SessionStart contract, asked for a namespace nothing writes to.
+  They now use the main checkout's name, read from the worktree's `.git` file (no git
+  process per prompt or tool call). A submodule keeps its own name. Re-run
+  `gingugu init` to refresh a repo's `session_start.py`.
+
 ### Added
 
 - **Scar tissue (X3): an X-rayed file names what it has cost before.** On the first Read
