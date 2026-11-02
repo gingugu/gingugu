@@ -1743,7 +1743,7 @@ architecture, fact and pattern memories that are not deprecated, newest first, a
 never sees a checkout. The client half (`xray/scars.py`) resolves each hit's path
 tokens against the checkout's source files, by the full path or a `/`-bounded suffix
 that only one file has (a name two files share is never guessed, so counts are a lower
-bound), and scores type weight (bug 3, decision/architecture 2, fact/pattern 1) divided
+bound), and scores type weight (bug 3, decision/architecture 2, fact/pattern 1; doubled when the memory's title names the file) divided
 by the number of repo source files the memory names, newest first on a tie. Only the
 repo's own project namespace is read, never `crow`, and in a git worktree that is the
 main checkout's folder name. With a remote brain the lookup is `POST /hook/scars`

@@ -887,7 +887,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   is no scars, never a local fallback. Client: `xray/scars.py` resolves each hit's path
   tokens against the checkout's source files, by the full path or a `/`-bounded suffix
   only one file has; a name two files share is never guessed, so a count is a lower
-  bound. Score = type weight (bug 3, decision/architecture 2, fact/pattern 1) divided by
+  bound. Score = type weight (bug 3, decision/architecture 2, fact/pattern 1; doubled when the memory's title names the file) divided by
   the number of repo source files the memory names (a memory about ten files says
   little about each), newest first on a tie. *Only the repo's own project namespace is
   read, never `crow`* (a file name in crow is usually another repo's file); in a git

@@ -901,7 +901,7 @@ It installs:
   reads one in full)`. A leaf file with no importers still gets its scar lines. Only the
   repo's own project namespace is searched (never `crow`), for bug, decision,
   architecture, fact and pattern memories that name the file by path; a name two files
-  share is never guessed. Weight is type (bug 3, decision/architecture 2, fact/pattern 1)
+  share is never guessed. Weight is type (bug 3, decision/architecture 2, fact/pattern 1; doubled when the memory's title names the file)
   divided by how many of the repo's files the memory names, newest first on a tie. It is
   derived at read time and stored nowhere. With a remote brain the lookup is the one
   thing the hook asks it (`POST /hook/scars`, owner token only); any failure reads as no
