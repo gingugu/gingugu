@@ -1,7 +1,8 @@
-"""``gingugu xray``: the X-ray brief and the test-prediction score, from a shell.
+"""``gingugu xray``: the X-ray brief, history, blind spots and test-prediction score.
 
-``brief`` is the same answer as ``code_xray`` action ``brief``, computed on this
-machine from the cached hook graph; ``score`` reads the local prediction ledger.
+``brief``, ``history`` and ``blindspots`` are the same answers as the
+``code_xray`` actions of those names, computed on this machine from the cached
+hook graph and git log; ``score`` reads the local prediction ledger.
 Exit 0 ok, 1 on a git/X-ray failure, 2 on bad usage.
 """
 
@@ -11,7 +12,7 @@ import argparse
 import json
 import sys
 
-from .xray import brief
+from .xray import brief, history_tool
 from .xray.scan import XrayError
 
 
@@ -23,9 +24,27 @@ def _parser() -> argparse.ArgumentParser:
     b.add_argument("--files", help="comma-separated files instead of a range")
     b.add_argument("--path", help="any directory in the checkout (default: cwd)")
     b.add_argument("--json", action="store_true", help="the full answer as JSON")
+    h = sub.add_parser("history", help="hotspots and files that change together (git log)")
+    h.add_argument("--files", help="comma-separated files to focus the pairs on")
+    d = sub.add_parser("blindspots", help="imported source no test reaches, by reach")
+    for p in (h, d):
+        p.add_argument("--path", help="any directory in the checkout (default: cwd)")
+        p.add_argument("--limit", type=int, default=20, help="rows per list (default 20)")
+        p.add_argument("--json", action="store_true", help="the full answer as JSON")
     s = sub.add_parser("score", help="how the post-edit test predictions fared against pytest")
     s.add_argument("--json", action="store_true", help="the score as JSON")
     return parser
+
+
+def _history(args: argparse.Namespace) -> int:
+    try:
+        files = getattr(args, "files", None)
+        data = history_tool.answer(args.path, args.cmd, files, args.limit)
+    except Exception as exc:  # noqa: BLE001 - a message and exit 1, never a traceback
+        print(f"gingugu xray {args.cmd}: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(data, indent=2) if args.json else data["text"])
+    return 0
 
 
 def _score(as_json: bool) -> int:
@@ -45,6 +64,8 @@ def main(argv: list[str]) -> int:
         return exc.code if isinstance(exc.code, int) else 2
     if args.cmd == "score":
         return _score(args.json)
+    if args.cmd in history_tool.ACTIONS:
+        return _history(args)
     if args.cmd != "brief":
         parser.print_usage(sys.stderr)
         return 2
