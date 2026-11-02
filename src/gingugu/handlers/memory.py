@@ -275,6 +275,7 @@ def register(mcp, ctx: ServerContext) -> None:
             if tags is not None:
                 ctx.store.set_tags(memory_id, _split_csv(tags))
             mem.tags = ctx.store.get_tags(memory_id)
+            ctx.store.log_act("update", [mem.id])
             response: dict = {"ok": True, "memory": summary_with_capability(ctx, mem)}
             if resolve_claims is not None:
                 response["resolved_claims"] = ctx.store.resolve_claims(
@@ -288,8 +289,7 @@ def register(mcp, ctx: ServerContext) -> None:
                     title=mem.title,
                     content=mem.content,
                 )
-            # Correcting a memory to say "merged" is exactly when the OTHER
-            # memories still saying "open" are worth surfacing.
+            # A correction to "merged" is when memories still saying "open" matter.
             if title is not None or content is not None:
                 contradicted = ctx.store.contradicted_memories(mem)
                 if contradicted:

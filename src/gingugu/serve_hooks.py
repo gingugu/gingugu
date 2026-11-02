@@ -120,12 +120,13 @@ def _parse_recall(body: dict) -> tuple:
 
 
 def _run_recall(ctx, args: tuple) -> dict:
-    from .recall_gate import render, strip_affect
+    from .recall_gate import is_worth_embedding, render, strip_affect, strip_notifications
     from .recall_pick import pick
 
     prompt, session_id, namespaces, suppressed, cfg = args
     embedder = ctx.store.embedder
-    if not embedder.enabled:
+    prompt = strip_notifications(prompt)  # an older client may still send a harness notice
+    if not embedder.enabled or not is_worth_embedding(prompt, min_chars=cfg.min_chars):
         return {"context": None, "ids": []}
     cleaned = strip_affect(prompt)[:2000]
     picked = pick(ctx.config.db_path, embedder, cleaned, namespaces, cfg, suppressed, session_id)

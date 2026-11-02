@@ -74,11 +74,13 @@ def register(mcp, ctx: ServerContext) -> None:
                 if not deleted:
                     return _err(f"memory {memory_id!r} not found")
                 logger.info("Hard-deleted memory %s (reason=%s)", memory_id, reason)
+                ctx.store.log_act("forget", [memory_id])
                 return {"ok": True, "memory_id": memory_id, "action": "hard_deleted"}
             mem = ctx.store.update(memory_id, confidence=Confidence.DEPRECATED)
             if mem is None:
                 return _err(f"memory {memory_id!r} not found")
             logger.info("Deprecated memory %s (reason=%s)", memory_id, reason)
+            ctx.store.log_act("forget", [memory_id])
             return {"ok": True, "memory_id": memory_id, "action": "deprecated"}
         except Exception as exc:
             logger.exception("memory_forget failed")

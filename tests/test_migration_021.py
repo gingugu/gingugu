@@ -56,10 +56,10 @@ def _seed_v20_snapshot(conn) -> None:
     conn.commit()
 
 
-def test_021_is_registered_once_and_latest():
+def test_021_is_registered_once():
     targets = [t for t, _ in MIGRATIONS]
     assert targets.count(21) == 1
-    assert LATEST_SCHEMA_VERSION == 21
+    assert LATEST_SCHEMA_VERSION >= 21
 
 
 def test_fresh_db_has_lang_and_kind():

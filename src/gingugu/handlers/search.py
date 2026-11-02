@@ -123,6 +123,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 summarize = _summarizer(compact=compact, explain=explain)
                 summaries = [_attach_review_hints(summarize(m), m) for m in results]
                 ctx.store.record_accesses([m.id for m in results])
+                ctx.store.log_act("fetch", [m.id for m in results])
                 _stamp_namespace_names(ctx, summaries)
                 stamp_capabilities(ctx, summaries)
                 payload = {"ok": True, "count": len(results), "memories": summaries}

@@ -227,7 +227,9 @@ memory_recall(query, namespace | "ns1,ns2,…", filters)
     main search ran in, kept at ≥ 0.68 (`capability.LANE_BAR`), best 2, never
     an id already in the response. Returned as `capabilities` (compact shape +
     `similarity` + `capability` + `namespace`), absent when empty. Not credited
-    as an access, not a spreading-activation seed, not in the query_log row.
+    as an access, not a spreading-activation seed; its ids (and the related
+    extras') go to the query_log row's `extra_ids`, written after the lane so
+    an act on either finds this query (migration 022).
     No embedder, no lane: there is no calibrated lexical floor to fall back to
 ```
 
@@ -371,7 +373,20 @@ deletes rows past `ACCESS_LOG_RETENTION_DAYS` (90), so anything built on
 co-access must accumulate its own durable aggregate rather than expecting to
 re-derive the full history from the log later. `query_log` is the opposite: it
 is **never pruned**, because nothing summarises it and its rows are the only
-copy of what was asked. The Explorer's `/stats` is the one reader that must
+copy of what was asked. `query_acts` (migration 022) is never pruned either:
+
+```
+memory_search ids | memory_excerpt | memory_update | memory_relate | memory_forget
+  → on success: store.log_act(act, ids) → query_acts.record
+    → the same MCP session's last 200 query_log rows, newest first; the first
+      that returned the memory claims it: in its result_ids → query_id + rank
+      (1-based); in its extra_ids → query_id, rank NULL; none → both NULL
+    → no session: no lookup, the row is still written (session_id NULL)
+    → one row per distinct memory (a relation logs both ends); best-effort,
+      never commits, swallows sqlite3.Error
+```
+
+The Explorer's `/stats` is the one reader that must
 not prune: it passes `prune=False` to `compute_stats`, so looking at the brain
 never deletes `access_log` rows.
 
@@ -489,6 +504,9 @@ UserPromptSubmit event  →  .claude/hooks/user_prompt_recall.py (pure stdlib)
       → BM25 over the same prompt: a hit must ALSO match lexically
       → gate: bar 0.78 AND (score - median of the full sweep) >= 0.15
       → cap 3, minus anything already injected this session
+  (first of all, recall_gate.strip_notifications drops Claude Code's
+   `<task-notification>` blocks - client and brain - so a notice alone recalls
+   and logs nothing, and real text around one is what gets searched)
   → log_prompt: the affect-stripped prompt + the ids actually injected go to
     query_log (tool='hook'), BEFORE the early return, so a prompt that
     surfaced nothing is still a row. The sweep stays read-only; this opens its
@@ -855,11 +873,13 @@ UserPromptSubmit → `gingugu hook prompt`
     board:<session>. The body also carries agent_session (the raw Claude Code
     session id, hashed by the brain): a post routed to another session of the
     persona is held back until it has gone unread for ROUTE_GRACE_SECONDS (1h). A persona agent's one-liner therefore makes this request
-  → length gate (local; no recall request for a one-liner)
+  → strip_notifications, then the length gate (local; no recall request for a
+    one-liner or a harness notice)
   → namespaces_for(cwd), narrowed by the client's grant ([] → exit), then _sendable
     drops any name the routes would refuse
   → POST /hook/recall {prompt, session_id, namespaces, suppressed, config}
-      brain: strip_affect → embed (model held warm) → sweep + lexical → select
+      brain: strip_notifications → length gate (an older client may send a
+             notice) → strip_affect → embed (model held warm) → sweep + lexical → select
              → query_log row (tool='hook') → {context, ids}
   → emit context; add ids to local hook-sessions/<session>.json
 
