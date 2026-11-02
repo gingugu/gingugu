@@ -10,6 +10,7 @@ code-maat, whose thresholds these are.
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 
@@ -199,7 +200,8 @@ def test_the_cache_file_is_owner_only_and_holds_no_email(tmp_path, state):
     _commit(repo, {"a.py": "2\n"}, author="private@corp.example")
     history.read(repo, state)
     (cache,) = state.glob("xray-history-*.json")
-    assert cache.stat().st_mode & 0o077 == 0
+    if os.name != "nt":  # Windows has no POSIX mode bits
+        assert cache.stat().st_mode & 0o077 == 0
     assert "private" not in cache.read_text()
 
 
