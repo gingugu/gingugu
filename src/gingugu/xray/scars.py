@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from . import scan
+from .scar_query import path_tokens
 
 TOP_N = 3
 _TITLE_SHOWN = 120
@@ -29,6 +30,10 @@ _NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")  # a namespace name, as t
 # What a memory of each type costs: a bug is a scar; a decision or the shape of
 # the code is why it is the way it is; a fact or pattern is a note about it.
 WEIGHTS = {"bug": 3.0, "decision": 2.0, "architecture": 2.0, "fact": 1.0, "pattern": 1.0}
+# A memory whose title names the file is about it; one naming it only in the
+# body may mention it in passing. Measured on a real brain: without this a plan
+# outranked "<file> double type-boost bug".
+TITLE_BOOST = 2.0
 
 
 class Scar(NamedTuple):
@@ -84,9 +89,10 @@ def rank(hits: list[dict], rel: str, files: set[str]) -> list[Scar]:
             continue
         # An ambiguous name still names some file: it dilutes, it never matches.
         named = len(resolved - {None, ""}) + (1 if "" in resolved else 0)
-        out.append(
-            Scar(hit["id"], hit["type"], hit["title"], hit["created_at"], named, weight / named)
-        )
+        score = weight / named
+        if rel in {_resolve(t, files) for t in path_tokens(hit["title"])}:
+            score *= TITLE_BOOST  # a title says what a memory is about
+        out.append(Scar(hit["id"], hit["type"], hit["title"], hit["created_at"], named, score))
     out.sort(key=lambda s: s.id)
     out.sort(key=lambda s: s.created_at, reverse=True)
     out.sort(key=lambda s: s.score, reverse=True)  # stable: score, then newest, then id

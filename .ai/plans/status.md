@@ -97,13 +97,13 @@ client `hook_remote_flows.remote_scars` (3 s `SCARS_TIMEOUT_S`); any failure is 
 scars, never a local fallback. Client side `xray/scars.py`: resolves each hit's path
 tokens against the checkout's source files (the full path, or a `/`-bounded suffix only
 one file has; a name two files share is never guessed, so counts are a lower bound);
-score = type weight (bug 3, decision/architecture 2, fact/pattern 1) / number of repo
+score = type weight (bug 3, decision/architecture 2, fact/pattern 1; doubled when the memory's title names the file) / number of repo
 source files the memory names, newest first on a tie; reads only the repo's own project
 namespace, never crow; in a git worktree the namespace is the MAIN checkout's folder
 name (`git rev-parse --git-common-dir`); `__init__.py` skipped; honours `MEMORY_GRANT`
 (no read on the namespace, nothing); never raises. Switch `MEMORY_XRAY_SCARS` (default
 on). Tests: `test_xray_scar_query.py`, `test_xray_scar_remote.py`, `test_xray_scars.py`,
-`test_xray_scars_wiring.py` (101); a security review hardened rendering (every field
+`test_xray_scars_wiring.py` (103); a security review hardened rendering (every field
 flattened), bounded the scan (first 20,000 characters, FTS pool 500, tokens <= 256) and
 validates the derived namespace; a conftest autouse sets `MEMORY_XRAY_SCARS=off` so no
 test reads the developer's real brain. Measured on the real gingugu brain (760 memories):

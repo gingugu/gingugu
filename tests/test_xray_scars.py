@@ -289,3 +289,24 @@ def test_a_checkout_folder_no_namespace_could_have_asks_nothing(tmp_path, local_
 
     odd = _repo(tmp_path / "x y", BASIC).rename(tmp_path / "my repo")
     assert scars.fetch(odd, "pkg/core.py") == []
+
+
+def test_a_title_that_names_the_file_doubles_its_weight():
+    # Measured on a real brain: a plan naming one file outranked a bug whose
+    # title is about the file. A title names what a memory is about.
+    plan = _hit("plan", "decision", title="Triage of a review", paths=["src/pkg/storage.py"])
+    bug = _hit(
+        "bug",
+        "bug",
+        title="storage.py double-boost bug",
+        paths=["storage.py", "src/pkg/rank.py"],
+    )
+    out = scars.rank([plan, bug], "src/pkg/storage.py", FILES)
+    assert [s.id for s in out] == ["bug", "plan"]
+    assert out[0].score == 2 * 3.0 / 2
+
+
+def test_a_title_naming_another_file_earns_nothing():
+    hit = _hit(title="see src/pkg/rank.py", paths=["src/pkg/storage.py", "src/pkg/rank.py"])
+    (s,) = scars.rank([hit], "src/pkg/storage.py", FILES)
+    assert s.score == 3.0 / 2
