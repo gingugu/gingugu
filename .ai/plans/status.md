@@ -1,29 +1,8 @@
 # Project Status
 
-_Last updated: 2026-11-02 (prompt hook skips harness notices; query_acts, migration 022)_
+_Last updated: 2026-11-02 (prompt hook skips harness notices; query_acts, migration 022 - released in 0.43.0)_
 
 ## In Flight
-
-**Board #4 groundwork: query acts + harness notices out of the prompt hook - BUILT on
-feature/query-acts (2026-11-02), not released.** Discovery first (read-only snapshot of
-the Pi brain, 3,408 query_log rows, 2026-09-30 to 2026-11-02): (1) 1,218 of 2,481
-prompt-hook queries were `<task-notification>` events, not prompts - 44 injected
-memories; (2) the "acted on" label the paraphrase set needs could not be recovered after
-the fact - most fetches of memories a query never returned were unrelated to it,
-because `access_log` carries a long-lived MCP session, updates and relations carry none,
-and `result_ids` held only the ranked hits. Where an agent fetched a memory its query
-returned (~59), it was rank 1 about a third of the time, in 4-10 about a quarter.
-Built: `recall_gate.strip_notifications` in `prompt_hook._recall` and the brain's
-`serve_hooks._run_recall` (which now also applies the same length/ack gate); migration
-022 adds `query_log.extra_ids` (related extras + capability pointers, written only when
-non-empty so a pre-022 store still logs) and `query_acts` (`query_acts.py`, via
-`store.log_act`): fetch (`memory_search ids`), excerpt, update, relate (both ends,
-single and batch) and forget, each tied to the newest of the same session's last 200
-queries that returned the memory, with its rank (NULL for an extra). Tests:
-`test_prompt_hook_notices.py`, `test_query_acts.py`, `test_query_acts_wiring.py`; the
-migration-019/021 tests no longer hard-code "latest". Next: let it collect for a few
-weeks, then rerun the discovery against `query_acts` before designing any ranking fix -
-the template-noise item stays parked until then.
 
 **Codebase X-ray in every language we can parse - phase 1 MERGED (#150), released in
 0.30.0; phases 2 and 3 not started.** Extraction runs through one adapter per language (`xray/lang/`): Python stays on `ast`;
@@ -106,6 +85,27 @@ mid-capture; `overview.top` and the payload's `skipped` are bounded but not
 paged; a git `core.fsmonitor`-style check for other config that runs code.
 
 ## Recently Completed
+
+**Board #4 groundwork: query acts + harness notices out of the prompt hook (RELEASED
+in 0.43.0, #171; 2026-11-02).** Discovery first (read-only snapshot of
+the Pi brain, 3,408 query_log rows, 2026-09-30 to 2026-11-02): (1) 1,218 of 2,481
+prompt-hook queries were `<task-notification>` events, not prompts - 44 injected
+memories; (2) the "acted on" label the paraphrase set needs could not be recovered after
+the fact - most fetches of memories a query never returned were unrelated to it,
+because `access_log` carries a long-lived MCP session, updates and relations carry none,
+and `result_ids` held only the ranked hits. Where an agent fetched a memory its query
+returned (~59), it was rank 1 about a third of the time, in 4-10 about a quarter.
+Built: `recall_gate.strip_notifications` in `prompt_hook._recall` and the brain's
+`serve_hooks._run_recall` (which now also applies the same length/ack gate); migration
+022 adds `query_log.extra_ids` (related extras + capability pointers, written only when
+non-empty so a pre-022 store still logs) and `query_acts` (`query_acts.py`, via
+`store.log_act`): fetch (`memory_search ids`), excerpt, update, relate (both ends,
+single and batch) and forget, each tied to the newest of the same session's last 200
+queries that returned the memory, with its rank (NULL for an extra). Tests:
+`test_prompt_hook_notices.py`, `test_query_acts.py`, `test_query_acts_wiring.py`; the
+migration-019/021 tests no longer hard-code "latest". Next: let it collect for a few
+weeks, then rerun the discovery against `query_acts` before designing any ranking fix -
+the template-noise item stays parked until then.
 
 **X4 history as a second graph + X6 blind-spot map (RELEASED in 0.42.0, #170;
 2026-11-01).** Built on his "do x4 and x6" with a session-long go; design
@@ -1751,7 +1751,7 @@ every row moved up one.
 | 1a | **Next X-item not yet chosen** - X7 edges beyond imports and X8 dependency X-ray lead the build order; X4 drift is owed | 19 | X4 + X6 shipped in 0.42.0. This row names whichever X-item is in progress and moves on when it ships |
 | 2 | **A calibration ledger** | 14 | New tables, so a migration. Follows X3: the lean X11 ledger (0.40.0) already records predictions, so it scores real data from day one |
 | 3 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
-| 4 | **Paraphrase question set + lexical/semantic arbitration** - labels now recorded at write time (`query_acts`, migration 022, built 2026-11-02); collect, then measure | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
+| 4 | **Paraphrase question set + lexical/semantic arbitration** - labels now recorded at write time (`query_acts`, migration 022, released in 0.43.0); collect, then measure | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
 | 5 | **A referee for rival memory tools** | 17 | Only a fair comparison once 4 exists |
 | 6 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
 | 7 | Session flight recorder (low priority) | 18 | Check prior art first |
@@ -2267,7 +2267,7 @@ recall and search calls (local, in the same file as the memories themselves).
 Recently Completed at the top. Open: what counts as "acted on", and how to keep a session that simply re-read
 the top hit from labelling that hit correct by default.
 
-**Step two built 2026-11-02 (feature/query-acts):** measured, the label could not be
+**Step two released in 0.43.0 (#171, 2026-11-02):** measured, the label could not be
 recovered from the logs after the fact (see In Flight), so acts are now recorded with
 their query: `query_acts` (fetch, excerpt, update, relate, forget; the newest query of
 the session that returned the memory, and its rank) and `query_log.extra_ids`. "Acted

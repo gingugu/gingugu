@@ -504,7 +504,12 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.42.0** (PyPI, 2026-11-01). Minor: X4 history graph + X6 blind-spot
+- Current version: **0.43.0** (PyPI, 2026-11-02). Minor: the prompt hook strips Claude
+  Code `<task-notification>` blocks before it searches or logs (client and brain);
+  migration 022 adds `query_log.extra_ids` and `query_acts` (fetch/excerpt/update/
+  relate/forget tied to the session's query that surfaced the memory) (#171).
+  **Upgrading:** the brain migrates to schema 22 on first open; restart MCP clients.
+- 0.42.0 (PyPI, 2026-11-01). Minor: X4 history graph + X6 blind-spot
   map - `code_xray` `history` (hotspots, code-maat co-change coupling, `hidden` pairs) and
   `blindspots` (imported untested source by rank over authors), `gingugu xray
   history|blindspots`, and the read line `Changes with (no import):` (`MEMORY_XRAY_HISTORY`);
