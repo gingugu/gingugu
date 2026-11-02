@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import NamedTuple
 
-from . import hook_common, local, rank, scan
+from . import docs_cites, docs_map, hook_common, local, rank, scan
 from .hook_common import _show
 from .hook_common import importers as _importers
 from .read_hook import _ranked
@@ -28,6 +28,9 @@ _STATUSES = ("A", "M", "D", "R")
 _WORDS = {"A": "added", "M": "modified", "D": "deleted", "R": "renamed"}
 # Past this the blast lists alone could crowd the changed files out of the text.
 MAX_LIMIT = 50
+MAX_DOCS_SHOWN = 5
+# Files per docs section: the changed-file list must not be crowded out of the text.
+MAX_DOC_ROWS = 10
 # The range may be another agent's choice, and a brief can run inside a hook.
 GIT_TIMEOUT_S = 10
 
@@ -106,7 +109,35 @@ def changes(
     return sorted(found, key=lambda c: c.path)
 
 
-def build(g: hook_common.Graph, changes: list[Change], limit: int = 10) -> dict:
+def _docs(docs: docs_map.DocsMap | None, changes: list[Change]) -> tuple[list, list]:
+    """(docs citing each added or changed file, docs still citing a deleted or
+    renamed-away one): both empty without a map."""
+    if docs is None:
+        return [], []
+
+    def rows(found):
+        return [{"doc": _safe(c.doc), "repo": _safe(c.repo)} for c in found]
+
+    live, gone = [], []
+    for c in changes:
+        if c.status in ("A", "M", "R"):
+            found = docs_map.citing(docs, c.path)
+            if found:
+                live.append({"path": _safe(c.path), "docs": rows(found)})
+        gone_path = c.path if c.status == "D" else c.old_path if c.status == "R" else None
+        if gone_path is not None:
+            found = docs_map.citing_gone(docs, gone_path)
+            if found:
+                gone.append({"path": _safe(gone_path), "status": c.status, "docs": rows(found)})
+    return live, sorted(gone, key=lambda r: r["path"])
+
+
+def build(
+    g: hook_common.Graph,
+    changes: list[Change],
+    limit: int = 10,
+    docs: docs_map.DocsMap | None = None,
+) -> dict:
     """Pure: the changed files placed in the graph, and what the source reaches."""
     source = _ranked(g)
     position = {p: n for n, p in enumerate(source, 1)}
@@ -125,6 +156,7 @@ def build(g: hook_common.Graph, changes: list[Change], limit: int = 10) -> dict:
     rows.sort(key=lambda r: (not r["source"], r["rank"] or 0, r["path"]))
     seeds = [c.path for c in changes if c.path in position and c.status != "D"]
     reach = rank.blast(seeds, g.files, g.links, g.ranks, limit=limit, hidden=g.packages)
+    live, gone = _docs(docs, changes)
     return {
         "changed": rows,
         "counts": {s: sum(1 for c in changes if c.status == s) for s in _STATUSES},
@@ -137,7 +169,24 @@ def build(g: hook_common.Graph, changes: list[Change], limit: int = 10) -> dict:
         },
         "files": len(source),
         "top": [_safe(p) for p in source[:TOP]],
+        "docs": live,
+        "docs_gone": gone,
     }
+
+
+def _doc_lines(title: str, rows: list[dict], word: bool = False) -> list[str]:
+    """A line per file: its first ``MAX_DOCS_SHOWN`` docs, then a count of the rest."""
+    if not rows:
+        return []
+    out = [title]
+    for r in rows[:MAX_DOC_ROWS]:
+        shown = [docs_cites.label(d["doc"], d["repo"]) for d in r["docs"]]
+        more = f" (+{len(shown) - MAX_DOCS_SHOWN} more)" if len(shown) > MAX_DOCS_SHOWN else ""
+        label = _show(r["path"]) + (f" ({_WORDS[r['status']]})" if word else "")
+        out.append(f"- {label}: {', '.join(shown[:MAX_DOCS_SHOWN])}{more}")
+    if len(rows) > MAX_DOC_ROWS:
+        out.append(f"(+{len(rows) - MAX_DOC_ROWS} more files; code_xray docs names them all)")
+    return out
 
 
 def _line(r: dict) -> str:
@@ -169,6 +218,10 @@ def render(data: dict, name: str) -> str:
         tail += [f"- {_show(p)}" for p in blast["code"] + blast["tests"]]
         if len(blast["code"]) < blast["code_total"] or len(blast["tests"]) < blast["tests_total"]:
             tail.append("(lists are paged; code_xray blast has the rest)")
+    tail += _doc_lines("Docs citing the changed files:", data.get("docs", []))
+    tail += _doc_lines(
+        "Docs still citing a deleted or renamed file:", data.get("docs_gone", []), True
+    )
     if data["top"]:
         top = ", ".join(map(_show, data["top"]))
         tail.append(f"Repo top files ({data['files']} source): {top}")
@@ -185,6 +238,16 @@ def render(data: dict, name: str) -> str:
         lines.append(f"(+{len(data['changed']) - len(lines)} more)")
     text = "\n".join([head, *lines, *([tail_text] if tail_text else [])])
     return text[:MAX_CHARS]
+
+
+def _docs_map(repo: Path, state: Path) -> docs_map.DocsMap | None:
+    """The docs map, or None when it is off or fails: docs never cost a brief."""
+    if not docs_map.enabled():
+        return None
+    try:
+        return docs_map.read(repo, state)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def answer(
@@ -205,6 +268,7 @@ def answer(
         raise ValueError("pass a range or files, not both")
     rel = [p for p in local.seeds(named, repo) if p] if named else None  # "." is no file
     found = changes(repo, rev_range, rel)  # a ref git rejects fails before any build
-    g = hook_common.graph(repo, load_config().db_path.parent / "hook-sessions", session_id)
-    data = build(g, found, limit=min(max(0, limit), MAX_LIMIT))
+    state = load_config().db_path.parent / "hook-sessions"
+    g = hook_common.graph(repo, state, session_id)
+    data = build(g, found, limit=min(max(0, limit), MAX_LIMIT), docs=_docs_map(repo, state))
     return {"ok": True, **data, "text": render(data, repo.name), "caveat": CAVEAT}

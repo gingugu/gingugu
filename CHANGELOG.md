@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Docs map (X22): which docs cite a file.** A runbook names the scripts and configs it
+  describes, so a change to one should name the runbooks to re-read. `code_xray`
+  `action: "docs"` (and `gingugu xray docs [--files] [--path] [--limit] [--json]`)
+  returns the docs that cite each file, or without `files` the totals and the most
+  cited files. A citation is a path mention in a doc (`.md .mdx .markdown .rst .txt
+  .adoc`) that resolves to exactly one repo file with X3's matcher; an ambiguous name
+  cites nothing and a doc never cites itself. It also reads the tracked docs (`git ls-files --cached`) of sibling
+  checkouts under the `MEMORY_XRAY_REPOS` roots (or the default home folders), where only
+  a repo-qualified path or a GitHub link to this repo counts. The X-ray brief (and so
+  `gingugu xray brief` and the board brief) gains `Docs citing the changed files:` and
+  `Docs still citing a deleted or renamed file:`; a docs failure never costs the brief.
+  Computed on the caller's machine, cached owner-only, switch `MEMORY_XRAY_DOCS`
+  (default on); `gingugu serve` refuses the action like `history`. No migration.
+
 ---
 
 ## [0.44.0] - 2026-11-02

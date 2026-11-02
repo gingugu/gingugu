@@ -6,8 +6,8 @@ the host's disk, and the tool there refuses one. So the proxy claims every
 ``refresh`` without a ``fingerprint`` or ``payload``) and does that part on
 this machine. It also claims every ``brief`` (changed files and their combined
 blast), every ``callers`` (one symbol's callers, X17) and every ``history`` and
-``blindspots`` (X4, X6), each answered whole from the local checkout; the brain is
-never asked. The rest goes through
+``blindspots`` (X4, X6) and every ``docs`` (X22), each answered whole from the local
+checkout; the brain is never asked. The rest goes through
 ``xray.local``, the same code the local server runs:
 
 1. fingerprint the checkout (cheap: no parsing) and ask the brain by fingerprint;
@@ -38,13 +38,14 @@ from mcp.types import CallToolResult, JSONRPCNotification, JSONRPCRequest, TextC
 from .proxy_auth import SessionTokens, brain_client
 from .proxy_session import CLIENT_GONE
 from .proxy_vault import _refused, _reply
-from .xray import brief, callers_tool, extract, history_tool, local
+from .xray import brief, callers_tool, docs_tool, extract, history_tool, local
 
 NAME = "code_xray"
 _LOCAL = ("blast", "overview", "refresh")
 BRIEF = "brief"  # answered here whole: the brain is never asked
 CALLERS = "callers"  # likewise
 HISTORY = history_tool.ACTIONS  # likewise: X4 history, X6 blindspots
+DOCS = docs_tool.ACTIONS  # likewise: X22 docs
 
 
 def claims(msg) -> bool:
@@ -53,7 +54,7 @@ def claims(msg) -> bool:
         return False
     params = msg.params or {}
     args = params.get("arguments") or {}
-    if params.get("name") == NAME and args.get("action") in (BRIEF, CALLERS, *HISTORY):
+    if params.get("name") == NAME and args.get("action") in (BRIEF, CALLERS, *HISTORY, *DOCS):
         return True
     return (
         params.get("name") == NAME
@@ -187,6 +188,10 @@ class XrayRelay:
         )
         return CallToolResult(content=[TextContent(type="text", text=json.dumps(data, indent=2))])
 
+    async def _docs(self, args: dict) -> CallToolResult:
+        data = await _thread(docs_tool.answer, args.get("path"), args.get("files"), _limit(args))
+        return CallToolResult(content=[TextContent(type="text", text=json.dumps(data, indent=2))])
+
     async def _answer(self, args: dict) -> CallToolResult:
         if args.get("action") == BRIEF:
             return await self._brief(args)
@@ -194,6 +199,8 @@ class XrayRelay:
             return await self._callers(args)
         if args.get("action") in HISTORY:
             return await self._history(args)
+        if args.get("action") in DOCS:
+            return await self._docs(args)
         repo = await _thread(local.root, args.pop("path", None))
         namespace = args.get("namespace")
         if args["action"] == "refresh":
