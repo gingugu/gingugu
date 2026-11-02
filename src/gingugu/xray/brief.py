@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import NamedTuple
 
-from . import docs_map, hook_common, local, rank, scan
+from . import docs_cites, docs_map, hook_common, local, rank, scan
 from .hook_common import _show
 from .hook_common import importers as _importers
 from .read_hook import _ranked
@@ -180,9 +180,7 @@ def _doc_lines(title: str, rows: list[dict], word: bool = False) -> list[str]:
         return []
     out = [title]
     for r in rows[:MAX_DOC_ROWS]:
-        shown = [
-            _show(d["doc"] if d["repo"] is None else f"{d['repo']}:{d['doc']}") for d in r["docs"]
-        ]
+        shown = [docs_cites.label(d["doc"], d["repo"]) for d in r["docs"]]
         more = f" (+{len(shown) - MAX_DOCS_SHOWN} more)" if len(shown) > MAX_DOCS_SHOWN else ""
         label = _show(r["path"]) + (f" ({_WORDS[r['status']]})" if word else "")
         out.append(f"- {label}: {', '.join(shown[:MAX_DOCS_SHOWN])}{more}")

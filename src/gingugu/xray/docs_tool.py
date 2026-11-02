@@ -8,6 +8,8 @@ Shared by the stdio handler, the proxy and ``gingugu xray``, like ``history_tool
 from __future__ import annotations
 
 from . import docs_map, local
+from .brief import _safe
+from .docs_cites import label
 from .hook_common import _show
 
 ACTIONS = ("docs",)
@@ -31,7 +33,7 @@ def _fit(lines: list[str]) -> str:
 
 
 def _docs(rows: list[dict]) -> str:
-    shown = [_show(d["doc"] if d["repo"] is None else f"{d['repo']}:{d['doc']}") for d in rows]
+    shown = [label(d["doc"], d["repo"]) for d in rows]
     more = f" (+{len(shown) - MAX_SHOWN} more)" if len(shown) > MAX_SHOWN else ""
     return ", ".join(shown[:MAX_SHOWN]) + more
 
@@ -60,7 +62,7 @@ def render(data: dict, name: str) -> str:
 
 
 def _rows(found: list[docs_map.Cite]) -> list[dict]:
-    return [{"doc": c.doc, "repo": c.repo} for c in found]
+    return [{"doc": _safe(c.doc), "repo": _safe(c.repo)} for c in found]
 
 
 def answer(
@@ -81,14 +83,14 @@ def answer(
     m = docs_map.read(repo, load_config().db_path.parent / "hook-sessions")
     if rel:
         data = {
-            "files": [{"path": p, "docs": _rows(docs_map.citing(m, p))} for p in rel],
+            "files": [{"path": _safe(p), "docs": _rows(docs_map.citing(m, p))} for p in rel],
         }
     else:
         every = docs_map.cited(m)
         ranked = sorted(every.items(), key=lambda kv: (-len(kv[1]), kv[0]))
         n = min(max(0, limit), MAX_LIMIT)
         data = {
-            "cited": [{"path": p, "docs": len(c)} for p, c in ranked[:n]],
+            "cited": [{"path": _safe(p), "docs": len(c)} for p, c in ranked[:n]],
             "totals": {
                 "docs": len(m.local),
                 "cited_files": len(every),

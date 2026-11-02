@@ -86,6 +86,35 @@ paged; a git `core.fsmonitor`-style check for other config that runs code.
 
 ## Recently Completed
 
+**X22 docs map (2026-11-02, board task 0c965b43).** The board task: remember where
+runbooks live and which ones a change touches. A client-side reverse index from a repo
+file to the docs that cite it (`xray/docs_map.py`, `docs_cites.py`, `docs_tool.py`).
+A citation is a path mention resolved to exactly one repo file with X3's matcher
+(`scar_query._TOKEN` + `scars._resolve`); an ambiguous name cites nothing and a doc
+never cites itself. Doc extensions `.md .mdx .markdown .rst .txt .adoc`. It also reads
+sibling checkouts (directly under the `MEMORY_XRAY_REPOS` roots or the default home
+folders, committed docs only; another checkout with this repo's own identity, a
+worktree or second clone, is skipped): a sibling doc counts only repo-qualified paths
+(`<name>/path`) and GitHub blob/tree/raw links to this repo's origin, since a bare
+path there means the sibling's own file. Caps: `MAX_DOCS` 5000, `MAX_DOC_BYTES` 256
+KiB, `MAX_SIBLINGS` 64, `MAX_TOKENS` 1000 per doc (path tokens and GitHub links each); siblings share a 3s budget per read (`SIBLING_BUDGET_S`; past it a sibling keeps its cached entry or is skipped); a doc name that is absolute, has `..` or passes through a link is refused; a sibling whose identity fails `repo_id.valid` is skipped; a cache over 16 MiB is ignored; shown names are cut at 200 characters. Cache: owner-only
+`xray-docs-<digest>.json` in the hook-sessions dir, untrusted on read; local docs
+re-read only when size or mtime changes, a sibling only when its HEAD moves. Switch
+`MEMORY_XRAY_DOCS` (default on). Surfaces: the X-ray brief (X19, so `gingugu xray
+brief` and the board brief) gains `Docs citing the changed files:` and `Docs still
+citing a deleted or renamed file:` (D paths and R old paths; <= 5 docs per file then
+`(+N more)`, <= 10 files per section then `(+N more files; code_xray docs names them
+all)`, a sibling doc as `<repo>:<doc>`; data keys `docs` / `docs_gone`; a docs failure
+never costs the brief), and `code_xray` `docs` (files: the citing docs per file;
+without: totals plus the most cited files; local on stdio and in the proxy, `gingugu
+serve` refuses it like `history`) with `gingugu xray docs [--files] [--path] [--limit]
+[--json]`. No migration, no brain change. Measured on gingugu: 91% of the path tokens
+in its 26 docs resolve to exactly one file in 0.11s, 314 files cited; a cold scan of
+the sibling docs in ~/GIT (17 checkouts, 142 docs) takes 0.24s. Not built: the hook
+surfaces (the edit note, the Bash X-ray, the read hook) - the planned follow-up.
+Tests: `tests/test_xray_docs_map.py`, `tests/test_xray_docs_brief.py`,
+`tests/test_xray_docs_tool.py`.
+
 **Minions never spawn minions; harness ships a fenced `researcher` (2026-11-02,
 board task 0790760f).** A Sonnet minion on the built-in general-purpose agent
 spawned a minion of its own (general-purpose carries the Agent tool), and the
@@ -2502,6 +2531,7 @@ slices alongside them. IDs are stable references, not the order.
 | X21 | **Symbols on the brain (OWED)** - brain tables for definitions and call edges (a migration), ingested with the snapshot, so `code_xray` `callers` works through `gingugu serve` and across repos | X17, X1 store, X9 | Owed by the X17 approval (2026-10-30), which was given on the condition that brain tables follow. Lands when X7 or X9 first needs symbols on the brain; until then the symbol graph stays on the client |
 | X19 | **X-ray brief (SHIPPED in 0.34.0, #157)** - the changed files by rank with importer counts, plus their combined blast (code and candidate tests), for an agent that fires no hooks | X1, X14 graph cache | `code_xray` `brief` (`range`, `files`, `path`) and `gingugu xray brief [--range R \| --files a,b] [--path P] [--json]`. Computed on the caller's machine from the hook graph cache; nothing stored, the brain never asked; `gingugu serve` refuses it, the proxy answers it locally. Compact `text` <= 8800 chars, for reviews, handoffs and `board watch --exec`. `xray/brief.py`, `xray_cli.py` |
 | X20 | **Brief on the board (RELEASED in 0.35.0)** - a handoff carries its X-ray brief without anyone asking. Why next: the agents X19 is for fire no hooks, so a brief they must request is a brief they rarely see | X19, agent board | When a board post names a range (`xray: <range>`), the RECEIVING side renders `xray brief` for it and attaches the text: the prompt hook's board mail (Claude Code) and `board watch --exec` (Codex). Rendered on the receiver's machine from its own checkout; the post itself carries only the ref, never paths or the brief. BUILT as a line of its own `xray: <range>` in the body: board mail appends at most one per prompt (<= 3500 chars, the prompt's cwd); `board watch` adds an `xray` field, appends to `text` and sets `GINGUGU_POST_XRAY` (<= 3 per batch, the watcher's cwd). Same range gate as `brief`, ref <= 200 chars. Sender nudge: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line (`xray/board_nudge.py`). A receiver with no cwd or outside a repo gets one line naming `gingugu xray brief --range <ref>` (0.35.2). Part 2: `xray: <repo> <range>` names the repo, found locally via `xray/repo_id` (0.36.0). Switch `MEMORY_XRAY_BOARD`. `xray/board_brief.py` |
+| X22 | **Docs map (SHIPPED in 0.45.0)** - which docs cite a changed file, here and in sibling checkouts: where the runbooks live and which ones a change touches | X3 matcher, X19 brief | `code_xray` `docs`, `gingugu xray docs`, and two brief sections (`Docs citing the changed files:`, `Docs still citing a deleted or renamed file:`). A citation is a path mention that resolves to exactly one repo file; a sibling doc counts only repo-qualified paths and GitHub links to this repo. Client only, no migration, `MEMORY_XRAY_DOCS`. Hook surfaces (edit note, Bash X-ray, read hook) not built yet |
 | X18 | **X-ray Explorer** - a view in the Memory Explorer: repo as a 3D city (height = rank, colour = churn or tests, districts = X5 boundaries), animated blast radius, X7 attack paths, X6 blind-spot heat, X3 scar markers linking into the memory drawer, X4 drift slider over snapshots | `ui/`, `ui_api/` read-only observer | Ships in slices; city + blast radius first |
 
 ### Standing rules

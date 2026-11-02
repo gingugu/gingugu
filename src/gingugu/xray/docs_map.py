@@ -16,7 +16,8 @@ from __future__ import annotations
 import os
 import re
 import stat
-from pathlib import Path
+import time
+from pathlib import Path, PurePosixPath
 
 from . import hook_common, repo_id, scan
 from .docs_cites import Cite, DocsMap, cited, citing, citing_gone  # noqa: F401
@@ -26,8 +27,12 @@ DOC_EXTS = (".md", ".mdx", ".markdown", ".rst", ".txt", ".adoc")
 MAX_DOCS = 5000  # per repo
 MAX_DOC_BYTES = 262_144  # read at most this much of one doc
 MAX_SIBLINGS = 64
-MAX_TOKENS = 1000  # per doc
+MAX_TOKENS = 1000  # per doc, path tokens and GitHub links each
 GIT_TIMEOUT_S = 10
+# Siblings are other people's checkouts and the brief can run inside a hook: past
+# this, a sibling with no cached entry is skipped for this read, not waited on.
+SIBLING_BUDGET_S = 3.0
+MAX_CACHE_BYTES = 16 * 1024 * 1024
 
 _GITHUB = re.compile(
     r"github\.com/([\w.-]+)/([\w.-]+)/(?:blob|tree|raw)/[^/\s]+/(\S+)", re.IGNORECASE
@@ -55,14 +60,16 @@ def github_paths(text: str, ident: str | None) -> list[str]:
     """Paths of GitHub links into the repo ``owner/name`` that ``ident`` names."""
     if not ident or "/" not in ident:
         return []
-    out: list[str] = []
+    out: dict[str, None] = {}  # ordered and O(1) to test: a doc can hold thousands
     for match in _GITHUB.finditer(text):
         if f"{match.group(1)}/{match.group(2)}".lower() != ident.lower():
             continue
         path = re.split(r"[#?]", match.group(3), maxsplit=1)[0].rstrip(_TRAIL)
-        if path and path not in out:
-            out.append(path)
-    return out
+        if path and len(path) <= MAX_TOKEN_CHARS:
+            out[path] = None
+            if len(out) == MAX_TOKENS:
+                break
+    return list(out)
 
 
 def qualified(text: str, ident: str | None) -> list[str]:
@@ -98,7 +105,12 @@ def _strs(value: object) -> list[str] | None:
 def _load(root: Path, state_dir: Path) -> tuple[object, dict, dict, object]:
     """(ident, local, siblings, raw) from the cache, every field type-checked;
     anything off drops that part, so a bad cache costs a rebuild and no more."""
-    raw = hook_common._read_json(state_dir / f"xray-docs-{hook_common._digest(root)}.json")
+    path = state_dir / f"xray-docs-{hook_common._digest(root)}.json"
+    try:
+        too_big = path.stat().st_size > MAX_CACHE_BYTES
+    except OSError:
+        too_big = False
+    raw = None if too_big else hook_common._read_json(path)
     if not isinstance(raw, dict) or not isinstance(raw.get("ident"), str):
         return None, {}, {}, raw
     local: dict[str, dict] = {}
@@ -138,27 +150,39 @@ def _docs(names: list[str]) -> list[str]:
     return [n for n in names if n.lower().endswith(DOC_EXTS)][:MAX_DOCS]
 
 
-def _plain_file(path: Path) -> os.stat_result | None:
-    """The stat of a regular file that is not a link; None for anything else."""
-    try:
-        st = path.lstat()
-    except OSError:
+def _inside(root: Path, name: str) -> Path | None:
+    """``root / name`` when it is a regular file inside ``root``: no absolute name,
+    no ``..``, no link at the end or on the way (a crafted index can list any name)."""
+    pure = PurePosixPath(name)
+    if not name or pure.is_absolute() or os.path.isabs(name) or ".." in pure.parts:
         return None
-    return st if stat.S_ISREG(st.st_mode) else None
+    full = root / name
+    try:
+        if not stat.S_ISREG(full.lstat().st_mode):
+            return None
+        if not full.resolve().is_relative_to(root.resolve()):
+            return None
+    except (OSError, RuntimeError):
+        return None
+    return full
 
 
 def _local(root: Path, docs: list[str], ident: str, old: dict) -> dict[str, dict]:
     out: dict[str, dict] = {}
     for doc in docs:
-        st = _plain_file(root / doc)
-        if st is None:
+        full = _inside(root, doc)
+        if full is None:
+            continue
+        try:
+            st = full.stat()
+        except OSError:
             continue
         prev = old.get(doc)
         if prev and prev["size"] == st.st_size and prev["mtime_ns"] == st.st_mtime_ns:
             out[doc] = prev
             continue
         try:
-            text = _read_text(root / doc)
+            text = _read_text(full)
         except OSError:
             continue
         toks = tokens(text)
@@ -189,44 +213,54 @@ def _candidates(root: Path) -> list[Path]:
     return found
 
 
-def _sibling(child: Path, own: str) -> tuple[str | None, dict[str, list[str]]]:
-    proc = scan.git(child, "ls-files", "-z", "--cached", timeout=GIT_TIMEOUT_S)
+def _sibling(child: Path, own: str, timeout: float) -> dict[str, list[str]]:
+    proc = scan.git(child, "ls-files", "-z", "--cached", timeout=timeout)
     if proc.returncode != 0:
         raise scan.XrayError("git ls-files failed")
     refs: dict[str, list[str]] = {}
     for doc in _docs(_names(proc)):
-        if _plain_file(child / doc) is None:
+        full = _inside(child, doc)
+        if full is None:
             continue
         try:
-            found = qualified(_read_text(child / doc), own)
+            found = qualified(_read_text(full), own)
         except OSError:
             continue
         if found:
             refs[doc] = found
-    return scan.commit(child), refs
+    return refs
 
 
 def _siblings(root: Path, own: str, old: dict) -> tuple[dict[str, dict], dict[str, dict]]:
-    """(by sibling path, for the cache; by ident, for the map)."""
+    """(by sibling path, for the cache; by ident, for the map). Past the time
+    budget a sibling keeps its cached entry unchecked, or is skipped."""
     cached: dict[str, dict] = {}
     by_ident: dict[str, dict] = {}
     if not own:
         return cached, by_ident
+    deadline = time.monotonic() + SIBLING_BUDGET_S
     for child in _candidates(root):
         where = str(child)
+        prev = old.get(where)
+        left = deadline - time.monotonic()
         try:
-            prev = old.get(where)
-            head = scan.commit(child)
-            if prev and head is not None and prev["head"] == head:
+            if left <= 0:
+                if prev is None:
+                    continue
                 entry = prev
             else:
-                ident = repo_id.of(child) or child.name
-                refs = {} if ident == own else _sibling(child, own)[1]
-                entry = {"ident": ident, "head": head, "refs": refs}
+                head = scan.commit(child)
+                if prev and head is not None and prev["head"] == head:
+                    entry = prev
+                else:
+                    ident = repo_id.of(child) or child.name
+                    keep = repo_id.valid(ident) and ident != own
+                    refs = _sibling(child, own, min(left, GIT_TIMEOUT_S)) if keep else {}
+                    entry = {"ident": ident, "head": head, "refs": refs}
         except (scan.XrayError, OSError):
             continue
-        if entry["ident"] == own:
-            continue  # this repo under another path: a worktree or a second clone
+        if entry["ident"] == own or not repo_id.valid(entry["ident"]):
+            continue  # this repo under another path (a worktree, a clone), or a bad name
         cached[where] = entry
         by_ident.setdefault(entry["ident"], entry["refs"])
     return cached, by_ident
