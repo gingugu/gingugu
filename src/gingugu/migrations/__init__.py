@@ -15,7 +15,7 @@ The migrations themselves live in eight modules, split by what they actually do:
 * ``fields`` - write-time declared fields on the memory record, and the FTS5
   rebuild that indexes them.
 * ``queries`` - the questions asked of the store, as opposed to the memories
-  in it.
+  in it, and what a session then did with the answers.
 * ``tripwires`` - memories bound to a tool call, fired before it runs.
 * ``board`` - what agents say to each other, kept out of the memories on
   purpose.
@@ -49,7 +49,7 @@ from .claim_derivation import (
     _migration_010_claim_qualification,
 )
 from .fields import _migration_014_provenance_about
-from .queries import _migration_015_query_log
+from .queries import _migration_015_query_log, _migration_022_query_acts
 from .runtime import _migration_012_activity_and_lock
 from .schema import (
     _migration_001_initial_schema,
@@ -88,6 +88,7 @@ MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
     (19, _migration_019_xray),
     (20, _migration_020_agent_sessions),
     (21, _migration_021_xray_languages),
+    (22, _migration_022_query_acts),
 ]
 
 # The version a fully-migrated DB lands on. Derived rather than written down so

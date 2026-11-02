@@ -38,3 +38,34 @@ CREATE INDEX idx_query_log_created ON query_log(created_at);
 
 def _migration_015_query_log(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA_V15)
+
+
+# Migration 022: what a session did with what a query returned. Measured
+# 2026-11-02, "the memory the session then acted on" could not be recovered
+# after the fact - access_log carries a long-lived MCP session id, updates and
+# relations carry none, and result_ids kept only the ranked hits. So
+# ``extra_ids`` keeps what a recall returned beside them (related extras,
+# capability pointers), and each act is tied to its query when it happens.
+# ``memory_id`` has no foreign key: a hard-deleted memory's acts stay as history.
+_SCHEMA_V22 = """
+ALTER TABLE query_log ADD COLUMN extra_ids TEXT NOT NULL DEFAULT '[]';
+
+CREATE INDEX idx_query_log_session ON query_log(session_id, created_at);
+
+CREATE TABLE query_acts (
+    id          TEXT PRIMARY KEY,
+    session_id  TEXT,
+    act         TEXT NOT NULL,
+    memory_id   TEXT NOT NULL,
+    query_id    TEXT,
+    rank        INTEGER,
+    created_at  TEXT NOT NULL
+);
+
+CREATE INDEX idx_query_acts_query ON query_acts(query_id);
+CREATE INDEX idx_query_acts_created ON query_acts(created_at);
+"""
+
+
+def _migration_022_query_acts(conn: sqlite3.Connection) -> None:
+    conn.executescript(_SCHEMA_V22)

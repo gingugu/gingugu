@@ -39,7 +39,9 @@ def test_upgrade_from_018_adds_the_tables_and_keeps_memories():
     )
     before = _tables(conn)
     assert migrate(conn) == LATEST_SCHEMA_VERSION
-    assert _tables(conn) - before == {"xray_snapshots", "xray_files", "xray_edges"}
+    xray = {"xray_snapshots", "xray_files", "xray_edges"}
+    assert xray <= _tables(conn) - before
+    assert not {t for t in _tables(conn) - before - xray if t.startswith("xray")}
     assert conn.execute("SELECT COUNT(*) FROM namespaces").fetchone()[0] == 1
 
 

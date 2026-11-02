@@ -125,6 +125,7 @@ def register(mcp, ctx: ServerContext) -> None:
             # An explicit read of a memory the caller named by id. No spreading
             # activation: like search, this traverses no relations.
             ctx.store.record_accesses([mem.id])
+            ctx.store.log_act("excerpt", [mem.id])
             return payload
         except Exception as exc:
             logger.exception("memory_excerpt failed")

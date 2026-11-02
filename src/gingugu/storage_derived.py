@@ -28,7 +28,7 @@ import sqlite3
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from . import access, claim_sync, embedding_sync, grants, query_log
+from . import access, claim_sync, embedding_sync, grants, query_acts, query_log
 from . import tags as tags_mod
 from .embeddings import EmbeddingProvider
 from .models import Memory
@@ -87,12 +87,18 @@ class DerivedTables:
         return updated
 
     def log_query(
-        self, tool: str, query: str | None, result_ids: list[str], namespaces: list[str] | None
+        self,
+        tool: str,
+        query: str | None,
+        result_ids: list[str],
+        namespaces: list[str] | None,
+        extra_ids: list[str] | None = None,
     ) -> None:
         """Record what a retrieval was asked and what it returned, rank order kept.
 
-        ``namespaces=None`` means the query ran across every namespace. Never
-        raises; see ``query_log.record``.
+        ``namespaces=None`` means the query ran across every namespace;
+        ``extra_ids`` what came back beside the ranked hits. Never raises; see
+        ``query_log.record``.
         """
         if query_log.record(
             self._conn,
@@ -101,6 +107,15 @@ class DerivedTables:
             result_ids=result_ids,
             namespaces=namespaces,
             session_id=current_session_id(),
+            extra_ids=extra_ids,
+        ):
+            self._commit()
+
+    def log_act(self, act: str, memory_ids: list[str]) -> None:
+        """Record that this session acted on these memories, tied to the query that
+        surfaced each. Never raises on the database; see ``query_acts.record``."""
+        if query_acts.record(
+            self._conn, act=act, memory_ids=memory_ids, session_id=current_session_id()
         ):
             self._commit()
 

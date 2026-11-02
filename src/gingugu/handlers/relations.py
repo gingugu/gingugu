@@ -75,7 +75,10 @@ def register(mcp, ctx: ServerContext) -> None:
                     return _err(
                         "pass either `edges` for a batch or the single-edge fields, not both"
                     )
-                return _relate_batch(relations, edges)
+                out = _relate_batch(relations, edges)
+                ends = [r[k] for r in out["results"] for k in ("source_id", "target_id")]
+                ctx.store.log_act("relate", ends)
+                return out
             if not source_id or not target_id or not relation_type:
                 return _err(
                     "source_id, target_id, and relation_type are required (or pass `edges`)"
@@ -83,6 +86,7 @@ def register(mcp, ctx: ServerContext) -> None:
             rel = _parse_type(relation_type)
             result = relations.relate(source_id=source_id, target_id=target_id, relation_type=rel)
             result.pop("created", None)
+            ctx.store.log_act("relate", [result["source_id"], result["target_id"]])
             return {"ok": True, "relation": result}
         except ValueError as exc:
             return _err(str(exc))
