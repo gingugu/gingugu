@@ -10,6 +10,7 @@ nothing reaches the brain.
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -240,7 +241,7 @@ def test_only_a_changed_doc_is_reread(repo, state, roots, reads):
     reads.clear()
     (repo / "docs/runbook.md").write_text("now pkg/leaf.py only, and a much longer line\n")
     m = docs_map.read(repo, state)
-    assert [p.rsplit("/", 1)[-1] for p in reads] == ["runbook.md"]
+    assert [Path(p).name for p in reads] == ["runbook.md"]
     assert docs_map.citing(m, "pkg/leaf.py") == [("docs/runbook.md", None)]
     assert docs_map.citing(m, "pkg/core.py") == []
 
