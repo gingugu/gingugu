@@ -23,12 +23,16 @@ direct-import-only "tested" marked 20 of 23 httpx files untested (its tests impo
 package), with naming 8; rank/(commits x authors) put 1-commit example files first on
 flask, rank/authors puts `ctx.py` first. Surfaces: `code_xray` `history` (optional
 `files` focus) and `blindspots` (`xray/history_tool.py`; serve refuses, proxy answers
-locally), `gingugu xray history|blindspots [--files] [--path] [--limit] [--json]`, and
+locally), `gingugu xray history [--files] [--path] [--limit] [--json]` and `gingugu xray
+blindspots [--path] [--limit] [--json]`, and
 the read neighbourhood's `Changes with (no import): <file> NN%` (top 3, before the
 scars; `MEMORY_XRAY_HISTORY`). On gingugu: hidden pairs `edit_hook`/`read_hook` 67%,
 `database`/`test_migrations` 73%; top blind spots `ui/src/types/index.ts` (17
 importers), `secret_file.py`, `xray/local.py`. Tests: `test_xray_history.py`,
-`test_xray_hotspots.py`, `test_xray_history_tool.py` (67). Not built: X4's per-commit
+`test_xray_hotspots.py`, `test_xray_history_tool.py` (68). Security review: a failed
+log is remembered per HEAD so the read hook pays one timeout, not one per file; paths
+decode as `scan` decodes them so non-UTF-8 names match the graph; the git output has no
+byte cap of its own (bounded by the 10s timeout, as `brief`'s diff is). Not built: X4's per-commit
 architectural drift (needs the import graph of past trees; extraction reads only the
 working tree); TS/JS test naming (`*.test.ts`) is not a "named for" match yet.
 

@@ -709,6 +709,21 @@ python raw "sym" (defs, binds, calls, types; cached by content, X16)
   → code_xray callers: symbols.callers for one (file, symbol), stdio/proxy only
 ```
 
+X4 and X6 read git history against the same graph cache, locally:
+
+```
+code_xray history | blindspots (stdio handler, or the proxy; serve refuses)
+  → history_tool.answer: local.root(path) → hook_common.graph (cached by fingerprint)
+  → history.read(retry=True): HEAD → xray-history-<sha16(root)>.json if HEAD matches,
+    else git log --no-merges -M --name-status -z -n 1000 (10s) → parse (renames
+    followed) → summarize (churn, author counts, pairs shared >= 5; changesets > 30
+    files skipped for pairs) → cache; a failure writes xray-history-failed-<sha16>
+  → history:    hotspots.hotspots (churn x rank x authors) + hotspots.coupling
+                (>= 5 revs, degree >= 30%, `hidden` = no direct import; `files` focus)
+  → blindspots: hotspots.blindspots (imported, untested by import or name, rank/authors)
+  → lists paged by limit (default 50, cap 100), totals whole; `text` <= 8800 chars
+```
+
 The hooks hash the checkout once and hand that fingerprint to both cache reads.
 
 **After an edit, and the test ledger.** The note after an edit and the ledger that

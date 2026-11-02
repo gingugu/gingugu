@@ -55,7 +55,8 @@ EMPTY = History(None, 0, 0, {}, {}, {})
 
 
 def _text(raw: bytes) -> str:
-    return raw.decode("utf-8", "surrogateescape")
+    """Decoded as ``scan`` decodes ``ls-files``, so a history path matches its graph path."""
+    return raw.decode("utf-8", errors="replace")
 
 
 def parse(out: bytes) -> list[Commit]:
@@ -196,8 +197,17 @@ def _cache_path(root: Path, state_dir: Path) -> Path:
     return state_dir / f"xray-history-{hook_common._digest(root)}.json"
 
 
-def read(root: Path, state_dir: Path) -> History:
-    """The checkout's history, cached by HEAD. An unborn branch has none."""
+def _failed_path(root: Path, state_dir: Path) -> Path:
+    return state_dir / f"xray-history-failed-{hook_common._digest(root)}"
+
+
+def read(root: Path, state_dir: Path, *, retry: bool = True) -> History:
+    """The checkout's history, cached by HEAD. An unborn branch has none.
+
+    A log that failed (a timeout) is remembered for that HEAD; with ``retry``
+    off - the read hook, which runs on every first read of a file - it is not
+    run again until HEAD moves, so one slow history costs one timeout, not one
+    per file. The tool keeps ``retry`` on: an agent that asks gets a fresh try."""
     head = scan.commit(root)
     if head is None:
         return EMPTY
@@ -205,6 +215,14 @@ def read(root: Path, state_dir: Path) -> History:
     cached = from_json(hook_common._read_json(cache))
     if cached is not None and cached.head == head:
         return cached
-    h = summarize(parse(_log(root)), head=head)
+    failed = _failed_path(root, state_dir)
+    if not retry and hook_common._read_json(failed) == head:
+        raise scan.XrayError("git log failed for this HEAD; not retried in a hook")
+    try:
+        h = summarize(parse(_log(root)), head=head)
+    except scan.XrayError:
+        hook_common._write_json(failed, head)
+        raise
     hook_common._write_json(cache, to_json(h))
+    failed.unlink(missing_ok=True)
     return h
