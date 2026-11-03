@@ -53,6 +53,33 @@ def test_qualified_paths_are_prefixed_with_the_repo_name():
     assert docs_map.qualified(text, "acme/widget") == ["lib/limits.py", "conf/app.yaml"]
 
 
+@pytest.mark.parametrize(
+    "prose",
+    [
+        "The resolver lives in Acme/Widget, as lib/limits.py.",  # the field repro
+        "see acme/widget/lib/limits.py",
+        "in `acme/widget` at `lib/limits.py`",
+    ],
+)
+def test_qualified_reads_owner_qualified_paths_and_prose(prose):
+    assert docs_map.qualified(prose, "acme/widget") == ["lib/limits.py"]
+
+
+def test_qualified_never_reads_another_owner_s_repo_of_the_same_name():
+    assert docs_map.qualified("lives in other/widget, as lib/limits.py", "acme/widget") == []
+
+
+def test_a_cache_from_an_older_matcher_rereads_its_siblings(tmp_path):
+    state = tmp_path / "s"
+    state.mkdir()
+    path = state / f"xray-docs-{docs_map.hook_common._digest(tmp_path)}.json"
+    path.write_text(
+        '{"ident": "acme/x", "local": {}, '
+        '"siblings": {"/a": {"ident": "acme/a", "head": "h", "refs": {}}}}'
+    )
+    assert docs_map._load(tmp_path, state)[2] == {}
+
+
 def test_qualified_includes_github_links():
     text = "https://github.com/acme/widget/blob/main/ops/run.sh"
     assert docs_map.qualified(text, "acme/widget") == ["ops/run.sh"]
