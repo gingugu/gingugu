@@ -246,6 +246,27 @@ def test_names_are_resource_shaped_literals_and_values():
     assert not {"SELECT 1", "ab", "on"} & found
 
 
+@pytest.mark.parametrize(
+    "line",
+    [
+        'OPENAI_API_KEY = "sk-proj-abcdEFGH12345678ijklMNOP"\n',
+        "  client_secret: shhh-do-not-tell\n",
+        'password = "hunter2-hunter2"\n',
+        'AUTH_HEADER = "Bearer-xyz-abc"\n',
+        'commit = "3f2a1b9c0d4e5f60718293a4b5c6d7e8f9012345"\n',
+        'build = "release-9f8e7d6c5b4a3f2e1d0c"\n',
+    ],
+)
+def test_credential_shaped_values_are_never_names(line):
+    # names are cached on disk: a value that may be a credential is never one
+    assert keys({"src/settings.py": line, "conf/app.yaml": line}, NAME) == set()
+
+
+def test_resource_names_beside_a_secret_line_still_count():
+    files = {"conf/app.yaml": "api_key: abc-def-ghi\ntable: usage-ledger\n"}
+    assert keys(files, NAME) == {"usage-ledger"}
+
+
 # --- citations of another repo's source -------------------------------------------------
 
 
