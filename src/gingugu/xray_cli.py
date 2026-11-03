@@ -1,6 +1,6 @@
-"""``gingugu xray``: the X-ray brief, history, blind spots, docs and test-prediction score.
+"""``gingugu xray``: the X-ray brief, history, blind spots, docs, links and prediction score.
 
-``brief``, ``history``, ``blindspots`` and ``docs`` are the same answers as the
+``brief``, ``history``, ``blindspots``, ``docs`` and ``links`` are the same answers as the
 ``code_xray`` actions of those names, computed on this machine from the cached
 hook graph and git log; ``score`` reads the local prediction ledger.
 Exit 0 ok, 1 on a git/X-ray failure, 2 on bad usage.
@@ -13,6 +13,7 @@ import json
 import sys
 
 from .xray import brief, docs_tool, history_tool
+from .xray.links import tool as links_tool
 from .xray.scan import XrayError
 
 
@@ -33,9 +34,12 @@ def _parser() -> argparse.ArgumentParser:
         p.add_argument("--json", action="store_true", help="the full answer as JSON")
     c = sub.add_parser("docs", help="which docs cite a file (this repo and sibling checkouts)")
     c.add_argument("--files", help="comma-separated files to look up (default: the most cited)")
-    c.add_argument("--path", help="any directory in the checkout (default: cwd)")
-    c.add_argument("--limit", type=int, default=20, help="rows (default 20)")
-    c.add_argument("--json", action="store_true", help="the full answer as JSON")
+    k = sub.add_parser("links", help="which other checkouts lean on this one, and on what")
+    k.add_argument("--files", help="comma-separated files: who leans on them, and the ripple")
+    for p in (c, k):
+        p.add_argument("--path", help="any directory in the checkout (default: cwd)")
+        p.add_argument("--limit", type=int, default=20, help="rows (default 20)")
+        p.add_argument("--json", action="store_true", help="the full answer as JSON")
     s = sub.add_parser("score", help="how the post-edit test predictions fared against pytest")
     s.add_argument("--json", action="store_true", help="the score as JSON")
     return parser
@@ -53,10 +57,11 @@ def _history(args: argparse.Namespace) -> int:
 
 
 def _docs(args: argparse.Namespace) -> int:
+    answer = docs_tool.answer if args.cmd == "docs" else links_tool.answer
     try:
-        data = docs_tool.answer(args.path, args.files, args.limit)
+        data = answer(args.path, args.files, args.limit)
     except Exception as exc:  # noqa: BLE001 - a message and exit 1, never a traceback
-        print(f"gingugu xray docs: {exc}", file=sys.stderr)
+        print(f"gingugu xray {args.cmd}: {exc}", file=sys.stderr)
         return 1
     print(json.dumps(data, indent=2) if args.json else data["text"])
     return 0
@@ -81,7 +86,7 @@ def main(argv: list[str]) -> int:
         return _score(args.json)
     if args.cmd in history_tool.ACTIONS:
         return _history(args)
-    if args.cmd == "docs":
+    if args.cmd in ("docs", "links"):
         return _docs(args)
     if args.cmd != "brief":
         parser.print_usage(sys.stderr)

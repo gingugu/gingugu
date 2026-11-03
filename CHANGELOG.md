@@ -9,6 +9,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Cross-repo links (X23): which other checkouts lean on this one.** A service
+  ecosystem is wired by names, not imports. `code_xray` `action: "links"` (and
+  `gingugu xray links [--files] [--path] [--limit] [--json]`) answers which other
+  checkouts on this machine lean on this repo, and what it leans on, with the file and
+  line that shows each link. Nothing is declared in any repo: every checkout (this one
+  and the siblings under the `MEMORY_XRAY_REPOS` roots or the default home folders, the
+  same discovery as the docs map) is read for the names it provides - published
+  packages, images it builds and pushes, hostnames it serves, routes it defines,
+  IaC-owned tables, buckets, queues, topics, streams and functions - and the names it
+  mentions: CI checkouts and reusable workflows, submodules, git-URL and package
+  dependencies, image refs, hosts in URLs and config, route literals, resource-shaped
+  literals, `repo@sha path` cites and doc prose. A mention in one repo of a name
+  another provides is a link with a kind (`ci`, `source`, `pin`, `deploy`, `runtime`,
+  `data`, `cite`, `docs`), certain when exactly one other repo provides the name and
+  the match is exact, otherwise flagged (`ambiguous`, `by-name`, `also-own`, `suffix`,
+  `unmounted`, `route-only`, `wildcard`, `pattern`, `partial`; `unpinned`, `missing`,
+  `drifted`, `unknown-sha` describe a link). Routes are weak names: certain only when
+  the calling repo also names a host the provider serves. `repo@sha path` cites are
+  checked for drift against the cited checkout. Private hosts two or more repos call
+  and no checkout here serves are reported as `shared`. With `files`, it returns the
+  links into those files (through their importers) plus every whole-repo link, and a
+  ripple across repos up to 3 hops. The X-ray brief gains `Other repos leaning on these
+  files` and `Ripple across repos` (data key `links`) on a 3s budget that never costs
+  the brief. Facts are cached per checkout by file size and mtime (owner-only
+  `xray-links-<digest>.json`, rebuilt when the extractors change); caps: 8000 files per
+  repo, 256 KiB per file; past the time budget a repo keeps its cache and reports how
+  many files it did not read. A resource-shaped literal is never kept from a `.env*`
+  file, a line that sets something secret-named, a well-known token prefix or a
+  random-looking value, so the cache holds no credential. Computed on the caller's
+  machine; `gingugu serve` refuses the action like `docs`. Switch `MEMORY_XRAY_LINKS`
+  (default on). No migration.
+
+### Changed
+
+- **The docs map reads prose and owner-qualified paths.** A sibling checkout's docs now
+  also cite this repo through `owner/name/path` and prose such as "lives in
+  `owner/name`, as `path`", "in `owner/name` at `path`" and "owner/name: path",
+  sharing X23's prose reader. The docs cache carries a matcher version, so unchanged
+  siblings are re-read once.
+
 ---
 
 ## [0.45.1] - 2026-11-03

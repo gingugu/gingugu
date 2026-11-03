@@ -33,6 +33,9 @@ GIT_TIMEOUT_S = 10
 # this, a sibling with no cached entry is skipped for this read, not waited on.
 SIBLING_BUDGET_S = 3.0
 MAX_CACHE_BYTES = 16 * 1024 * 1024
+# Bumped whenever ``qualified`` reads more: a sibling's refs are cached by its HEAD,
+# so without this a sibling that never moves would keep the old reading forever.
+MATCH_VERSION = 2
 
 _GITHUB = re.compile(
     r"github\.com/([\w.-]+)/([\w.-]+)/(?:blob|tree|raw)/[^/\s]+/(\S+)", re.IGNORECASE
@@ -74,9 +77,13 @@ def github_paths(text: str, ident: str | None) -> list[str]:
 
 def qualified(text: str, ident: str | None) -> list[str]:
     """What ``text`` says about the repo ``ident``: paths prefixed with its name
-    (``widget/lib/x.py``) and GitHub links to it. Unique, first seen first."""
+    (``widget/lib/x.py``) or its ``owner/name``, GitHub links to it, and prose that
+    places a path in it ("lives in acme/widget, as lib/x.py" - X23's reader).
+    Unique, first seen first."""
     if not ident:
         return []
+    from .links.prose import doc_refs
+
     name = ident.rpartition("/")[2].lower()
     out: list[str] = []
     for token in tokens(text):
@@ -84,12 +91,32 @@ def qualified(text: str, ident: str | None) -> list[str]:
         if rest and head.lower() == name and rest not in out:
             out.append(rest)
     out += [p for p in github_paths(text, ident) if p not in out]
+    whole = ident.lower()
+    for key, path in doc_refs(text):
+        if (key == whole or ("/" not in key and key == name)) and path not in out:
+            out.append(path)
     return out
 
 
+_OPEN_FLAGS = (
+    os.O_RDONLY
+    | getattr(os, "O_NOFOLLOW", 0)
+    | getattr(os, "O_NONBLOCK", 0)
+    | getattr(os, "O_BINARY", 0)
+)
+
+
 def _read_text(path: Path) -> str:
-    """The one I/O seam for reading a doc."""
-    with open(path, "rb") as handle:
+    """The one I/O seam for reading a doc (and, for X23, any checkout file).
+    ``_inside`` checked the name; a checkout can still swap the file for a link or
+    a FIFO before this open, so the open itself refuses a link and never blocks,
+    and what it opened must be a regular file."""
+    if not hasattr(os, "O_NOFOLLOW") and os.path.islink(path):
+        raise OSError(f"a link: {path}")  # Windows has no O_NOFOLLOW: check, then open
+    fd = os.open(path, _OPEN_FLAGS)
+    with os.fdopen(fd, "rb") as handle:
+        if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+            raise OSError(f"not a regular file: {path}")
         return handle.read(MAX_DOC_BYTES).decode("utf-8", errors="replace")
 
 
@@ -121,7 +148,7 @@ def _load(root: Path, state_dir: Path) -> tuple[object, dict, dict, object]:
                 continue
             local[doc] = {"size": e["size"], "mtime_ns": e["mtime_ns"], "tokens": toks}
     sibs: dict[str, dict] = {}
-    if isinstance(raw.get("siblings"), dict):
+    if isinstance(raw.get("siblings"), dict) and raw.get("v") == MATCH_VERSION:
         for where, e in raw["siblings"].items():
             if not isinstance(e, dict) or not isinstance(e.get("ident"), str):
                 continue
@@ -280,7 +307,7 @@ def read(root: Path, state_dir: Path) -> DocsMap:
         old_local, old_sibs = {}, {}  # another identity reads every doc differently
     local = _local(root, _docs(names), own, old_local)
     cached, by_ident = _siblings(root, own, old_sibs)
-    fresh = {"ident": own, "local": local, "siblings": cached}
+    fresh = {"v": MATCH_VERSION, "ident": own, "local": local, "siblings": cached}
     if fresh != raw:
         hook_common._write_json(state_dir / f"xray-docs-{hook_common._digest(root)}.json", fresh)
     return DocsMap(frozenset(names), {d: e["tokens"] for d, e in local.items()}, by_ident)

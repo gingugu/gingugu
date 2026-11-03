@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-11-03 (startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
+_Last updated: 2026-11-03 (X23 cross-repo links built, unreleased; startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
 
 ## In Flight
 
@@ -97,6 +97,27 @@ itself is unchanged; Codex's `--exec` sidecar wakes only on a post. Rollout
 needs `gingugu init --force` per repo: each repo holds its own hook copy.
 Tests: `tests/test_board_watch_contract.py`.
 
+**X23 cross-repo links (2026-11-03, branch `feature/xray-links`, board task 435a1c84; built, not released).**
+Which other checkouts on this machine lean on this repo, by the names the code already
+uses, with no map file in any repo (a hand-declared map was rejected on purpose).
+`xray/links/` (`model`, `provides*`, `mentions*`, `prose`, `index`, `join`, `ripple`, `tool`,
+`render`): each checkout (this one + siblings, the docs map's discovery) is read for names it
+provides (packages, pushed images, served hosts, routes, IaC resources) and mentions (CI
+checkouts, submodules, git-URL and package deps, image refs, hosts, route and resource
+literals, `repo@sha` cites, doc prose). A mention of a name another repo provides is a link
+(kinds `ci source pin deploy runtime data cite docs`), certain or flagged; routes are weak
+names; cites are drift-checked; private hosts called by two or more repos and served by none
+are `shared`. `code_xray` `links` / `gingugu xray links` (20s budget; with `files`, the
+links into them plus a ripple up to 3 hops) and the brief's `Other repos leaning on these
+files` / `Ripple across repos` (3s budget, never costs the brief). Facts cached per checkout
+(`xray-links-<digest>.json`, size + mtime, extractor-source digest; 8000 files per repo,
+256 KiB per file). Switch `MEMORY_XRAY_LINKS` (default on); local only, `gingugu serve`
+refuses it; no migration. Also changed: the docs map (X22) now reads owner-qualified paths
+and prose ("lives in owner/name, as path") in sibling docs, with a matcher version in its
+cache. Measured on 18 real checkouts: cold read 1.0s, warm 0.3s, 0.5 MB of cache. Still
+to do: measure recall on a real multi-repo service ecosystem on the work machine; the hook
+surfaces (a read hook and an edit note naming outside dependents) are the follow-up.
+
 **X22 docs map (2026-11-02, board task 0c965b43).** The board task: remember where
 runbooks live and which ones a change touches. A client-side reverse index from a repo
 file to the docs that cite it (`xray/docs_map.py`, `docs_cites.py`, `docs_tool.py`).
@@ -106,7 +127,7 @@ never cites itself. Doc extensions `.md .mdx .markdown .rst .txt .adoc`. It also
 sibling checkouts (directly under the `MEMORY_XRAY_REPOS` roots or the default home
 folders, tracked docs only; another checkout with this repo's own identity, a
 worktree or second clone, is skipped): a sibling doc counts only repo-qualified paths
-(`<name>/path`) and GitHub blob/tree/raw links to this repo's origin, since a bare
+(`<name>/path`; X23 adds `<owner>/<name>/path` and prose placing a path in the repo) and GitHub blob/tree/raw links to this repo's origin, since a bare
 path there means the sibling's own file. Caps: `MAX_DOCS` 5000, `MAX_DOC_BYTES` 256
 KiB, `MAX_SIBLINGS` 64, `MAX_TOKENS` 1000 per doc (path tokens and GitHub links each); siblings share a 3s budget per read (`SIBLING_BUDGET_S`; past it a sibling keeps its cached entry or is skipped); a doc name that is absolute, has `..`, is a symlink or resolves outside the checkout is refused; a sibling whose identity fails `repo_id.valid` is skipped; a cache over 16 MiB is ignored; shown names are cut at 200 characters. Cache: owner-only
 `xray-docs-<digest>.json` in the hook-sessions dir, untrusted on read; local docs
@@ -2542,7 +2563,8 @@ slices alongside them. IDs are stable references, not the order.
 | X21 | **Symbols on the brain (OWED)** - brain tables for definitions and call edges (a migration), ingested with the snapshot, so `code_xray` `callers` works through `gingugu serve` and across repos | X17, X1 store, X9 | Owed by the X17 approval (2026-10-30), which was given on the condition that brain tables follow. Lands when X7 or X9 first needs symbols on the brain; until then the symbol graph stays on the client |
 | X19 | **X-ray brief (SHIPPED in 0.34.0, #157)** - the changed files by rank with importer counts, plus their combined blast (code and candidate tests), for an agent that fires no hooks | X1, X14 graph cache | `code_xray` `brief` (`range`, `files`, `path`) and `gingugu xray brief [--range R \| --files a,b] [--path P] [--json]`. Computed on the caller's machine from the hook graph cache; nothing stored, the brain never asked; `gingugu serve` refuses it, the proxy answers it locally. Compact `text` <= 8800 chars, for reviews, handoffs and `board watch --exec`. `xray/brief.py`, `xray_cli.py` |
 | X20 | **Brief on the board (RELEASED in 0.35.0)** - a handoff carries its X-ray brief without anyone asking. Why next: the agents X19 is for fire no hooks, so a brief they must request is a brief they rarely see | X19, agent board | When a board post names a range (`xray: <range>`), the RECEIVING side renders `xray brief` for it and attaches the text: the prompt hook's board mail (Claude Code) and `board watch --exec` (Codex). Rendered on the receiver's machine from its own checkout; the post itself carries only the ref, never paths or the brief. BUILT as a line of its own `xray: <range>` in the body: board mail appends at most one per prompt (<= 3500 chars, the prompt's cwd); `board watch` adds an `xray` field, appends to `text` and sets `GINGUGU_POST_XRAY` (<= 3 per batch, the watcher's cwd). Same range gate as `brief`, ref <= 200 chars. Sender nudge: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line (`xray/board_nudge.py`). A receiver with no cwd or outside a repo gets one line naming `gingugu xray brief --range <ref>` (0.35.2). Part 2: `xray: <repo> <range>` names the repo, found locally via `xray/repo_id` (0.36.0). Switch `MEMORY_XRAY_BOARD`. `xray/board_brief.py` |
-| X22 | **Docs map (SHIPPED in 0.45.0)** - which docs cite a changed file, here and in sibling checkouts: where the runbooks live and which ones a change touches | X3 matcher, X19 brief | `code_xray` `docs`, `gingugu xray docs`, and two brief sections (`Docs citing the changed files:`, `Docs still citing a deleted or renamed file:`). A citation is a path mention that resolves to exactly one repo file; a sibling doc counts only repo-qualified paths and GitHub links to this repo. Client only, no migration, `MEMORY_XRAY_DOCS`. Hook surfaces (edit note, Bash X-ray, read hook) not built yet |
+| X22 | **Docs map (SHIPPED in 0.45.0)** - which docs cite a changed file, here and in sibling checkouts: where the runbooks live and which ones a change touches | X3 matcher, X19 brief | `code_xray` `docs`, `gingugu xray docs`, and two brief sections (`Docs citing the changed files:`, `Docs still citing a deleted or renamed file:`). A citation is a path mention that resolves to exactly one repo file; a sibling doc counts only repo-qualified paths (`name/path`, `owner/name/path`), GitHub links to this repo and prose placing a path in it. Client only, no migration, `MEMORY_XRAY_DOCS`. Hook surfaces (edit note, Bash X-ray, read hook) not built yet |
+| X23 | **Cross-repo links (BUILT, unreleased; branch `feature/xray-links`)** - which other checkouts lean on this one, by names the code already uses (hosts, routes, images, packages, IaC resources, CI checkouts, `repo@sha` cites), and the ripple of a change across repos | X22 sibling discovery, X19 brief | `code_xray` `links`, `gingugu xray links`, and two brief sections (`Other repos leaning on these files`, `Ripple across repos`). Zero config: no map file in any repo. Each link has file:line evidence, certain or flagged. Client only, no migration, `MEMORY_XRAY_LINKS`. Recall still to be measured on a real multi-repo ecosystem; hook surfaces (read hook, edit note) are the follow-up |
 | X18 | **X-ray Explorer** - a view in the Memory Explorer: repo as a 3D city (height = rank, colour = churn or tests, districts = X5 boundaries), animated blast radius, X7 attack paths, X6 blind-spot heat, X3 scar markers linking into the memory drawer, X4 drift slider over snapshots | `ui/`, `ui_api/` read-only observer | Ships in slices; city + blast radius first |
 
 ### Standing rules
