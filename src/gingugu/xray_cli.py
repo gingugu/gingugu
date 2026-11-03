@@ -36,6 +36,9 @@ def _parser() -> argparse.ArgumentParser:
     c.add_argument("--files", help="comma-separated files to look up (default: the most cited)")
     k = sub.add_parser("links", help="which other checkouts lean on this one, and on what")
     k.add_argument("--files", help="comma-separated files: who leans on them, and the ripple")
+    k.add_argument(
+        "--warm", action="store_true", help="read every checkout now, filling the caches"
+    )
     for p in (c, k):
         p.add_argument("--path", help="any directory in the checkout (default: cwd)")
         p.add_argument("--limit", type=int, default=20, help="rows (default 20)")
@@ -59,7 +62,10 @@ def _history(args: argparse.Namespace) -> int:
 def _docs(args: argparse.Namespace) -> int:
     answer = docs_tool.answer if args.cmd == "docs" else links_tool.answer
     try:
-        data = answer(args.path, args.files, args.limit)
+        if getattr(args, "warm", False):
+            data = links_tool.warm(args.path)
+        else:
+            data = answer(args.path, args.files, args.limit)
     except Exception as exc:  # noqa: BLE001 - a message and exit 1, never a traceback
         print(f"gingugu xray {args.cmd}: {exc}", file=sys.stderr)
         return 1

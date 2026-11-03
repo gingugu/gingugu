@@ -156,7 +156,9 @@ carries the file and line that shows it, and is certain only when exactly one ot
 name; anything looser is kept and flagged. With files it adds who outside leans on them and the ripple
 across repos, and the brief gains `Other repos leaning on these files`. A repo named outright (a
 hyphenated name, `owner/name`, or a GitHub URL) counts as a whole-repo link flagged `named`, and the
-read hook and edit note name the outside files leaning on the file you are touching.
+read hook and edit note name the outside files leaning on the file you are touching. Generated code
+(EF migrations, designer files, protobuf and the like) is skipped, and `gingugu xray links --warm`
+fills every checkout's cache up front.
 
 That is the part that makes the memory worth having, and it is in the box.
 

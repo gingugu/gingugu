@@ -771,7 +771,8 @@ code_xray links / gingugu xray links (stdio handler, or the proxy; serve refuses
   MEMORY_XRAY_LINKS=off refuses); the brief calls links.tool.for_brief (3s budget)
   → index.read(root, state, budget_s): this checkout + sibling checkouts (the docs map's
     discovery: MEMORY_XRAY_REPOS roots / default home folders)
-  → per file (<= 8000 per repo, <= 256 KiB; lockfiles and vendored dirs skipped; opened
+  → per file (<= 8000 per repo, <= 256 KiB; lockfiles, vendored dirs and generated code -
+    by name (links/generated.py) or by head marker - skipped; opened
     O_NOFOLLOW|O_NONBLOCK, regular files only):
     provides*.py   -> provided facts: package, image, host, route (unmounted tails), resource;
                       tests and fixtures provide nothing (they still mention)
@@ -780,7 +781,10 @@ code_xray links / gingugu xray links (stdio handler, or the proxy; serve refuses
                       named outright: bare hyphenated name, owner/name, GitHub URL); <= 2000 facts, 200 names;
                       a name is never read from .env* files, a secret-named line, a known
                       token prefix or a random-looking value (names are cached on disk)
-    per repo: <= 100,000 facts a side, 20,000 names, 500 loose (globbed/wildcard) names
+    per repo: repo-name candidates cut to names of a checkout read here (_prune), then
+    <= 100,000 facts a side, 20,000 names, 500 loose (globbed/wildcard) names
+  (gingugu xray links --warm: the same read with no practical budget; fleet.py upgrade runs
+  it after installing on each machine with checkouts)
   → xray-links-<digest>.json per checkout (owner-only; by file size + mtime; keyed to an
     extractor-source digest so any extractor change rebuilds); past the budget a repo keeps
     its cache and reports the files it did not read (read.partial / read.unscanned); past

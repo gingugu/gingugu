@@ -95,6 +95,15 @@ def test_cli_links(eco, capsys):  # noqa: F811
     assert json.loads(capsys.readouterr().out)["files"] == ["guardrails/policy.py"]
 
 
+def test_cli_links_warm_fills_every_cache_and_summary(eco, tmp_path, capsys):  # noqa: F811
+    from gingugu import xray_cli
+    from gingugu.xray.links import inbound
+
+    assert xray_cli.main(["links", "--warm"]) == 0  # no path: the first checkout under the roots
+    assert capsys.readouterr().out.startswith("warmed 4 checkouts")
+    assert inbound.map_line(eco, tmp_path / "hook-sessions")
+
+
 def test_cli_links_outside_a_repo_exits_1(tmp_path, eco):  # noqa: F811
     from gingugu import xray_cli
 

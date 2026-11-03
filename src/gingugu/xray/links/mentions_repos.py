@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import re
 
-from .mentions_net import _SECRETISH, _TOKEN_PREFIX, _random_part
+from .mentions_net import _TOKEN_PREFIX, _random_part, secretish
 from .mentions_sink import Sink
 from .model import REPO_DEP, REPO_NAME, norm_repo
 
@@ -56,7 +56,10 @@ def scan_repo_names(path: str, lines: list[str], sink: Sink, *, doc: bool, ci: b
     for i, ln in enumerate(lines):
         if added >= MAX_PER_FILE:
             return
-        if not ln.strip() or _SECRETISH.search(ln):
+        # a repo-shaped token needs a "-" or "/" (or a "_" in a doc): most lines have none
+        if "-" not in ln and "/" not in ln and not (doc and "_" in ln):
+            continue
+        if not ln.strip() or secretish(ln):
             continue
         n = i + 1
         line_kind = "deploy" if "repourl" in ln.lower() else kind
