@@ -771,20 +771,29 @@ code_xray links / gingugu xray links (stdio handler, or the proxy; serve refuses
   MEMORY_XRAY_LINKS=off refuses); the brief calls links.tool.for_brief (3s budget)
   → index.read(root, state, budget_s): this checkout + sibling checkouts (the docs map's
     discovery: MEMORY_XRAY_REPOS roots / default home folders)
-  → per file (<= 8000 per repo, <= 256 KiB; tests, fixtures, lockfiles, vendored dirs skipped):
-    provides*.py   -> provided facts: package, image, host, route (unmounted tails), resource
+  → per file (<= 8000 per repo, <= 256 KiB; lockfiles and vendored dirs skipped; opened
+    O_NOFOLLOW|O_NONBLOCK, regular files only):
+    provides*.py   -> provided facts: package, image, host, route (unmounted tails), resource;
+                      tests and fixtures provide nothing (they still mention)
     mentions*.py + prose.py -> mentioned facts: ci, submodule, repo-dep, dep, image, host,
-                      route, name, cite (repo@sha path), doc (prose); <= 2000 facts, 200 names
+                      route, name, cite (repo@sha path), doc (prose); <= 2000 facts, 200 names;
+                      a name is never read from .env* files, a secret-named line, a known
+                      token prefix or a random-looking value (names are cached on disk)
+    per repo: <= 100,000 facts a side, 20,000 names, 500 loose (globbed/wildcard) names
   → xray-links-<digest>.json per checkout (owner-only; by file size + mtime; keyed to an
     extractor-source digest so any extractor change rebuilds); past the budget a repo keeps
-    its cache and reports the files it did not read (read.partial / read.unscanned)
+    its cache and reports the files it did not read (read.partial / read.unscanned); past
+    it no sibling is asked anything: a cached one is served unchecked
   → join: a mention in B of a name A provides -> link B -> A (kind, evidence file:line,
     certain or flagged); routes certain only beside a host the provider serves; cites
-    checked for drift; private hosts called by >= 2 repos and served by none -> shared
+    checked for drift (hex sha and a git-listed path only; git diff --no-ext-diff
+    --no-textconv; <= 20 checks in 5s; the brief skips them); private hosts called by
+    >= 2 repos and served by none -> shared
   → no files: leaning_on_this / this_leans_on (+ totals)
   → files: links into those files through their importers + whole-repo links; ripple.py
     follows them backwards <= 3 hops (a file link counts when its target is touched, widened
-    by that repo's cached import graph; pin/deploy count when a change reaches the repo;
+    by that repo's import graph - this checkout's built if need be, a sibling's only when
+    already cached; pin/deploy count when a change reaches the repo;
     ci/submodule only into the changed repo)
   → render: `text` + caveat; the brief adds `Other repos leaning on these files` and
     `Ripple across repos` (data key `links`); a failure never costs the brief

@@ -989,7 +989,9 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   checkouts (the docs map's discovery) for the names each file *provides* (`provides*.py`:
   package names, images built and pushed, hosts served, routes defined, IaC-owned
   resource names) and *mentions* (`mentions*.py`, `prose.py`: CI checkouts, submodules,
-  git-URL and package deps, image refs, hosts, route and resource literals, `repo@sha`
+  git-URL and package deps, image refs, hosts, route and resource literals (a resource
+  literal is never kept from `.env*`, a secret-named line, a token prefix or a
+  random-looking value: facts are cached on disk), `repo@sha`
   cites, doc prose); tests and fixtures provide nothing. `index.py` caches facts per
   checkout (size + mtime; `xray-links-<digest>.json`, keyed to a digest of the extractor
   source; 8000 files per repo, 256 KiB per file, 2000 facts / 200 names per file).

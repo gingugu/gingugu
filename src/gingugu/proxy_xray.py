@@ -6,7 +6,8 @@ the host's disk, and the tool there refuses one. So the proxy claims every
 ``refresh`` without a ``fingerprint`` or ``payload``) and does that part on
 this machine. It also claims every ``brief`` (changed files and their combined
 blast), every ``callers`` (one symbol's callers, X17) and every ``history`` and
-``blindspots`` (X4, X6) and every ``docs`` (X22), each answered whole from the local
+``blindspots`` (X4, X6), every ``docs`` (X22) and every ``links`` (X23), each answered
+whole from the local
 checkout; the brain is never asked. The rest goes through
 ``xray.local``, the same code the local server runs:
 
