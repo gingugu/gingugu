@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-11-02 (X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
+_Last updated: 2026-11-03 (startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
 
 ## In Flight
 
@@ -85,6 +85,17 @@ mid-capture; `overview.top` and the payload's `skipped` are bounded but not
 paged; a git `core.fsmonitor`-style check for other config that runs code.
 
 ## Recently Completed
+
+**Startup contract stops arming the board watcher (2026-11-03,
+fix/no-idle-board-watch).** Measured from local transcripts: four Claude Code
+sessions left open overnight re-armed the `Monitor` on `gingugu board watch` at
+every 30 minute expiry, 173 Opus calls and 49.6M tokens between midnight and
+10:30 on an empty board (up to ~490k context per wake). The SessionStart
+contract and the protocol block (`### Board watcher` -> `### Board mail`) now
+say mail arrives with the next prompt and forbid the watcher. `board watch`
+itself is unchanged; Codex's `--exec` sidecar wakes only on a post. Rollout
+needs `gingugu init --force` per repo: each repo holds its own hook copy.
+Tests: `tests/test_board_watch_contract.py`.
 
 **X22 docs map (2026-11-02, board task 0c965b43).** The board task: remember where
 runbooks live and which ones a change touches. A client-side reverse index from a repo
