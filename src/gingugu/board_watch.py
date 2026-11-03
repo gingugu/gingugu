@@ -8,6 +8,10 @@ exits wakes a session that ran it in the background. ``codex queue`` puts a
 message into a live Codex or ChatGPT desktop thread from outside. So the
 universal adapter is a command: this one.
 
+Not under Claude Code's ``Monitor``, though: its expiry wakes the session too,
+so re-arming it every 30 minutes keeps an idle session spending turns on its
+whole context. Claude Code takes board mail from the prompt hook instead.
+
 Each new post is one line of JSON on stdout, never repeated. Posts already
 waiting are printed first. ``--once`` exits after the first batch (a
 ``board wait``); ``--exec`` runs a command per post, with the post as JSON on
