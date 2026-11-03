@@ -9,6 +9,8 @@ stdio handler, the proxy and ``gingugu xray``, like ``docs_tool``.
 from __future__ import annotations
 
 import os
+import re
+import time
 from pathlib import Path
 
 from .. import hook_common, local, rank, scan
@@ -20,6 +22,7 @@ MAX_LIMIT = 100
 LINKS_BUDGET_S = 20.0  # an explicit ask: worth a cold read of every sibling
 BRIEF_BUDGET_S = 3.0  # the brief can run inside a hook
 MAX_DRIFT_CHECKS = 20
+DRIFT_BUDGET_S = 5.0  # all drift checks together, two git calls each
 CAVEAT = (
     "Links are inferred from names the code already uses: a host, route, image, "
     "package, table or repo one checkout provides and another mentions. Certain means "
@@ -59,16 +62,30 @@ def _closure(eco: index.Ecosystem, state: Path, session_id: str | None):
     return widen
 
 
-def _drift(eco: index.Ecosystem, lk: Link) -> str | None:
+_SHA = re.compile(r"[0-9a-f]{7,40}")
+
+
+def _drift(eco: index.Ecosystem, lk: Link, timeout: float) -> str | None:
     """For a cite of ``repo@sha path``: "drifted" when the file changed since that
-    sha, "unknown-sha" when this checkout does not have it, else None."""
+    sha, "unknown-sha" when that checkout does not have it, else None.
+
+    The sha and path came out of another repo's text (and maybe a cache): the sha
+    must be hex, and the path a file git listed in the cited checkout. The diff is
+    run with no external diff or textconv driver, so a checkout's own config
+    cannot make it run anything."""
     root = eco.roots.get(lk.dst)
-    if root is None or not lk.dst_path or not lk.detail:
+    sha, path = lk.detail, lk.dst_path
+    if root is None or not path or not _SHA.fullmatch(sha or ""):
+        return None
+    if path not in eco.repos[lk.dst].files:
         return None
     try:
-        if scan.git(root, "cat-file", "-e", f"{lk.detail}^{{commit}}", timeout=3).returncode:
+        if scan.git(root, "cat-file", "-e", f"{sha}^{{commit}}", timeout=timeout).returncode:
             return "unknown-sha"
-        proc = scan.git(root, "diff", "--quiet", lk.detail, "HEAD", "--", lk.dst_path, timeout=3)
+        proc = scan.git(
+            root, "diff", "--quiet", "--no-ext-diff", "--no-textconv", sha, "HEAD", "--", path,
+            timeout=timeout,
+        )  # fmt: skip
         return "drifted" if proc.returncode == 1 else None
     except (scan.XrayError, OSError):
         return None
@@ -84,9 +101,12 @@ def build(
     files: list[str] | None,
     limit: int = 20,
     closure=None,
+    *,
+    drift_s: float = DRIFT_BUDGET_S,
 ) -> dict:
-    """Pure but for the cite drift check: the links into and out of this repo, or
-    (with files) the links into those files and the ripple from them."""
+    """Pure but for the cite drift check (``drift_s`` of git at most; 0 skips it):
+    the links into and out of this repo, or (with files) the links into those
+    files and the ripple from them."""
     me = eco.me
     n = min(max(0, limit), MAX_LIMIT)
     into = sorted((lk for lk in res.links if lk.dst == me), key=_rank)
@@ -96,8 +116,12 @@ def build(
     out = sorted((lk for lk in res.links if lk.src == me), key=_rank)
     shown_in, shown_out = into[:n], ([] if files is not None else out[:n])
     drift: dict[int, str] = {}
+    stop = time.monotonic() + drift_s
     for lk in [x for x in shown_in + shown_out if x.kind == "cite"][:MAX_DRIFT_CHECKS]:
-        found = _drift(eco, lk)
+        left = stop - time.monotonic()
+        if left <= 0:
+            break
+        found = _drift(eco, lk, min(3.0, left))
         if found:
             drift[id(lk)] = found
     data = {
@@ -152,6 +176,6 @@ def for_brief(repo: Path, state: Path, paths: list[str], session_id: str | None)
     try:
         eco = index.read(repo, state, budget_s=BRIEF_BUDGET_S)
         res = join.join(eco.repos)
-        return build(eco, res, paths, 10, _closure(eco, state, session_id))
+        return build(eco, res, paths, 10, _closure(eco, state, session_id), drift_s=0)
     except Exception:  # noqa: BLE001
         return None

@@ -98,9 +98,23 @@ def qualified(text: str, ident: str | None) -> list[str]:
     return out
 
 
+_OPEN_FLAGS = (
+    os.O_RDONLY
+    | getattr(os, "O_NOFOLLOW", 0)
+    | getattr(os, "O_NONBLOCK", 0)
+    | getattr(os, "O_BINARY", 0)
+)
+
+
 def _read_text(path: Path) -> str:
-    """The one I/O seam for reading a doc."""
-    with open(path, "rb") as handle:
+    """The one I/O seam for reading a doc (and, for X23, any checkout file).
+    ``_inside`` checked the name; a checkout can still swap the file for a link or
+    a FIFO before this open, so the open itself refuses a link and never blocks,
+    and what it opened must be a regular file."""
+    fd = os.open(path, _OPEN_FLAGS)
+    with os.fdopen(fd, "rb") as handle:
+        if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+            raise OSError(f"not a regular file: {path}")
         return handle.read(MAX_DOC_BYTES).decode("utf-8", errors="replace")
 
 

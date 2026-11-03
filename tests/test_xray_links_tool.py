@@ -122,6 +122,32 @@ def test_a_cite_whose_file_changed_since_its_sha_is_flagged_drifted(eco):
     assert "drifted" in cite["flags"]
 
 
+@pytest.mark.parametrize("sha", ["--output=/tmp/pwned", "-p", "HEAD", "abc", "g" * 40])
+def test_a_cite_sha_that_is_not_hex_never_reaches_git(eco, sha, monkeypatch):
+    from gingugu.xray import scan
+    from gingugu.xray.links import index, join, model
+
+    e = index.read(eco, eco.parent.parent / "state", budget_s=10)
+    lk = model.Link("acme/sidecar", "c.json", 1, "acme/gateway", "guardrails/resolver.py",
+                    "cite", "acme/gateway", sha)  # fmt: skip
+    called = []
+    monkeypatch.setattr(scan, "git", lambda *a, **k: called.append(a))
+    assert tool._drift(e, lk, 1.0) is None and called == []
+    assert join  # imported for the Link's home
+
+
+def test_a_cite_of_a_path_git_never_listed_never_reaches_git(eco, monkeypatch):
+    from gingugu.xray import scan
+    from gingugu.xray.links import index, model
+
+    e = index.read(eco, eco.parent.parent / "state", budget_s=10)
+    lk = model.Link("acme/sidecar", "c.json", 1, "acme/gateway", "-rf/../../etc/passwd",
+                    "cite", "acme/gateway", "a" * 40)  # fmt: skip
+    called = []
+    monkeypatch.setattr(scan, "git", lambda *a, **k: called.append(a))
+    assert tool._drift(e, lk, 1.0) is None and called == []
+
+
 def test_links_can_be_turned_off(eco, monkeypatch):
     monkeypatch.setenv("MEMORY_XRAY_LINKS", "off")
     with pytest.raises(ValueError, match="MEMORY_XRAY_LINKS"):

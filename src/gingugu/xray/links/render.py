@@ -16,6 +16,7 @@ from .ripple import Reach
 MAX_CHARS = 8800
 MAX_LINES = 12  # per list in the text; the rows carry the rest
 MAX_DETAIL = 60
+MAX_PATH = 160
 
 
 def row(lk: Link, drift: str | None = None) -> dict:
@@ -65,16 +66,21 @@ def _what(r: dict) -> str:
     return what
 
 
+def _path(s: str) -> str:
+    """A path from someone's checkout: quoted, and cut to ``MAX_PATH``."""
+    return _show(s if len(s) <= MAX_PATH else s[:MAX_PATH] + "...")
+
+
 def _line_in(r: dict) -> str:
     mark = "" if r["certain"] else "? "
-    target = _show(r["target"]) if r["target"] else "(whole repo)"
-    return f"- {mark}{_show(r['from'])} {_show(r['file'])}:{r['line']} -> {target} [{_what(r)}]"
+    target = _path(r["target"]) if r["target"] else "(whole repo)"
+    return f"- {mark}{_path(r['from'])} {_path(r['file'])}:{r['line']} -> {target} [{_what(r)}]"
 
 
 def _line_out(r: dict) -> str:
     mark = "" if r["certain"] else "? "
-    target = f":{_show(r['target'])}" if r["target"] else ""
-    return f"- {mark}{_show(r['file'])}:{r['line']} -> {_show(r['to'])}{target} [{_what(r)}]"
+    target = f":{_path(r['target'])}" if r["target"] else ""
+    return f"- {mark}{_path(r['file'])}:{r['line']} -> {_path(r['to'])}{target} [{_what(r)}]"
 
 
 def _list(title: str, rows: list[dict], total: int, fmt) -> list[str]:
