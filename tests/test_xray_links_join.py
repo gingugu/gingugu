@@ -430,6 +430,19 @@ def test_without_a_host_only_a_distinctive_whole_route_survives_flagged():
     ]
 
 
+def test_a_route_ending_in_a_shared_word_needs_a_host():
+    alone = _route_case(
+        [F(model.ROUTE, "/api/auth/oidc/callback", "a.py")],
+        [F(model.ROUTE, "/api/auth/oidc/callback", "k.yaml")],
+    )
+    assert alone == []
+    hosted = _route_case(
+        [F(model.ROUTE, "/api/auth/oidc/callback", "a.py"), F(model.HOST, "a.acme.io", "i.yaml")],
+        [F(model.ROUTE, "/api/auth/oidc/callback", "k.yaml"), F(model.HOST, "a.acme.io", "v.yaml")],
+    )
+    assert any(lk.key == "/api/auth/oidc/callback" and lk.certain for lk in hosted)
+
+
 def test_a_host_anywhere_in_the_repo_corroborates_its_routes():
     found = _route_case(
         [

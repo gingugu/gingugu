@@ -178,6 +178,43 @@ def answer(
     return {"ok": True, **data, "text": render.text(data), "caveat": CAVEAT}
 
 
+WARM_BUDGET_S = 600.0  # a deliberate warm-up, after an upgrade: read everything
+
+
+def warm(path: str | None = None) -> dict:
+    """Read every checkout under the sibling roots with no practical budget, so the
+    facts caches and the hook summaries are full before any session needs them.
+    An upgrade that changes an extractor retires every cached fact; this refills
+    them. ``path``: any checkout to start from (default: the first under the roots)."""
+    import time as _time
+
+    from ...config import load_config
+    from .. import repo_id
+
+    if not enabled():
+        raise ValueError("cross-repo links are off (MEMORY_XRAY_LINKS)")
+    if path:
+        repo = local.root(path)
+    else:
+        starts = [
+            c for base in repo_id.roots() for c in sorted(base.iterdir()) if (c / ".git").exists()
+        ]
+        if not starts:
+            return {"ok": True, "repos": 0, "seconds": 0.0, "text": "no checkouts under the roots"}
+        repo = starts[0]
+    state = load_config().db_path.parent / "hook-sessions"
+    t = _time.monotonic()
+    eco = index.read(repo, state, budget_s=WARM_BUDGET_S)
+    res = join.join(eco.repos)
+    _leave_summaries(eco, res, state)
+    took = round(_time.monotonic() - t, 1)
+    n = len(eco.repos)
+    return {
+        "ok": True, "repos": n, "links": len(res.links), "seconds": took,
+        "text": f"warmed {n} checkout{'' if n == 1 else 's'} ({len(res.links)} links) in {took}s",
+    }  # fmt: skip
+
+
 def for_brief(repo: Path, state: Path, paths: list[str], session_id: str | None) -> dict | None:
     """The brief's section: who outside leans on the changed files, and the ripple.
     None when links are off, nothing changed, or anything fails: links never cost

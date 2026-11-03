@@ -25,7 +25,7 @@ from typing import NamedTuple
 from .. import repo_id, scan
 from ..brief import _safe
 from ..docs_map import _candidates, _names, _read_text
-from . import cache, model, walk
+from . import cache, generated, model, walk
 from .cache import EXTRACT_VERSION, MAX_CACHE_BYTES, MAX_STR  # noqa: F401 - re-exported
 from .join import RepoFacts
 from .model import Fact
@@ -87,7 +87,7 @@ def _bounded(facts: list[Fact]) -> list[Fact]:
     for f in facts:
         if len(out) >= MAX_FACTS_PER_REPO:
             break
-        if f.kind in (model.NAME, model.REPO_NAME):  # the two kinds every file is full of
+        if f.kind == model.NAME:  # repo names are pruned to real checkouts first (_prune)
             names += 1
             if names > MAX_NAMES_PER_REPO:
                 continue
@@ -99,13 +99,36 @@ def _bounded(facts: list[Fact]) -> list[Fact]:
     return out
 
 
+RAW_CAP = 400_000  # facts a side held per repo before the prune: memory, not policy
+
+
 def _assemble(entries: cache.Entries, files: frozenset[str]) -> RepoFacts:
+    """Raw facts, first files first. The per-repo caps come after ``_prune``: a
+    repo-name candidate only counts once it is known to name a checkout here, or
+    a big repo's hyphenated words would crowd its real repo names out of the cap."""
     ordered = [entries[n] for n in sorted(entries)]
     return RepoFacts(
-        _bounded([f for e in ordered for f in e[2]]),
-        _bounded([f for e in ordered for f in e[3]]),
+        [f for e in ordered for f in e[2]][:RAW_CAP],
+        [f for e in ordered for f in e[3]][:RAW_CAP],
         files,
     )
+
+
+def _prune(repos: dict[str, RepoFacts], roots: dict[str, Path]) -> dict[str, RepoFacts]:
+    """Each repo's facts with its repo-name mentions cut to names of a checkout read
+    here (an identity, its name part, or a folder name), then within the caps."""
+    known = set(repos) | {r.rpartition("/")[2] for r in repos}
+    known |= {p.name.lower() for p in roots.values()}
+
+    def names_one(f: Fact) -> bool:
+        return f.kind != model.REPO_NAME or f.key in known or f.key.rpartition("/")[2] in known
+
+    return {
+        rid: RepoFacts(
+            _bounded(rf.provided), _bounded([f for f in rf.mentioned if names_one(f)]), rf.files
+        )
+        for rid, rf in repos.items()
+    }
 
 
 def _listing(root: Path, own: bool, timeout: float) -> list[str]:
@@ -131,7 +154,8 @@ def scan_repo(
     inside = walk.Inside(root)
     entries: cache.Entries = {}
     unread = 0
-    for name in [n for n in names if model.wanted(n)][:MAX_FILES]:
+    kept = [n for n in names if model.wanted(n) and not generated.by_name(n)]
+    for name in kept[:MAX_FILES]:
         prev = old.get(name)
         if time.monotonic() >= deadline:  # past the budget: not even a stat
             unread += 1
@@ -148,7 +172,9 @@ def scan_repo(
         if walk.Inside(root)(name) is None:
             continue  # checked again, uncached, right before it is opened
         try:
-            provided, mentioned = extract(name, _read_text(full))
+            text = _read_text(full)
+            # a generator's marker in the head: cached as nothing, so never read again
+            provided, mentioned = ([], []) if generated.by_head(text) else extract(name, text)
         except OSError:
             continue
         except Exception:  # noqa: BLE001 - one odd file never costs the repo
@@ -227,4 +253,4 @@ def read(
         repos[ident], roots[ident] = facts, child
         if left:
             partial[ident] = left
-    return Ecosystem(me, roots, repos, partial, tuple(unscanned))
+    return Ecosystem(me, roots, _prune(repos, roots), partial, tuple(unscanned))
