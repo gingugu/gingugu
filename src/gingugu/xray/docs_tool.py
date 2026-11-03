@@ -18,9 +18,10 @@ MAX_CHARS = 8800
 MAX_SHOWN = 5
 CAVEAT = (
     "A citation is a path mentioned in a doc that resolves to exactly one file of this "
-    "repo; an ambiguous name cites nothing. Sibling checkouts' docs count only "
-    "repo-qualified paths and GitHub links. A citation is a candidate to re-read, not "
-    "proof the doc is wrong."
+    "repo; an ambiguous name cites nothing. Sibling checkouts' docs count only paths "
+    "they place in this repo: repo-qualified paths, GitHub links, and prose such as "
+    "'lives in owner/name, as path'. A citation is a candidate to re-read, not proof "
+    "the doc is wrong."
 )
 
 
