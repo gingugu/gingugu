@@ -507,7 +507,9 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.45.0** (PyPI, 2026-11-02). Minor: X22 docs map - `code_xray`
+- Current version: **0.45.1** (PyPI, 2026-11-03). Patch: the startup contract and
+  protocol block forbid the board watcher under Claude Code's `Monitor` (#175).
+- 0.45.0 (PyPI, 2026-11-02). Minor: X22 docs map - `code_xray`
   `docs` / `gingugu xray docs` and the X-ray brief's "Docs citing the changed files" and
   "Docs still citing a deleted or renamed file" sections, over this repo's docs and
   sibling checkouts' tracked docs (repo-qualified paths and GitHub links); client only,
