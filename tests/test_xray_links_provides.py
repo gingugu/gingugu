@@ -330,6 +330,47 @@ def test_a_glob_needs_four_literal_characters():
     assert keys({"q.tf": tf}, RESOURCE) == set()
 
 
+# --- whole paths and tails --------------------------------------------------------
+
+
+def _route_detail(files):
+    return {f.key: f.detail for f in provides.extract(files) if f.kind == ROUTE}
+
+
+def test_routes_on_the_app_are_whole_routes_on_a_router_are_tails():
+    py = (
+        "app = FastAPI()\nrouter = APIRouter()\n"
+        '@app.get("/internal/resolve")\ndef a(): ...\n'
+        '@router.get("/keys/{k}")\ndef b(): ...\n'
+        '@imported.get("/other/thing")\ndef c(): ...\n'
+    )
+    assert _route_detail({"svc/main.py": py}) == {
+        "/internal/resolve": "", "/keys/*": model.UNMOUNTED, "/other/thing": model.UNMOUNTED,
+    }  # fmt: skip
+    js = "app.get('/a/whole', h)\nrouter.get('/a/tail', h)\napiRouter.post('/b/tail', h)\n"
+    assert _route_detail({"src/s.ts": js}) == {
+        "/a/whole": "", "/a/tail": model.UNMOUNTED, "/b/tail": model.UNMOUNTED,
+    }  # fmt: skip
+    go = 'mux.HandleFunc("/x/whole", h)\nv1 := r.Group("/v1")\nv1.GET("/y/tail", h)\n'
+    assert _route_detail({"main.go": go}) == {"/x/whole": "", "/y/tail": model.UNMOUNTED}
+    assert _route_detail({"urls.py": 'path("orders/<int:pk>/", v)\n'}) == {
+        "/orders/*": model.UNMOUNTED
+    }
+    assert _route_detail({"app/api/x/route.ts": "export function GET() {}\n"}) == {"/api/x": ""}
+
+
+def test_nextjs_file_routes_inside_a_monorepo_folder():
+    assert keys({"web/app/api/keys/route.ts": "x\n"}, ROUTE) == {"/api/keys"}
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["tests/test_serve.py", "svc/api_test.py", "src/__tests__/a.ts", "a.spec.ts", "conftest.py"],
+)
+def test_tests_and_fixtures_provide_nothing(path):
+    assert provides.extract({path: '@app.get("/a/b")\nmodule github.com/x/y\n'}) == []
+
+
 # --- cost bounds ---------------------------------------------------------------------
 
 

@@ -175,7 +175,7 @@ def _hits(path: str, text: str) -> list[Hit]:
 
 
 def _normalize(kind: str, raw: str) -> str | None:
-    if kind == ROUTE:
+    if kind in (ROUTE, provides_routes.TAIL):
         return model.norm_route(raw)
     if kind == HOST:
         return model.norm_host(raw)
@@ -187,12 +187,13 @@ def _normalize(kind: str, raw: str) -> str | None:
 
 
 def extract(files: dict[str, str]) -> list[Fact]:
-    """The package, image, host, route and resource facts the files provide."""
-    best: dict[tuple[str, str, str], int] = {}
+    """The package, image, host, route and resource facts the files provide. A
+    test or fixture provides nothing: what it serves is a stand-in."""
+    best: dict[tuple[str, str, str], tuple[int, str]] = {}
     for path, text in files.items():
         if not isinstance(text, str) or not model.wanted(path) or model.is_doc(path):
             continue
-        if len(text) > model.MAX_FILE_BYTES:
+        if model.is_test(path) or len(text) > model.MAX_FILE_BYTES:
             continue
         try:
             hits = _hits(path, text)
@@ -200,8 +201,13 @@ def extract(files: dict[str, str]) -> list[Fact]:
             continue
         for kind, raw, line in hits:
             key = _normalize(kind, raw)
-            if key:
-                ident = (kind, key, path)
-                best[ident] = min(line, best.get(ident, line))
-    facts = [Fact(k, key, p, line) for (k, key, p), line in best.items()]
+            if not key:
+                continue
+            detail = model.UNMOUNTED if kind == provides_routes.TAIL else ""
+            ident = (ROUTE if detail else kind, key, path)
+            prev = best.get(ident)
+            # a whole path beats a tail; then the first line
+            if prev is None or (detail, line) < (prev[1], prev[0]):
+                best[ident] = (line, detail)
+    facts = [Fact(k, key, p, line, detail) for (k, key, p), (line, detail) in best.items()]
     return sorted(facts, key=lambda f: (f.path, f.line, f.kind, f.key))

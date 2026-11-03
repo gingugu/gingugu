@@ -338,3 +338,57 @@ def test_ripple_stops_at_its_hop_limit_and_never_returns_to_the_start():
     ]
     reach = ripple.ripple(chain, "r/0", ["f"], hops=3)
     assert [(r.repo, r.hop) for r in reach] == [("r/1", 1), ("r/2", 2), ("r/3", 3)]
+
+
+# --- route precision: a route alone is a weak name ----------------------------------
+
+
+def _route_case(provided, mentioned):
+    return links({"acme/a": repo(provided=provided), "acme/b": repo(mentioned=mentioned)})
+
+
+def test_a_mention_parameter_never_matches_a_provider_name():
+    found = _route_case(
+        [F(model.ROUTE, "/*/message", "a.py"), F(model.HOST, "a.acme.io")],
+        [F(model.ROUTE, "/messages/*", "b.ts"), F(model.HOST, "a.acme.io", "cfg.yaml")],
+    )
+    assert [lk for lk in found if lk.key.startswith("/")] == []
+
+
+def test_without_a_host_only_a_distinctive_whole_route_survives_flagged():
+    found = _route_case(
+        [
+            F(model.ROUTE, "/internal/resolve", "a.py"),
+            F(model.ROUTE, "/upload", "u.py"),
+            F(model.ROUTE, "/v2/keys/*", "k.py", detail=model.UNMOUNTED),
+        ],
+        [
+            F(model.ROUTE, "/internal/resolve", "b.ts"),
+            F(model.ROUTE, "/upload", "c.ts"),
+            F(model.ROUTE, "/v2/keys/*", "d.ts"),
+            F(model.ROUTE, "/api/internal/resolve", "e.ts"),
+        ],
+    )
+    assert [(lk.src_path, lk.certain, lk.flags) for lk in found] == [
+        ("b.ts", False, ("route-only",))
+    ]
+
+
+def test_a_host_anywhere_in_the_repo_corroborates_its_routes():
+    found = _route_case(
+        [
+            F(model.HOST, "a.acme.io", "k8s/i.yaml"),
+            F(model.ROUTE, "/internal/resolve", "a.py"),
+            F(model.ROUTE, "/v2/keys/*", "k.py", detail=model.UNMOUNTED),
+        ],
+        [
+            F(model.HOST, "a.acme.io", "values.yaml"),
+            F(model.ROUTE, "/internal/resolve", "b.ts"),
+            F(model.ROUTE, "/v2/keys/*", "d.ts"),
+            F(model.ROUTE, "/api/internal/resolve", "e.ts"),
+        ],
+    )
+    got = {(lk.src_path, lk.certain, lk.flags) for lk in found if lk.key.startswith("/")}
+    assert got == {
+        ("b.ts", True, ()), ("d.ts", False, ("unmounted",)), ("e.ts", False, ("suffix",)),
+    }  # fmt: skip
