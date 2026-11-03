@@ -757,10 +757,37 @@ code_xray docs (stdio handler, or the proxy; serve refuses)
   → siblings: git checkouts directly under the MEMORY_XRAY_REPOS roots (<= 64; a
     checkout with this repo's own identity or an invalid one skipped; 3s budget, past it
     a cached entry is kept unchecked or the sibling skipped), tracked docs only, re-read only
-    when its HEAD moved; kept: repo-qualified paths and GitHub links to this origin
+    when its HEAD moved; kept: repo-qualified paths (`name/` or `owner/name/`), GitHub links to this origin, and prose
+    placing a path in it (links/prose.py); the xray-docs cache carries MATCH_VERSION
   → docs_cites: token (scar_query._TOKEN) → scars._resolve → exactly one repo file, else
     no citation; a doc never cites itself
   → files given: citing docs per file; none: totals + most cited files; `text` <= 8800
+```
+
+X23 reads cross-repo links from the same checkouts, locally:
+
+```
+code_xray links / gingugu xray links (stdio handler, or the proxy; serve refuses;
+  MEMORY_XRAY_LINKS=off refuses); the brief calls links.tool.for_brief (3s budget)
+  → index.read(root, state, budget_s): this checkout + sibling checkouts (the docs map's
+    discovery: MEMORY_XRAY_REPOS roots / default home folders)
+  → per file (<= 8000 per repo, <= 256 KiB; tests, fixtures, lockfiles, vendored dirs skipped):
+    provides*.py   -> provided facts: package, image, host, route (unmounted tails), resource
+    mentions*.py + prose.py -> mentioned facts: ci, submodule, repo-dep, dep, image, host,
+                      route, name, cite (repo@sha path), doc (prose); <= 2000 facts, 200 names
+  → xray-links-<digest>.json per checkout (owner-only; by file size + mtime; keyed to an
+    extractor-source digest so any extractor change rebuilds); past the budget a repo keeps
+    its cache and reports the files it did not read (read.partial / read.unscanned)
+  → join: a mention in B of a name A provides -> link B -> A (kind, evidence file:line,
+    certain or flagged); routes certain only beside a host the provider serves; cites
+    checked for drift; private hosts called by >= 2 repos and served by none -> shared
+  → no files: leaning_on_this / this_leans_on (+ totals)
+  → files: links into those files through their importers + whole-repo links; ripple.py
+    follows them backwards <= 3 hops (a file link counts when its target is touched, widened
+    by that repo's cached import graph; pin/deploy count when a change reaches the repo;
+    ci/submodule only into the changed repo)
+  → render: `text` + caveat; the brief adds `Other repos leaning on these files` and
+    `Ripple across repos` (data key `links`); a failure never costs the brief
 ```
 
 The hooks hash the checkout once and hand that fingerprint to both cache reads.
