@@ -4,12 +4,12 @@ Four checkouts wired the way real services are, with nothing declared by hand:
 
 - ``acme/gateway`` serves ``gateway.acme.io`` (Ingress) and ``POST /internal/resolve``
   in ``guardrails/resolver.py``, which imports ``guardrails/policy.py``;
-- ``acme/tokentab`` calls that route through a base URL set in its chart, checks the
+- ``acme/ledger`` calls that route through a base URL set in its chart, checks the
   gateway out in CI to run its rig, documents the resolver in prose
   ("lives in acme/gateway, as guardrails/resolver.py" - the field repro), and
-  publishes ``@acme/tokentab``;
+  publishes ``@acme/ledger``;
 - ``acme/sidecar`` carries a request-shape contract citing ``acme/gateway@<sha>``;
-- ``acme/portal`` pins ``@acme/tokentab``.
+- ``acme/portal`` pins ``@acme/ledger``.
 """
 
 from __future__ import annotations
@@ -33,17 +33,17 @@ GATEWAY = {
     "guardrails/other.py": "X = 1\n",
     "k8s/ingress.yaml": "kind: Ingress\nspec:\n  rules:\n    - host: gateway.acme.io\n",
 }
-TOKENTAB = {
-    "package.json": '{"name": "@acme/tokentab", "version": "1.0.0"}\n',
+LEDGER = {
+    "package.json": '{"name": "@acme/ledger", "version": "1.0.0"}\n',
     "src/hook.ts": "export const r = () => fetch(`${process.env.GATEWAY_URL}/internal/resolve`)\n",
-    "charts/tt/values.yaml": "env:\n  GATEWAY_URL: https://gateway.acme.io\n",
+    "charts/ledger/values.yaml": "env:\n  GATEWAY_URL: https://gateway.acme.io\n",
     ".github/workflows/rig.yml": (
         "jobs:\n  rig:\n    steps:\n      - uses: actions/checkout@v4\n        with:\n"
         "          repository: acme/gateway\n          ref: main\n"
     ),
-    "docs/RESOLVER-HOOK.md": "The resolver lives in acme/gateway, as guardrails/resolver.py.\n",
+    "docs/GATEWAY-HOOK.md": "The resolver lives in acme/gateway, as guardrails/resolver.py.\n",
 }
-PORTAL = {"package.json": '{"name": "portal", "dependencies": {"@acme/tokentab": "^1.0.0"}}\n'}
+PORTAL = {"package.json": '{"name": "portal", "dependencies": {"@acme/ledger": "^1.0.0"}}\n'}
 
 
 def _sha(repo: Path) -> str:
@@ -56,7 +56,7 @@ def eco(tmp_path, monkeypatch):
     base = tmp_path / "GIT"
     gw = _checkout(base, "gateway", GATEWAY, "git@github.com:acme/gateway.git")
     sha = _sha(gw)
-    _checkout(base, "tokentab", TOKENTAB, "https://github.com/acme/tokentab.git")
+    _checkout(base, "ledger", LEDGER, "https://github.com/acme/ledger.git")
     sidecar = {
         "contracts/shape.json": f'{{"source": "acme/gateway@{sha} guardrails/resolver.py"}}\n'
     }
@@ -77,10 +77,10 @@ def test_whole_repo_shows_every_kind_of_link_in_and_none_out(eco):
     assert out["ok"] is True and out["repo"] == "acme/gateway"
     assert out["read"] == {"repos": 4, "partial": {}, "unscanned": []}
     assert _in(out) == {
-        ("acme/tokentab", "src/hook.ts", "guardrails/resolver.py", "runtime"),
-        ("acme/tokentab", "charts/tt/values.yaml", "k8s/ingress.yaml", "runtime"),
-        ("acme/tokentab", ".github/workflows/rig.yml", None, "ci"),
-        ("acme/tokentab", "docs/RESOLVER-HOOK.md", "guardrails/resolver.py", "docs"),
+        ("acme/ledger", "src/hook.ts", "guardrails/resolver.py", "runtime"),
+        ("acme/ledger", "charts/ledger/values.yaml", "k8s/ingress.yaml", "runtime"),
+        ("acme/ledger", ".github/workflows/rig.yml", None, "ci"),
+        ("acme/ledger", "docs/GATEWAY-HOOK.md", "guardrails/resolver.py", "docs"),
         ("acme/sidecar", "contracts/shape.json", "guardrails/resolver.py", "cite"),
     }
     assert all(r["certain"] for r in out["leaning_on_this"])
@@ -88,27 +88,27 @@ def test_whole_repo_shows_every_kind_of_link_in_and_none_out(eco):
     assert ci["detail"] == "main" and "unpinned" in ci["flags"]
     assert out["this_leans_on"] == [] and out["this_leans_on_total"] == 0
     assert out["text"].startswith("GINGUGU X-RAY LINKS: acme/gateway - 4 checkouts read")
-    assert "acme/tokentab src/hook.ts:1 -> guardrails/resolver.py [runtime" in out["text"]
+    assert "acme/ledger src/hook.ts:1 -> guardrails/resolver.py [runtime" in out["text"]
 
 
 def test_a_file_reaches_outside_through_its_importers_and_ripples_on(eco):
     out = tool.answer(str(eco), files="guardrails/policy.py")
     # resolver.py imports policy.py, so everything leaning on resolver.py leans on policy.py
-    assert ("acme/tokentab", "src/hook.ts", "guardrails/resolver.py", "runtime") in _in(out)
-    assert ("acme/tokentab", ".github/workflows/rig.yml", None, "ci") in _in(out)
+    assert ("acme/ledger", "src/hook.ts", "guardrails/resolver.py", "runtime") in _in(out)
+    assert ("acme/ledger", ".github/workflows/rig.yml", None, "ci") in _in(out)
     hops = {(r["repo"], r["hop"]) for r in out["ripple"]}
-    # portal pins what tokentab ships, and the change reached tokentab
-    assert hops == {("acme/tokentab", 1), ("acme/sidecar", 1), ("acme/portal", 2)}
+    # portal pins what ledger ships, and the change reached ledger
+    assert hops == {("acme/ledger", 1), ("acme/sidecar", 1), ("acme/portal", 2)}
     assert "Ripple across repos:" in out["text"] and "hop 2: acme/portal" in out["text"]
 
 
 def test_a_file_nothing_outside_leans_on_has_only_whole_repo_links(eco):
     out = tool.answer(str(eco), files="guardrails/other.py")
-    assert _in(out) == {("acme/tokentab", ".github/workflows/rig.yml", None, "ci")}
+    assert _in(out) == {("acme/ledger", ".github/workflows/rig.yml", None, "ci")}
 
 
 def test_the_other_side_sees_what_it_leans_on(eco, tmp_path):
-    out = tool.answer(str(tmp_path / "GIT/tokentab"))
+    out = tool.answer(str(tmp_path / "GIT/ledger"))
     outs = {(r["to"], r["kind"]) for r in out["this_leans_on"]}
     assert {("acme/gateway", "runtime"), ("acme/gateway", "ci"), ("acme/gateway", "docs")} <= outs
     assert ("acme/portal", "pin") in {(r["from"], r["kind"]) for r in out["leaning_on_this"]}

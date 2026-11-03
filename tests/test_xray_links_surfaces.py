@@ -34,7 +34,7 @@ async def test_links_on_stdio(server, eco):  # noqa: F811
     )
     out = json.loads(result.content[0].text)
     assert out["ok"] is True, out
-    assert {r["repo"] for r in out["ripple"]} == {"acme/tokentab", "acme/sidecar", "acme/portal"}
+    assert {r["repo"] for r in out["ripple"]} == {"acme/ledger", "acme/sidecar", "acme/portal"}
 
 
 @pytest.fixture
@@ -110,7 +110,7 @@ def test_the_brief_names_the_repos_leaning_on_the_change(eco):  # noqa: F811
     out = brief.answer(str(eco), None, None)
     assert out["links"]["files"] == ["guardrails/policy.py"]
     assert "Other repos leaning on these files" in out["text"]
-    assert "acme/tokentab src/hook.ts:1 -> guardrails/resolver.py" in out["text"]
+    assert "acme/ledger src/hook.ts:1 -> guardrails/resolver.py" in out["text"]
     assert "hop 2: acme/portal" in out["text"]
 
 
@@ -118,7 +118,7 @@ def test_a_brief_over_a_range_names_them_too(eco):  # noqa: F811
     (eco / "guardrails/resolver.py").write_text("# moved\n")
     _git(eco, "commit", "-qam", "change")
     out = brief.answer(str(eco), "HEAD~1..HEAD", None)
-    assert {r["from"] for r in out["links"]["leaning_on_this"]} == {"acme/tokentab", "acme/sidecar"}
+    assert {r["from"] for r in out["links"]["leaning_on_this"]} == {"acme/ledger", "acme/sidecar"}
 
 
 def test_links_never_cost_the_brief(eco, monkeypatch):  # noqa: F811

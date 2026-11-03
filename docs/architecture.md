@@ -1862,6 +1862,29 @@ data key `links`); `render.py` writes the text. Local like `docs`: `gingugu serv
 it, the proxy answers it on the caller's machine. Switch `MEMORY_XRAY_LINKS` (default
 on). No migration, no brain change.
 
+A sibling repo named outright is a mention too (`mentions_repos.py`): a bare repo-shaped
+name (a hyphen is required; an underscore name only in docs), `owner/name`, or a GitHub URL
+(a `releases/download/<tag>/` asset is a `pin` on that tag; a line with an ArgoCD `repoURL`
+is a `deploy`). The `repo-name` fact joins only when it names a checkout read here and
+becomes a whole-repo link of the file's kind (`docs` in a doc, `ci` in a CI file, else
+`mention`) flagged `named`; it gives way to any stronger link from the same file, and a file
+yields one per target repo. Prose citations read through markdown emphasis, and double-backtick
+code spans in comments and docstrings count as literals. `index.py` reads siblings on 8
+threads, checks each directory on a file's way once (`lstat`) and `cache.py` validates rows
+with plain type checks; `join_index.py` buckets globbed resource names by a 3-character
+literal end. The `links` action's 20s budget makes a first answer on a machine with dozens
+of checkouts partial; the cache fills on later reads.
+
+*Hooks.* Every links read leaves each checkout it read an owner-only summary,
+`xray-links-in-<digest>.json` (`inbound.py`): links into that repo by target file (8 per
+file) plus up to 20 whole-repo links. The hooks only read that summary, never scan siblings.
+The read hook's map on arrival adds `Other repos lean on this one: N links from K
+checkouts here (...)`, refreshing a summary older than 10 minutes on a 1s read budget (past
+it, siblings come from their cache); a file's first read adds `Other repos lean on it:
+<repo> <file>:<line> (<kind>), ...` (3 shown). The edit note names them once per file per
+session for any file type, config and IaC included (header `GINGUGU X-RAY after edit:` when
+it is the only line). `MEMORY_XRAY_LINKS=off` silences every line.
+
 The snapshot is the checkout at `path` (default: the working directory),
 fingerprinted on every call and re-extracted when its content changed
 (`freshness: current`); a `fingerprint` names one exactly (`exact`); with
@@ -2278,7 +2301,7 @@ src/gingugu/
 ├── proxy_vault.py          # Remote mode: the machine's credential vault, screened (reveal refused) and exposed as a server
 ├── proxy_vault_link.py     # Remote mode: runs that vault behind an in-memory MCP session so it can ask the user
 ├── proxy_xray.py           # Remote mode: code_xray reads the checkout here, asks the brain by fingerprint
-├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), tool_xray (the PreToolUse X-ray decision, kept apart from tool_hook), bash_hook + bash_state (X15: a shell command's dirty-set snapshot and diff; the repos a session touched), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only), board_nudge (X20 sender: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line), board_brief (X20: the brief a board post's `xray: <range>` line asks for, rendered on the receiver), repo_id (X20: a checkout's identity, and the local checkout an `xray: <repo> <range>` line names), resolve_walk + parse_cache (X16: content-only import records, the per-file parse cache), symbols_walk + symbols (X17: the Python symbol graph, client only), edit_symbols (X17: the tripwire's `Edit lands in` lines), callers_tool (X17: `code_xray` `callers`, local only), edit_note (the note after an edit), ledger (X11 lean: test predictions vs pytest failures), scar_query (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace), scars (X3, client side: resolves and ranks those hits against the checkout), history (X4: git log summarized as churn, author counts and co-changed pairs, cached by HEAD), hotspots (X4 hotspots + coupling, X6 blind spots, pure), history_tool (`code_xray` `history` / `blindspots`, local only), docs_map + docs_cites + docs_tool (X22: which docs cite a file, here and in sibling checkouts; `code_xray` `docs`, local only), links/ (X23: model + provides* + mentions* + prose read a checkout into provided and mentioned names; index caches them per checkout; join + ripple turn them into links, `shared` hosts and the cross-repo ripple; render + tool answer `code_xray` `links` and the brief's section, local only)
+├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), tool_xray (the PreToolUse X-ray decision, kept apart from tool_hook), bash_hook + bash_state (X15: a shell command's dirty-set snapshot and diff; the repos a session touched), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only), board_nudge (X20 sender: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line), board_brief (X20: the brief a board post's `xray: <range>` line asks for, rendered on the receiver), repo_id (X20: a checkout's identity, and the local checkout an `xray: <repo> <range>` line names), resolve_walk + parse_cache (X16: content-only import records, the per-file parse cache), symbols_walk + symbols (X17: the Python symbol graph, client only), edit_symbols (X17: the tripwire's `Edit lands in` lines), callers_tool (X17: `code_xray` `callers`, local only), edit_note (the note after an edit), ledger (X11 lean: test predictions vs pytest failures), scar_query (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace), scars (X3, client side: resolves and ranks those hits against the checkout), history (X4: git log summarized as churn, author counts and co-changed pairs, cached by HEAD), hotspots (X4 hotspots + coupling, X6 blind spots, pure), history_tool (`code_xray` `history` / `blindspots`, local only), docs_map + docs_cites + docs_tool (X22: which docs cite a file, here and in sibling checkouts; `code_xray` `docs`, local only), links/ (X23: model + provides* + mentions* (incl. mentions_repos: a repo named outright) + prose read a checkout into provided and mentioned names; index reads checkouts (8 threads) and cache holds the per-checkout facts; join + join_index (provider index and matchers) + ripple turn them into links, `shared` hosts and the cross-repo ripple; render + tool answer `code_xray` `links` and the brief's section, local only; inbound writes and reads the per-repo summaries the read hook and edit note use)
 ├── xray_cli.py             # `gingugu xray brief` (--range / --files / --path / --json), `gingugu xray history` (--files / --path / --limit / --json), `gingugu xray blindspots` (--path / --limit / --json), `gingugu xray docs` (--files / --path / --limit / --json), `gingugu xray links` (--files / --path / --limit / --json) and `gingugu xray score` (--json)
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine

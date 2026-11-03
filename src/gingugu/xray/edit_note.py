@@ -133,6 +133,29 @@ def _lines(root: Path, rel: str, state_dir: Path, session_id: str, news: list[st
     return out
 
 
+def _any_target(payload: dict) -> tuple[Path, str] | None:
+    """(repo root, repo-relative path) for an edit of any file, X-ray language or not."""
+    if payload.get("tool_name") not in edit_hook.EDIT_TOOLS:
+        return None
+    raw = payload["tool_input"].get("file_path")
+    if not isinstance(raw, str) or not raw:
+        return None
+    return hook_common.resolve_file(raw, payload.get("cwd"))
+
+
+def _outside(root: Path, rel: str, state_dir: Path, session_id: str) -> list[str]:
+    """X23: the other repos leaning on the edited file, once per file per session."""
+    from .links import inbound, tool
+
+    if not tool.enabled():
+        return []
+    line = inbound.file_line(root, rel, state_dir)
+    if not line:
+        return []
+    claim = hook_common.claim_path(state_dir, "xray-links-edit", session_id, root, rel)
+    return [f"- {line}"] if _claim(claim) else []
+
+
 def check(payload: dict, state_dir: Path) -> str | None:
     """The note for the definitions this edit landed in, else None."""
     try:
@@ -140,20 +163,28 @@ def check(payload: dict, state_dir: Path) -> str | None:
             return None
         target = edit_hook._target(payload)
         session_id = payload.get("session_id")
-        if target is None or not isinstance(session_id, str) or not session_id:
+        if not isinstance(session_id, str) or not session_id:
             return None
+        if target is None:
+            # Not an X-ray language, but config and IaC are where repos wire to
+            # each other: only the X23 outside-repos line can speak for it.
+            target = _any_target(payload)
+            if target is None:
+                return None
+            outside = _outside(*target, state_dir, session_id)
+            return "\n".join(["GINGUGU X-RAY after edit:", *outside]) if outside else None
         root, rel = target
         # The file is seen now, by whoever wrote it, in any X-ray language: the
         # blind-edit deny stands down. Only Python has a symbol graph to say more.
         _claim(hook_common.claim_path(state_dir, "xray-read", session_id, root, rel))
-        if not rel.endswith(".py"):
+        outside = _outside(root, rel, state_dir, session_id)  # any language: X23
+        lines: list[str] = []
+        news = _news(payload) if rel.endswith(".py") else None
+        if news:
+            lines = _lines(root, rel, state_dir, session_id, news)
+        if not lines and not outside:
             return None
-        news = _news(payload)
-        if not news:
-            return None
-        lines = _lines(root, rel, state_dir, session_id, news)
-        if not lines:
-            return None
-        return "\n".join([HEADER, *lines])[:_MAX_CHARS]
+        head = HEADER if lines else "GINGUGU X-RAY after edit:"
+        return "\n".join([head, *lines, *outside])[:_MAX_CHARS]
     except (XrayError, ValueError, OSError):
         return None
