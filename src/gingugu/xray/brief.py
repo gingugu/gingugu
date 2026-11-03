@@ -137,6 +137,7 @@ def build(
     changes: list[Change],
     limit: int = 10,
     docs: docs_map.DocsMap | None = None,
+    links: dict | None = None,
 ) -> dict:
     """Pure: the changed files placed in the graph, and what the source reaches."""
     source = _ranked(g)
@@ -171,6 +172,7 @@ def build(
         "top": [_safe(p) for p in source[:TOP]],
         "docs": live,
         "docs_gone": gone,
+        "links": links,  # X23: other checkouts leaning on the change (``links.tool``)
     }
 
 
@@ -222,6 +224,10 @@ def render(data: dict, name: str) -> str:
     tail += _doc_lines(
         "Docs still citing a deleted or renamed file:", data.get("docs_gone", []), True
     )
+    if data.get("links"):
+        from .links import render as links_render  # links' renderer imports this module
+
+        tail += links_render.section(data["links"])
     if data["top"]:
         top = ", ".join(map(_show, data["top"]))
         tail.append(f"Repo top files ({data['files']} source): {top}")
@@ -270,5 +276,11 @@ def answer(
     found = changes(repo, rev_range, rel)  # a ref git rejects fails before any build
     state = load_config().db_path.parent / "hook-sessions"
     g = hook_common.graph(repo, state, session_id)
-    data = build(g, found, limit=min(max(0, limit), MAX_LIMIT), docs=_docs_map(repo, state))
+    from .links import tool as links_tool  # links' renderer imports this module
+
+    touched = sorted({p for c in found for p in (c.path, c.old_path) if p})
+    links = links_tool.for_brief(repo, state, touched, session_id)
+    data = build(
+        g, found, limit=min(max(0, limit), MAX_LIMIT), docs=_docs_map(repo, state), links=links
+    )
     return {"ok": True, **data, "text": render(data, repo.name), "caveat": CAVEAT}

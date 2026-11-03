@@ -1,9 +1,11 @@
 """X23: ripple - who leans on a change, then who leans on them, across repos.
 
 From the changed files of one repo, follow links backwards. A file-level link
-counts when the file it points at is touched; a repo-level link (a CI checkout,
-a submodule, a git pin) counts only into the repo that changed, since leaning
-on a repo as a whole says nothing about which of its files matter. In each repo
+counts when the file it points at is touched. A pin or a deploy leans on what a
+repo *ships* - its package, its image - so it counts whenever a change reaches
+that repo at all. Any other repo-level link (a CI checkout, a submodule) counts
+only into the repo that changed: it leans on the repo's source as it is, which
+a ripple further out has not changed. In each repo
 reached, the touched files are the evidence files of the links that reached it,
 widened by that repo's own import blast when ``closure`` can supply one.
 
@@ -18,6 +20,7 @@ from typing import NamedTuple
 from .model import Link
 
 HOPS = 3
+SHIPPED = frozenset({"pin", "deploy"})  # lean on what a repo ships, not on one file
 MAX_VIA = 20  # evidence links kept per repo reached
 
 Closure = Callable[[str, set[str]], set[str]]
@@ -63,7 +66,9 @@ def ripple(
             for lk in by_dst.get(repo, ()):
                 if lk.src in done:
                     continue
-                if lk.dst_path is None:
+                if lk.kind in SHIPPED:
+                    pass
+                elif lk.dst_path is None:
                     if repo != start:
                         continue
                 elif have is not None and lk.dst_path not in have:

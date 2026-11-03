@@ -143,9 +143,9 @@ def test_limit_is_clamped(repo, tmp_path, monkeypatch):
     seen = {}
     real = brief.build
 
-    def spy(g, changes, limit=10, docs=None):
+    def spy(g, changes, limit=10, docs=None, **kw):
         seen["limit"] = limit
-        return real(g, changes, limit, docs)
+        return real(g, changes, limit, docs, **kw)
 
     monkeypatch.setattr(brief, "build", spy)
     brief.answer(str(repo), None, "pkg/core.py", limit=10_000)

@@ -307,8 +307,9 @@ def _eco():
 def test_ripple_from_changed_files_follows_file_links_and_repo_links_into_the_start():
     reach = ripple.ripple(_eco(), "acme/a", ["svc/api.py"])
     got = {(r.repo, r.hop) for r in reach}
-    # f leans on c as a whole, and c did not change: repo-level links count only into the start
-    assert got == {("acme/b", 1), ("acme/c", 1), ("acme/e", 2)}
+    # f checks c out, and c's source did not change: a checkout counts only into the start.
+    # d pins b's package, and the change reached b: a pin leans on what b ships.
+    assert got == {("acme/b", 1), ("acme/c", 1), ("acme/d", 2), ("acme/e", 2)}
     e = next(r for r in reach if r.repo == "acme/e")
     assert not e.certain and [lk.src_path for lk in e.via] == ["src/x.ts"]
 
@@ -319,12 +320,15 @@ def test_ripple_needs_the_changed_file_for_a_file_link():
 
 
 def test_ripple_closure_widens_each_repo_by_its_own_blast():
-    def closure(repo_id, files):
-        # in b, client.ts is imported by package.json's entry (stand-in for an import blast)
-        return set(files) | ({"package.json"} if repo_id == "acme/b" else set())
+    eco = _eco() + [model.Link("acme/g", "g.ts", 1, "acme/b", "src/core.ts", "runtime", "/c")]
 
-    reach = ripple.ripple(_eco(), "acme/a", ["svc/api.py"], closure=closure)
-    assert ("acme/d", 2) in {(r.repo, r.hop) for r in reach}
+    def closure(repo_id, files):
+        # in b, core.ts imports client.ts (a stand-in for b's own import blast)
+        return set(files) | ({"src/core.ts"} if repo_id == "acme/b" else set())
+
+    assert "acme/g" not in {r.repo for r in ripple.ripple(eco, "acme/a", ["svc/api.py"])}
+    reach = ripple.ripple(eco, "acme/a", ["svc/api.py"], closure=closure)
+    assert ("acme/g", 2) in {(r.repo, r.hop) for r in reach}
 
 
 def test_ripple_without_files_starts_from_every_link_into_the_repo():

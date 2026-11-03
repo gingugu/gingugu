@@ -20,6 +20,7 @@ import logging
 
 from .. import grants
 from ..xray import brief, callers_tool, docs_tool, extract, history_tool, local, store
+from ..xray.links import tool as links_tool
 from . import ServerContext
 from .helpers import _err
 
@@ -34,6 +35,7 @@ _ACTIONS = (
     "callers",
     *history_tool.ACTIONS,
     *docs_tool.ACTIONS,
+    *links_tool.ACTIONS,
 )
 _CAVEAT = brief.CAVEAT
 _NO_DISK = (
@@ -108,7 +110,12 @@ def register(mcp, ctx: ServerContext) -> None:
         or is named for, ordered by reach over the number of authors; computed locally),
         "docs" (files: which docs cite each file, in this repo and in sibling checkouts on
         this machine, to re-read after a change; no files: the most cited files; computed
-        locally).
+        locally), "links" (the other checkouts on this machine that lean on this repo and
+        what it leans on, inferred from names the code already uses - hosts, routes,
+        images, packages, tables, CI checkouts, ``repo@sha`` cites, doc prose - each with
+        the file and line that shows it, certain or flagged why not; files: who outside
+        leans on those files, through their importers, and the ripple across repos;
+        computed locally).
 
         ``path`` is any directory in the git checkout (default: the working directory).
         The snapshot is rebuilt automatically when the checkout's source content changed,
@@ -135,6 +142,10 @@ def register(mcp, ctx: ServerContext) -> None:
                 if ctx.transport != "stdio":
                     return _err(_NO_DISK)
                 return docs_tool.answer(path, files, limit)
+            if action in links_tool.ACTIONS:
+                if ctx.transport != "stdio":
+                    return _err(_NO_DISK)
+                return links_tool.answer(path, files, limit)
             ns_id = ctx.namespaces.get_or_create(ctx.namespaces.resolve_name(namespace)).id
             if action == "ingest":
                 if payload is None:
