@@ -1005,8 +1005,17 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   decisions: **client-only and zero-config** - no map file or manifest is read from or
   written to any repo (a hand-declared map was rejected on purpose: it rots, and every
   repo would have to carry one), nothing is stored and the brain is never asked; no
-  migration. Switch `MEMORY_XRAY_LINKS` (default on). Hook surfaces (read hook, edit note
-  naming outside dependents) are the follow-up.
+  migration. Switch `MEMORY_XRAY_LINKS` (default on). `mentions_repos.py` also reads a
+  repo named outright (bare name with a hyphen, `owner/name`, GitHub URL) as a `repo-name`
+  fact, joined only when it names a checkout read here: a whole-repo link flagged `named`
+  (kinds `docs`, `ci`, `mention`), dropped when the same file links stronger.
+  `cache.py` (facts cache), `join_index.py` (provider index, matchers) and `inbound.py`
+  split out of `index.py` / `join.py`. Hook surfaces (built, unreleased): **hooks read a
+  summary, never scan.** Every links read writes each checkout it read an owner-only
+  `xray-links-in-<digest>.json` (links into it by target file, 8 per file, plus 20
+  whole-repo links); the read hook's map on arrival and a file's first read, and the edit
+  note after an edit (any file type), read only that summary. A summary older than 10
+  minutes is refreshed on a 1s budget by the map alone.
 - **Codebase X-ray: the brief on the board (X20, released in 0.35.0).** The agents the
   brief is for fire no hooks, so a handoff carries one unasked. A post body with a
   line of its own `xray: <range>` arrives with the brief of that range, rendered by

@@ -178,6 +178,24 @@ def _scars(root: Path, rel: str, g: Graph) -> list[str]:
     return scars.for_file(root, rel, {p for p in g.files if p not in g.packages})
 
 
+def _outside_map(root: Path, state_dir: Path) -> str | None:
+    """X23: how many other checkouts lean on this one (refreshed if stale)."""
+    from .links import inbound, tool
+
+    if not tool.enabled():
+        return None
+    inbound.refresh(root, state_dir)
+    return inbound.map_line(root, state_dir)
+
+
+def _outside_file(root: Path, rel: str, state_dir: Path) -> list[str]:
+    """X23: the outside files that lean on ``rel``, from the last links read."""
+    from .links import inbound, tool
+
+    line = inbound.file_line(root, rel, state_dir) if tool.enabled() else None
+    return [line] if line else []
+
+
 def check(payload: dict, state_dir: Path) -> str | None:
     """The map and/or neighbourhood to add to a read, else None."""
     try:
@@ -215,13 +233,18 @@ def check(payload: dict, state_dir: Path) -> str | None:
         parts = []
         if want_map and _claim(map_claim):
             repo_map = _render_map(root, g)
-            if repo_map:
-                parts.append(repo_map)
+            outside = _outside_map(root, state_dir)
+            if repo_map or outside:
+                parts.append("\n".join(p for p in (repo_map, outside) if p))
         if want_read and rel is not None and _claim(read_claim):
             near = _render_neighbourhood(rel, g)
             if near:
                 near = _with_symbols(near, rel, root, state_dir, session_id, fp)
-            extra = _changes_with(root, rel, g, state_dir) + _scars(root, rel, g)
+            extra = (
+                _changes_with(root, rel, g, state_dir)
+                + _scars(root, rel, g)
+                + _outside_file(root, rel, state_dir)
+            )
             if extra:  # a leaf has no neighbourhood, but its history still speaks
                 near = "\n".join([near or f"GINGUGU X-RAY: {_show(rel)}.", *extra])
             if near:

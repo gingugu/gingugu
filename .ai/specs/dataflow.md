@@ -776,7 +776,8 @@ code_xray links / gingugu xray links (stdio handler, or the proxy; serve refuses
     provides*.py   -> provided facts: package, image, host, route (unmounted tails), resource;
                       tests and fixtures provide nothing (they still mention)
     mentions*.py + prose.py -> mentioned facts: ci, submodule, repo-dep, dep, image, host,
-                      route, name, cite (repo@sha path), doc (prose); <= 2000 facts, 200 names;
+                      route, name, cite (repo@sha path), doc (prose), repo-name (a repo
+                      named outright: bare hyphenated name, owner/name, GitHub URL); <= 2000 facts, 200 names;
                       a name is never read from .env* files, a secret-named line, a known
                       token prefix or a random-looking value (names are cached on disk)
     per repo: <= 100,000 facts a side, 20,000 names, 500 loose (globbed/wildcard) names
@@ -789,6 +790,8 @@ code_xray links / gingugu xray links (stdio handler, or the proxy; serve refuses
     checked for drift (hex sha and a git-listed path only; git diff --no-ext-diff
     --no-textconv; <= 20 checks in 5s; the brief skips them); private hosts called by
     >= 2 repos and served by none -> shared
+  → join: a repo-name mention joins only when it names a checkout read here -> whole-repo
+    link (docs / ci / mention) flagged `named`, dropped if the same file links stronger
   → no files: leaning_on_this / this_leans_on (+ totals)
   → files: links into those files through their importers + whole-repo links; ripple.py
     follows them backwards <= 3 hops (a file link counts when its target is touched, widened
@@ -797,6 +800,20 @@ code_xray links / gingugu xray links (stdio handler, or the proxy; serve refuses
     ci/submodule only into the changed repo)
   → render: `text` + caveat; the brief adds `Other repos leaning on these files` and
     `Ripple across repos` (data key `links`); a failure never costs the brief
+  → inbound.write_all: per checkout read, xray-links-in-<digest>.json (owner-only): links
+    into it by target file (<= 8) + whole-repo links (<= 20)
+```
+
+Hooks read that summary and never scan siblings:
+
+```
+read hook (PostToolUse Read): map on arrival -> inbound.refresh (summary older than 600s,
+    1s read budget; past it siblings come from cache) -> "Other repos lean on this one: N
+    links from K checkouts here (...)"; a file's first read -> inbound.file_line ->
+    "Other repos lean on it: <repo> <file>:<line> (<kind>)" (3 shown)
+edit note (PostToolUse Edit/Write/MultiEdit): any file type -> inbound.file_line, once per
+    file per session; header "GINGUGU X-RAY after edit:" when it is the only line
+MEMORY_XRAY_LINKS=off silences every line
 ```
 
 The hooks hash the checkout once and hand that fingerprint to both cache reads.

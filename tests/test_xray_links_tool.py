@@ -33,15 +33,15 @@ GATEWAY = {
     "guardrails/other.py": "X = 1\n",
     "k8s/ingress.yaml": "kind: Ingress\nspec:\n  rules:\n    - host: gateway.acme.io\n",
 }
-ledger = {
+LEDGER = {
     "package.json": '{"name": "@acme/ledger", "version": "1.0.0"}\n',
     "src/hook.ts": "export const r = () => fetch(`${process.env.GATEWAY_URL}/internal/resolve`)\n",
-    "charts/tt/values.yaml": "env:\n  GATEWAY_URL: https://gateway.acme.io\n",
+    "charts/ledger/values.yaml": "env:\n  GATEWAY_URL: https://gateway.acme.io\n",
     ".github/workflows/rig.yml": (
         "jobs:\n  rig:\n    steps:\n      - uses: actions/checkout@v4\n        with:\n"
         "          repository: acme/gateway\n          ref: main\n"
     ),
-    "docs/gateway-hook.md": "The resolver lives in acme/gateway, as guardrails/resolver.py.\n",
+    "docs/GATEWAY-HOOK.md": "The resolver lives in acme/gateway, as guardrails/resolver.py.\n",
 }
 PORTAL = {"package.json": '{"name": "portal", "dependencies": {"@acme/ledger": "^1.0.0"}}\n'}
 
@@ -56,7 +56,7 @@ def eco(tmp_path, monkeypatch):
     base = tmp_path / "GIT"
     gw = _checkout(base, "gateway", GATEWAY, "git@github.com:acme/gateway.git")
     sha = _sha(gw)
-    _checkout(base, "ledger", ledger, "https://github.com/acme/ledger.git")
+    _checkout(base, "ledger", LEDGER, "https://github.com/acme/ledger.git")
     sidecar = {
         "contracts/shape.json": f'{{"source": "acme/gateway@{sha} guardrails/resolver.py"}}\n'
     }
@@ -78,9 +78,9 @@ def test_whole_repo_shows_every_kind_of_link_in_and_none_out(eco):
     assert out["read"] == {"repos": 4, "partial": {}, "unscanned": []}
     assert _in(out) == {
         ("acme/ledger", "src/hook.ts", "guardrails/resolver.py", "runtime"),
-        ("acme/ledger", "charts/tt/values.yaml", "k8s/ingress.yaml", "runtime"),
+        ("acme/ledger", "charts/ledger/values.yaml", "k8s/ingress.yaml", "runtime"),
         ("acme/ledger", ".github/workflows/rig.yml", None, "ci"),
-        ("acme/ledger", "docs/gateway-hook.md", "guardrails/resolver.py", "docs"),
+        ("acme/ledger", "docs/GATEWAY-HOOK.md", "guardrails/resolver.py", "docs"),
         ("acme/sidecar", "contracts/shape.json", "guardrails/resolver.py", "cite"),
     }
     assert all(r["certain"] for r in out["leaning_on_this"])

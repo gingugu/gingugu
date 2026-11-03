@@ -344,6 +344,58 @@ def test_ripple_stops_at_its_hop_limit_and_never_returns_to_the_start():
     assert [(r.repo, r.hop) for r in reach] == [("r/1", 1), ("r/2", 2), ("r/3", 3)]
 
 
+# --- a repo named outright ----------------------------------------------------------
+
+
+def test_a_named_repo_is_a_whole_repo_link_of_its_file_s_kind():
+    repos = {
+        "acme/acme-kit": repo(),
+        "acme/tt": repo(
+            mentioned=[
+                F(model.REPO_NAME, "acme-kit", ".github/settings.yml", 2, "mention"),
+                F(model.REPO_NAME, "acme/acme-kit", "docs/a.md", 3, "docs"),
+                F(model.REPO_NAME, "nobody-here", "x.md", 1, "docs"),
+                F(model.REPO_NAME, "read-only", "y.md", 1, "docs"),
+            ]
+        ),
+        "acme/read-only": repo(),
+    }
+    got = {(lk.src_path, lk.dst, lk.kind, lk.dst_path, lk.certain, lk.flags) for lk in links(repos)}
+    assert got == {
+        (".github/settings.yml", "acme/acme-kit", "mention", None, True, ("named",)),
+        ("docs/a.md", "acme/acme-kit", "docs", None, True, ("named",)),
+    }  # a generic word is never a repo name, even when a sibling is called that
+
+
+def test_a_named_repo_gives_way_to_a_stronger_link_from_the_same_file():
+    repos = {
+        "acme/a": repo(),
+        "acme/b": repo(
+            mentioned=[
+                F(model.CI, "acme/a", ".github/workflows/t.yml", 6, "main"),
+                F(model.REPO_NAME, "acme/a", ".github/workflows/t.yml", 6, "ci"),
+            ]
+        ),
+    }
+    (lk,) = links(repos)
+    assert lk.flags == ("unpinned",)
+
+
+def test_one_file_naming_a_repo_twice_is_one_named_link():
+    repos = {
+        "acme/kit-tools": repo(),
+        "acme/b": repo(
+            mentioned=[
+                F(model.REPO_NAME, "kit-tools", "README.md", 9, "docs"),
+                F(model.REPO_NAME, "acme/kit-tools", "README.md", 9, "docs"),
+                F(model.REPO_NAME, "kit-tools", "README.md", 40, "docs"),
+            ]
+        ),
+    }
+    (lk,) = links(repos)
+    assert (lk.src_line, lk.key) == (9, "acme/kit-tools")
+
+
 # --- route precision: a route alone is a weak name ----------------------------------
 
 
