@@ -262,6 +262,19 @@ def test_credential_shaped_values_are_never_names(line):
     assert keys({"src/settings.py": line, "conf/app.yaml": line}, NAME) == set()
 
 
+@pytest.mark.parametrize(
+    "value",
+    ["ghp_abc123", "sk-live-a", "xoxb-1-2", "AKIAEXAMPLE", "eyJhbGciOi.x", "glpat-abc"],
+)
+def test_well_known_credential_prefixes_are_never_names(value):
+    assert keys({"conf/app.yaml": f"value: {value}\n"}, NAME) == set()
+
+
+def test_an_env_file_gives_hosts_but_never_names():
+    files = {".env.example": "UPSTREAM=https://svc-a.acme.io\nTABLE=usage-ledger\n"}
+    assert keys(files, NAME) == set() and keys(files, HOST) == {"svc-a.acme.io"}
+
+
 def test_resource_names_beside_a_secret_line_still_count():
     files = {"conf/app.yaml": "api_key: abc-def-ghi\ntable: usage-ledger\n"}
     assert keys(files, NAME) == {"usage-ledger"}

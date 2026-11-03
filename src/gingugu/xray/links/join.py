@@ -202,6 +202,8 @@ def _for(rid: str, m: Fact, ix: _Index, repos: dict[str, RepoFacts], hosts_in) -
     else:
         hits = _named(ix, m)
     hits = [h for h in hits if h[0] != rid]
+    if m.kind not in _LINK_KIND:
+        return []  # a kind this join does not know (an older or foreign cache)
     own = any(r == rid for r, _f in ix.by[_provided_kind(m.kind)].get(m.key, []))
     providers = {r for r, _f, _x in hits}
     out = []

@@ -33,11 +33,16 @@ def _dict(x: object) -> dict:
     return x if isinstance(x, dict) else {}
 
 
-def _line_of(lines: list[str], *needles: str) -> int:
+MAX_DEPS = 1000  # per manifest section: a real one has dozens
+
+
+def _line_of(text: str, *needles: str) -> int:
+    """The 1-based line of the first needle found. ``str.find`` and ``count`` run
+    in C, so a thousand deps over a 256 KiB manifest stays well under a second."""
     for needle in needles:
-        for i, ln in enumerate(lines):
-            if needle in ln:
-                return i + 1
+        at = text.find(needle)
+        if at >= 0:
+            return text.count("\n", 0, at) + 1
     return 1
 
 
@@ -69,26 +74,25 @@ def _pyproject(path: str, text: str, sink: Sink) -> None:
         data = tomllib.loads(text)
     except (tomllib.TOMLDecodeError, ValueError, RecursionError):
         return
-    lines = text.split("\n")
     proj = _dict(data.get("project"))
     poetry = _dict(_dict(data.get("tool")).get("poetry"))
     name = proj.get("name") or poetry.get("name")
     own = norm_package("py", name) if isinstance(name, str) else None
 
     def entries(seq: object) -> None:
-        for e in seq if isinstance(seq, list) else []:
+        for e in (seq if isinstance(seq, list) else [])[:MAX_DEPS]:
             if isinstance(e, str):
-                _py_entry(sink, path, _line_of(lines, e), e, own)
+                _py_entry(sink, path, _line_of(text, e), e, own)
 
     entries(proj.get("dependencies"))
     for group in _dict(proj.get("optional-dependencies")).values():
         entries(group)
     for group in _dict(data.get("dependency-groups")).values():
         entries(group)
-    for dep, val in _dict(poetry.get("dependencies")).items():
+    for dep, val in list(_dict(poetry.get("dependencies")).items())[:MAX_DEPS]:
         if dep.lower() == "python":
             continue
-        n = _line_of(lines, dep)
+        n = _line_of(text, dep)
         if isinstance(val, dict) and "git" in val:
             m = _GIT.search("git+" + str(val["git"]).removeprefix("git+"))
             ref = val.get("rev") or val.get("tag") or val.get("branch") or ""
@@ -107,13 +111,12 @@ def _package_json(path: str, text: str, sink: Sink) -> None:
     except (ValueError, RecursionError):
         return
     data = _dict(data)
-    lines = text.split("\n")
     own = data.get("name")
     for section in NPM_SECTIONS:
-        for name, val in _dict(data.get(section)).items():
+        for name, val in list(_dict(data.get(section)).items())[:MAX_DEPS]:
             if not isinstance(val, str) or name == own:
                 continue
-            n = _line_of(lines, f'"{name}"')
+            n = _line_of(text, f'"{name}"')
             g = _NPM_GIT.match(val) or _NPM_GH.match(val)
             if g:
                 key = norm_repo(f"{g.group(1)}/{g.group(2)}")

@@ -182,6 +182,75 @@ def test_a_poisoned_cache_entry_is_dropped_not_trusted(eco):
     assert "/x/y" not in keys and "/internal/resolve" in keys
 
 
+@pytest.mark.parametrize(
+    "row",
+    [
+        ["not-a-kind", "/x/y", 1, "", ""],
+        ["route", "/" + "a" * 5000, 1, "", ""],
+        ["route", "/x/y", 0, "", ""],
+        ["cite", "acme/b", 1, "--output=/tmp/pwned", "a.py"],
+    ],
+)
+def test_a_cache_row_out_of_shape_drops_its_file(eco, row):
+    a, state = eco
+    index.read(a, state, budget_s=10)
+    path = index._cache_path(a, state)
+    raw = json.loads(path.read_text())
+    st = (a / "svc/api.py").stat()
+    raw["files"]["svc/api.py"] = [st.st_size, st.st_mtime_ns, [row], []]
+    path.write_text(json.dumps(raw))
+    _ident, entries = index._load(a, state)
+    if row[0] == "cite":
+        # a hostile detail is a string like any other here: it is the drift check's
+        # job to refuse it, see test_xray_links_tool's hostile sha test
+        assert "svc/api.py" in entries
+    else:
+        assert "svc/api.py" not in entries
+
+
+def test_past_the_budget_a_cached_sibling_is_served_without_asking_git(eco, monkeypatch):
+    a, state = eco
+    index.read(a, state, budget_s=10)
+    from gingugu.xray import scan
+
+    asked = []
+    real = scan.git
+
+    def spy(root, *args, **kw):
+        asked.append(Path(root).name)
+        return real(root, *args, **kw)
+
+    monkeypatch.setattr(scan, "git", spy)
+    e = index.read(a, state, budget_s=0)
+    assert "svc-b" not in asked
+    assert "acme/svc-b" in e.repos and e.partial["acme/svc-b"] > 0
+    assert any(f.key == "svc-a.acme.io" for f in e.repos["acme/svc-b"].mentioned)
+
+
+def test_loose_names_are_capped_per_repo():
+    facts = [
+        model.Fact(model.RESOURCE, f"*-q{i:04d}-name", f"f{i}.tf", 1)
+        for i in range(index.MAX_LOOSE_PER_REPO + 50)
+    ] + [model.Fact(model.HOST, "a.acme.io", "z.yaml", 1)]
+    kept = index._bounded(facts)
+    assert len([f for f in kept if f.kind == model.RESOURCE]) == index.MAX_LOOSE_PER_REPO
+    assert kept[-1].kind == model.HOST
+
+
+def test_the_file_reader_refuses_a_link_and_a_fifo(tmp_path):
+    from gingugu.xray import docs_map
+
+    real = tmp_path / "real.md"
+    real.write_text("x")
+    (tmp_path / "link.md").symlink_to(real)
+    with pytest.raises(OSError):
+        docs_map._read_text(tmp_path / "link.md")
+    if hasattr(os, "mkfifo"):
+        os.mkfifo(tmp_path / "pipe.md")
+        with pytest.raises(OSError):
+            docs_map._read_text(tmp_path / "pipe.md")  # never blocks waiting for a writer
+
+
 def test_names_are_capped_per_file(eco):
     a, state = eco
     many = "\n".join(f'X{i} = "resource-name-{i}"' for i in range(1000))

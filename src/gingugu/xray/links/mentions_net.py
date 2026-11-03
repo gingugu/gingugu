@@ -60,7 +60,15 @@ _SECRETISH = re.compile(
 _PART = re.compile(r"[-_.]")
 
 
+_TOKEN_PREFIX = re.compile(
+    r"^(?:gh[pousr]_|github_pat_|sk-|sk_|pk_|rk_|xox[abpors]-|AKIA|ASIA|AIza|ya29\.|eyJ|glpat-|"
+    r"npm_|pypi-|hf_|shpat_|SG\.)"
+)
+
+
 def _random_part(value: str) -> bool:
+    if _TOKEN_PREFIX.match(value):
+        return True  # a well-known credential prefix, however short the rest
     for part in _PART.split(value):
         has_digit = any(c.isdigit() for c in part)
         if len(part) >= 16 and has_digit and any(c.isalpha() for c in part):
@@ -83,6 +91,8 @@ def _add_name(sink: Sink, value: str, path: str, line: int) -> None:
 
 
 def scan_net(path: str, lines: list[str], sink: Sink, code: bool) -> None:
+    # an env file is where secrets live: its hosts count, its values are never names
+    env_file = path.rpartition("/")[2].lower().startswith(".env")
     for i, ln in enumerate(lines):
         if not ln.strip():
             continue
@@ -97,7 +107,7 @@ def scan_net(path: str, lines: list[str], sink: Sink, code: bool) -> None:
         kv = _KV_HOST.match(ln) if "host" in ln.lower() else None
         if kv and "host" in kv.group(1).lower() and (kv.group(2) or not code):
             sink.add(HOST, norm_host(kv.group(3)), path, n)
-        secretish = bool(_SECRETISH.search(ln))
+        secretish = env_file or bool(_SECRETISH.search(ln))
         for lit in literals(ln):
             route = _route_in(lit)
             if route and route != "/":
