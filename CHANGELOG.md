@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The startup contract no longer keeps a board watcher running.** For a
+  persona, the SessionStart contract and the managed protocol block in
+  CLAUDE.md / AGENTS.md told Claude Code to hold `gingugu board watch` under
+  `Monitor` all session and re-arm it at every 30 minute expiry. Each expiry
+  is a model turn on the session's whole context, so a session left open
+  re-armed it all night on an empty board. Both now say board mail arrives
+  with the next prompt and forbid the watcher. `gingugu board watch` itself is
+  unchanged (Codex's `--exec` sidecar wakes only on a post). **Upgrading:**
+  re-run `gingugu init --force` in each repo with a gingugu SessionStart hook,
+  so the hook copy and the rules blocks are refreshed (the previous hook is
+  kept as `session_start.py.bak`), then restart any open Claude Code session.
+
 ---
 
 ## [0.45.0] - 2026-11-02

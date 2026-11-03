@@ -111,7 +111,7 @@ prompt woke, **tripwires** stop a tool call that a memory says must not be
 missed, before it runs, and **warm minions** hand a subagent a fenced,
 pre-loaded brain of its own. Agents sharing a brain can also leave each other
 posts on the **agent board** (`board`), which is not memory: addressed, read
-once (a task stays up until it is claimed or done), never ranked. `gingugu board watch` wakes an idle agent when one arrives.
+once (a task stays up until it is claimed or done), never ranked. Claude Code gets a post with your next prompt; `gingugu board watch` wakes an idle Codex agent when one arrives.
 **Codebase X-ray** (`code_xray`) maps a repository's import graph - Python,
 TypeScript/JavaScript and Go: before an edit, an agent asks what the change
 reaches and which tests to run, and which files the rest of the code leans on. It reads your checkout on your machine, even when the
@@ -271,7 +271,7 @@ or Rust toolchain required to use it. The MCP SDK is first-class in Python.
 | 📌 **Pinned Tier** | The handful of rules that must never be missed load first at every session start, exempt from ranking |
 | 🪝 **Hooks** | Session-start contract, involuntary recall on a prompt, tripwires that stop a tool call a memory forbids, an X-ray map when an agent first reads into a repo, warm minions for subagents, and a save-discipline stop hook — wired by `gingugu init` |
 | 🌙 **Dream Pass** | Deterministic consolidation over the relation graph (PageRank, label propagation, orphan reconnection), staged to a proposal queue you accept or reject - safe on a cron |
-| 📬 **Agent Board** | Agents sharing a brain leave each other addressed posts and claimable tasks; `gingugu board watch` wakes an idle agent, and a reply goes back to the session that asked |
+| 📬 **Agent Board** | Agents sharing a brain leave each other addressed posts and claimable tasks; Claude Code gets them with the next prompt and `gingugu board watch` wakes an idle Codex agent; a reply goes back to the session that asked |
 | 🩻 **Codebase X-ray** | `code_xray` maps a repo's import graph (Python, TypeScript/JavaScript, Go; parsed, never run): blast radius before an edit (dependents by hop, candidate tests) and the files the code leans on, ranked by directed PageRank. The tool hook says it before a blind edit of an imported file and names the callers right after any other edit, and a read hook brings a repo map on the first read and each file's neighbourhood the first time it is read. Both also name the repo's memories that mention the file (scar tissue). `gingugu xray brief` gives the same map of a change to an agent that fires no hooks |
 | 🌐 **Memory Explorer UI** | 3D brain (one lobe per namespace), list, dashboard, timeline, and trust map — a read-only observer ([live demo](https://gingugu.github.io/gingugu/)) |
 | 📡 **Central Brain (optional)** | `gingugu serve` runs the same server over HTTP behind Bearer tokens, each client scoped to its own namespaces; `gingugu promote` harvests a local brain's durable knowledge up to it with provenance stamps |
@@ -731,8 +731,12 @@ unchanged if it is not about the branch. `MEMORY_XRAY_BOARD=off` turns both off.
 Which harness wakes on what was measured, not assumed:
 
 - **Claude Code** (terminal and VS Code) wakes an idle session on each stdout
-  line of a `Monitor` watch, and when a background command exits. Arm
-  `Monitor` on `gingugu board watch`, and re-arm it at the 30 minute deadline.
+  line of a `Monitor` watch, and when a background command exits - and also
+  when the `Monitor` expires. Do **not** keep `gingugu board watch` under
+  `Monitor`: every 30 minute expiry and re-arm is a model turn that re-reads
+  the whole context, so a session left open burns tokens all night with an
+  empty board. Claude Code gets board mail through the prompt hook on the
+  next prompt instead.
 - **Codex CLI and the ChatGPT desktop app** wake on a message queued from
   outside; a background command exiting does not wake Codex. Run the watcher
   as a sidecar that queues each post into the thread:
