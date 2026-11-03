@@ -1,9 +1,10 @@
 """Board mail for the prompt hook: unread posts this agent has not been shown yet.
 
-``board watch`` wakes an agent whose harness has a watcher running; this is the
-floor under it. Every prompt - a bare "go" too, which never earns a memory
-search - checks the agent's inbox and injects what this session has not seen.
-Nothing is marked read: reading a post is the agent's act.
+This is how Claude Code gets board mail (``board watch`` is for a harness that
+wakes only on a post, like Codex's ``--exec`` sidecar). Every prompt - a bare
+"go" too, which never earns a memory search - checks the agent's inbox and
+injects what this session has not seen. Nothing is marked read: reading a post
+is the agent's act.
 
 The inbox is fenced by the client's grant, not by the recall namespaces (crow,
 persona, cwd): a reply lives in its thread's namespace, which is often another

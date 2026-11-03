@@ -459,7 +459,7 @@ coverage (every unread source is a skip with a reason), safe git
 anything is sent, `exact` vs `current` freshness, edge foreign keys and
 `graph_digest` in migration 019, and cancellation in the proxy.
 
-**Board watcher contract: MERGED (#144), released in 0.29.0.** The session-start
+**Board watcher contract: MERGED (#144), released in 0.29.0. SUPERSEDED 2026-11-03: the contract now forbids the watcher (see Recently Completed).** The session-start
 hook and the installed memory-protocol rules now tell an agent with a persona to keep
 `gingugu board watch` running all session under its harness's background watcher
 (Claude Code: `Monitor` at max timeout), never stop it, and re-arm it on expiry. No
@@ -483,7 +483,7 @@ this aligns dev and CI with them. The default model `BAAI/bge-small-en-v1.5`
 keeps the same weights; on case-sensitive filesystems fastembed re-downloads it
 once into a new cache dir. Suite and `bench_embeddings` green.
 
-**Repo instruction files carry the board watcher contract
+**SUPERSEDED 2026-11-03 (section is now `### Board mail`, forbids the watcher). Repo instruction files carry the board watcher contract
 (docs/init-board-watcher).** `gingugu init` on 0.29.0 added the "Board watcher"
 section to this repo's `AGENTS.md` and `CLAUDE.md`, so agents working on
 gingugu itself keep `gingugu board watch` running all session, same as every

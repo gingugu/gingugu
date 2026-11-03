@@ -598,7 +598,7 @@ gap between the count and the rows.
 - 0.29.0 (2026-10-27): Minor: Codebase X-ray -
   `code_xray` blast radius (migration 019) and the X-ray tripwire on edit;
   board replies routed to the asking agent session (migration 020, schema
-  v20); the startup contract keeps a persona's board watcher running; board
+  v20); the startup contract keeps a persona's board watcher running (reversed 2026-11-03); board
   delivery receipt; Windows CI on D: (#137-#144).
 - 0.28.0: Minor: one persona on two
   machines can talk over the board - board identity is persona + machine
