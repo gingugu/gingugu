@@ -154,7 +154,9 @@ this machine lean on this repo, and what it leans on, by the hosts, routes, imag
 CI checkouts and `repo@sha` cites the code already names. Nothing is declared in any repo. Each link
 carries the file and line that shows it, and is certain only when exactly one other repo provides the
 name; anything looser is kept and flagged. With files it adds who outside leans on them and the ripple
-across repos, and the brief gains `Other repos leaning on these files`.
+across repos, and the brief gains `Other repos leaning on these files`. A repo named outright (a
+hyphenated name, `owner/name`, or a GitHub URL) counts as a whole-repo link flagged `named`, and the
+read hook and edit note name the outside files leaning on the file you are touching.
 
 That is the part that makes the memory worth having, and it is in the box.
 
@@ -1291,7 +1293,7 @@ Environment variables (all optional):
 | `MEMORY_XRAY_MAP` | `on` | Set `off` to disable the X-ray map on arrival in `gingugu hook read` (the repo map on a session's first Read/Grep/Glob of a repo, and each Read source file's importers and imports, once per session) |
 | `MEMORY_XRAY_HISTORY` | `on` | Set `off` to drop the `Changes with (no import):` line from the X-ray read neighbourhood: up to three files the read file changes with in git history though neither imports the other. The `code_xray` `history` action is unaffected |
 | `MEMORY_XRAY_DOCS` | `on` | Set `off` to drop the docs map: the `Docs citing the changed files:` and `Docs still citing a deleted or renamed file:` sections of the X-ray brief, and the `code_xray` `docs` action, which then refuses. A doc cites a file only by a path that resolves to exactly one file; a sibling checkout's doc only by a repo-qualified path (`name/path` or `owner/name/path`), a GitHub link to this repo, or prose placing a path in it ("lives in owner/name, as path") |
-| `MEMORY_XRAY_LINKS` | `on` | Set `off` to drop cross-repo links: the `Other repos leaning on these files` and `Ripple across repos` sections of the X-ray brief, and the `code_xray` `links` action, which then refuses. Nothing is declared in any repo; the other checkouts are the same siblings the docs map reads |
+| `MEMORY_XRAY_LINKS` | `on` | Set `off` to drop cross-repo links: the `Other repos leaning on these files` and `Ripple across repos` sections of the X-ray brief, and the `code_xray` `links` action, which then refuses, and the hook lines `Other repos lean on this one` (map on arrival), `Other repos lean on it` (a file's first read) and the outside-repos line of the edit note. Nothing is declared in any repo; the other checkouts are the same siblings the docs map reads |
 | `MEMORY_XRAY_SCARS` | `on` | Set `off` to disable scar tissue: the repo's memories that name a file, appended to the X-ray read neighbourhood and to the deny of a blind edit. A remote brain needs the release that serves `POST /hook/scars`; an older one answers 404, which reads as no scars |
 | `MEMORY_XRAY_REPOS` | `~/GIT`, `~/git`, `~/src`, `~/code`, `~/projects`, `~/dev`, `~/repos`, `~/Developer` | Folders (`os.pathsep`-separated) where a receiver looks for the repo an `xray: <repo> <range>` board line names: exactly `<folder>/<name>`, used only when its origin matches. The same folders are where the docs map (X22) and cross-repo links (X23) find sibling checkouts: every direct child with a `.git`, up to 64. Empty turns both searches off |
 | `MEMORY_XRAY_BOARD` | `on` | Set `off` to disable the brief on the board: a post with a line of its own `xray: <range>` no longer arrives with that range's X-ray brief, in the prompt hook's board mail or in `gingugu board watch`, and a board post from a branch is no longer asked once to name its range |

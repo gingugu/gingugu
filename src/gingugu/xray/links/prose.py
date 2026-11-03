@@ -10,8 +10,11 @@ from .model import norm_repo
 
 _PATH = re.compile(r"(?<![\w./-])((?:[\w.-]+/){2,}[\w.-]+)")
 _LINK = re.compile(r"github\.com/([\w.-]+)/([\w.-]+)/(?:blob|tree|raw)/[^/\s]+/([^\s#?)>\]\"'`]+)")
+# Markdown wraps names in emphasis and code spans: "**owner/name**, as `path`".
+_WRAP = r"[`*_\"']{0,3}"
 _PROSE = re.compile(
-    r"(?<![\w./-])([\w.-]+/[\w.-]+)`?(?:,?\s+(?:as|at|in|under)\s+|:\s*)`?([\w.-]+(?:/[\w.-]+)*)"
+    rf"(?<![\w./-])([\w.-]+/[\w.-]+){_WRAP}(?:,?\s+(?:as|at|in|under)\s+|:\s*){_WRAP}"
+    r"([\w.-]+(?:/[\w.-]+)*)"
 )
 _EXT = re.compile(r"\.[A-Za-z][A-Za-z0-9]{0,7}$")
 _TRAIL = ".,;:)"

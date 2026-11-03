@@ -9,6 +9,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **X23 in the hooks: the read hook and the edit note name the repos that lean on a
+  file.** Every links read (the `links` action, the brief, the map's refresh) now leaves
+  each checkout it read an owner-only summary, `xray-links-in-<digest>.json`: the links
+  into that repo grouped by target file (8 per file) plus up to 20 whole-repo links. The
+  hooks read only that summary and never scan siblings per call. The map on arrival adds
+  `Other repos lean on this one: N links from K checkouts here (...)`; a summary older
+  than 10 minutes is refreshed on a 1s read budget (past it, siblings come from their
+  cache; about 2.7s on a 48-checkout machine, at most once per 10 minutes per repo). A
+  file's first read adds `Other repos lean on it: <repo> <file>:<line> (<kind>), ...`
+  (3 shown). The edit note (PostToolUse after Edit, Write or MultiEdit) names them once
+  per file per session for any file type, config and IaC included; when it is the only
+  line its header is `GINGUGU X-RAY after edit:`. `MEMORY_XRAY_LINKS=off` silences every
+  line. No migration.
+
+### Changed
+
+- **X23 links read a sibling repo named outright.** A sibling named in a sentence, a
+  comment or a path - a bare repo-shaped name (a hyphen is required; an underscore name
+  only in docs), `owner/name`, or a GitHub URL - is now a link. A
+  `releases/download/<tag>/` asset is a `pin` on that tag; a line with an ArgoCD
+  `repoURL` is a `deploy`. The new mention kind `repo-name` joins only when it names a
+  checkout read here and becomes a whole-repo link of the file's kind (`docs` in a doc,
+  `ci` in a CI file, else the new link kind `mention`), flagged `named` (a describing
+  flag, not an uncertainty flag). It is dropped when the same file links to that repo
+  some stronger way, and kept once per file per target repo; generic hyphenated words
+  never count. Prose citations read through markdown emphasis (bold `owner/name`
+  followed by "as" and a code-spanned path), and double-backtick code spans in comments and docstrings count as
+  literals, so a route named in one is read. Measured against a hand-made map of a real
+  multi-repo service ecosystem (26 edges between checkouts present on that machine),
+  edge-level recall (the map's own evidence file is a link source) is 21/26, from 11/26
+  in 0.46.0; the 5 left are semantic (no name in the file) or an abbreviated path in the
+  map.
+- **X23 links read faster on a machine with many checkouts.** On 48 checkouts a warm
+  read takes 2.9s (was 9.0s) and the join 0.7s (was 3.0s): each directory on a file's
+  way is checked once with `lstat` instead of resolving every file, cache rows are
+  validated with plain type checks, siblings are read on 8 threads, and globbed
+  resource names are bucketed by a 3-character literal end so a name meets only the
+  globs it could match. A cold read of 48 checkouts is still about 56s: the `links`
+  action's 20s budget makes a first answer on such a machine partial, and the cache
+  fills on later reads. Internal: the facts cache moved to `links/cache.py`, the
+  provider index and matchers to `links/join_index.py`, with new
+  `links/mentions_repos.py` and `links/inbound.py`; the test suite no longer reads the
+  developer's own checkouts.
+
 ---
 
 ## [0.46.0] - 2026-11-03

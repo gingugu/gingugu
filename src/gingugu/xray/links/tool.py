@@ -91,6 +91,16 @@ def _drift(eco: index.Ecosystem, lk: Link, timeout: float) -> str | None:
         return None
 
 
+def _leave_summaries(eco: index.Ecosystem, res: join.Result, state: Path) -> None:
+    """Every links read leaves the hooks their per-repo answer (``inbound``)."""
+    from . import inbound
+
+    try:
+        inbound.write_all(eco.roots, res.links, state)
+    except Exception:  # noqa: BLE001 - a summary never costs the answer
+        pass
+
+
 def _rank(lk: Link) -> tuple:
     return (not lk.certain, lk.kind, lk.src, lk.src_path, lk.src_line)
 
@@ -163,6 +173,7 @@ def answer(
     state = load_config().db_path.parent / "hook-sessions"
     eco = index.read(repo, state, budget_s=LINKS_BUDGET_S)
     res = join.join(eco.repos)
+    _leave_summaries(eco, res, state)
     data = build(eco, res, rel, limit, _closure(eco, state, session_id))
     return {"ok": True, **data, "text": render.text(data), "caveat": CAVEAT}
 
@@ -176,6 +187,7 @@ def for_brief(repo: Path, state: Path, paths: list[str], session_id: str | None)
     try:
         eco = index.read(repo, state, budget_s=BRIEF_BUDGET_S)
         res = join.join(eco.repos)
+        _leave_summaries(eco, res, state)
         return build(eco, res, paths, 10, _closure(eco, state, session_id), drift_s=0)
     except Exception:  # noqa: BLE001
         return None

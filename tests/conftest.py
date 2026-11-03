@@ -150,6 +150,18 @@ def no_scars_from_the_real_brain(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.fixture(autouse=True)
+def no_real_sibling_checkouts(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    """No X-ray sibling search of the developer's own folders.
+
+    The docs map (X22) and cross-repo links (X23) read every checkout under the
+    ``MEMORY_XRAY_REPOS`` roots, by default ``~/GIT`` and friends: the brief and
+    the read hook would otherwise read the developer's real repos. A test of
+    siblings sets its own roots.
+    """
+    monkeypatch.setenv("MEMORY_XRAY_REPOS", str(tmp_path / "no-sibling-roots"))
+
+
+@pytest.fixture(autouse=True)
 def offline_embeddings(monkeypatch: pytest.MonkeyPatch):
     """Keep the suite off the network — the sibling of ``fake_keyring``.
 

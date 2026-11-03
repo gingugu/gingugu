@@ -11,6 +11,7 @@ from .mentions_ci import scan_ci_yaml, scan_clones, scan_submodules
 from .mentions_deps import is_requirements, scan_deps
 from .mentions_images import scan_dockerfile, scan_images
 from .mentions_net import scan_cites, scan_net
+from .mentions_repos import scan_repo_names
 from .mentions_sink import Sink, split_lines
 from .model import CODE_EXTS, DOC, Fact, is_ci, is_doc, wanted
 from .prose import doc_refs, iter_refs
@@ -24,11 +25,13 @@ def _one(path: str, text: str, sink: Sink) -> None:
     lines = split_lines(text)
     base = path.rpartition("/")[2].lower()
     scan_cites(path, lines, sink)
-    if is_doc(path) and not is_requirements(path):
+    doc = is_doc(path) and not is_requirements(path)
+    ci = is_ci(path)
+    scan_repo_names(path, lines, sink, doc=doc, ci=ci)
+    if doc:
         for n, repo, target in iter_refs(lines):
             sink.add(DOC, repo, path, n, "", target)
         return
-    ci = is_ci(path)
     if ci:
         scan_ci_yaml(path, lines, sink)
     if ci or base.endswith(".sh") or base.startswith(_SCRIPT_BASES):
