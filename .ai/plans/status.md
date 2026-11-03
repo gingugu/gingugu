@@ -1,11 +1,11 @@
 # Project Status
 
-_Last updated: 2026-11-03 (X23 hook lines, named-repo recall and read speed on feature/xray-links-recall; X23 cross-repo links - 0.46.0; startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
+_Last updated: 2026-11-03 (X23 hook lines, named-repo recall, generated-code skip and links --warm - 0.47.0; X23 cross-repo links - 0.46.0; startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
 
 ## In Flight
 
 **X23 hook lines, named-repo recall and read speed (2026-11-03, branch
-`feature/xray-links-recall`; built and tested, unreleased).** On top of 0.46.0. Recall: a sibling
+`feature/xray-links-recall`; RELEASED in 0.47.0 with #178).** On top of 0.46.0. Recall: a sibling
 repo named outright (bare hyphenated name, `owner/name`, GitHub URL; a `releases/download/<tag>/`
 asset is a `pin`, an ArgoCD `repoURL` a `deploy`) is a whole-repo link of the file's kind
 (`docs`, `ci`, new kind `mention`) flagged `named`, joined only when it names a checkout read

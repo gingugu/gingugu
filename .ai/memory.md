@@ -258,10 +258,10 @@ Generated sets hold real memory content and stay in `bench/local/`.
   other; `blindspots` lists imported source no test imports or is named for, by rank over
   authors (`xray/hotspots.py`, pure). The read neighbourhood adds `Changes with (no
   import):` (`MEMORY_XRAY_HISTORY`). `docs` (X22) is a reverse index from a file to the docs that cite it,
-  here and in sibling checkouts (`xray/docs_map.py`, `MEMORY_XRAY_DOCS`); `links` (X23, unreleased) is the same
+  here and in sibling checkouts (`xray/docs_map.py`, `MEMORY_XRAY_DOCS`); `links` (X23) is the same
   kind of local answer for cross-repo wiring: which sibling checkouts lean on this repo by names it
   provides (hosts, routes, images, packages, IaC resources, CI checkouts, cites; `xray/links/`,
-  `MEMORY_XRAY_LINKS`; the read hook and edit note name outside dependents from a per-repo summary, built unreleased); the brief gains `Other repos leaning on these files`, `Ripple across
+  `MEMORY_XRAY_LINKS`; the read hook and edit note name outside dependents from a per-repo summary, 0.47.0); the brief gains `Other repos leaning on these files`, `Ripple across
   repos`, `Docs citing
   the changed files:` and `Docs still citing a deleted or renamed file:`. Client only, no migration. Drift not built.
   Multi-language + migration 021 (shipped 0.30.0).
@@ -512,7 +512,11 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.46.0** (PyPI, 2026-11-03). Minor: X23 cross-repo links -
+- Current version: **0.47.0** (PyPI, 2026-11-03). Minor: X23 links read repos named
+  outright (edge-level recall 11/26 -> 21/26 on a real ecosystem), the read hook and
+  edit note name outside dependents, generated code skipped (cold read of 48 checkouts
+  56s -> 19.5s), `gingugu xray links --warm` run by `fleet.py upgrade` (#177, #178).
+- 0.46.0 (PyPI, 2026-11-03). Minor: X23 cross-repo links -
   `code_xray` `links` / `gingugu xray links` and the brief's "Other repos leaning on these
   files" + "Ripple across repos", zero-config over sibling checkouts; the docs map reads
   owner-qualified paths and prose (#176).
