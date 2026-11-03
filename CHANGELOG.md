@@ -37,8 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the brief. Facts are cached per checkout by file size and mtime (owner-only
   `xray-links-<digest>.json`, rebuilt when the extractors change); caps: 8000 files per
   repo, 256 KiB per file; past the time budget a repo keeps its cache and reports how
-  many files it did not read. Computed on the caller's machine; `gingugu serve` refuses
-  the action like `docs`. Switch `MEMORY_XRAY_LINKS` (default on). No migration.
+  many files it did not read. A resource-shaped literal is never kept from a `.env*`
+  file, a line that sets something secret-named, a well-known token prefix or a
+  random-looking value, so the cache holds no credential. Computed on the caller's
+  machine; `gingugu serve` refuses the action like `docs`. Switch `MEMORY_XRAY_LINKS`
+  (default on). No migration.
 
 ### Changed
 
