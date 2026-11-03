@@ -29,7 +29,7 @@ Usage:
   gingugu board watch [opts]   Print a line for every new post in this agent's
                                board inbox (pushed from a remote brain, polled
                                locally). --once exits on the first; --exec runs
-                               a command per post. For Monitor / codex queue.
+                               a command per post. For codex queue.
   gingugu xray brief [opts]    Handoff brief for a change: the changed files by
                                rank and the code and tests they reach. --range
                                main..HEAD, --files a,b, or the working tree;
