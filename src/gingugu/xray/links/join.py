@@ -28,8 +28,9 @@ from .model import Fact, Link
 _REPO_KIND = {model.CI: "ci", model.SUBMODULE: "source", model.REPO_DEP: "pin"}
 # Flags that make a link uncertain; "unpinned" and "missing" describe a certain one.
 UNCERTAIN = frozenset(
-    {"ambiguous", "by-name", "also-own", "suffix", "wildcard", "pattern", "partial"}
-)
+    {"ambiguous", "by-name", "also-own", "suffix", "unmounted", "route-only", "wildcard",
+     "pattern", "partial"}
+)  # fmt: skip
 _PRIVATE = (
     ".internal", ".local", ".corp", ".lan", ".intranet", ".svc", ".svc.cluster.local",
     ".home.arpa", ".private",
@@ -57,10 +58,13 @@ def _segs(route: str) -> list[str]:
     return [s for s in route.split("/") if s]
 
 
-def _seg_eq(a: list[str], b: list[str]) -> bool:
-    if len(a) != len(b):
+def _seg_eq(mention: list[str], provided: list[str]) -> bool:
+    """A provider's parameter takes any segment; every name it gives must be
+    matched by that name. A mention's ``*`` is unknown, so it matches only a
+    parameter: ``/messages/*`` is not ``/*/message``."""
+    if len(mention) != len(provided):
         return False
-    return all(x == y or model.WILD in (x, y) for x, y in zip(a, b, strict=True))
+    return all(p == model.WILD or m == p for m, p in zip(mention, provided, strict=True))
 
 
 class _Index:
@@ -109,10 +113,9 @@ def _route_hits(ix: _Index, key: str) -> list[tuple[str, Fact, bool]]:
     if key in model.GENERIC_ROUTES or model.concrete(key) == 0:
         return []
     m = _segs(key)
-    if m[-1] == model.WILD:
-        cands = [c for lst in ix.routes_by_last.values() for c in lst]
-    else:
-        cands = ix.routes_by_last.get(m[-1], []) + ix.routes_by_last.get(model.WILD, [])
+    cands = ix.routes_by_last.get(model.WILD, [])  # a provider parameter takes anything
+    if m[-1] != model.WILD:
+        cands = ix.routes_by_last.get(m[-1], []) + cands
     out = []
     for rid, f in cands:
         r = _segs(f.key)
@@ -137,6 +140,28 @@ def _named(ix: _Index, m: Fact) -> list[tuple[str, Fact, str | None]]:
     elif m.kind == model.IMAGE:
         last = m.key.rpartition("/")[2]
         out += [(r, f, "partial") for r, f in ix.image_by_last.get(last, []) if f.key != m.key]
+    return out
+
+
+def _route_links(rid: str, m: Fact, ix: _Index, hosts_in) -> list[tuple[str, Fact, str | None]]:
+    """A route is a weak name on its own: unrelated services share ``/api/users``.
+    It is corroborated when the mentioning repo names a host the provider serves
+    (the same file, for a standard OpenAI-style path). Corroborated: an exact
+    match on a whole path is certain, a tail match is kept flagged. Not
+    corroborated: only an exact match on a whole path with two or more names in
+    it survives, flagged ``route-only``."""
+    out = []
+    for r, f, exact in _route_hits(ix, m.key):
+        whole = f.detail != model.UNMOUNTED
+        if m.key in model.STANDARD_ROUTES or f.key in model.STANDARD_ROUTES:
+            if r in hosts_in.get((rid, m.path), ()):
+                out.append((r, f, None if exact and whole else "suffix"))
+            continue
+        if r in hosts_in.get((rid, None), ()):
+            loose = None if exact and whole else ("unmounted" if exact else "suffix")
+            out.append((r, f, loose))
+        elif exact and whole and model.concrete(f.key) >= 2:
+            out.append((r, f, "route-only"))
     return out
 
 
@@ -173,9 +198,7 @@ def _for(rid: str, m: Fact, ix: _Index, repos: dict[str, RepoFacts], hosts_in) -
             out.append(_link(rid, m, t, dst_path, kind, flags))
         return out
     if m.kind == model.ROUTE:
-        hits = [(r, f, None if exact else "suffix") for r, f, exact in _route_hits(ix, m.key)]
-        if m.key in model.STANDARD_ROUTES:
-            hits = [h for h in hits if h[0] in hosts_in.get((rid, m.path), ())]
+        hits = _route_links(rid, m, ix, hosts_in)
     else:
         hits = _named(ix, m)
     hits = [h for h in hits if h[0] != rid]
@@ -221,12 +244,14 @@ def _shared(repos: dict[str, RepoFacts], ix: _Index) -> list[Shared]:
 def join(repos: dict[str, RepoFacts]) -> Result:
     """Every link between the repos, deduplicated (first line wins), sorted."""
     ix = _Index(repos)
-    hosts_in: dict[tuple[str, str], set[str]] = defaultdict(set)  # (repo, file) -> host providers
+    # (repo, file) and (repo, None) -> the repos serving a host it names there / anywhere
+    hosts_in: dict[tuple[str, str | None], set[str]] = defaultdict(set)
     for rid, facts in repos.items():
         for m in facts.mentioned:
             if m.kind == model.HOST:
                 for r, _f, _x in _named(ix, m):
                     hosts_in[(rid, m.path)].add(r)
+                    hosts_in[(rid, None)].add(r)
     best: dict[tuple, Link] = {}
     for rid, facts in repos.items():
         for m in facts.mentioned:

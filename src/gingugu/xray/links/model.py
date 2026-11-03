@@ -20,7 +20,8 @@ from dataclasses import dataclass, field
 PACKAGE = "package"  # key: "py:<pep503>", "npm:<name>", "go:<module path>"
 IMAGE = "image"  # key: image path without registry, tag or digest
 HOST = "host"  # key: lowercased hostname; "*.x.com" for a wildcard
-ROUTE = "route"  # key: normalized path, see ``norm_route``
+ROUTE = "route"  # key: normalized path, see ``norm_route``; detail UNMOUNTED when partial
+UNMOUNTED = "unmounted"  # a route on a router mounted elsewhere: the key is only its tail
 RESOURCE = "resource"  # key: an IaC-owned name (table, bucket, queue...); "*" globs
 PROVIDED = (PACKAGE, IMAGE, HOST, ROUTE, RESOURCE)
 
@@ -92,7 +93,27 @@ def _base(path: str) -> str:
 
 
 def is_doc(path: str) -> bool:
-    return path.lower().endswith(DOC_EXTS)
+    base = _base(path)
+    return base.endswith(DOC_EXTS) and not base.startswith(("requirements", "constraints"))
+
+
+_TEST_DIRS = frozenset({"test", "tests", "__tests__", "spec", "specs", "testdata", "fixtures"})
+_TEST_SUFFIXES = (
+    "_test.py", "_test.go", ".test.ts", ".test.tsx", ".test.js", ".test.jsx", ".spec.ts",
+    ".spec.tsx", ".spec.js", ".spec.jsx", "_spec.rb", "_test.rb",
+)  # fmt: skip
+
+
+def is_test(path: str) -> bool:
+    """A test or fixture: what it serves is a stand-in, so it provides nothing."""
+    parts = path.lower().split("/")
+    base = parts[-1]
+    return (
+        any(p in _TEST_DIRS for p in parts[:-1])
+        or base.startswith("test_")
+        or base == "conftest.py"
+        or base.endswith(_TEST_SUFFIXES)
+    )
 
 
 def wanted(path: str) -> bool:
@@ -133,7 +154,11 @@ GENERIC_ROUTES = frozenset(
     {"/", "/health", "/healthz", "/healthcheck", "/ready", "/readyz", "/live", "/livez",
      "/status", "/metrics", "/ping", "/version", "/docs", "/redoc", "/openapi.json",
      "/swagger.json", "/favicon.ico", "/login", "/logout", "/callback", "/api", "/v1",
-     "/v2", "/index", "/static", "/assets", "/robots.txt", "/*"}
+     "/v2", "/index", "/static", "/assets", "/robots.txt", "/*",
+     "/api/health", "/api/healthz", "/api/status", "/api/version", "/api/ping", "/api/info",
+     "/api/me", "/api/login", "/api/logout", "/api/auth", "/api/config", "/api/settings",
+     "/api/graphql", "/v1/health", "/v1/status", "/auth/login", "/auth/logout",
+     "/auth/callback", "/oauth/callback", "/oauth/token", "/oauth2/callback"}
 )  # fmt: skip
 # Paths every OpenAI-compatible client and server shares: a link only when the
 # same mentioning file also names a host the provider serves.
