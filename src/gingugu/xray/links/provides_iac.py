@@ -17,7 +17,6 @@ _RES_TYPES = frozenset(
 _NAME_ATTRS = frozenset({"name", "bucket", "function_name"})
 _TF_RES = re.compile(r'^\s*resource\s+"([\w-]+)"\s+"[^"]*"\s*\{')
 _TF_ATTR = re.compile(r"^\s*(\w+)\s*=\s*(.*)$")
-_TF_DOMAIN = re.compile(r'^\s*domain_name\s*=\s*"([^"]*)"')
 _STR = re.compile(r'"([^"\n]*)"')
 _CFN = re.compile(
     r'^\s*-?\s*["\']?(?:Table|Bucket|Queue|Topic|Stream|Function)Name["\']?\s*:\s*(.*)$'
@@ -72,13 +71,21 @@ def _tf_attrs(lines: list[str]) -> Iterator[tuple[str, str, str, int]]:
             rtype = None
 
 
+def _serves_domain(rtype: str) -> bool:
+    """A resource whose ``domain_name`` is a name this repo serves: a certificate
+    or a custom domain. A CloudFront origin's ``domain_name`` is one it CALLS,
+    and sits in a nested block besides, so only depth-1 attributes count."""
+    return rtype == "aws_acm_certificate" or rtype.endswith("_domain_name")
+
+
 def terraform(lines: list[str]) -> list[Hit]:
     out: list[Hit] = []
-    for n, line in enumerate(lines, 1):
-        m = _TF_DOMAIN.match(line)
-        if m:
-            out.append((HOST, m.group(1), n))
     for rtype, attr, val, n in _tf_attrs(lines):
+        if attr == "domain_name" and _serves_domain(rtype):
+            first = _STR.match(val.strip())
+            if first:
+                out.append((HOST, first.group(1), n))
+            continue
         first = _STR.match(val.strip())
         if rtype == "aws_ecr_repository" and attr == "name" and first:
             out.append((IMAGE, first.group(1), n))

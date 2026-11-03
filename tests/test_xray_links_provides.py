@@ -162,6 +162,15 @@ def test_terraform_dns_cert_and_custom_domains():
     }  # fmt: skip
 
 
+def test_a_cloudfront_origin_domain_is_called_not_served():
+    tf = (
+        'resource "aws_cloudfront_distribution" "cdn" {\n  aliases = ["www.acme.io"]\n'
+        '  origin {\n    domain_name = "svc-a.acme.io"\n    origin_id = "a"\n  }\n}\n'
+        'locals {\n  domain_name = "nope.acme.io"\n}\n'
+    )
+    assert keys({"infra/cdn.tf": tf}, HOST) == {"www.acme.io"}
+
+
 def test_openapi_servers_nginx_server_name_and_cname_file():
     spec = "openapi: 3.0.0\nservers:\n  - url: https://svc-a.acme.io/v2\npaths: {}\n"
     files = {
