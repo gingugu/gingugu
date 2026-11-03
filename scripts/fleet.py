@@ -153,6 +153,19 @@ def upgrade(machine: Machine, version: str) -> None:
         )
     if machine.service:
         restart(machine)
+    else:
+        warm(machine)
+
+
+def warm(machine: Machine) -> None:
+    """Refill the X-ray links caches on a machine with checkouts: an upgrade that
+    changes an extractor retires every cached fact, and the first session after it
+    would otherwise get a partial answer. Never fails the upgrade."""
+    try:
+        out = shell(machine, as_user(machine, "gingugu xray links --warm"), check=True)
+        print(f"  {machine.name}: {out.strip().splitlines()[-1] if out.strip() else 'warmed'}")
+    except FleetError as exc:
+        print(f"  {machine.name}: links warm-up skipped ({exc})", flush=True)
 
 
 def restart(machine: Machine) -> None:

@@ -243,3 +243,38 @@ def test_status_does_not_fail_on_an_unknown_remote_status(tmp_path, monkeypatch,
     # Unknown is reported, not treated as an outage: it may be an older gingugu.
     code, _ = _status_run(tmp_path, monkeypatch, capsys, {"old": ""})
     assert code == 0
+
+
+# --- fleet upgrade: a Mac's X-ray links caches are refilled, never at the cost of it ---
+
+
+def _upgrade_run(tmp_path, monkeypatch, machine, fail_warm=False):
+    (m,) = fleet.load(_fleet_file(tmp_path, [machine]))
+    ran = []
+
+    def shell(_machine, command, *, check=True):
+        ran.append(command)
+        if fail_warm and "xray links --warm" in command:
+            raise fleet.FleetError("warm failed")
+        return "warmed 3 checkouts (9 links) in 1.0s"
+
+    monkeypatch.setattr(fleet, "shell", shell)
+    monkeypatch.setattr(fleet, "installed", lambda _m: "1.2.3")
+    monkeypatch.setattr(fleet, "restart", lambda _m: ran.append("restart"))
+    fleet.upgrade(m, "1.2.3")
+    return ran
+
+
+def test_an_upgraded_mac_has_its_links_caches_warmed(tmp_path, monkeypatch):
+    ran = _upgrade_run(tmp_path, monkeypatch, {"name": "mac", "uv": "/opt/homebrew/bin/uv"})
+    assert any("gingugu xray links --warm" in c for c in ran)
+
+
+def test_a_service_host_is_restarted_not_warmed(tmp_path, monkeypatch):
+    ran = _upgrade_run(tmp_path, monkeypatch, {"name": "pi", "ssh": "me@pi", "service": "gingugu"})
+    assert "restart" in ran and not any("--warm" in c for c in ran)
+
+
+def test_a_warm_up_that_fails_never_fails_the_upgrade(tmp_path, monkeypatch, capsys):
+    _upgrade_run(tmp_path, monkeypatch, {"name": "mac"}, fail_warm=True)
+    assert "links warm-up skipped" in capsys.readouterr().out

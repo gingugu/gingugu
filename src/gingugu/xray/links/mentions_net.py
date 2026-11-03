@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import re
 
 from .mentions_sink import Sink
@@ -65,6 +66,21 @@ _SECRETISH = re.compile(
     re.IGNORECASE,
 )
 _PART = re.compile(r"[-_.]")
+# The same words as plain substrings: a C-speed `in` test turns most lines away
+# before the regex runs (measured: the guard was 14M regex searches on a cold read).
+_SECRET_WORDS = (
+    "secret", "token", "passw", "pwd", "key", "credential", "auth", "bearer", "session",
+    "cookie", "signature", "salt", "dsn", "license",
+)  # fmt: skip
+
+
+@functools.lru_cache(maxsize=8192)
+def secretish(line: str) -> bool:
+    """Whether ``line`` sets something secret-named; shared by every scanner of a line."""
+    if "=" not in line and ":" not in line:
+        return False
+    low = line.lower()
+    return any(w in low for w in _SECRET_WORDS) and bool(_SECRETISH.search(line))
 
 
 _TOKEN_PREFIX = re.compile(
@@ -76,6 +92,8 @@ _TOKEN_PREFIX = re.compile(
 def _random_part(value: str) -> bool:
     if _TOKEN_PREFIX.match(value):
         return True  # a well-known credential prefix, however short the rest
+    if len(value) < 12:
+        return False  # too short for either random-looking shape below
     for part in _PART.split(value):
         has_digit = any(c.isdigit() for c in part)
         if len(part) >= 16 and has_digit and any(c.isalpha() for c in part):
@@ -104,24 +122,26 @@ def scan_net(path: str, lines: list[str], sink: Sink, code: bool) -> None:
         if not ln.strip():
             continue
         n = i + 1
-        for m in _URL.finditer(ln):
-            sink.add(HOST, norm_host(m.group(1)), path, n)
-            rest = m.group(2)
-            if rest and not re.split(r"[?#]", rest, maxsplit=1)[0].endswith(".git"):
-                route = norm_route(rest)
-                if route and route != "/":
-                    sink.add(ROUTE, route, path, n)
+        if "://" in ln:
+            for m in _URL.finditer(ln):
+                sink.add(HOST, norm_host(m.group(1)), path, n)
+                rest = m.group(2)
+                if rest and not re.split(r"[?#]", rest, maxsplit=1)[0].endswith(".git"):
+                    route = norm_route(rest)
+                    if route and route != "/":
+                        sink.add(ROUTE, route, path, n)
         kv = _KV_HOST.match(ln) if "host" in ln.lower() else None
         if kv and "host" in kv.group(1).lower() and (kv.group(2) or not code):
             sink.add(HOST, norm_host(kv.group(3)), path, n)
-        secretish = env_file or bool(_SECRETISH.search(ln))
-        for lit in literals(ln):
-            route = _route_in(lit)
-            if route and route != "/":
-                sink.add(ROUTE, route, path, n)
-            if not secretish:
-                _add_name(sink, lit, path, n)
-        if not code and not secretish:
+        quiet = env_file or secretish(ln)
+        if '"' in ln or "'" in ln or "`" in ln:
+            for lit in literals(ln):
+                route = _route_in(lit)
+                if route and route != "/":
+                    sink.add(ROUTE, route, path, n)
+                if not quiet:
+                    _add_name(sink, lit, path, n)
+        if not code and not quiet and (":" in ln or "=" in ln):
             m = _KV_VALUE.match(ln)
             if m:
                 _add_name(sink, m.group(1), path, n)

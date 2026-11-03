@@ -94,9 +94,22 @@ def _route_links(rid: str, m: Fact, ix: _Index, hosts_in) -> list[tuple[str, Fac
         if r in hosts_in.get((rid, None), ()):
             loose = None if exact and whole else ("unmounted" if exact else "suffix")
             out.append((r, f, loose))
-        elif exact and whole and model.concrete(f.key) >= 2:
+        elif exact and whole and model.concrete(f.key) >= 2 and not _generic_tail(f.key):
             out.append((r, f, "route-only"))
     return out
+
+
+# The ends every auth flow and probe shares: "/api/auth/oidc/callback" is everyone's.
+_GENERIC_TAILS = frozenset(
+    {"callback", "login", "logout", "signin", "signout", "health", "healthz", "ready",
+     "readyz", "live", "livez", "metrics", "status", "ping", "version", "token", "authorize",
+     "userinfo", "jwks", "openid-configuration", "well-known"}
+)  # fmt: skip
+
+
+def _generic_tail(route: str) -> bool:
+    """A route ending in a shared word is never a link on its own; with a host, it is."""
+    return route.rstrip("/").rpartition("/")[2].lower() in _GENERIC_TAILS
 
 
 _LINK_KIND = {

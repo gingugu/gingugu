@@ -296,6 +296,22 @@ def test_the_file_reader_refuses_a_link_and_a_fifo(tmp_path):
             docs_map._read_text(tmp_path / "pipe.md")  # never blocks waiting for a writer
 
 
+def test_repo_names_are_pruned_to_real_checkouts_before_any_cap(eco, monkeypatch):
+    a, state = eco
+    # thousands of hyphenated words first, the real sibling name last: the cap must
+    # count only names of checkouts read here, or the real one is crowded out
+    noise = "\n".join(f"# word-{i} other-{i}" for i in range(3000))
+    (a / "docs").mkdir()
+    for k in range(10):
+        (a / f"docs/a{k}.md").write_text(noise)
+    (a / "docs/z.md").write_text("Calls svc-b for everything.\n")
+    monkeypatch.setattr(index, "MAX_NAMES_PER_REPO", 50)
+    e = index.read(a, state, budget_s=30)
+    named = {(f.key, f.path) for f in e.repos["acme/svc-a"].mentioned if f.kind == model.REPO_NAME}
+    assert ("svc-b", "docs/z.md") in named
+    assert not any(k.startswith("word-") for k, _ in named)
+
+
 def test_names_are_capped_per_file(eco):
     a, state = eco
     many = "\n".join(f'X{i} = "resource-name-{i}"' for i in range(1000))

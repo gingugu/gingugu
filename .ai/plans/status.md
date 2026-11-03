@@ -12,12 +12,15 @@ asset is a `pin`, an ArgoCD `repoURL` a `deploy`) is a whole-repo link of the fi
 here; prose citations read through markdown emphasis; double-backtick spans count as literals.
 Measured against a hand-made map of a real multi-repo ecosystem (26 edges between checkouts on
 that machine): edge-level recall 11/26 -> 21/26. Perf on 48 checkouts: warm read 9.0s -> 2.9s,
-join 3.0s -> 0.7s; cold read still about 56s (the `links` 20s budget makes a first answer
-partial, the cache fills later). Hooks: every links read writes `xray-links-in-<digest>.json`
+join 3.0s -> 0.7s (#177, merged). Cold read 56s -> 19.5s on branch `feature/xray-links-cold`:
+generated code skipped by name and head marker (97% of one .NET repo's C# was EF migrations),
+cheaper line guards, repo-name candidates pruned to real checkouts before the caps (a big
+repo's hyphen words had crowded its real names out), generic route tails need a host, and
+`gingugu xray links --warm` run by `fleet.py upgrade` after install. Recall held at 21/26. Hooks: every links read writes `xray-links-in-<digest>.json`
 per checkout read; the read hook's map and a file's first read, and the edit note (any file
 type), name the outside repos from it; `MEMORY_XRAY_LINKS=off` silences them. New files:
 `links/mentions_repos.py`, `inbound.py`, `cache.py`, `join_index.py`. The suite's autouse
-fixture points `MEMORY_XRAY_REPOS` at an empty folder. 3775 tests passed.
+fixture points `MEMORY_XRAY_REPOS` at an empty folder. 3812 tests passed.
 
 **Codebase X-ray in every language we can parse - phase 1 MERGED (#150), released in
 0.30.0; phases 2 and 3 not started.** Extraction runs through one adapter per language (`xray/lang/`): Python stays on `ast`;
