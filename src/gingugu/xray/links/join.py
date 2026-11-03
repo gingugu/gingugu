@@ -18,11 +18,18 @@ set, worth knowing, with no direction to give it.
 from __future__ import annotations
 
 from collections import defaultdict
-from fnmatch import fnmatchcase
 from typing import NamedTuple
 
 from ..docs_cites import _resolver
 from . import model
+from .join_index import (  # noqa: F401 - RepoFacts is re-exported
+    RepoFacts,
+    _Index,
+    _named,
+    _provided_kind,
+    _repos_named,
+    _route_hits,
+)
 from .model import Fact, Link
 
 _REPO_KIND = {model.CI: "ci", model.SUBMODULE: "source", model.REPO_DEP: "pin"}
@@ -37,12 +44,6 @@ _PRIVATE = (
 )  # fmt: skip
 
 
-class RepoFacts(NamedTuple):
-    provided: list[Fact]
-    mentioned: list[Fact]
-    files: frozenset[str]
-
-
 class Shared(NamedTuple):
     key: str
     repos: tuple[str, ...]
@@ -54,92 +55,25 @@ class Result(NamedTuple):
     shared: list[Shared]
 
 
-def _segs(route: str) -> list[str]:
-    return [s for s in route.split("/") if s]
+# Hyphenated words a sibling could be named but a sentence uses as plain words.
+_GENERIC_NAMES = frozenset(
+    {"pre-commit", "docker-compose", "read-only", "built-in", "end-to-end", "follow-up",
+     "real-time", "open-source", "self-hosted", "how-to", "e-mail", "set-up", "log-in"}
+)  # fmt: skip
 
 
-def _seg_eq(mention: list[str], provided: list[str]) -> bool:
-    """A provider's parameter takes any segment; every name it gives must be
-    matched by that name. A mention's ``*`` is unknown, so it matches only a
-    parameter: ``/messages/*`` is not ``/*/message``."""
-    if len(mention) != len(provided):
-        return False
-    return all(p == model.WILD or m == p for m, p in zip(mention, provided, strict=True))
-
-
-class _Index:
-    """Every provided name, by kind, with the repos and facts behind it."""
-
-    def __init__(self, repos: dict[str, RepoFacts]):
-        self.by: dict[str, dict[str, list[tuple[str, Fact]]]] = defaultdict(
-            lambda: defaultdict(list)
-        )
-        self.globs: list[tuple[str, Fact]] = []  # resources with a "*"
-        self.wild_hosts: list[tuple[str, Fact]] = []
-        self.routes_by_last: dict[str, list[tuple[str, Fact]]] = defaultdict(list)
-        self.image_by_last: dict[str, list[tuple[str, Fact]]] = defaultdict(list)
-        for rid, facts in repos.items():
-            for f in facts.provided:
-                self.by[f.kind][f.key].append((rid, f))
-                if f.kind == model.RESOURCE and "*" in f.key:
-                    self.globs.append((rid, f))
-                elif f.kind == model.HOST and f.key.startswith("*."):
-                    self.wild_hosts.append((rid, f))
-                elif f.kind == model.ROUTE and f.key not in model.GENERIC_ROUTES:
-                    last = (_segs(f.key) or [""])[-1]
-                    self.routes_by_last[last].append((rid, f))
-                elif f.kind == model.IMAGE:
-                    self.image_by_last[f.key.rpartition("/")[2]].append((rid, f))
-        self.idents = sorted(repos)
-        self.by_name: dict[str, list[str]] = defaultdict(list)
-        for rid in self.idents:
-            self.by_name[rid.rpartition("/")[2]].append(rid)
-
-
-def _repos_named(ix: _Index, key: str) -> tuple[list[str], bool]:
-    """The repos a repo key names, and whether that reading is certain."""
-    if "/" in key:
-        if key in ix.by_name.get(key.rpartition("/")[2], []):
-            return [key], True
-        # a sibling known only by its folder name may be this owner/name
-        folder = [r for r in ix.by_name.get(key.rpartition("/")[2], []) if "/" not in r]
-        return folder, False
-    found = ix.by_name.get(key, [])
-    return list(found), len(found) == 1
-
-
-def _route_hits(ix: _Index, key: str) -> list[tuple[str, Fact, bool]]:
-    """(repo, provider fact, exact) for a mentioned route."""
-    if key in model.GENERIC_ROUTES or model.concrete(key) == 0:
+def _named_repo(rid: str, m: Fact, ix: _Index) -> list[Link]:
+    """A file that names a sibling outright leans on that repo as a whole. A bare
+    name is only as good as it is distinctive: a generic word is never one."""
+    if "/" not in m.key and m.key in _GENERIC_NAMES:
         return []
-    m = _segs(key)
-    cands = ix.routes_by_last.get(model.WILD, [])  # a provider parameter takes anything
-    if m[-1] != model.WILD:
-        cands = ix.routes_by_last.get(m[-1], []) + cands
+    targets, sure = _repos_named(ix, m.key)
+    targets = [t for t in targets if t != rid]
+    kind = m.detail if m.detail in model.LINK_KINDS else "mention"
     out = []
-    for rid, f in cands:
-        r = _segs(f.key)
-        if _seg_eq(m, r) and model.concrete(f.key) >= 1:
-            out.append((rid, f, True))
-        elif len(m) > len(r) and model.concrete(f.key) >= 2 and _seg_eq(m[-len(r) :], r):
-            out.append((rid, f, False))
-    return out
-
-
-def _provided_kind(kind: str) -> str:
-    return {model.DEP: model.PACKAGE, model.NAME: model.RESOURCE}.get(kind, kind)
-
-
-def _named(ix: _Index, m: Fact) -> list[tuple[str, Fact, str | None]]:
-    """(repo, provider fact, loose-match flag or None) for a named mention."""
-    out = [(rid, f, None) for rid, f in ix.by[_provided_kind(m.kind)].get(m.key, [])]
-    if m.kind == model.HOST:
-        out += [(r, f, "wildcard") for r, f in ix.wild_hosts if m.key.endswith(f.key[1:])]
-    elif m.kind == model.NAME:
-        out += [(r, f, "pattern") for r, f in ix.globs if fnmatchcase(m.key, f.key)]
-    elif m.kind == model.IMAGE:
-        last = m.key.rpartition("/")[2]
-        out += [(r, f, "partial") for r, f in ix.image_by_last.get(last, []) if f.key != m.key]
+    for t in targets:
+        flags = ["named"] + (["ambiguous"] if len(targets) > 1 else [] if sure else ["by-name"])
+        out.append(_link(rid, m, t, None, kind, flags))
     return out
 
 
@@ -173,6 +107,8 @@ _LINK_KIND = {
 
 def _for(rid: str, m: Fact, ix: _Index, repos: dict[str, RepoFacts], hosts_in) -> list[Link]:
     """The links one mention makes."""
+    if m.kind == model.REPO_NAME:
+        return _named_repo(rid, m, ix)
     if m.kind in _REPO_KIND or m.kind in (model.CITE, model.DOC):
         targets, sure = _repos_named(ix, m.key)
         targets = [t for t in targets if t != rid]
@@ -261,8 +197,19 @@ def join(repos: dict[str, RepoFacts]) -> Result:
                 k = (lk.src, lk.src_path, lk.dst, lk.dst_path, lk.kind, lk.key)
                 if k not in best or lk.src_line < best[k].src_line:
                     best[k] = lk
+    # a file that names a repo AND links to it some stronger way keeps the stronger link
+    # and one file naming a repo twice (as owner/name and by name) is one named link
+    stronger = {(lk.src, lk.src_path, lk.dst) for lk in best.values() if "named" not in lk.flags}
+    kept, named_seen = [], set()
+    for lk in sorted(best.values(), key=lambda lk: (lk.src_line, "/" not in lk.key)):
+        where = (lk.src, lk.src_path, lk.dst)
+        if "named" in lk.flags:
+            if where in stronger or where in named_seen:
+                continue
+            named_seen.add(where)
+        kept.append(lk)
     found = sorted(
-        best.values(),
+        kept,
         key=lambda lk: (lk.dst, lk.dst_path or "", lk.src, lk.src_path, lk.src_line, lk.kind),
     )
     return Result(found, _shared(repos, ix))

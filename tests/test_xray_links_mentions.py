@@ -22,6 +22,7 @@ from gingugu.xray.links.model import (
     IMAGE,
     NAME,
     REPO_DEP,
+    REPO_NAME,
     ROUTE,
     SUBMODULE,
 )  # fmt: skip
@@ -302,7 +303,82 @@ def test_emails_and_versions_are_not_cites():
     assert keys(files, CITE) == set()
 
 
+# --- a repo named outright (measured on a real ecosystem: the most common link) -----------
+
+
+def _named(files):
+    return {(f.key, f.detail, f.path) for f in mentions.extract(files) if f.kind == REPO_NAME}
+
+
+def test_a_repo_named_in_a_comment_a_sentence_or_a_path():
+    files = {
+        ".github/settings.yml": "# Managed by acme-kit. Apply via the sync workflow\n",
+        "README.md": "The hook lives in acme-gateway and runs on the edge gateway.\n",
+        "scripts/rig.py": 'ext = Path.home() / "GIT/acme-sidecar"\n',
+        "src/a.py": '"""The server side is Acme-Org/acme-ledger."""\n',
+    }
+    got = _named(files)
+    assert ("acme-kit", "mention", ".github/settings.yml") in got
+    assert ("acme-gateway", "docs", "README.md") in got
+    assert ("acme-sidecar", "mention", "scripts/rig.py") in got
+    assert ("acme-org/acme-ledger", "mention", "src/a.py") in got
+
+
+def test_github_urls_name_repos_releases_are_pins_and_repourl_deploys():
+    files = {
+        "platform/release.yaml": (
+            "url: https://github.com/Acme/side-car/releases/download/v0.1.37/side-car-linux-x64\n"
+        ),
+        "apps/a.yaml": "  repoURL: https://github.com/Acme/Platform.git\n",
+        "docs/x.md": "See https://github.com/acme/kit/blob/main/README.md\n",
+    }
+    assert got(files, REPO_DEP) == {("acme/side-car", "v0.1.37")}
+    named = _named(files)
+    assert ("acme/platform", "deploy", "apps/a.yaml") in named
+    assert ("acme/kit", "docs", "docs/x.md") in named
+
+
+def test_plain_words_identifiers_and_file_names_are_not_repo_names():
+    files = {"src/a.py": "max_files = ledger_core.py\nfrom x import y\n", "a.md": "a b c\n"}
+    assert {k for k, _d, _p in _named(files)} <= set()
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "use sk-proj-abcdEFGH12345678ijkl-MNOP\n",
+        "token: glpat-abcdefgh-ijklmnop\n",
+        "see ghp_abcdefghijklmnopqrstuvwxyz0123456789 in the doc\n",
+        "build release-9f8e7d6c5b4a3f2e1d0c\n",
+        "acme/sk-live-abc123def456ghi789jkl0\n",
+        "password = hunter2-hunter2-again\n",
+    ],
+)
+def test_credential_shaped_tokens_are_never_repo_names(line):
+    files = {"README.md": line, "src/a.py": line, "conf/app.yaml": line}
+    assert _named(files) == set()
+
+
+def test_an_env_file_names_no_repos():
+    assert _named({".env.local": "SIBLING=acme-kit\n"}) == set()
+
+
+def test_underscore_names_only_in_docs():
+    files = {"README.md": "Clone pill_manager first.\n", "src/a.py": "pill_manager = 1\n"}
+    assert {(k, p) for k, _d, p in _named(files)} == {("pill_manager", "README.md")}
+
+
+def test_double_backtick_code_spans_in_comments_are_literals():
+    src = '"""Calls the ledger\'s ``/internal/resolve`` per request."""\n'
+    assert "/internal/resolve" in keys({"guardrails/r.py": src}, ROUTE)
+
+
 # --- docs prose ---------------------------------------------------------------------------
+
+
+def test_doc_refs_read_through_markdown_emphasis():
+    text = "now lives in\n**Acme-Org/acme-gateway**, as `guardrails/resolver.py`\n"
+    assert ("acme-org/acme-gateway", "guardrails/resolver.py") in mentions.doc_refs(text)
 
 
 def test_doc_refs_prose_owner_qualified_and_links():

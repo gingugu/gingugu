@@ -33,11 +33,12 @@ DEP = "dep"  # key: as PACKAGE; detail: the version spec
 NAME = "name"  # key: a resource-shaped literal, matched against RESOURCE
 CITE = "cite"  # key: "owner/name" or "name"; detail: sha; target: cited path ("" if none)
 DOC = "doc"  # key: "owner/name" or "name"; target: path in that repo
+REPO_NAME = "repo-name"  # key: a repo-shaped name or "owner/name" anywhere; detail: link kind
 # IMAGE, HOST and ROUTE are mentioned under the same names they are provided.
-MENTIONED = (CI, SUBMODULE, REPO_DEP, DEP, IMAGE, HOST, ROUTE, NAME, CITE, DOC)
+MENTIONED = (CI, SUBMODULE, REPO_DEP, DEP, IMAGE, HOST, ROUTE, NAME, CITE, DOC, REPO_NAME)
 
 # --- link kinds (what the edge means, for the agent) -------------------------
-LINK_KINDS = ("ci", "source", "pin", "deploy", "runtime", "data", "cite", "docs")
+LINK_KINDS = ("ci", "source", "pin", "deploy", "runtime", "data", "cite", "docs", "mention")
 
 DOC_EXTS = (".md", ".mdx", ".markdown", ".rst", ".txt", ".adoc")
 CODE_EXTS = (

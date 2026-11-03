@@ -111,7 +111,8 @@ def test_past_the_budget_a_repo_keeps_its_cache_and_counts_what_it_did_not_read(
     index.read(a, state, budget_s=10)
     (a / "svc/api.py").write_text('@app.get("/changed/route")\n')
     e = index.read(a, state, budget_s=0)
-    assert e.partial.get("acme/svc-a") == 1
+    # past the budget not even a stat runs: every wanted file counts as unchecked
+    assert e.partial.get("acme/svc-a") == 2
     routes = {f.key for f in e.repos["acme/svc-a"].provided if f.kind == model.ROUTE}
     assert routes == {"/internal/resolve"}  # the stale entry, flagged by the count
 
@@ -150,6 +151,50 @@ def test_a_symlink_out_of_the_checkout_is_never_read(eco, tmp_path):
     _git(a, "commit", "-q", "-m", "link")
     e = index.read(a, state, budget_s=10)
     assert not any(f.key == "leaked.acme.io" for f in e.repos["acme/svc-a"].provided)
+
+
+def test_a_linked_directory_out_of_the_checkout_is_never_read(eco, tmp_path):
+    a, state = eco
+    outside = tmp_path / "outside"
+    (outside / "k8s").mkdir(parents=True)
+    (outside / "k8s/i.yaml").write_text(
+        "kind: Ingress\nspec:\n  rules:\n    - host: leak.acme.io\n"
+    )
+    os.symlink(outside / "k8s", a / "deploy")
+    # a crafted index can list a name under the link; the reader must refuse it
+    found = index._Inside(a)("deploy/i.yaml")
+    assert found is None
+    assert index._Inside(a)("svc/api.py") is not None
+
+
+def test_a_crafted_deep_name_is_refused_and_the_dir_cache_stays_bounded(eco):
+    a, _state = eco
+    inside = index._Inside(a)
+    assert inside("/".join(["a"] * 100) + "/f.json") is None
+    for i in range(index._Inside.MAX_DIRS + 50):
+        inside(f"d{i}/x/f.json")
+    assert len(inside.dirs) <= index._Inside.MAX_DIRS + 3
+
+
+def test_a_hung_sibling_is_left_behind_at_the_deadline_plus_grace(monkeypatch):
+    import threading
+    import time as _t
+
+    from gingugu.xray.links import walk
+
+    monkeypatch.setattr(walk, "GRACE_S", 0.2)
+    stop = threading.Event()
+
+    def work(x):
+        if x == "hung":
+            stop.wait(30)
+        return x
+
+    start = _t.monotonic()
+    out = walk.gather(["a", "hung", "b"], work, _t.monotonic() + 0.1)
+    stop.set()
+    assert _t.monotonic() - start < 2
+    assert out[0] == "a" and out[2] == "b" and out[1] is walk.LATE
 
 
 @pytest.mark.parametrize(

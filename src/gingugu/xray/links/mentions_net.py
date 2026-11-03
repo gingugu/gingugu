@@ -24,7 +24,9 @@ _EXT = re.compile(r"\.[A-Za-z0-9]{1,8}$")
 
 
 def literals(line: str) -> list[str]:
-    """Quoted string literals (", ', `) on one line, each at most 500 chars."""
+    """Quoted string literals (", ', `) on one line, each at most 500 chars. A
+    doubled backtick (an RST or markdown code span in a comment) counts as one."""
+    line = line.replace("``", "`")
     out: list[str] = []
     pos = 0
     while True:
@@ -44,17 +46,22 @@ def _route_in(lit: str) -> str | None:
     if lit.startswith("/"):
         return None if lit.startswith("//") else norm_route(lit)
     for k, ch in enumerate(lit):
-        if ch in "})" and lit.startswith("/", k + 1):
-            return norm_route(lit[k + 1 :])
+        if ch in "})`" and lit.startswith("/", k + 1):  # `{base}/x`, `(url)/x`, a `/code` span
+            rest = lit[k + 1 :]
+            if ch == "`":  # a code span inside prose: the path ends where the span does
+                rest = rest.split("`", 1)[0]
+            return norm_route(rest)
     return None
 
 
 # A NAME is kept in the links cache on disk, so a value that may be a credential is
 # never one: not on a line that sets something secret-named, and not when any part
 # of it looks random (a key, a token, a hash). Resource names are words.
+# A line that SETS something secret-named (``API_KEY=``, ``client_secret:``), not one
+# that merely says the word: a repo called "auth-service" is still named.
 _SECRETISH = re.compile(
-    r"secret|token|passw|pwd|api[_-]?key|apikey|private[_-]?key|credential|auth|bearer"
-    r"|session|cookie|signature|salt|dsn|license",
+    r"(?:secret|token|passw|pwd|api[_-]?key|apikey|private[_-]?key|credential|auth|bearer"
+    r"|session|cookie|signature|salt|dsn|license)[\w.-]*[\"']?\s*[:=]",
     re.IGNORECASE,
 )
 _PART = re.compile(r"[-_.]")

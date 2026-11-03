@@ -44,10 +44,10 @@ def normalize(url: str) -> str | None:
     return name if valid(name) else None
 
 
-def of(root: Path) -> str | None:
+def of(root: Path, timeout: float = 3) -> str | None:
     """A checkout's identity: its origin, else its folder name."""
     try:
-        proc = scan.git(root, "config", "--get", "remote.origin.url", timeout=3)
+        proc = scan.git(root, "config", "--get", "remote.origin.url", timeout=timeout)
     except XrayError:
         proc = None
     if proc is not None and proc.returncode == 0:
