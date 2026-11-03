@@ -358,6 +358,8 @@ def test_doc_facts_come_only_from_docs():
         "`" * 200000,
         '"' * 200000,
     ],
+    # short ids: pytest puts the id in PYTEST_CURRENT_TEST, capped at 32767 on Windows
+    ids=lambda t: f"{t[:12]!r}x{len(t)}",
 )
 def test_hostile_text_finishes_fast(text):
     start = time.monotonic()

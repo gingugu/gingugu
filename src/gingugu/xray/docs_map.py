@@ -111,6 +111,8 @@ def _read_text(path: Path) -> str:
     ``_inside`` checked the name; a checkout can still swap the file for a link or
     a FIFO before this open, so the open itself refuses a link and never blocks,
     and what it opened must be a regular file."""
+    if not hasattr(os, "O_NOFOLLOW") and os.path.islink(path):
+        raise OSError(f"a link: {path}")  # Windows has no O_NOFOLLOW: check, then open
     fd = os.open(path, _OPEN_FLAGS)
     with os.fdopen(fd, "rb") as handle:
         if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):

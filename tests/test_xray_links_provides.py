@@ -392,6 +392,8 @@ def test_tests_and_fixtures_provide_nothing(path):
         "tags: |\n" + "  x:" * 60000 + "\n",
         "kind: Ingress\n" + "    - host: " * 20000 + "\n",
     ],
+    # short ids: pytest puts the id in PYTEST_CURRENT_TEST, capped at 32767 on Windows
+    ids=lambda t: f"{t[:12]!r}x{len(t)}",
 )
 def test_hostile_text_finishes_fast(text):
     start = time.monotonic()
