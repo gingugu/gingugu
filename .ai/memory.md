@@ -511,12 +511,16 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.45.1** (PyPI, 2026-11-03). Patch: the startup contract and
+- Current version: **0.46.0** (PyPI, 2026-11-03). Minor: X23 cross-repo links -
+  `code_xray` `links` / `gingugu xray links` and the brief's "Other repos leaning on these
+  files" + "Ripple across repos", zero-config over sibling checkouts; the docs map reads
+  owner-qualified paths and prose (#176).
+- 0.45.1 (PyPI, 2026-11-03). Patch: the startup contract and
   protocol block forbid the board watcher under Claude Code's `Monitor` (#175).
 - 0.45.0 (PyPI, 2026-11-02). Minor: X22 docs map - `code_xray`
   `docs` / `gingugu xray docs` and the X-ray brief's "Docs citing the changed files" and
   "Docs still citing a deleted or renamed file" sections, over this repo's docs and
-  sibling checkouts' tracked docs (repo-qualified paths and GitHub links; owner-qualified paths and prose added by X23, unreleased); client only,
+  sibling checkouts' tracked docs (repo-qualified paths and GitHub links; owner-qualified paths and prose added by X23 in 0.46.0); client only,
   `MEMORY_XRAY_DOCS` (#174). No migration.
 - 0.44.0 (PyPI, 2026-11-02). Minor: a minion never spawns a
   minion (`minion_fence` denies `Agent`/`Task` inside a subagent), and `gingugu
