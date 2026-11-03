@@ -49,8 +49,29 @@ def _route_in(lit: str) -> str | None:
     return None
 
 
+# A NAME is kept in the links cache on disk, so a value that may be a credential is
+# never one: not on a line that sets something secret-named, and not when any part
+# of it looks random (a key, a token, a hash). Resource names are words.
+_SECRETISH = re.compile(
+    r"secret|token|passw|pwd|api[_-]?key|apikey|private[_-]?key|credential|auth|bearer"
+    r"|session|cookie|signature|salt|dsn|license",
+    re.IGNORECASE,
+)
+_PART = re.compile(r"[-_.]")
+
+
+def _random_part(value: str) -> bool:
+    for part in _PART.split(value):
+        has_digit = any(c.isdigit() for c in part)
+        if len(part) >= 16 and has_digit and any(c.isalpha() for c in part):
+            return True
+        if len(part) >= 12 and has_digit and all(c in "0123456789abcdefABCDEF" for c in part):
+            return True
+    return False
+
+
 def _name_shaped(value: str) -> bool:
-    if not _NAME.fullmatch(value):
+    if not _NAME.fullmatch(value) or _random_part(value):
         return False
     return len(value) >= 6 or any(c in value for c in "-_.")
 
@@ -76,12 +97,14 @@ def scan_net(path: str, lines: list[str], sink: Sink, code: bool) -> None:
         kv = _KV_HOST.match(ln) if "host" in ln.lower() else None
         if kv and "host" in kv.group(1).lower() and (kv.group(2) or not code):
             sink.add(HOST, norm_host(kv.group(3)), path, n)
+        secretish = bool(_SECRETISH.search(ln))
         for lit in literals(ln):
             route = _route_in(lit)
             if route and route != "/":
                 sink.add(ROUTE, route, path, n)
-            _add_name(sink, lit, path, n)
-        if not code:
+            if not secretish:
+                _add_name(sink, lit, path, n)
+        if not code and not secretish:
             m = _KV_VALUE.match(ln)
             if m:
                 _add_name(sink, m.group(1), path, n)
