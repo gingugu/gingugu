@@ -17,6 +17,7 @@ reaches the brain.
 
 from __future__ import annotations
 
+import os
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -25,7 +26,7 @@ from typing import NamedTuple
 from .. import repo_id, scan
 from ..brief import _safe
 from ..docs_map import _candidates, _names, _read_text
-from . import cache, generated, model, walk
+from . import cache, generated, model, pool, walk
 from .cache import EXTRACT_VERSION, MAX_CACHE_BYTES, MAX_STR  # noqa: F401 - re-exported
 from .join import RepoFacts
 from .model import Fact
@@ -147,13 +148,36 @@ def scan_repo(
     own: bool,
     extract: Extract,
     ident: str = "",
+    procs: pool.Pool | None = None,
 ) -> tuple[RepoFacts, int]:
-    """(facts, files left unread). Raises ``scan.XrayError`` when git cannot list it."""
+    """(facts, files left unread). Raises ``scan.XrayError`` when git cannot list it.
+    Cold files go to ``procs`` when it wants them (a deliberate read with many)."""
     names = _listing(root, own, max(0.5, min(GIT_TIMEOUT_S, deadline - time.monotonic())))
     cached_ident, old = cache.load(root, state_dir)
     inside = walk.Inside(root)
     entries: cache.Entries = {}
     unread = 0
+    cold: list[tuple[str, os.stat_result, str]] = []  # (name, stat, text) to extract
+
+    def flush() -> int:
+        """Send the held cold files to the pool; the count it could not finish."""
+        left = 0
+        done = procs.run([(n, t) for n, _s, t in cold], deadline)
+        for (name, st, text), res in zip(cold, done, strict=True):
+            if res is None and procs.broken and time.monotonic() < deadline:
+                try:  # the pool broke: this file runs here instead of going unread
+                    res = extract(name, text)
+                except Exception:  # noqa: BLE001
+                    res = ([], [])
+            if res is None:
+                left += 1
+                if name in old:
+                    entries[name] = old[name]
+                continue
+            entries[name] = (st.st_size, st.st_mtime_ns, _cap(res[0]), _cap(res[1]))
+        cold.clear()
+        return left
+
     kept = [n for n in names if model.wanted(n) and not generated.by_name(n)]
     for name in kept[:MAX_FILES]:
         prev = old.get(name)
@@ -173,13 +197,23 @@ def scan_repo(
             continue  # checked again, uncached, right before it is opened
         try:
             text = _read_text(full)
-            # a generator's marker in the head: cached as nothing, so never read again
-            provided, mentioned = ([], []) if generated.by_head(text) else extract(name, text)
         except OSError:
             continue
+        if generated.by_head(text):  # a generator's marker: cached as nothing, never re-read
+            entries[name] = (st.st_size, st.st_mtime_ns, [], [])
+            continue
+        if procs is not None and procs.wants(len(kept)):
+            cold.append((name, st, text))
+            if len(cold) >= procs.batch:  # held texts stay bounded
+                unread += flush()
+            continue
+        try:
+            provided, mentioned = extract(name, text)
         except Exception:  # noqa: BLE001 - one odd file never costs the repo
             provided, mentioned = [], []
         entries[name] = (st.st_size, st.st_mtime_ns, _cap(provided), _cap(mentioned))
+    if cold:
+        unread += flush()
     if entries != old or cached_ident != ident:
         cache.save(root, state_dir, ident, entries)
     return _assemble(entries, frozenset(names)), unread
@@ -189,7 +223,7 @@ def _folder(child: Path) -> str:
     return _safe(child.name)
 
 
-def _sibling(child: Path, me: str, state_dir: Path, deadline: float, extract: Extract):
+def _sibling(child: Path, me: str, state_dir: Path, deadline: float, extract: Extract, procs=None):
     """(ident, checkout, facts, unread), ("unscanned", folder), or None (skip it).
     Past the budget no git is run: a cached sibling is served unchecked."""
     try:
@@ -206,7 +240,7 @@ def _sibling(child: Path, me: str, state_dir: Path, deadline: float, extract: Ex
             return None  # this repo elsewhere (a worktree, a clone), or a bad name
         try:
             facts, left = scan_repo(
-                child, state_dir, deadline, own=False, extract=extract, ident=ident
+                child, state_dir, deadline, own=False, extract=extract, ident=ident, procs=procs
             )
         except (scan.XrayError, OSError):
             return ("unscanned", _folder(child))
@@ -224,6 +258,8 @@ def read(
     budget no sibling is asked anything: one with a cache is served from it
     unchecked (every cached file counted as unread), one without is unscanned.
     Two checkouts of one repo: the first, in folder order, is the one read."""
+    # worker processes only for a deliberate read with the default (importable) extractors
+    procs = pool.Pool(extract is None and budget_s >= pool.MIN_BUDGET_S)
     extract = extract or _default_extract
     deadline = time.monotonic() + budget_s
     me = repo_id.of(root) or "this-repo"
@@ -231,13 +267,18 @@ def read(
     repos: dict[str, RepoFacts] = {}
     partial: dict[str, int] = {}
     unscanned: list[str] = []
-    repos[me], left = scan_repo(root, state_dir, deadline, own=True, extract=extract, ident=me)
+    try:
+        repos[me], left = scan_repo(
+            root, state_dir, deadline, own=True, extract=extract, ident=me, procs=procs
+        )
+        children = _candidates(root)
+        results = walk.gather(
+            children, lambda c: _sibling(c, me, state_dir, deadline, extract, procs), deadline
+        )
+    finally:
+        procs.close()
     if left:
         partial[me] = left
-    children = _candidates(root)
-    results = walk.gather(
-        children, lambda c: _sibling(c, me, state_dir, deadline, extract), deadline
-    )
     for child, res in zip(children, results, strict=True):  # folder order: duplicates resolve alike
         if res is walk.LATE:
             unscanned.append(_folder(child))

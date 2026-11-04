@@ -5,7 +5,7 @@ _Last updated: 2026-11-03 (X23 hook lines, named-repo recall, generated-code ski
 ## In Flight
 
 **X23 hook lines, named-repo recall and read speed (2026-11-03, branch
-`feature/xray-links-recall`; RELEASED in 0.47.0 with #178).** On top of 0.46.0. Recall: a sibling
+`feature/xray-links-recall`; RELEASED in 0.47.0 with #178; cold reads on worker processes - 48 checkouts ~9s, branch `feature/xray-links-pool`).** On top of 0.46.0. Recall: a sibling
 repo named outright (bare hyphenated name, `owner/name`, GitHub URL; a `releases/download/<tag>/`
 asset is a `pin`, an ArgoCD `repoURL` a `deploy`) is a whole-repo link of the file's kind
 (`docs`, `ci`, new kind `mention`) flagged `named`, joined only when it names a checkout read
