@@ -512,7 +512,8 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.47.0** (PyPI, 2026-11-03). Minor: X23 links read repos named
+- Current version: **0.47.1** (PyPI, 2026-11-03). Patch: X23 cold reads on worker processes (48 checkouts ~9s, #179); first release cut from the rewritten, work-name-free history.
+- 0.47.0 (PyPI, 2026-11-03). Minor: X23 links read repos named
   outright (edge-level recall 11/26 -> 21/26 on a real ecosystem), the read hook and
   edit note name outside dependents, generated code skipped (cold read of 48 checkouts
   56s -> 19.5s), `gingugu xray links --warm` run by `fleet.py upgrade` (#177, #178).
