@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.47.1] - 2026-11-03
+
 ### Changed
 
 - **X23 cold reads run on worker processes: 48 checkouts in about 9s (was 20s).** After
