@@ -81,10 +81,12 @@
       "Bash(npm ci:*)",
       "Bash(npm install:*)"
     ],
+    "ask": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)"
+    ],
     "deny": [
       "Agent(model:opus)",
-      "Bash(git push --force:*)",
-      "Bash(git push -f:*)",
       "Bash(git reset --hard:*)",
       "Bash(rm -rf:*)",
       "Bash(npm publish:*)",

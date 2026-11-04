@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **X23 cold reads run on worker processes: 48 checkouts in about 9s (was 20s).** After
+  generated code is skipped, what is left of a cold read is pure-Python scanning spread
+  over every file type, which threads cannot overlap. A deliberate read (the `links`
+  action, `gingugu xray links --warm`) with 64 or more cold files in a repo now hands
+  them to a process pool, in bounded batches; a hook never starts one. A chunk not back
+  by the deadline counts as unread like any file past the budget, and if the pool breaks
+  the files are extracted in-process instead, so a failure costs speed, never facts.
+  The pool is used only from a guarded `__main__` (every `gingugu` entry point is one),
+  since worker processes re-import it.
+
 ---
 
 ## [0.47.0] - 2026-11-03
