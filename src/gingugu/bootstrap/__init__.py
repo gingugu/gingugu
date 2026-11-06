@@ -30,6 +30,19 @@ from .settings import (
     merge_settings,
     write_settings,
 )
+from .shipped import previous_versions
+
+# The hook scripts `init` installs in .claude/hooks, each from `<name>.tmpl`.
+_HOOK_FILES = (
+    "session_start.py",
+    "stop.py",
+    "user_prompt_recall.py",
+    "pre_tool_tripwire.py",
+    "post_tool_xray.py",
+    "post_bash_xray.py",
+    "post_edit_xray.py",
+    "subagent_warmup.py",
+)
 
 CLIENT_RULES_FILES = {
     "windsurf": ".windsurfrules",
@@ -79,62 +92,18 @@ def init_claude_code(
     skill_path = target / ".claude" / "skills" / "sink-the-ship" / "SKILL.md"
     legacy_command = target / ".claude" / "commands" / "sink-the-ship.md"
 
-    _write_file(
-        hooks_dir / "session_start.py",
-        _read_template("session_start.py.tmpl"),
-        force=force,
-        dry_run=dry_run,
-        results=results,
-    )
-    _write_file(
-        hooks_dir / "stop.py",
-        _read_template("stop.py.tmpl"),
-        force=force,
-        dry_run=dry_run,
-        results=results,
-    )
-    _write_file(
-        hooks_dir / "user_prompt_recall.py",
-        _read_template("user_prompt_recall.py.tmpl"),
-        force=force,
-        dry_run=dry_run,
-        results=results,
-    )
-    _write_file(
-        hooks_dir / "pre_tool_tripwire.py",
-        _read_template("pre_tool_tripwire.py.tmpl"),
-        force=force,
-        dry_run=dry_run,
-        results=results,
-    )
-    _write_file(
-        hooks_dir / "post_tool_xray.py",
-        _read_template("post_tool_xray.py.tmpl"),
-        force=force,
-        dry_run=dry_run,
-        results=results,
-    )
-    _write_file(
-        hooks_dir / "post_bash_xray.py",
-        _read_template("post_bash_xray.py.tmpl"),
-        force=force,
-        dry_run=dry_run,
-        results=results,
-    )
-    _write_file(
-        hooks_dir / "post_edit_xray.py",
-        _read_template("post_edit_xray.py.tmpl"),
-        force=force,
-        dry_run=dry_run,
-        results=results,
-    )
-    _write_file(
-        hooks_dir / "subagent_warmup.py",
-        _read_template("subagent_warmup.py.tmpl"),
-        force=force,
-        dry_run=dry_run,
-        results=results,
-    )
+    # A hook that is a stock copy of an older template is refreshed without
+    # --force: see bootstrap/shipped.py.
+    for hook in _HOOK_FILES:
+        template = f"{hook}.tmpl"
+        _write_file(
+            hooks_dir / hook,
+            _read_template(template),
+            force=force,
+            dry_run=dry_run,
+            results=results,
+            previous=previous_versions(template),
+        )
     # `sink-the-ship` ships as a SKILL, not a `.claude/commands/*.md` slash
     # command. Anthropic documents the commands directory inside `skills.md` as
     # the predecessor format and says to prefer skills for new work: a command
