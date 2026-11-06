@@ -1346,6 +1346,11 @@ Environment variables (all optional):
 | `MEMORY_DREAM_IDLE_MINUTES` | `20` | How long the brain must go untouched before `gingugu dream --if-idle` will run. Also the threshold that cancels a run in progress when you come back |
 | `MEMORY_LOG_LEVEL` | `INFO` | Logging verbosity (logs go to **stderr** — stdout is the MCP transport) |
 | `MEMORY_DEBUG` | `false` | Convenience switch for `DEBUG` logging (`MEMORY_LOG_LEVEL` wins if also set) |
+| `GINGUGU_QUIET` | *(unset)* | Mute the CLI's techno loop. The human-facing commands (`init`, `harness`, `remote`, `credential`, `token`, `promote`, `embed`) play a short keygen show with a synthesized chiptune on a real terminal, through `afplay` / `paplay` / `aplay` / `winsound`; with no player there is no sound and no message. `gingugu party` (alias `iddqd`) plays the cracktro on demand |
+| `GINGUGU_CACHE_DIR` | *(user cache dir)* | Where the CLI caches its rendered techno loop (`c0r3-d3pth-<hash>.wav`) |
+| `GINGUGU_NO_ANIM` | *(unset)* | Keep the CLI's colours but print every screen once, without motion (also automatic under `CI`) |
+| `GINGUGU_PLAIN` | *(unset)* | Plain ASCII CLI output with the same words: no colour, motion or music. Also automatic on a pipe or file, and under `NO_COLOR` or `TERM=dumb` |
+| `GINGUGU_COLORS` / `GINGUGU_ASCII` | *(detected)* | Force the CLI colour level (`plain`, `16`, `256`, `truecolor`) or ASCII glyphs instead of box drawing and blocks. Detection reads `COLORTERM`, `TERM`, `TERM_PROGRAM`, `WT_SESSION` and the stream's encoding |
 
 The four `MEMORY_W_*` weights are **normalized at load** (`w_i / Σw`), so they
 need not sum to 1.0 — only their *ratios* matter. Setting all four to 0 falls
@@ -1386,7 +1391,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo). Deleting a namespace is a big delete: `confirm=true` plus your approval |
 | `memory_export` | Export memories + tags + relations to portable JSON |
 | `memory_import` | Restore a JSON export (skip or replace on conflict; a replace that overwrites memories needs `confirm=true`, plus your approval past 10) |
-| `memory_stats` | Health overview (dormancy, counts, coverage, review sweep, the `claims` backlog, a relation-graph block whose `orphan_sample` names the memories no edge reaches - `review_limit` raises every sample's cap, a `size` block reporting the character cost of the store and of the always-loaded pinned tier, and `query_log_rows`, the count of recorded queries); a comma-separated `namespace` list returns the global block once plus each namespace's own stats |
+| `memory_stats` | Health overview (dormancy, counts, coverage, review sweep, the `claims` backlog, a relation-graph block whose `orphan_sample` names the memories no edge reaches - `review_limit` raises every sample's cap, a `size` block reporting the character cost of the store and of the always-loaded pinned tier, and `query_log_rows`, the count of recorded queries; `credentials` counts this machine's vault and names it in `machine`, with a `note` at zero since the vault is per machine); a comma-separated `namespace` list returns the global block once plus each namespace's own stats |
 | `memory_search` | Advanced filtered search (type, tags, confidence, dates; one or many namespaces; optional compact mode; fetch by exact `ids`; `claims` to work the reconciliation backlog or read refs the prose never resolved, `orphans` to work the graph backlog, `pinned` to enumerate the always-present tier; `explain` for a per-hit score breakdown) |
 | `memory_excerpt` | Read inside ONE memory: find literal matches with their character offsets, line numbers and surrounding context, and/or slice an exact character range |
 | `credential_store` | Store/update a service credential bundle |

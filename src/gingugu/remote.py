@@ -13,7 +13,6 @@ import argparse
 import json
 import os
 import re
-import socket
 import ssl
 import subprocess
 import sys
@@ -26,7 +25,7 @@ from urllib.parse import urlparse
 
 import keyring
 
-from . import remote_tls
+from . import machine, remote_tls
 from .config import _default_db_path
 from .remote_args import USAGE, _UsageError, build_parser, ssh_argv
 
@@ -220,7 +219,7 @@ def _off() -> int:
 
 
 def _default_name() -> str:
-    return re.sub(r"[^a-z0-9._-]", "-", socket.gethostname().split(".")[0].lower())
+    return machine.name()
 
 
 def _login(args: argparse.Namespace) -> int:

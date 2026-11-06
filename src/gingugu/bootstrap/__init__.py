@@ -15,7 +15,6 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from . import theme
 from ._files import read_template as _read_template
 from ._files import retire_file as _retire_file
 from ._files import write_file as _write_file
@@ -281,5 +280,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         results = init_rules_file(args.client, target, force=args.force, dry_run=args.dry_run)
 
-    print(theme.render(results, dry_run=args.dry_run))
+    from .. import tui
+
+    tui.report(results, dry_run=args.dry_run, command="init", subject=target.name)
     return 0
