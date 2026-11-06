@@ -36,6 +36,19 @@ Never use the built-in `general-purpose` agent for minion work: it carries the
 Agent tool and the main thread's model. Pick one of the agents above and name its
 tier. A minion that tries to spawn its own is denied by `gingugu hook tool`.
 
+### Forks: parallel hard work
+
+Opus work - design, tests for an unsettled design, debugging - is never handed to
+a cold minion. When there is more than one thread of it, **fork**: the Agent tool
+with `subagent_type: "fork"` (or `/subtask`). A fork inherits the whole
+conversation, system prompt and model, so it is a branch of the main thread, not
+a briefing; `gingugu hook tool` gives it the main thread's rights. Pass
+`isolation: "worktree"` when it writes files. A fork cannot fork again.
+
+Split hard parallel work across forks, let each one design and write the tests,
+and approve its verdict on the main thread. Once a design is settled, its
+implementation goes to a Sonnet minion working against those tests.
+
 ### Logs
 
 Hook events are logged as JSON lines in `logs/*.jsonl` - metadata only (tool,

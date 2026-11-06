@@ -188,9 +188,23 @@ def _checkout_guard(payload: dict) -> bool:
     return True
 
 
+def _destructive(payload: dict) -> bool:
+    """Ask the person about a big delete (``destructive``). True = decided."""
+    try:
+        from . import destructive
+        from .config import load_config
+
+        out = destructive.hook_output(payload, load_config().db_path.parent)
+    except Exception:  # noqa: BLE001 - a guard bug never breaks the hook
+        return False
+    if out:
+        print(json.dumps(out))
+    return bool(out)
+
+
 def run(payload: dict) -> int:
     """Decide and print. Returns the process exit code (always 0)."""
-    if _minion_and_spawn(payload) or _checkout_guard(payload):
+    if _minion_and_spawn(payload) or _checkout_guard(payload) or _destructive(payload):
         return 0
     from .xray.tool_xray import reason as xray_reason
 

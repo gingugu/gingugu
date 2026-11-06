@@ -180,9 +180,15 @@ def _mcp_reason(tool_name: str, tool_input: dict) -> str | None:
     )
 
 
+# A fork (`subagent_type: "fork"`, `/subtask`) inherits the whole conversation,
+# system prompt and model: a branch of the main thread, not a cold minion, so it
+# gets the main thread's rights. Claude Code forbids a fork from forking again.
+FORK = "fork"
+
+
 def decide(payload: dict, data_dir: Path) -> str | None:
     """Why this subagent call is refused, or None to let it through."""
-    if not payload.get("agent_id"):
+    if not payload.get("agent_id") or payload.get("agent_type") == FORK:
         return None
     tool_name = str(payload.get("tool_name") or "")
     if tool_name in _SPAWN_TOOLS:

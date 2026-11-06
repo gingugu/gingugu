@@ -1,13 +1,12 @@
 """Credential vault tool handlers: store / get / list / delete.
 
-``credential_delete`` asks the user through the client, never the model (see
-``confirm``); its ``confirm`` argument is the model's and only ever says no. No
+``credential_delete`` needs a confirmation (see ``confirm``): the caller's
+``confirm=true``, or the user's in a dialog when it is omitted. No
 ``from __future__ import annotations``: ``Resolve(_ask_delete)`` names a closure.
 """
 
 import json
 import logging
-import shlex
 from typing import Annotated
 
 from mcp.server.elicitation import ElicitationResult
@@ -15,20 +14,12 @@ from mcp.server.mcpserver import Context
 from mcp.server.mcpserver.resolve import Resolve
 
 from .. import confirm as confirmation
+from .. import destructive
 from ..credentials import CredentialVault
 from . import ServerContext
 from .helpers import _err
 
 logger = logging.getLogger(__name__)
-
-
-def _by_hand(service_name: str, field_name: str | None) -> str | None:
-    """The terminal command that deletes the same thing, for a client with no dialog.
-    None for a name that would not show as itself in that command."""
-    if not all(confirmation.plain(n) for n in (service_name, field_name or "")):
-        return None
-    field = f" --field {shlex.quote(field_name)}" if field_name else ""
-    return f"run `gingugu credential delete {shlex.quote(service_name)}{field}` in a terminal"
 
 
 def register(mcp, ctx: ServerContext) -> None:
@@ -42,10 +33,11 @@ def register(mcp, ctx: ServerContext) -> None:
         return field_name in entry["non_secret_fields"] or field_name in entry["secret_field_names"]
 
     async def _ask_delete(
-        ctx_: Context, service_name: str, confirm: bool = True, field_name: str | None = None
+        ctx_: Context,
+        service_name: str,
+        confirm: bool | None = None,
+        field_name: str | None = None,
     ) -> object:
-        if confirm is not True:
-            return confirmation.NOT_NEEDED  # the body refuses before reading the answer
         if confirmation.fenced(ctx, "credential_delete") is None:
             return confirmation.FENCED
         if not _exists(service_name, field_name):
@@ -61,6 +53,12 @@ def register(mcp, ctx: ServerContext) -> None:
             f"Permanently delete credential {target} from this machine's keychain? "
             "This cannot be undone.",
             ctx.transport,
+            confirm,
+            destructive.gate(
+                ctx,
+                "credential_delete",
+                {"service_name": service_name, "field_name": field_name},
+            ),
         )
 
     def _write_into(service_name: str, field_list, into: str, reveal: bool) -> dict:
@@ -165,7 +163,7 @@ def register(mcp, ctx: ServerContext) -> None:
     @mcp.tool()
     def credential_delete(
         service_name: str,
-        confirm: bool = True,
+        confirm: bool | None = None,
         field_name: str | None = None,
         answer: Annotated[ElicitationResult[confirmation.Confirm], Resolve(_ask_delete)] = None,
     ) -> dict:
@@ -173,19 +171,16 @@ def register(mcp, ctx: ServerContext) -> None:
         deleted from the OS keychain. This action is irreversible — there is no
         soft-delete for credentials. Use credential_list first to confirm what exists.
 
-        The user confirms the deletion through the client; it is refused if they
-        decline or the client cannot ask. ``confirm=False`` refuses outright.
+        Ask the user first and pass ``confirm=true`` once they agree;
+        ``confirm=false`` refuses. Omitted, a client that can show a dialog asks the
+        user there.
         ``field_name`` deletes only that field from the service; omit to delete the
         entire service and all its fields."""
         try:
-            if not confirm:
-                return _err("confirm must be true to delete")
             target = field_name or service_name
             if not _exists(service_name, field_name):
                 return _err(f"nothing deleted; {target!r} not found")
-            refused = confirmation.refusal(
-                answer, f"deleting credential {target!r}", _by_hand(service_name, field_name)
-            )
+            refused = confirmation.refusal(answer, f"deleting credential {target!r}")
             if refused is not None:
                 return _err(refused)
             ok = vault.delete(service_name, field_name)

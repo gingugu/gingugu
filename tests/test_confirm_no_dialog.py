@@ -132,44 +132,16 @@ async def _store_cred(server, person, mode, name="kraken-api"):
 
 
 @pytest.mark.parametrize("mode", MODES)
-async def test_a_refused_credential_delete_points_at_the_terminal(server, mode, monkeypatch):
+async def test_a_refused_credential_delete_says_how_to_go_ahead(server, mode, monkeypatch):
     monkeypatch.setenv(confirm.ENTRYPOINT, VSCODE)
     person = Person()
     await _store_cred(server, person, mode)
     out = await call(server, person, mode, "credential_delete", {"service_name": "kraken-api"})
     left = await call(server, person, mode, "credential_list", {})
     assert out["ok"] is False and "cannot ask" in out["error"]
-    assert "gingugu credential delete kraken-api" in out["error"]
+    assert "confirm=true" in out["error"] and "terminal" not in out["error"]
     assert person.asked == []
     assert [s["service_name"] for s in left["services"]] == ["kraken-api"]
-
-
-@pytest.mark.parametrize("mode", MODES)
-async def test_the_terminal_hint_quotes_what_the_model_named(server, mode, monkeypatch):
-    monkeypatch.setenv(confirm.ENTRYPOINT, VSCODE)
-    person = Person()
-    await _store_cred(server, person, mode, name="a b;rm")
-    out = await call(
-        server,
-        person,
-        mode,
-        "credential_delete",
-        {"service_name": "a b;rm", "field_name": "api_token"},
-    )
-    assert "gingugu credential delete 'a b;rm' --field api_token" in out["error"]
-
-
-@pytest.mark.parametrize("mode", MODES)
-@pytest.mark.parametrize("name", ["a`b", "a\u202eb", "a\nb"])
-async def test_no_terminal_hint_for_a_name_that_would_not_show_as_itself(
-    server, mode, monkeypatch, name
-):
-    monkeypatch.setenv(confirm.ENTRYPOINT, VSCODE)
-    person = Person()
-    await _store_cred(server, person, mode, name=name)
-    out = await call(server, person, mode, "credential_delete", {"service_name": name})
-    assert out["ok"] is False and "cannot ask" in out["error"]
-    assert "gingugu credential" not in out["error"]
 
 
 # --- through the proxy -------------------------------------------------------------------
@@ -207,7 +179,7 @@ async def test_the_brain_behind_the_proxy_is_told_the_client_cannot_ask(brain, m
     assert len(found) == 1
 
 
-async def test_the_proxys_vault_refuses_under_vscode_and_points_at_the_terminal(
+async def test_the_proxys_vault_refuses_under_vscode_and_says_how_to_go_ahead(
     brain, tmp_path, monkeypatch
 ):
     monkeypatch.setenv(confirm.ENTRYPOINT, VSCODE)
@@ -228,5 +200,5 @@ async def test_the_proxys_vault_refuses_under_vscode_and_points_at_the_terminal(
                 await session.call_tool("credential_delete", {"service_name": "kraken-api"})
             )
     assert out["ok"] is False and "cannot ask" in out["error"]
-    assert "gingugu credential delete kraken-api" in out["error"]
+    assert "confirm=true" in out["error"]
     assert person.asked == []

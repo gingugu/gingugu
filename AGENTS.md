@@ -271,6 +271,12 @@ watch item (see `.ai/plans/status.md`).
 
 - Define clear acceptance criteria before starting work
 - `uv run pytest -n auto` green before opening a PR
+- **In a worktree, test the worktree.** Run `uv sync --extra dev` there, then
+  `.venv/bin/python -m pytest`. The editor may export `VIRTUAL_ENV` pointing at
+  the primary checkout's `.venv`: `uv sync --active` then re-points THAT venv's
+  editable install at your worktree, and a worktree venv without dev extras
+  makes `uv run pytest` fall back to the primary's pytest - testing someone
+  else's tree.
 - `ruff` + `black` clean
 - Surface performance characteristics (DB size, query latency) when relevant
 - Surface uncertainties — never guess

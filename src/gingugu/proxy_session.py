@@ -22,6 +22,7 @@ from mcp.types import (
     JSONRPCResponse,
 )
 
+from .proxy_gate import screen as _gate
 from .remote_tls import explain, is_clock, tls_failure, verify_for
 
 CRED_PREFIX = "credential_"
@@ -184,6 +185,9 @@ class Link:
         msg = item.message
         if not isinstance(msg, JSONRPCRequest):
             await self.srv_write.send(item)
+            return
+        if not replay and (refused := _gate(msg)) is not None:  # a replay passed it once
+            await self.client_write.send(refused)
             return
         self.pending[msg.id] = item
         if replay:

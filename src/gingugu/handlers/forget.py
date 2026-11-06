@@ -18,7 +18,8 @@ from mcp.server.elicitation import ElicitationResult
 from mcp.server.mcpserver import Context
 from mcp.server.mcpserver.resolve import Resolve
 
-from .. import confirm, grants
+from .. import confirm as confirmation
+from .. import grants
 from ..models import Confidence
 from . import ServerContext
 from .helpers import _err
@@ -27,23 +28,26 @@ logger = logging.getLogger(__name__)
 
 
 def register(mcp, ctx: ServerContext) -> None:
-    async def _ask(memory_id: str, ctx_: Context, hard_delete: bool = False) -> object:
+    async def _ask(
+        memory_id: str, ctx_: Context, hard_delete: bool = False, confirm: bool | None = None
+    ) -> object:
         if not hard_delete:
-            return confirm.NOT_NEEDED
-        grant = confirm.fenced(ctx, "memory_forget")
+            return confirmation.NOT_NEEDED
+        grant = confirmation.fenced(ctx, "memory_forget")
         if grant is None:
-            return confirm.FENCED  # the wrapper refuses; never show a dialog for it
+            return confirmation.FENCED  # the wrapper refuses; never show a dialog for it
         with grants.bind(grant, ctx.conn):
             mem = ctx.store.get(memory_id, record_access=False)
         if mem is None:
             # The body answers "not found" before it reads the answer, so this
             # never lets a delete through: it only spares the person a dialog.
-            return confirm.NOT_NEEDED
-        return confirm.ask(
+            return confirmation.NOT_NEEDED
+        return confirmation.ask(
             ctx_,
-            f"Permanently delete memory {confirm.shown(mem.title)} ({mem.id})? "
+            f"Permanently delete memory {confirmation.shown(mem.title)} ({mem.id})? "
             "This cannot be undone.",
             ctx.transport,
+            confirm,
         )
 
     @mcp.tool()
@@ -51,7 +55,8 @@ def register(mcp, ctx: ServerContext) -> None:
         memory_id: str,
         hard_delete: bool = False,
         reason: str | None = None,
-        answer: Annotated[ElicitationResult[confirm.Confirm], Resolve(_ask)] = None,
+        confirm: bool | None = None,
+        answer: Annotated[ElicitationResult[confirmation.Confirm], Resolve(_ask)] = None,
     ) -> dict:
         """Mark a memory as no longer valid or permanently remove it. Default behavior
         (hard_delete=False) sets confidence to "deprecated", keeping the memory as a
@@ -59,15 +64,16 @@ def register(mcp, ctx: ServerContext) -> None:
         hard_delete=True only when the memory must be permanently erased (e.g. sensitive
         data stored by mistake). Prefer deprecation over deletion when in doubt.
 
-        A hard delete asks the user to confirm through the client; it is refused if
-        they decline, or if the client cannot ask.
+        A hard delete needs a confirmation. Ask the user first and pass
+        ``confirm=true`` once they agree; ``confirm=false`` refuses. Omitted, a client
+        that can show a dialog asks the user there.
 
         ``reason`` is optional but recommended for audit trail — recorded in logs."""
         try:
             if hard_delete:
                 if ctx.store.get(memory_id, record_access=False) is None:
                     return _err(f"memory {memory_id!r} not found")
-                refused = confirm.refusal(answer, f"hard delete of {memory_id!r}")
+                refused = confirmation.refusal(answer, f"hard delete of {memory_id!r}")
                 if refused is not None:
                     return _err(refused)
                 deleted = ctx.store.delete(memory_id)
