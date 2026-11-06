@@ -14,7 +14,7 @@ can be seen working in Claude Code before it ships.
 Isolation is the point. On a machine in remote mode a scratch MEMORY_DB_PATH is
 not enough (the machine setting ignores it on purpose), so every process gets
 MEMORY_REMOTE_URL=off. The keychain is your real one: credentials are off
-unless `--credentials`. Needs `uv sync --extra dev` in this checkout.
+unless `--credentials`. Needs `uv sync` in this checkout.
 """
 
 from __future__ import annotations
@@ -131,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if not (REPO / ".venv" / "bin" / "gingugu").exists():
-        print(f"no {REPO}/.venv/bin/gingugu - run `uv sync --extra dev` there", file=sys.stderr)
+        print(f"no {REPO}/.venv/bin/gingugu - run `uv sync` there", file=sys.stderr)
         return 2
     root = args.dir or Path(tempfile.mkdtemp(prefix="gingugu-live-"))
     rig = build(root, credentials=args.credentials)

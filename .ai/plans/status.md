@@ -24,7 +24,7 @@ main thread's rights in the minion fence, and the harness CLAUDE.md block names
 forks as the parallel path for hard work. New `scripts/live_rig.py` runs a
 checkout's doorway, hook and server live in Claude Code on a scratch brain.
 Daily-use sweep: no other path dead-ends into a terminal (the remaining
-`run gingugu ...` messages are setup or recovery). 3930 tests passed. Existing
+`run gingugu ...` messages are setup or recovery). 3956 tests passed. Existing
 projects pick up the new doorway on `gingugu init`.
 
 **Board claims say which session holds a task, and every surface asks for one
