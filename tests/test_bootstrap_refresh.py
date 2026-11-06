@@ -85,7 +85,8 @@ def test_plain_init_refreshes_a_stock_old_doorway(tmp_path):
     assert main(["--path", str(tmp_path)]) == 0
 
     assert (hooks / DOORWAY).read_text() == read_template(f"{DOORWAY}.tmpl")
-    assert (hooks / f"{DOORWAY}.bak").read_bytes() == old
+    # The .bak is written as text, so Windows gives it CRLF.
+    assert fingerprint((hooks / f"{DOORWAY}.bak").read_bytes()) == fingerprint(old)
 
 
 def test_plain_init_skips_an_edited_doorway(tmp_path):
