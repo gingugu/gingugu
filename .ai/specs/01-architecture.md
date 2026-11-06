@@ -1236,8 +1236,10 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `.claude/worktrees/`, `.claude/hooks/**/__pycache__/`, `.claude/**/*.bak`, `CLAUDE.md.bak`,
   `AGENTS.md.bak`) to the target's `.gitignore` so transcripts never get
   committed (`bootstrap/gitignore.py`; a rerun adds missing rules under the
-  block an earlier run wrote, never a second block under the same header). Output is a themed 90s boot sequence
-  (`theme.py`, degrades to monochrome off-TTY). Other clients (`--client`) get a
+  block an earlier run wrote, never a second block under the same header). Output is the keygen show
+  (`tui/`: Win98 keygen window, plasma/copper/scroller effects, LEVEL headers,
+  score + achievement counted from the result lines, a synthesized chiptune loop;
+  plain ASCII with the same words off a TTY, under CI/`NO_COLOR`/`TERM=dumb`/`GINGUGU_PLAIN`). Other clients (`--client`) get a
   rules file. This closes the gap where the repo's own hook-based install
   outperformed the copy-paste setup shipped to users.
 - **`gingugu harness` is `init` plus the working kit, as a separate command.**

@@ -2404,8 +2404,21 @@ src/gingugu/
 │   ├── harness_retired.py  # Kit file names, sha256 manifest, symlink checks
 │   ├── harness_settings.py # Harness hooks + deny rules, merged additively; hook-command parsing
 │   ├── settings.py         # Non-destructive .claude/settings.json merge
-│   ├── theme.py            # The 90s boot sequence; degrades to monochrome off-TTY
 │   └── templates/harness/  # Hooks, minions, skill, .ai/ scaffold, CLAUDE.md block
+│
+│   # ── CLI face (human-facing commands only; machine paths never import it) ──
+├── tui/
+│   ├── __init__.py         # report() for init/harness, run() wrapper, banner, version line
+│   ├── caps.py             # Capability ladder: truecolor/256/16/plain, unicode, width, motion
+│   ├── paint.py            # RGB quantized to the terminal; gradients; CGA + amber palette
+│   ├── art.py              # Block logo, Win98 keygen window chrome, Unicode/ASCII glyph sets
+│   ├── fx.py               # Plasma, copper rasterbars, sine scroller, progress bar (pure f(t))
+│   ├── stage.py            # Draws frames in place; any key / Ctrl-C skips; cursor restored
+│   ├── keys.py             # Non-blocking keypress (cbreak / msvcrt), terminal always restored
+│   ├── keygen.py           # The report: tags, LEVELs, score, achievement, finale, fake serial
+│   ├── synth.py            # "C0R3 D3PTH": the original 8-bar chiptune loop, stdlib WAV synth
+│   ├── audio.py            # Plays the loop via afplay/paplay/aplay/winsound; killed on exit
+│   └── party.py            # gingugu party: the cracktro on demand
 │
 │   # ── Storage ───────────────────────────────────────────────────
 ├── database.py             # The connection alone: WAL, foreign keys, busy timeout
