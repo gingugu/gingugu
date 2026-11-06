@@ -191,6 +191,13 @@ def publish(version: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """The release, dressed as the keygen show on a real terminal (plain otherwise)."""
+    from gingugu import tui
+
+    return tui.run("release", lambda: _release(argv))
+
+
+def _release(argv: list[str] | None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("version")
     parser.add_argument("--summary", required=True, help="commit subject after the version")

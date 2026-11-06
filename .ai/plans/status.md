@@ -1,8 +1,65 @@
 # Project Status
 
-_Last updated: 2026-11-05 (deletes need no terminal + the big-delete gate; board claims record the claiming session + claim nudges, migration 023; dev tools a dependency group; X23 hook lines, named-repo recall, generated-code skip and links --warm - 0.47.0; X23 cross-repo links - 0.46.0; startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
+_Last updated: 2026-11-06 (the CLI is a Win95 keygen with a techno loop; memory_stats names the vault's machine; board mail reaches sibling sessions on one machine; X-ray lists who reads a removed key; deletes need no terminal + the big-delete gate; board claims record the claiming session + claim nudges, migration 023; dev tools a dependency group; X23 hook lines, named-repo recall, generated-code skip and links --warm - 0.47.0; X23 cross-repo links - 0.46.0; startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
 
 ## In Flight
+
+**The CLI is a Win95 keygen (2026-11-06, branch `feature/cli-keygen`, stacked on
+`fix/stats-vault-per-machine`).** The human-facing commands were plain text. New
+`gingugu.tui` package (replaces `bootstrap/theme.py`): `caps` detects truecolor -> 256 ->
+16 -> plain and unicode -> ASCII; `report()` plays the keygen window, progress bar,
+LEVEL-grouped results and the score/achievement finale for `init` / `harness`; `run()`
+wraps `remote`, `credential`, `token`, `promote`, `embed` and `scripts/release.py` with an
+intro and an exit-code outro; `gingugu party` (alias `iddqd`) is the cracktro. `synth` renders an original
+8-bar 140 BPM loop deterministically to the user cache dir (`GINGUGU_CACHE_DIR`
+overrides) and `audio.Music` plays it
+(afplay / paplay / aplay / winsound), killed with the command; on whenever the show
+animates, `GINGUGU_QUIET=1` mutes. Machine paths never import it
+(`test_tui_machine_paths.py`: a static import check plus six hook entry points
+byte-identical under a pty). Demo: `scripts/cli_demo.py`. Checked on macOS
+(pty runs, and the maintainer heard it live); Windows consoles and Linux audio players
+are covered by tests only.
+
+**memory_stats names the vault's machine (2026-11-06, branch
+`fix/stats-vault-per-machine`, stacked on `fix/board-same-machine-sessions`).**
+Sessions on a machine with no vaulted credentials kept reading `credentials.total: 0`
+as data loss. New `machine.py`: `name()` (sanitised short hostname, moved from
+`remote._default_name` so the login token name, the board's machine and stats agree)
+and `describe(health)`, which stamps the block with `machine` and adds a zero-count
+`note`. Both local `stats.py` and the remote-mode `LocalVault.health` / `patch_stats`
+go through it; the `memory_stats` docstring says the count is this machine's vault.
+Tests: `test_stats_vault_machine.py` plus an empty-vault case through the real proxy.
+
+**Board mail reaches sibling sessions on one machine (2026-11-06, branch
+`fix/board-same-machine-sessions`, stacked on `feature/xray-key-readers`, board
+5d5854a0).** Two sessions of one persona on the same machine never received each
+other's posts: `_inbox_where` counted an own-persona post as mail only from another
+machine. It now also counts one whose `author_agent` and the reader's agent session are
+both known and different; `is_me` compares persona, machine and session (each only when
+both sides are known), so `_reply_to` / `_route` send a reply to a sibling's post back to
+that sibling. The writing session never sees its own post, and a reader with no session
+id keeps the old rule (a watcher started by a session reads the same
+`CLAUDE_CODE_SESSION_ID`, so it shares that session's identity and never echoes it).
+Every inbox surface already passed the reader's session. Read receipts stay per persona. Tests: `test_board_sibling_sessions.py` plus a
+real-HTTP `/hook/inbox` case.
+
+**X-ray lists who reads a removed key (2026-11-05, branch `feature/xray-key-readers`,
+stacked on `fix/agent-confirm-deletes`, board d5639dd5).** Nothing imports a data
+contract, so renaming the key of an emitted JSON line left its readers (tests asserting
+`line["status"]`, runbooks, monitor queries on `@status:error`) invisible to the import
+graph. The post-edit note (`xray/edit_note.py`, new `xray/literals.py`) now lists who
+still reads a KEY an `Edit`/`MultiEdit` removed: a quoted literal (`"status"` /
+`'status'`) no new string still quotes, or an unquoted key (Python kwarg `status=`,
+TS/JS object key `status:`). One `git grep -n -I -F --untracked` per key (1s timeout),
+word-boundary checked; delimited forms only (`"x"`, `'x'`, `` `x` ``, `@x` facet, and
+`x:` outside non-test code). Unquoted keys search everything but non-test code, not
+other code (the symbol graph covers that). Excludes the edited file, generated files and
+lockfiles. Labelled `Text matches, not import edges`; 5 named plus `(+N more)`; over
+`TOO_COMMON = 40` files it says `too common to list` with the count (40 measured on
+gingugu: p50 5, p90 28, p95 44 of 150 sampled quoted keys). At most 3 keys per edit, once
+per (session, repo), off with `MEMORY_XRAY_TRIPWIRE`, never raises. Measured 26-111ms per
+key on gingugu. `Edit`/`MultiEdit` only, after the edit (a `Write` has no old text).
+4041 tests passed.
 
 **Deletes need no terminal; the big-delete gate (2026-11-05, branch
 `fix/agent-confirm-deletes`, board task 0b9ea472).** Every destructive tool
@@ -597,8 +654,8 @@ tokens have none). `board._inbox_where` treats your own persona's post as mail
 only when both origins are known and differ; `board.is_me` makes reply
 routing machine-aware. `/hook/inbox` takes the origin from the owner token
 (`serve_hooks._endpoint(with_origin=True)`), never the body. Labels and watch
-lines say "on <machine>". Limitation: two sessions of one persona on the same
-machine still read as one agent. A machine's name is its owner token's name,
+lines say "on <machine>". Limitation at the time: two sessions of one persona on
+the same machine still read as one agent (fixed 2026-11-06, sibling sessions). A machine's name is its owner token's name,
 set at `gingugu remote login --name` (default: the short hostname at login).
 
 **Agent board PR 3: MERGED (#134), released in 0.27.0.** Board mail in the

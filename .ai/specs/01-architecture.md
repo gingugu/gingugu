@@ -59,11 +59,11 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `xray/` (Codebase X-ray: `scan` + `extract` + `lang/` (one adapter per language: `python`
    on `ast` with `resolve`; `typescript` + `ts_*` + `jsonc` and `golang` on tree-sitter) +
    `model` + `local` + `parse_cache` + `resolve_walk` on the client, `validate` +
-   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check), `tool_xray` (the PreToolUse X-ray decision, apart from `tool_hook`), `bash_hook` + `bash_state` (X15: a shell command's writes get their X-ray; the repos a session touched) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), `symbols_walk` + `symbols` (X17: the Python symbol graph - per-file definition/binding/call/type records, resolved to call edges; client only, cached beside the graph), `edit_symbols` (X17: the tripwire's `Edit lands in` lines), `callers_tool` (X17: `code_xray` `callers`, local only), `edit_note` (the PostToolUse note after an edit: cross-file callers of the definitions touched, nearest tests), `ledger` (X11 lean: X-ray's test predictions vs pytest failures, local; `gingugu xray score`), `board_nudge` (X20 sender: asks a board post from a branch ahead of the default branch for its range, once per session, from `gingugu hook tool`), `board_brief` (X20: the brief a board post's `xray:` line asks for, rendered on the receiver), `repo_id` (X20: a checkout's identity and where the repo a post names is checked out here), `scar_query` (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace, bug/decision/architecture/fact/pattern only; never sees a checkout) + `scars` (X3, client side: resolves a hit's path tokens against the checkout's source files, ranks by type weight over files named, reads only the repo's own namespace, never `crow`; derived at read time, no table, no migration; appended to the read neighbourhood and the blind-edit deny), `history` (X4: git log summarized as churn, author counts and co-changed pairs, cached by HEAD), `hotspots` (X4 hotspots + coupling, X6 blind spots; pure), `history_tool` (`code_xray` `history`/`blindspots`, local only), `docs_map` + `docs_cites` + `docs_tool` (X22: the reverse index from a file to the docs that cite it, here and in sibling checkouts; `code_xray` `docs`, local only) and the `links/` package (X23: zero-config cross-repo links - what each checkout provides and mentions, joined into links, `shared` hosts and a cross-repo ripple; `code_xray` `links`, local only), the hook side that builds the graph itself and never
+   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check), `tool_xray` (the PreToolUse X-ray decision, apart from `tool_hook`), `bash_hook` + `bash_state` (X15: a shell command's writes get their X-ray; the repos a session touched) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), `symbols_walk` + `symbols` (X17: the Python symbol graph - per-file definition/binding/call/type records, resolved to call edges; client only, cached beside the graph), `edit_symbols` (X17: the tripwire's `Edit lands in` lines), `callers_tool` (X17: `code_xray` `callers`, local only), `edit_note` (the PostToolUse note after an edit: cross-file callers of the definitions touched, nearest tests), `literals` (who still reads a key an Edit/MultiEdit removed: a `git grep` text match, labelled as such, never an import edge), `ledger` (X11 lean: X-ray's test predictions vs pytest failures, local; `gingugu xray score`), `board_nudge` (X20 sender: asks a board post from a branch ahead of the default branch for its range, once per session, from `gingugu hook tool`), `board_brief` (X20: the brief a board post's `xray:` line asks for, rendered on the receiver), `repo_id` (X20: a checkout's identity and where the repo a post names is checked out here), `scar_query` (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace, bug/decision/architecture/fact/pattern only; never sees a checkout) + `scars` (X3, client side: resolves a hit's path tokens against the checkout's source files, ranks by type weight over files named, reads only the repo's own namespace, never `crow`; derived at read time, no table, no migration; appended to the read neighbourhood and the blind-edit deny), `history` (X4: git log summarized as churn, author counts and co-changed pairs, cached by HEAD), `hotspots` (X4 hotspots + coupling, X6 blind spots; pure), `history_tool` (`code_xray` `history`/`blindspots`, local only), `docs_map` + `docs_cites` + `docs_tool` (X22: the reverse index from a file to the docs that cite it, here and in sibling checkouts; `code_xray` `docs`, local only) and the `links/` package (X23: zero-config cross-repo links - what each checkout provides and mentions, joined into links, `shared` hosts and a cross-repo ripple; `code_xray` `links`, local only), the hook side that builds the graph itself and never
    touches the brain; see Key Decisions), `proxy_xray` (the proxy's local half of `code_xray`),
    `board_watch` +
    `board_watch_remote`, `board_watch_emit` (the `gingugu board watch` wake-up command; see Key
-   Decisions), `board_hook` (board mail for the prompt hook; see Key Decisions), `board_tasks` (claim and done, re-exported by `board`), `cli_usage` (the top-level help text), `minion_fence`, `subagent_hook` and `subagent_warmup` (see Warm minions),
+   Decisions), `board_hook` (board mail for the prompt hook; see Key Decisions), `board_tasks` (claim and done, re-exported by `board`), `cli_usage` (the top-level help text), `tui` (the CLI's keygen show, music and plain fallback; human-facing commands only - see Key Decisions), `minion_fence`, `subagent_hook` and `subagent_warmup` (see Warm minions),
    `recall_pick` (the recall pipeline the local hook and `/hook/recall` share),
    `hook_remote` + `hook_remote_flows` and `serve_hooks` (see Remote mode; `serve_hooks` also serves `POST /hook/scars` for X3, owner-only, answered by `xray/scar_query`), `hook_grant`
    (the client's `MEMORY_GRANT` as the hooks apply it), `credential_cli` (`gingugu
@@ -495,8 +495,10 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   refused. `memory_stats` is relayed, but its credential summary
   (`global.credentials` or `stats.credentials`) describes the brain's vault, so
   `Link` tracks each `memory_stats` call and `patch_stats` replaces that block
-  with `LocalVault.health()` (metadata only, no keychain); an unrecognised reply
-  passes through.
+  with `LocalVault.health()` (metadata only, no keychain; stamped by
+  `machine.describe` with this machine's `machine` name, plus a `note` at
+  `total: 0`, exactly as local mode reports it); an unrecognised reply passes
+  through.
 - **Derive route** (`serve_derive.py`, `POST /token/derive`): `BearerAuthMiddleware`
   tags each request `token_kind` (owner, derived, scoped); only an owner token
   may derive (others get 403). `DerivedTokens` (`derived_tokens.py`) keeps
@@ -773,7 +775,9 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   it re-issued every deny of a file it had just read without reading the reason; the
   import blast was already in front of it from the read neighbourhood. An informed edit
   gets the post-edit note (`xray/edit_note`, PostToolUse `gingugu hook edit`) instead:
-  cross-file callers of the definitions touched and their nearest tests. The deny text
+  cross-file callers of the definitions touched and their nearest tests, plus, after an
+  Edit/MultiEdit of any file, who still reads a key it removed (`xray/literals`: `git grep`
+  text matches, not import edges; board d5639dd5). The deny text
   below was later changed to lead with direct importers (`is imported directly by D;
   a change reaches N`, `Direct importers by rank` (top 5), `Nearest tests` (top 5:
   `test_*` files, one named for the file first, then hops) and an "import-based
@@ -990,7 +994,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   like `history`: `code_xray` `docs` (`xray/docs_tool`) is refused by `gingugu serve`
   and answered by the proxy; the X-ray brief gains `Docs citing the changed files:` and
   `Docs still citing a deleted or renamed file:` (`MEMORY_XRAY_DOCS`, default on; a docs
-  failure never costs the brief). Hook surfaces (edit note, Bash X-ray, read hook) are
+  failure never costs the brief). Docs-map hook surfaces (edit note, Bash X-ray, read hook) are
   not built yet. No migration, no brain change.
 - **Codebase X-ray: cross-repo links (X23, built, unreleased).** A service ecosystem
   is wired by names, not imports. `xray/links/` reads this checkout and its sibling
@@ -1232,8 +1236,13 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `.claude/worktrees/`, `.claude/hooks/**/__pycache__/`, `.claude/**/*.bak`, `CLAUDE.md.bak`,
   `AGENTS.md.bak`) to the target's `.gitignore` so transcripts never get
   committed (`bootstrap/gitignore.py`; a rerun adds missing rules under the
-  block an earlier run wrote, never a second block under the same header). Output is a themed 90s boot sequence
-  (`theme.py`, degrades to monochrome off-TTY). Other clients (`--client`) get a
+  block an earlier run wrote, never a second block under the same header). Output is the keygen show
+  (`tui/`: Win98 keygen window, plasma/copper/scroller effects, LEVEL headers,
+  score + achievement counted from the result lines, a synthesized chiptune loop;
+  plain ASCII with the same words off a TTY, under CI/`NO_COLOR`/`TERM=dumb`/`GINGUGU_PLAIN`);
+  `harness` plays the same show, and `remote`, `credential`, `token`, `promote`, `embed`
+  and `scripts/release.py` get a short intro and an exit-code outro around their own
+  output (`tui.run`). Other clients (`--client`) get a
   rules file. This closes the gap where the repo's own hook-based install
   outperformed the copy-paste setup shipped to users.
 - **`gingugu harness` is `init` plus the working kit, as a separate command.**
@@ -1642,7 +1651,20 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `Mcp-Session-Id` changes on every reconnect and a watcher holds a different
   one than its agent, so session-based filtering would echo an agent's own
   posts back through its own watcher. Replies are routed per agent session
-  separately (below).
+  separately (below). Superseded for same-machine siblings on 2026-11-06 (next
+  bullet), using the stable hashed Claude Code session, not `Mcp-Session-Id`.
+- **Board identity adds the agent session (2026-11-06).** Two sessions of one
+  persona on one machine never got each other's posts: the 2026-10-26 rule only
+  lifted the own-persona exclusion across machines. `_inbox_where` now also
+  counts an own-persona post as mail when `author_agent` and the reader's agent
+  session are both known and differ, and `is_me` compares persona, machine and
+  session (each only when both sides are known), so `_reply_to` / `_route` send
+  a reply to a sibling's post back to that sibling. The agent session is the
+  hashed `CLAUDE_CODE_SESSION_ID`, stable across reconnects; a watcher reads the
+  same env (`board_watch.py`, `proxy_auth.brain_client` headers), so a watcher
+  started by a session shares its identity and never echoes that session's own
+  posts, and one with no session keeps the persona + machine rule. Read
+  receipts stay per persona.
 - **Route replies by agent session, not just persona.** (2026-10.) Several
   sessions of one persona share one inbox, so a reply meant for
   the session that asked reached all of them. A post records `author_agent`
@@ -1672,6 +1694,14 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `memory_tripwire` (a capability is 1:1 with its memory, and a two-call write
   goes unused). The lane's 0.68 cosine floor was measured on real recall
   queries; the prompt gate's 0.78 missed most of them.
+- **The CLI show never reaches a machine path (2026-11-06).** Output that a program
+  reads - hooks, the stdio server, the proxy, `serve`, `board watch`, `xray`, `dream` -
+  never imports `tui`, so a hook's JSON or an MCP frame can never pick up colour, motion
+  or a stray escape. Only `server.py`'s human-facing dispatch, `bootstrap/` and
+  `scripts/release.py` call it. Enforced by `tests/test_tui_machine_paths.py`: a static
+  check that nothing else imports `gingugu.tui`, and the hook entry points run under a
+  pty on a truecolor and a plain terminal with byte-identical output and the package
+  never loaded.
 - **Server resilience over strictness.** Handlers fail soft (structured errors)
   so a bad call never takes down the client's memory layer.
 

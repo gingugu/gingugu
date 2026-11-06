@@ -24,6 +24,7 @@ from .credentials import CredentialVault
 from .database import Database
 from .handlers import ServerContext
 from .handlers import credentials as credential_handlers
+from .machine import describe
 from .proxy_session import ProxyLost, wrap
 
 
@@ -69,7 +70,7 @@ class LocalVault:
 
     def health(self) -> dict:
         """The vault summary ``memory_stats`` reports; metadata only, no keychain."""
-        return CredentialVault(self._db.connect()).health()
+        return describe(CredentialVault(self._db.connect()).health())
 
     def close(self) -> None:
         self._db.close()

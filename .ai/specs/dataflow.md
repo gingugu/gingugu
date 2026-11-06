@@ -830,6 +830,27 @@ edit note (PostToolUse Edit/Write/MultiEdit): any file type -> inbound.file_line
 MEMORY_XRAY_LINKS=off silences every line
 ```
 
+**Readers of a removed key (xray/literals, board d5639dd5).** The edit note also
+runs for any file type, on Edit/MultiEdit only (a Write has no old text):
+
+```
+edit_note.check → literals.lines(payload, root, rel, state_dir, session)
+  → quoted literals: "x"/'x' in an old_string no new_string still quotes
+  → unquoted keys: Python kwarg `x=` (.py), TS/JS object key `x:` (.ts .tsx .js .jsx
+    .mjs .cjs) in an old_string no new_string still names
+  → qualifies (3-80 chars, identifier-shaped, not a STOP value); at most 3 per edit
+  → one `git grep -n -I -F --untracked` per key, 1s timeout; failure drops the line
+  → boundary check in Python: "x" 'x' `x` @x anywhere, `x:` outside non-test code; unquoted
+    keys also `x=` / `.x`, in tests, fixtures, docs and non-code only (symbol graph
+    covers other code); skips the edited file, generated files, lockfiles
+  → once per (session, repo, key): hook-sessions/xray-literal-<session>/
+  → "- Text matches, not import edges: `x` removed by this edit is still named in N
+    files - path:line, ... (+K more)"; over 40 files: "is named in N files - too
+    common to list"; an unquoted key adds " (unquoted key)" after `x` and
+    " (read outside non-test code)" at the end; "file" when N is 1
+MEMORY_XRAY_TRIPWIRE=off silences it
+```
+
 The hooks hash the checkout once and hand that fingerprint to both cache reads.
 
 **After an edit, and the test ledger.** The note after an edit and the ledger that
@@ -958,7 +979,9 @@ UserPromptSubmit → `gingugu hook prompt`
     POST /hook/inbox {persona, namespaces (grant names, null = unfenced),
     shown} -> {posts}; 3s timeout; brain: read-only grant-bound inbox query
     for persona + origin (the calling owner token's name, never the body; a
-    twin persona on another machine's posts count as mail), minus the shown ids; shown ids stay in local hook-sessions/ under
+    twin persona on another machine's posts count as mail, and so do a sibling
+    session's on the same machine when both sessions are known; the writing
+    session never gets its own), minus the shown ids; shown ids stay in local hook-sessions/ under
     board:<session>. The body also carries agent_session (the raw Claude Code
     session id, hashed by the brain): a post routed to another session of the
     persona is held back until it has gone unread for ROUTE_GRACE_SECONDS (1h). A persona agent's one-liner therefore makes this request

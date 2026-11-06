@@ -118,6 +118,8 @@ reaches and which tests to run, and which files the rest of the code leans on. I
 brain is remote, and rebuilds itself whenever the code changes. The tool hook also
 tells the agent what an edit reached: right after an edit of a Python file it names the
 callers in other files of the functions the edit touched and the tests nearest them, and
+after an edit that removes a key (`"status"`, a keyword argument, an object key) it lists
+the files that still read it, as text matches rather than import edges, and
 it stops an edit only when it is blind - a file other files import that the agent never
 read this session. After a shell command it says what the source files it wrote reach,
 and a
@@ -722,10 +724,13 @@ direction is backwards, accept it with `reverse=True` rather than rejecting it.
 
 ### Wake an agent when a post arrives (optional)
 
-A reader is a persona plus a machine. The machine is the name of the owner token
-its session was derived from, so one persona on two machines (each with its own
-owner token) can post to itself across them; your own persona's posts are mail
-only when both machines are known and differ. Every session of one persona, on any
+A reader is a persona plus a machine plus an agent session. The machine is the name
+of the owner token its session was derived from, so one persona on two machines
+(each with its own owner token) can post to itself across them, and the agent
+session (Claude Code's `CLAUDE_CODE_SESSION_ID`, hashed) lets two sessions on one
+machine do the same. Your own persona's posts are mail when both machines are known
+and differ, or both sessions are known and differ; the session that wrote a post
+never sees it. Every session of one persona, on any
 machine, reads a new post addressed to it, but a reply goes to the session that
 asked: it shows only to that session until it has sat unread for an hour, then to
 every session of the persona. The session is Claude Code's `CLAUDE_CODE_SESSION_ID`,
@@ -980,6 +985,10 @@ It installs:
   `Edit|Write|MultiEdit`) that gives the agent the **note after an edit**: for each
   definition an edit of a Python file landed in, its callers in other files and the
   tests nearest them, once per definition per session, from the cached symbol graph.
+  An `Edit`/`MultiEdit` that removes a key (a quoted `"status"`, a Python keyword
+  argument, a TS/JS object key) also lists, as `Text matches, not import edges`, up to
+  five files that still read it - anything but non-test code for an unquoted key - or a count
+  when more than 40 do.
   Each note records the tests it named in a local ledger (`xray-ledger.jsonl`, beside
   the hook state); `gingugu xray score` says how often the tests that then failed were
   among them. It informs and never blocks; `gingugu init` adds it, and
@@ -1337,6 +1346,11 @@ Environment variables (all optional):
 | `MEMORY_DREAM_IDLE_MINUTES` | `20` | How long the brain must go untouched before `gingugu dream --if-idle` will run. Also the threshold that cancels a run in progress when you come back |
 | `MEMORY_LOG_LEVEL` | `INFO` | Logging verbosity (logs go to **stderr** — stdout is the MCP transport) |
 | `MEMORY_DEBUG` | `false` | Convenience switch for `DEBUG` logging (`MEMORY_LOG_LEVEL` wins if also set) |
+| `GINGUGU_QUIET` | *(unset)* | Mute the CLI's techno loop. The human-facing commands (`init`, `harness`, `remote`, `credential`, `token`, `promote`, `embed`) play a short keygen show with a synthesized chiptune on a real terminal, through `afplay` / `paplay` / `aplay` / `winsound`; with no player there is no sound and no message. `gingugu party` (alias `iddqd`) plays the cracktro on demand |
+| `GINGUGU_CACHE_DIR` | *(user cache dir)* | Where the CLI caches its rendered techno loop (`c0r3-d3pth-<hash>.wav`) |
+| `GINGUGU_NO_ANIM` | *(unset)* | Keep the CLI's colours but print every screen once, without motion (also automatic under `CI`) |
+| `GINGUGU_PLAIN` | *(unset)* | Plain ASCII CLI output with the same words: no colour, motion or music. Also automatic on a pipe or file, and under `NO_COLOR` or `TERM=dumb` |
+| `GINGUGU_COLORS` / `GINGUGU_ASCII` | *(detected)* | Force the CLI colour level (`plain`, `16`, `256`, `truecolor`) or ASCII glyphs instead of box drawing and blocks. Detection reads `COLORTERM`, `TERM`, `TERM_PROGRAM`, `WT_SESSION` and the stream's encoding |
 
 The four `MEMORY_W_*` weights are **normalized at load** (`w_i / Σw`), so they
 need not sum to 1.0 — only their *ratios* matter. Setting all four to 0 falls
@@ -1377,7 +1391,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo). Deleting a namespace is a big delete: `confirm=true` plus your approval |
 | `memory_export` | Export memories + tags + relations to portable JSON |
 | `memory_import` | Restore a JSON export (skip or replace on conflict; a replace that overwrites memories needs `confirm=true`, plus your approval past 10) |
-| `memory_stats` | Health overview (dormancy, counts, coverage, review sweep, the `claims` backlog, a relation-graph block whose `orphan_sample` names the memories no edge reaches - `review_limit` raises every sample's cap, a `size` block reporting the character cost of the store and of the always-loaded pinned tier, and `query_log_rows`, the count of recorded queries); a comma-separated `namespace` list returns the global block once plus each namespace's own stats |
+| `memory_stats` | Health overview (dormancy, counts, coverage, review sweep, the `claims` backlog, a relation-graph block whose `orphan_sample` names the memories no edge reaches - `review_limit` raises every sample's cap, a `size` block reporting the character cost of the store and of the always-loaded pinned tier, and `query_log_rows`, the count of recorded queries; `credentials` counts this machine's vault and names it in `machine`, with a `note` at zero since the vault is per machine); a comma-separated `namespace` list returns the global block once plus each namespace's own stats |
 | `memory_search` | Advanced filtered search (type, tags, confidence, dates; one or many namespaces; optional compact mode; fetch by exact `ids`; `claims` to work the reconciliation backlog or read refs the prose never resolved, `orphans` to work the graph backlog, `pinned` to enumerate the always-present tier; `explain` for a per-hit score breakdown) |
 | `memory_excerpt` | Read inside ONE memory: find literal matches with their character offsets, line numbers and surrounding context, and/or slice an exact character range |
 | `credential_store` | Store/update a service credential bundle |

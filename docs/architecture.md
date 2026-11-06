@@ -198,8 +198,13 @@ repo's own project namespace, never stored; switch `MEMORY_XRAY_SCARS`), after a
 though neither imports the other (X4; switch `MEMORY_XRAY_HISTORY`). `gingugu hook edit` runs after every `Edit`,
 `Write` or `MultiEdit` (doorway `post_edit_xray.py`): after an edit of a Python file it
 names the cross-file callers of the definitions the new text landed in and the tests
-nearest them, once per definition per session, from the cached symbol graph. Each
-such note records its test predictions in a local ledger, and the Bash `PostToolUse`
+nearest them, once per definition per session, from the cached symbol graph. After an
+`Edit` or `MultiEdit` of any file it also lists who still reads a key the edit removed
+(`xray/literals.py`): a quoted literal, or an unquoted Python keyword argument or TS/JS
+object key, found with one `git grep` per key (1s timeout) and labelled `Text matches,
+not import edges`; five are named, more than 40 files gives a count, and unquoted keys
+are read everywhere but non-test code. At most three keys per edit, each once per session
+per repo. Each such note records its test predictions in a local ledger, and the Bash `PostToolUse`
 path records the failed test files of every `pytest` run; `gingugu xray score` says
 how the predictions fared. It uses the same locally built graph cache as the edit
 check and never touches the MCP server process (the brain is asked only for scar tissue, in remote mode), and `MEMORY_XRAY_MAP=off`
@@ -552,6 +557,13 @@ Never pruned: a finished task leaves the inbox by status, not by delete.
 
 Only a hash of the agent session is stored (`sha256(CLAUDE_CODE_SESSION_ID)[:32]`,
 `agent_session.py`): the raw id is a handle to a live transcript.
+
+A reader is persona + machine + session. Its own persona's post is mail when it
+comes from a twin (both `author_origin` and the reader's machine known and
+different) or a sibling session on the same machine (both `author_agent` and the
+reader's session known and different); the session that wrote a post never gets
+it, and an unknown machine or session on either side keeps the persona as the
+identity (`board.is_me`, `_inbox_where`).
 
 #### `xray_snapshots` / `xray_files` / `xray_edges`
 Codebase X-ray import graphs (migration 019, `migrations/xray.py`). A snapshot
@@ -1505,7 +1517,9 @@ Get health overview of the memory system.
   ...}}` - `global` is the four namespace-independent fields
   (`namespaces`, `access_log_rows`, `query_log_rows`, `credentials`) computed
   once, and each `by_namespace` entry is that namespace's own scoped stats
-  minus those four fields. This is what collapses the session-start protocol's old two-call
+  minus those four fields. `credentials` is this machine's vault summary,
+  stamped with `machine` (`machine.name()`) and, at `total: 0`, a `note` that
+  the vault is per machine. This is what collapses the session-start protocol's old two-call
   pattern (`memory_stats(namespace="crow")` then one per project) into one
   call that computes the shared block once instead of once per namespace.
   `review_limit` applies to every namespace's block.
@@ -1652,7 +1666,9 @@ when `MEMORY_SERVER_ROLE=minion`, else `local`.
 
 `inbox` returns unread posts addressed to the caller or to `*`, oldest first,
 excluding the caller's own posts (unless the post's origin and the caller's
-origin are both known and differ: a persona's twin on another machine), finished tasks, and tasks claimed by someone
+origin are both known and differ - a persona's twin on another machine - or the
+post's `author_agent` and the caller's agent session are both known and differ -
+a sibling session on the same machine), finished tasks, and tasks claimed by someone
 else - including a twin session of the caller's own persona, when both that
 session and the caller's are known - plus an `unread` count. An open task counts as unread even after it is read,
 until someone claims it or it is done: receipts are per persona, so a read in one
@@ -1851,7 +1867,7 @@ shows as `<repo>:<doc>`; data keys `docs` and `docs_gone`), and a docs failure n
 the brief. `code_xray` `docs` (`xray/docs_tool.py`) answers the citing docs per file, or
 without `files` the totals and the most cited files; it answers locally like `history`:
 `gingugu serve` refuses it and the proxy answers it on the caller's machine. Switch
-`MEMORY_XRAY_DOCS` (default on). No migration, no brain change. The hook surfaces (the
+`MEMORY_XRAY_DOCS` (default on). No migration, no brain change. The docs-map hook surfaces (the
 edit note, the Bash X-ray, the read hook) are not built yet.
 
 **Cross-repo links (X23).** A service ecosystem is wired by names, not imports. The
@@ -2184,7 +2200,11 @@ Remove a service bundle or a specific field. Cleans up Keychain entries.
   - **`expiring_soon`** — expiry within 14 days
   - **`expired`** — past the `expires_at` date
 - `memory_stats` includes a **credential health summary**: total count,
-  expired count, expiring-soon count.
+  expired count, expiring-soon count, and `machine` - the machine whose vault
+  it counts (`machine.name()`, the sanitised short hostname, also the default
+  `remote login` token name). The vault is per machine, so at `total: 0` the
+  block carries a `note` saying nothing is vaulted on this machine - expected,
+  not data loss. Remote mode reports the local vault the same way.
 - Expired credentials **still return values** — the system warns, it doesn't
   block. Rotation is the user's responsibility.
 
@@ -2346,13 +2366,14 @@ src/gingugu/
 ├── proxy_vault.py          # Remote mode: the machine's credential vault, screened (reveal refused) and exposed as a server
 ├── proxy_vault_link.py     # Remote mode: runs that vault behind an in-memory MCP session so it can ask the user
 ├── proxy_xray.py           # Remote mode: code_xray reads the checkout here, asks the brain by fingerprint
-├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), tool_xray (the PreToolUse X-ray decision, kept apart from tool_hook), bash_hook + bash_state (X15: a shell command's dirty-set snapshot and diff; the repos a session touched), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only), board_nudge (X20 sender: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line), board_brief (X20: the brief a board post's `xray: <range>` line asks for, rendered on the receiver), repo_id (X20: a checkout's identity, and the local checkout an `xray: <repo> <range>` line names), resolve_walk + parse_cache (X16: content-only import records, the per-file parse cache), symbols_walk + symbols (X17: the Python symbol graph, client only), edit_symbols (X17: the tripwire's `Edit lands in` lines), callers_tool (X17: `code_xray` `callers`, local only), edit_note (the note after an edit), ledger (X11 lean: test predictions vs pytest failures), scar_query (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace), scars (X3, client side: resolves and ranks those hits against the checkout), history (X4: git log summarized as churn, author counts and co-changed pairs, cached by HEAD), hotspots (X4 hotspots + coupling, X6 blind spots, pure), history_tool (`code_xray` `history` / `blindspots`, local only), docs_map + docs_cites + docs_tool (X22: which docs cite a file, here and in sibling checkouts; `code_xray` `docs`, local only), links/ (X23: model + provides* + mentions* (incl. mentions_repos: a repo named outright) + prose read a checkout into provided and mentioned names; index reads checkouts (8 threads) and cache holds the per-checkout facts; join + join_index (provider index and matchers) + ripple turn them into links, `shared` hosts and the cross-repo ripple; render + tool answer `code_xray` `links` and the brief's section, local only; inbound writes and reads the per-repo summaries the read hook and edit note use)
+├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), tool_xray (the PreToolUse X-ray decision, kept apart from tool_hook), bash_hook + bash_state (X15: a shell command's dirty-set snapshot and diff; the repos a session touched), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only), board_nudge (X20 sender: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line), board_brief (X20: the brief a board post's `xray: <range>` line asks for, rendered on the receiver), repo_id (X20: a checkout's identity, and the local checkout an `xray: <repo> <range>` line names), resolve_walk + parse_cache (X16: content-only import records, the per-file parse cache), symbols_walk + symbols (X17: the Python symbol graph, client only), edit_symbols (X17: the tripwire's `Edit lands in` lines), callers_tool (X17: `code_xray` `callers`, local only), edit_note (the note after an edit), literals (who still reads a key an edit removed: `git grep` text matches, not import edges), ledger (X11 lean: test predictions vs pytest failures), scar_query (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace), scars (X3, client side: resolves and ranks those hits against the checkout), history (X4: git log summarized as churn, author counts and co-changed pairs, cached by HEAD), hotspots (X4 hotspots + coupling, X6 blind spots, pure), history_tool (`code_xray` `history` / `blindspots`, local only), docs_map + docs_cites + docs_tool (X22: which docs cite a file, here and in sibling checkouts; `code_xray` `docs`, local only), links/ (X23: model + provides* + mentions* (incl. mentions_repos: a repo named outright) + prose read a checkout into provided and mentioned names; index reads checkouts (8 threads) and cache holds the per-checkout facts; join + join_index (provider index and matchers) + ripple turn them into links, `shared` hosts and the cross-repo ripple; render + tool answer `code_xray` `links` and the brief's section, local only; inbound writes and reads the per-repo summaries the read hook and edit note use)
 ├── xray_cli.py             # `gingugu xray brief` (--range / --files / --path / --json), `gingugu xray history` (--files / --path / --limit / --json), `gingugu xray blindspots` (--path / --limit / --json), `gingugu xray docs` (--files / --path / --limit / --json), `gingugu xray links` (--files / --path / --limit / --json / --warm) and `gingugu xray score` (--json)
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine
 ├── remote_args.py          # usage text + argparse for `gingugu remote`, mint ssh argv
 ├── remote_tls.py           # Client TLS: pins, verify_for, downgrade refusal, login's live check, diagnose/speaks_tls
 ├── credential_cli.py       # `gingugu credential list|delete`: the vault by hand, at a terminal
+├── showable.py             # clean(): strips ESC sequences, C0/C1, zero-width and bidi from untrusted text before a terminal shows it
 ├── confirm.py              # Destructive tools take `confirm`; omitted, a dialog (MCP elicitation) where the client can show one; MEMORY_CONFIRM_DESTRUCTIVE opt-out
 ├── destructive.py          # The big-delete gate: what counts as big, the hook's single-use approvals, the per-session hard-delete count
 ├── proxy_gate.py           # Remote mode: takes a big delete's approval at the proxy before the call is relayed to the brain
@@ -2384,8 +2405,22 @@ src/gingugu/
 │   ├── harness_retired.py  # Kit file names, sha256 manifest, symlink checks
 │   ├── harness_settings.py # Harness hooks + deny rules, merged additively; hook-command parsing
 │   ├── settings.py         # Non-destructive .claude/settings.json merge
-│   ├── theme.py            # The 90s boot sequence; degrades to monochrome off-TTY
 │   └── templates/harness/  # Hooks, minions, skill, .ai/ scaffold, CLAUDE.md block
+│
+│   # ── CLI face (human-facing commands only; machine paths never import it) ──
+├── tui/
+│   ├── __init__.py         # report() for init/harness, run() wrapper, banner, version line
+│   ├── caps.py             # Capability ladder: truecolor/256/16/plain, unicode, width, motion
+│   ├── paint.py            # RGB quantized to the terminal; gradients; CGA + amber palette
+│   ├── art.py              # Block logo, Win98 keygen window chrome, Unicode/ASCII glyph sets
+│   ├── fx.py               # Plasma, copper rasterbars, sine scroller, progress bar (pure f(t))
+│   ├── stage.py            # Draws frames in place; any key / Ctrl-C skips; cursor restored
+│   ├── keys.py             # Non-blocking keypress (cbreak / msvcrt), terminal always restored
+│   ├── keygen.py           # The report: tags, LEVELs, score, achievement, finale, fake serial
+│   ├── synth.py            # "C0R3 D3PTH": the original 8-bar chiptune loop, stdlib WAV synth
+│   ├── audio.py            # Plays the loop via /usr/bin/afplay or paplay/aplay (absolute PATH only)/winsound; killed on exit
+│   ├── signals.py          # SIGTERM/SIGHUP while a show is live: restore the terminal, stop the music, re-deliver
+│   └── party.py            # gingugu party: the cracktro on demand
 │
 │   # ── Storage ───────────────────────────────────────────────────
 ├── database.py             # The connection alone: WAL, foreign keys, busy timeout
@@ -2483,6 +2518,7 @@ src/gingugu/
 │
 │   # ── Stats + misc ──────────────────────────────────────────────
 ├── stats.py                # Counts, confidence, dormancy, review sweep; global block
+├── machine.py              # This machine's name; the vault summary that says whose vault it counts
 ├── hygiene_stats.py        # Ghost namespaces, duplicate titles
 ├── graph_stats.py          # Relation-graph health: edges, degree, orphans, spread cap
 ├── size_stats.py           # The character cost the counts do not show
@@ -2523,8 +2559,8 @@ src/gingugu/
 ```
 
 Dev-only tooling lives at the repo root and never ships in the wheel: `bench/`
-(the golden-set retrieval benchmark), `scripts/` (`release.py`, `fleet.py`, and
-`live_rig.py`, which runs this checkout's hook doorway, hook and server live in a
+(the golden-set retrieval benchmark), `scripts/` (`release.py`, `fleet.py`, `cli_demo.py` (plays every
+CLI effect and the loop), and `live_rig.py`, which runs this checkout's hook doorway, hook and server live in a
 throwaway Claude Code project on a scratch brain) and `ui/` (the Memory Explorer source,
 whose built bundle is what `webui.py` serves).
 

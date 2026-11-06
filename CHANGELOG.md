@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The CLI is a Win95 keygen.** `init` and `harness` play a keygen window (copper
+  bars, plasma logo, sine scroller, a serial being cracked), then the real results as
+  tagged lines grouped into LEVELs, with a score, an achievement and a finale counted
+  from them. `remote`, `credential`, `token`, `promote`, `embed` and the release script
+  get an intro and an exit-code outro around their unchanged output; `gingugu party`
+  (alias `iddqd`) plays the cracktro, `--help` gets the logo and `--version` a gradient. An original synthesized chiptune loop plays through
+  `afplay` / `paplay` / `aplay` / `winsound` and stops with the command
+  (`GINGUGU_QUIET=1` mutes it). Truecolor, 256 and 16 colours with an ASCII fallback;
+  plain ASCII with the same words on a pipe, `NO_COLOR`, `TERM=dumb` or
+  `GINGUGU_PLAIN`, and no motion under `CI` or `GINGUGU_NO_ANIM`; `GINGUGU_COLORS`
+  forces a colour level, `GINGUGU_ASCII` ASCII glyphs, and `GINGUGU_CACHE_DIR` moves
+  the cached loop. Any key or Ctrl-C skips the show. `scripts/cli_demo.py` plays every
+  effect. Hooks, the stdio server, the proxy and every other machine path are
+  byte-for-byte unchanged.
+- **The X-ray note after an edit lists who still reads a key the edit removed.**
+  Nothing imports a data contract: renaming the key of an emitted JSON line left its
+  readers (tests, runbooks, monitor queries) invisible to the import graph. After an
+  `Edit`/`MultiEdit` that drops a quoted literal (`"status"`) or an unquoted key (a
+  Python keyword argument `status=`, a TS/JS object key `status:`), the note names up to
+  five files still reading it as `Text matches, not import edges` (`(+N more)` past
+  five; over 40 files it gives the count and says `too common to list`). One
+  `git grep` per key with a 1s timeout, whole-word, delimited forms only; unquoted keys
+  are searched everywhere but non-test code, since the symbol graph covers
+  other code. At most 3 keys per edit, each once per session and repo, off with
+  `MEMORY_XRAY_TRIPWIRE`. New `xray/literals.py`.
 - **A board claim says which session holds the task (migration 023).** One persona
   runs several sessions, and a claim recorded only the persona, so a task one
   session was working could not be told apart from another session's claim. A
@@ -52,6 +77,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the whole conversation, so the minion fence lets it through. The harness `CLAUDE.md`
   block gains a "Forks: parallel hard work" section.
 
+### Removed
+
+- `bootstrap/theme.py`, replaced by the `gingugu.tui` package.
+
 ### Changed
 
 - **Dev tools are a dependency group, not an extra.** `pytest`, `ruff`, `black` and
@@ -68,6 +97,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`memory_stats` says whose vault its credential count is.** The vault is per
+  machine, so a machine that never vaulted anything reported `credentials.total: 0`
+  with nothing to say that was expected. The `credentials` block now carries `machine`
+  (this machine's name, the same one `gingugu remote login` gives its token by
+  default) and, at zero, a `note` that nothing is vaulted on this machine - expected,
+  not data loss. Same in local and remote mode.
+- **Board mail between two sessions of one persona on the same machine is delivered.**
+  A reader is now persona + machine + agent session: your own persona's post is mail
+  from a twin machine or from a sibling session (both sessions known and different), a
+  reply to a sibling's post is routed back to that session, and the session that wrote a
+  post never sees it. An unknown session on either side keeps the old rule.
 - **A delete no longer dead-ends on a client with no dialog.** In Claude Code's VS Code
   extension, which answers every MCP dialog "decline" unseen, every destructive call used
   to end in a refusal. They now complete on the agent's `confirm=true`.
