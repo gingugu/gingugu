@@ -139,6 +139,20 @@ def test_a_longer_word_containing_the_literal_is_no_reader(contract):
     assert "app/noise.py" not in _paths(found)
 
 
+def test_a_datadog_facet_query_alone_is_a_reader(tmp_path):
+    # The case that started this (board d5639dd5): a monitor that only ever
+    # names the key as a facet, `@status:error`, with no YAML key beside it.
+    repo = _repo(
+        tmp_path,
+        {
+            "sync/cli.py": 'print(json.dumps({"status": "ok"}))\n',
+            "monitors/only_facet.yaml": 'query: logs("service:sync @status:error").rollup()\n',
+        },
+    )
+    found = literals.consumers(repo, "status", exclude="sync/cli.py")
+    assert ("monitors/only_facet.yaml", 1) in found.hits
+
+
 def test_a_bare_key_colon_counts_only_outside_code(contract):
     # ``status: int`` is a Python annotation; ``status: enabled`` is a YAML key.
     found = literals.consumers(contract, "status", exclude="sync/cli.py")
