@@ -1346,7 +1346,8 @@ Environment variables (all optional):
 | `MEMORY_DREAM_IDLE_MINUTES` | `20` | How long the brain must go untouched before `gingugu dream --if-idle` will run. Also the threshold that cancels a run in progress when you come back |
 | `MEMORY_LOG_LEVEL` | `INFO` | Logging verbosity (logs go to **stderr** — stdout is the MCP transport) |
 | `MEMORY_DEBUG` | `false` | Convenience switch for `DEBUG` logging (`MEMORY_LOG_LEVEL` wins if also set) |
-| `GINGUGU_QUIET` | *(unset)* | Mute the CLI's techno loop. The human-facing commands (`init`, `harness`, `remote`, `credential`, `token`, `promote`, `embed`) play a short keygen show with a synthesized chiptune on a real terminal, through `afplay` / `paplay` / `aplay` / `winsound`; with no player there is no sound and no message |
+| `GINGUGU_QUIET` | *(unset)* | Mute the CLI's techno loop. The human-facing commands (`init`, `harness`, `remote`, `credential`, `token`, `promote`, `embed`) play a short keygen show with a synthesized chiptune on a real terminal, through `afplay` / `paplay` / `aplay` / `winsound`; with no player there is no sound and no message. `gingugu party` (alias `iddqd`) plays the cracktro on demand |
+| `GINGUGU_CACHE_DIR` | *(user cache dir)* | Where the CLI caches its rendered techno loop (`c0r3-d3pth-<hash>.wav`) |
 | `GINGUGU_NO_ANIM` | *(unset)* | Keep the CLI's colours but print every screen once, without motion (also automatic under `CI`) |
 | `GINGUGU_PLAIN` | *(unset)* | Plain ASCII CLI output with the same words: no colour, motion or music. Also automatic on a pipe or file, and under `NO_COLOR` or `TERM=dumb` |
 | `GINGUGU_COLORS` / `GINGUGU_ASCII` | *(detected)* | Force the CLI colour level (`plain`, `16`, `256`, `truecolor`) or ASCII glyphs instead of box drawing and blocks. Detection reads `COLORTERM`, `TERM`, `TERM_PROGRAM`, `WT_SESSION` and the stream's encoding |

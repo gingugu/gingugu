@@ -2557,8 +2557,8 @@ src/gingugu/
 ```
 
 Dev-only tooling lives at the repo root and never ships in the wheel: `bench/`
-(the golden-set retrieval benchmark), `scripts/` (`release.py`, `fleet.py`, and
-`live_rig.py`, which runs this checkout's hook doorway, hook and server live in a
+(the golden-set retrieval benchmark), `scripts/` (`release.py`, `fleet.py`, `cli_demo.py` (plays every
+CLI effect and the loop), and `live_rig.py`, which runs this checkout's hook doorway, hook and server live in a
 throwaway Claude Code project on a scratch brain) and `ui/` (the Memory Explorer source,
 whose built bundle is what `webui.py` serves).
 

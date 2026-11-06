@@ -56,6 +56,10 @@
 
 - **`pytest` + `pytest-asyncio`** — MCP handlers are async.
 - **No PR without tests** for the changed surface.
+- **Output a program reads stays byte-identical.** Hooks, the stdio server, the
+  proxy and JSON modes never import `gingugu.tui`, and a change near them carries a
+  byte-identity test (see `tests/test_tui_machine_paths.py`: a static import check plus
+  the hook entry points under a pty on a colour and a plain terminal).
 - **The suite is offline and bounded.** Two autouse fixtures in
   `tests/conftest.py` enforce it: `fake_keyring` keeps tests off the OS
   keychain, `offline_embeddings` keeps them off the network (the fastembed
