@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.48.1] - 2026-11-06
+
 ### Fixed
 
 - **Plain `gingugu init` refreshes a hook that is a stock copy of an older version.**
