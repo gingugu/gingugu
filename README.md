@@ -118,6 +118,8 @@ reaches and which tests to run, and which files the rest of the code leans on. I
 brain is remote, and rebuilds itself whenever the code changes. The tool hook also
 tells the agent what an edit reached: right after an edit of a Python file it names the
 callers in other files of the functions the edit touched and the tests nearest them, and
+after an edit that removes a key (`"status"`, a keyword argument, an object key) it lists
+the files that still read it, as text matches rather than import edges, and
 it stops an edit only when it is blind - a file other files import that the agent never
 read this session. After a shell command it says what the source files it wrote reach,
 and a
@@ -980,6 +982,10 @@ It installs:
   `Edit|Write|MultiEdit`) that gives the agent the **note after an edit**: for each
   definition an edit of a Python file landed in, its callers in other files and the
   tests nearest them, once per definition per session, from the cached symbol graph.
+  An `Edit`/`MultiEdit` that removes a key (a quoted `"status"`, a Python keyword
+  argument, a TS/JS object key) also lists, as `Text matches, not import edges`, up to
+  five files that still read it - tests, docs and config for an unquoted key - or a count
+  when more than 40 do.
   Each note records the tests it named in a local ledger (`xray-ledger.jsonl`, beside
   the hook state); `gingugu xray score` says how often the tests that then failed were
   among them. It informs and never blocks; `gingugu init` adds it, and

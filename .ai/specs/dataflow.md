@@ -830,6 +830,26 @@ edit note (PostToolUse Edit/Write/MultiEdit): any file type -> inbound.file_line
 MEMORY_XRAY_LINKS=off silences every line
 ```
 
+**Readers of a removed key (xray/literals, board d5639dd5).** The edit note also
+runs for any file type, on Edit/MultiEdit only (a Write has no old text):
+
+```
+edit_note.check → literals.lines(payload, root, rel, state_dir, session)
+  → quoted literals: "x"/'x' in an old_string no new_string still quotes
+  → unquoted keys: Python kwarg `x=` (.py), TS/JS object key `x:` (.ts .tsx .js .jsx
+    .mjs .cjs) in an old_string no new_string still names
+  → qualifies (3-80 chars, identifier-shaped, not a STOP value); at most 3 per edit
+  → one `git grep -n -I -F --untracked` per key, 1s timeout; failure drops the line
+  → boundary check in Python: "x" 'x' `x` @x anywhere, `x:` outside code; unquoted
+    keys also `x=` / `.x`, in tests, fixtures, docs and non-code only (symbol graph
+    covers other code); skips the edited file, generated files, lockfiles
+  → once per (session, repo, key): hook-sessions/xray-literal-<session>/
+  → "- Text matches, not import edges: `x` removed by this edit is still named in N
+    files - path:line, ... (+K more)"; over 40 files: "is named in N files - too
+    common to list"
+MEMORY_XRAY_TRIPWIRE=off silences it
+```
+
 The hooks hash the checkout once and hand that fingerprint to both cache reads.
 
 **After an edit, and the test ledger.** The note after an edit and the ledger that

@@ -1,8 +1,26 @@
 # Project Status
 
-_Last updated: 2026-11-05 (deletes need no terminal + the big-delete gate; board claims record the claiming session + claim nudges, migration 023; dev tools a dependency group; X23 hook lines, named-repo recall, generated-code skip and links --warm - 0.47.0; X23 cross-repo links - 0.46.0; startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
+_Last updated: 2026-11-05 (X-ray lists who reads a removed key; deletes need no terminal + the big-delete gate; board claims record the claiming session + claim nudges, migration 023; dev tools a dependency group; X23 hook lines, named-repo recall, generated-code skip and links --warm - 0.47.0; X23 cross-repo links - 0.46.0; startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
 
 ## In Flight
+
+**X-ray lists who reads a removed key (2026-11-05, branch `feature/xray-key-readers`,
+stacked on `fix/agent-confirm-deletes`, board d5639dd5).** Nothing imports a data
+contract, so renaming the key of an emitted JSON line left its readers (tests asserting
+`line["status"]`, runbooks, monitor queries on `@status:error`) invisible to the import
+graph. The post-edit note (`xray/edit_note.py`, new `xray/literals.py`) now lists who
+still reads a KEY an `Edit`/`MultiEdit` removed: a quoted literal (`"status"` /
+`'status'`) no new string still quotes, or an unquoted key (Python kwarg `status=`,
+TS/JS object key `status:`). One `git grep -n -I -F --untracked` per key (1s timeout),
+word-boundary checked; delimited forms only (`"x"`, `'x'`, `` `x` ``, `@x` facet, and
+`x:` outside code). Unquoted keys search only tests, fixtures, docs, yaml and json, not
+other code (the symbol graph covers that). Excludes the edited file, generated files and
+lockfiles. Labelled `Text matches, not import edges`; 5 named plus `(+N more)`; over
+`TOO_COMMON = 40` files it says `too common to list` with the count (40 measured on
+gingugu: p50 5, p90 28, p95 44 of 150 sampled quoted keys). At most 3 keys per edit, once
+per (session, repo), off with `MEMORY_XRAY_TRIPWIRE`, never raises. Measured 26-111ms per
+key on gingugu. `Edit`/`MultiEdit` only, after the edit (a `Write` has no old text).
+4041 tests passed.
 
 **Deletes need no terminal; the big-delete gate (2026-11-05, branch
 `fix/agent-confirm-deletes`, board task 0b9ea472).** Every destructive tool
