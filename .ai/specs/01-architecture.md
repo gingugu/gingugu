@@ -63,7 +63,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    touches the brain; see Key Decisions), `proxy_xray` (the proxy's local half of `code_xray`),
    `board_watch` +
    `board_watch_remote`, `board_watch_emit` (the `gingugu board watch` wake-up command; see Key
-   Decisions), `board_hook` (board mail for the prompt hook; see Key Decisions), `cli_usage` (the top-level help text), `minion_fence`, `subagent_hook` and `subagent_warmup` (see Warm minions),
+   Decisions), `board_hook` (board mail for the prompt hook; see Key Decisions), `board_tasks` (claim and done, re-exported by `board`), `cli_usage` (the top-level help text), `minion_fence`, `subagent_hook` and `subagent_warmup` (see Warm minions),
    `recall_pick` (the recall pipeline the local hook and `/hook/recall` share),
    `hook_remote` + `hook_remote_flows` and `serve_hooks` (see Remote mode; `serve_hooks` also serves `POST /hook/scars` for X3, owner-only, answered by `xray/scar_query`), `hook_grant`
    (the client's `MEMORY_GRANT` as the hooks apply it), `credential_cli` (`gingugu
@@ -98,7 +98,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `queries.py` for the query log (`query_log`, migration 015; `extra_ids` and
    `query_acts`, migration 022),
    `tripwires.py` for the tripwire triggers (`tripwires`, migration 016),
-   `board.py` for the agent board (`board_posts`, `board_reads`, migrations 017, 018, 020),
+   `board.py` for the agent board (`board_posts`, `board_reads`, migrations 017, 018, 020, 023),
    `xray.py` for Codebase X-ray (`xray_snapshots`, `xray_files`, `xray_edges`, migration 019;
    `xray_files.lang`/`kind`, migration 021), and
    `__init__.py` for the ordered registry and the runner. `config.py` resolves
@@ -1506,14 +1506,23 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   memory and hoping the other recalled it. A post is not a memory: it is
   addressed, read once, and a task on it is claimed and finished, so storing
   posts as memories would put chatter into the graph and the ranking.
-  `board_posts` and `board_reads` (migration 017; 018 adds `author_origin`; 020 adds `author_agent` and `recipient_agent`) are separate tables; unread is
+  `board_posts` and `board_reads` (migration 017; 018 adds `author_origin`; 020 adds `author_agent` and `recipient_agent`; 023 adds `claimed_origin` and `claimed_agent`) are separate tables; unread is
   the absence of a `board_reads` row, so marking read is an idempotent insert
   and the inbox an anti-join. Receipts are per persona, so an open task skips
   the anti-join and stays unread until a claim or a done acts on it (2026-11):
   otherwise one session reading it hides it from every twin session. `kind` and `status` are validated in Python, not
   `CHECK` constraints, so a new kind needs no table rebuild. Threads are one
   level deep. `claim` is a compare-and-set (`UPDATE ... WHERE status='open'`),
-  so racing agents cannot both win. The author is derived in
+  so racing agents cannot both win. A claim records the claimer's machine and
+  hashed agent session as well as the persona (2026-11-05, `board_tasks`): one
+  persona runs several sessions, and a task one session was building stayed open
+  and read as new work to the next, while a persona-only claim could not say
+  which session held it. A twin session's claim takes the task out of the
+  reader's inbox when both sessions are known; a losing claim names the holder;
+  re-claiming from the holding session is a no-op; `done` stays by persona so an
+  ended session never strands its task. Every surface asks for the claim before
+  work starts: the hook's board mail, `read`'s `next`, the startup contract and
+  the protocol rules (including a task the user hands over in chat). The author is derived in
   `handlers/board.py` from what the server knows of the connection: the HTTP
   token's name with `derived:` stripped (the proxy now names its derived token
   for `MEMORY_PERSONA`, falling back to the home namespace), or on stdio
@@ -1568,7 +1577,8 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   of an agent with `MEMORY_PERSONA`, before the length gate, so a bare "go"
   still gets its mail. Unread posts the session has not been shown are injected
   in the same `additionalContext` block as recalled memories (at most 5, a
-  300-char JSON-encoded preview each, with the `board(action="read")` call);
+  300-char JSON-encoded preview each, with the `board(action="read")` call; a
+  task also gets the claim call when open, or its holder when claimed);
   nothing is marked read. The inbox is fenced by the client's `MEMORY_GRANT`
   (`hook_grant.client_grant`), not the recall namespaces (crow, persona, project):
   a reply lives in its thread's namespace, often another agent's. Remote mode

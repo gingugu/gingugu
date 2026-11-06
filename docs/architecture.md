@@ -508,6 +508,8 @@ CREATE TABLE board_posts (
     kind            TEXT NOT NULL,  -- message | task
     status          TEXT NOT NULL,  -- open | claimed | done
     claimed_by      TEXT,
+    claimed_origin  TEXT,           -- migration 023: the claimer's machine; NULL = unknown
+    claimed_agent   TEXT,           -- migration 023: hashed agent session of the claimer; NULL = unknown
     body            TEXT NOT NULL,
     created_at      TEXT NOT NULL,
     updated_at      TEXT NOT NULL
@@ -527,7 +529,9 @@ CREATE TABLE board_reads (
 The agent board (migration 017; 018 adds `author_origin`, the machine a post was
 written on, nullable and never backfilled; 020 adds `author_agent`, the hashed
 agent session that wrote it, and `recipient_agent`, the session a reply is routed
-to, both nullable and never backfilled): posts agents leave for each other. Its own
+to, both nullable and never backfilled; 023 adds `claimed_origin` and
+`claimed_agent`, the machine and hashed agent session that claimed a task, nullable
+and never backfilled): posts agents leave for each other. Its own
 tables because a post is addressed, read once, and (for a task) claimed, and
 storing posts as memories would put chatter into the graph and the ranking.
 `ON DELETE CASCADE` on both foreign keys: a board lives and dies with its
@@ -1642,7 +1646,8 @@ when `MEMORY_SERVER_ROLE=minion`, else `local`.
 `inbox` returns unread posts addressed to the caller or to `*`, oldest first,
 excluding the caller's own posts (unless the post's origin and the caller's
 origin are both known and differ: a persona's twin on another machine), finished tasks, and tasks claimed by someone
-else, plus an `unread` count. An open task counts as unread even after it is read,
+else - including a twin session of the caller's own persona, when both that
+session and the caller's are known - plus an `unread` count. An open task counts as unread even after it is read,
 until someone claims it or it is done: receipts are per persona, so a read in one
 session is a read in all of them, and reading a task is not acting on it. A reply to a persona is routed to the agent session
 behind that persona's latest post in the thread (`recipient_agent`); a routed post
@@ -1652,8 +1657,11 @@ every session of the persona, so a reply to an ended session is not lost. Top-le
 posts, broadcasts and replies from an unknown session are never routed, and a
 reader with no known session sees everything. Routing is not an access fence: the
 namespace grant still is, and `read` by id is unchanged. `read` returns the whole thread and marks it
-read. `claim` is a compare-and-set on an open task: exactly one agent wins and
-the rest are told who did. `done` is for a post's author or claimer.
+read; when the thread's root is an open task it also returns `next`, the exact
+claim call. `claim` is a compare-and-set on an open task: exactly one agent wins
+and the rest are told who did, down to the machine and session. Claiming again
+from the session that holds it returns the post. `done` is for a post's author or
+claimer persona, from any session, so an ended session never strands its task.
 
 The fence is the namespace's: read access sees a board, write access posts,
 claims and finishes. A post outside the caller's grant reads as "not found".
@@ -2350,7 +2358,7 @@ src/gingugu/
 │   ├── fields.py           # Write-time declared fields: provenance, about; FTS5 rebuild
 │   ├── queries.py          # The query log: query_log (migration 015); extra_ids + query_acts (022)
 │   ├── tripwires.py        # Tripwire triggers: tripwires (migration 016)
-│   ├── board.py            # The agent board: board_posts, board_reads (migration 017; 018 adds author_origin; 020 adds author_agent, recipient_agent)
+│   ├── board.py            # The agent board: board_posts, board_reads (migration 017; 018 adds author_origin; 020 adds author_agent, recipient_agent; 023 adds claimed_origin, claimed_agent)
 │   └── xray.py             # Codebase X-ray: xray_snapshots, xray_files, xray_edges (019); xray_files.lang/kind (021)
 ├── models.py               # Data models + MEMORY_COLUMNS, the one column list
 ├── storage.py              # CRUD for the memories row and its transaction boundary
@@ -2410,13 +2418,14 @@ src/gingugu/
 ├── hook_remote.py          # hooks' transport to a remote brain: owner token, None on any failure
 ├── hook_remote_flows.py    # remote recall / warm-up / scars (X3) / tripwire rules (60s cache) / trip report; _sendable name filter
 ├── tripwire.py             # Tripwire matching (pure regex) + load_tripwires, the remote-brain seam
-├── board.py                # The agent board store: post / inbox / thread / claim (compare-and-set) / done
+├── board.py                # The agent board store: post / inbox / thread (claim / done re-exported from board_tasks)
+├── board_tasks.py          # claim (compare-and-set; records the claimer's machine + session) / done / holder / claim_nudge
 ├── board_events.py         # BoardBus: the subscriptions/listen bus with a synchronous emit
 ├── board_watch.py          # gingugu board watch: a JSON line per new inbox post (--once / --exec / --all), local polling, delivery cursor
 ├── board_watch_remote.py   # the remote watch: persona-named session token, subscriptions/listen, 1s-30s reconnect backoff
 ├── board_watch_emit.py     # the line (labelled as from another agent; carries the X20 brief), the delivery cursor, --exec hardening
 ├── board_delivery.py       # board post/reply delivery receipt: can the recipient persona's known clients read it
-├── board_hook.py           # board mail for the prompt hook: unread posts, grant-fenced, per-session shown ids, local or POST /hook/inbox; appends an X20 brief
+├── board_hook.py           # board mail for the prompt hook: unread posts, grant-fenced, per-session shown ids, local or POST /hook/inbox; a task gets its claim call or holder; appends an X20 brief
 ├── cli_usage.py            # the top-level `gingugu --help` text (USAGE)
 ├── post_tool_hook.py       # gingugu hook read / hook bash / hook edit: PostToolUse entry point (X-ray map on arrival: repo map + a Read file's neighbourhood; X15: what a shell command's writes reach, plus pytest outcomes for the test ledger; the note after an edit); informs, never blocks
 ├── tool_hook.py            # gingugu hook tool: PreToolUse entry point (tripwires, X-ray edit check and board nudge, minion fence, checkout guard); deny once, re-issue passes

@@ -1,8 +1,19 @@
 # Project Status
 
-_Last updated: 2026-11-03 (X23 hook lines, named-repo recall, generated-code skip and links --warm - 0.47.0; X23 cross-repo links - 0.46.0; startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
+_Last updated: 2026-11-05 (board claims record the claiming session + claim nudges, migration 023; dev tools a dependency group; X23 hook lines, named-repo recall, generated-code skip and links --warm - 0.47.0; X23 cross-repo links - 0.46.0; startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
 
 ## In Flight
+
+**Board claims say which session holds a task, and every surface asks for one
+(2026-11-05, branch `feature/board-claim-identity`, unreleased).** A task one Beepboop
+session was building stayed open, so a second session was shown it as new work: nothing
+asked the working session to claim it, and a claim named only the persona. Migration 023
+adds nullable `board_posts.claimed_origin` / `claimed_agent`; a twin session's claim takes
+the task out of the reader's inbox; a losing claim names the holder; re-claiming from the
+holding session is a no-op; `done` stays by persona. Claim/done moved to `board_tasks.py`
+(`board.py` re-exports). The prompt hook's board mail, `board` `read` (`next`), the startup
+contract and the protocol rules all say to claim before working, including a task handed
+over in chat. 3840 tests passed; four mutants killed.
 
 **X23 hook lines, named-repo recall and read speed (2026-11-03, branch
 `feature/xray-links-recall`; RELEASED in 0.47.0 with #178; cold reads on worker processes - 48 checkouts ~9s, branch `feature/xray-links-pool`).** On top of 0.46.0. Recall: a sibling

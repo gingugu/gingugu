@@ -87,3 +87,19 @@ def _migration_020_agent_sessions(conn: sqlite3.Connection) -> None:
     for column in ("author_agent", "recipient_agent"):
         if column not in have:
             conn.execute(f"ALTER TABLE board_posts ADD COLUMN {column} TEXT")
+
+
+def _migration_023_claimer(conn: sqlite3.Connection) -> None:
+    """``board_posts.claimed_origin`` and ``claimed_agent``: which session claimed.
+
+    A claim named only the persona, and one persona runs several sessions, so a
+    twin could not tell its own claim from another session's. The claimer's
+    machine and hashed agent session are recorded the same way a post records
+    its author's. Nullable and never backfilled: an old claim's session is
+    unknown, and unknown keeps the old rule. Resumable like 020: a column
+    already present is skipped.
+    """
+    have = {row[1] for row in conn.execute("PRAGMA table_info(board_posts)")}
+    for column in ("claimed_origin", "claimed_agent"):
+        if column not in have:
+            conn.execute(f"ALTER TABLE board_posts ADD COLUMN {column} TEXT")

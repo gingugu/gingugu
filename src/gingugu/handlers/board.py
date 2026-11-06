@@ -109,6 +109,12 @@ def register(mcp, ctx: ServerContext) -> None:
         given), "claim" (post_id of an open task: exactly one agent wins), "done"
         (post_id: by its author or claimer).
 
+        Claim a task before you start working it - including one the user handed you
+        in chat that is also on the board - and mark it done when it ships. An open
+        task stays in every other session's inbox as new work until it is claimed.
+        A claim records your machine and session; reading an open task's thread
+        returns ``next`` saying so.
+
         A post body with a line of its own ``xray: <range>`` (e.g. ``xray: main..feature/x``)
         arrives with the receiver's X-ray brief of that range. The line may name the
         repo first: ``xray: <repo> <range>`` (e.g. ``xray: acme/widget main..feature/x``);
@@ -142,6 +148,9 @@ def register(mcp, ctx: ServerContext) -> None:
             if action == "read":
                 out = board.thread(ctx.conn, post_id, me)
                 ctx.conn.commit()
+                root = out["post"]
+                if root["kind"] == "task" and root["status"] == "open":
+                    out["next"] = board.claim_nudge(root["id"])  # read is when work starts
                 return {"ok": True, **out}
             if action in ("post", "reply"):
                 if not body:
@@ -164,7 +173,9 @@ def register(mcp, ctx: ServerContext) -> None:
                     author_agent=agent_session.current(),
                 )
             elif action == "claim":
-                made = board.claim(ctx.conn, post_id, me)
+                made = board.claim(
+                    ctx.conn, post_id, me, origin=origin, agent=agent_session.current()
+                )
             elif action == "done":
                 made = board.done(ctx.conn, post_id, me)
             else:

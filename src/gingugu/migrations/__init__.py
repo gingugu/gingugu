@@ -40,6 +40,7 @@ from .board import (
     _migration_017_board,
     _migration_018_author_origin,
     _migration_020_agent_sessions,
+    _migration_023_claimer,
 )
 from .claim_derivation import (
     _migration_005_claims,
@@ -89,6 +90,7 @@ MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
     (20, _migration_020_agent_sessions),
     (21, _migration_021_xray_languages),
     (22, _migration_022_query_acts),
+    (23, _migration_023_claimer),
 ]
 
 # The version a fully-migrated DB lands on. Derived rather than written down so

@@ -62,9 +62,9 @@ def _query(conn, session, results, extras=(), text="q") -> str:
 # --- Migration 022 -----------------------------------------------------------
 
 
-def test_022_is_registered_and_latest():
+def test_022_is_registered():
     assert (22, _migration_022_query_acts) in MIGRATIONS
-    assert LATEST_SCHEMA_VERSION == 22
+    assert LATEST_SCHEMA_VERSION >= 22
 
 
 def test_upgrade_from_21_adds_extra_ids_and_the_acts_table():
@@ -73,7 +73,7 @@ def test_upgrade_from_21_adds_extra_ids_and_the_acts_table():
         "INSERT INTO query_log(id, session_id, tool, query, namespaces, result_ids, created_at) "
         "VALUES ('q0', 's', 'recall', 'x', 'ns', '[\"a\"]', '2026-11-01T00:00:00+00:00')"
     )
-    assert migrate(old) == 22
+    assert migrate(old) == LATEST_SCHEMA_VERSION
     assert old.execute("SELECT extra_ids FROM query_log").fetchone()[0] == "[]"
     assert old.execute("SELECT COUNT(*) FROM query_acts").fetchone()[0] == 0
     names = {r[0] for r in old.execute("SELECT name FROM sqlite_master WHERE type = 'index'")}
