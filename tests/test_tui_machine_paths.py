@@ -63,9 +63,15 @@ def test_only_human_facing_modules_import_the_tui():
 
 def _run_on_pty(hook: str, env: dict[str, str], payload: bytes) -> tuple[bytes, str]:
     import pty
+    import termios
     import threading
 
     master, slave = pty.openpty()
+    # Raw output: with OPOST the kernel's \n -> \r\n can emit \r\r\n under load,
+    # which would make two identical runs compare unequal.
+    attrs = termios.tcgetattr(slave)
+    attrs[1] &= ~termios.OPOST
+    termios.tcsetattr(slave, termios.TCSANOW, attrs)
     chunks: list[bytes] = []
 
     def drain() -> None:  # a pty buffer is small; read while the hook writes
@@ -93,7 +99,6 @@ def _run_on_pty(hook: str, env: dict[str, str], payload: bytes) -> tuple[bytes, 
         reader.join(10)
     finally:
         os.close(master)
-    # A pty turns \n into \r\n; both runs go through the same one, so compare as is.
     return b"".join(chunks), err.decode(errors="replace")
 
 

@@ -77,6 +77,7 @@ def test_serial_comes_from_the_cleaned_name():
 @pytest.mark.skipif(sys.platform == "win32", reason="needs a POSIX pty")
 def test_animated_show_on_a_pty_is_clean(tmp_path):
     import pty
+    import termios
 
     code = (
         "import sys; from gingugu import tui; name = sys.argv[1]\n"
@@ -84,6 +85,11 @@ def test_animated_show_on_a_pty_is_clean(tmp_path):
         " dry_run=False, command='init', subject=name)\n"
     )
     master, slave = pty.openpty()
+    # Raw output: with OPOST the kernel turns \n into \r\n, and when the queue
+    # backs up under load it can emit \r\r\n. Off, every \r seen is the show's own.
+    attrs = termios.tcgetattr(slave)
+    attrs[1] &= ~termios.OPOST
+    termios.tcsetattr(slave, termios.TCSANOW, attrs)
     chunks: list[bytes] = []
 
     def drain() -> None:
@@ -114,6 +120,6 @@ def test_animated_show_on_a_pty_is_clean(tmp_path):
     assert proc.wait(timeout=60) == 0
     reader.join(5)
     os.close(master)
-    out = b"".join(chunks).decode("utf-8", "replace").replace("\r\n", "\n")
+    out = b"".join(chunks).decode("utf-8", "replace")
     _assert_clean(out)
     assert "mid" in out and "end" in out  # the readable parts survive
