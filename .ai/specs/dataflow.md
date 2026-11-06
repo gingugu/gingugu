@@ -480,7 +480,8 @@ UserPromptSubmit event  →  .claude/hooks/user_prompt_recall.py (pure stdlib)
         namespaces; minus ids already shown this session (key board:<session>
         in hook-sessions); read-only, nothing marked read. At most 5 posts, a
         300-char JSON-encoded preview each, each with its board(action="read")
-        call. Never raises. A post body with a line of its own `xray: <range>`
+        call; a task also with its claim call when open, or its holder
+        (persona, machine, session) when claimed. Never raises. A post body with a line of its own `xray: <range>`
         also gets its X-ray brief appended (X20: the first such post, once per
         prompt, <= 3500 chars, rendered from the prompt's cwd, or from the local
         checkout of the repo an `xray: <repo> <range>` line names; xray/board_brief;

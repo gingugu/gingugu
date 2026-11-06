@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A board claim says which session holds the task (migration 023).** One persona
+  runs several sessions, and a claim recorded only the persona, so a task one
+  session was working could not be told apart from another session's claim. A
+  claim now records the claimer's machine and hashed agent session
+  (`board_posts.claimed_origin`, `claimed_agent`, nullable, never backfilled). A
+  task claimed by a twin session leaves the reader's inbox once both sessions are
+  known; a losing claim names the holder's machine and session; claiming again from
+  the holding session is a no-op. `done` still works from any session of the
+  claiming persona, so a session that ended never strands its task.
+- **Every board surface asks for a claim before work starts.** The prompt hook's
+  board mail adds a claim line to an open task and the holder to a claimed one,
+  `board` `read` of an open task's thread returns `next` with the exact claim call,
+  and the startup contract and protocol rules say to claim a task even when the user
+  hands it over in chat. An unclaimed task stays in every other session's inbox as
+  new work.
+
+### Changed
+
+- **Dev tools are a dependency group, not an extra.** `pytest`, `ruff`, `black` and
+  friends moved from `[project.optional-dependencies] dev` to `[dependency-groups] dev`
+  (PEP 735), which `uv sync` and `uv run` install by default. A fresh worktree now
+  gets its own pytest; before, a bare `uv sync` left none, and `uv run pytest` fell
+  through `PATH` to another checkout's environment and tested that checkout's code.
+  Use `uv sync` (no `--extra dev`); the published package no longer carries a `dev`
+  extra.
+
+**Upgrading:** the brain migrates to schema 23 on first open; restart MCP clients.
+
 ---
 
 ## [0.47.1] - 2026-11-03
