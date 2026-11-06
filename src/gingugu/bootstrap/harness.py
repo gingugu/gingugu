@@ -20,8 +20,9 @@ import argparse
 import json
 from pathlib import Path
 
+from .. import tui
 from ..prompt_hook import _PERSONA_RE as NAMESPACE_RE
-from . import init_claude_code, theme
+from . import init_claude_code
 from ._files import read_template, safe_read, write_file
 from .harness_migrate import migrate_settings, retire_legacy
 from .harness_prune import prune
@@ -228,7 +229,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.prune:
         results = ["Claude Code harness prune:", *prune(target, dry_run=args.dry_run)]
-        print(theme.render(results, dry_run=args.dry_run))
+        tui.report(results, dry_run=args.dry_run, command="harness", subject=target.name)
         return 0
 
     settings_path = target / ".claude" / "settings.json"
@@ -293,5 +294,5 @@ def main(argv: list[str] | None = None) -> int:
     note = untrusted_note(target.resolve())
     if note:
         results.extend(["", "Claude Code trust:", f"  warn   {note}"])
-    print(theme.render(results, dry_run=args.dry_run))
+    tui.report(results, dry_run=args.dry_run, command="harness", subject=target.name)
     return 0

@@ -17,6 +17,7 @@ import stat
 import anyio
 import pytest
 
+from gingugu import machine
 from tests.proxy_fixtures import make_brain, payload, serving, through_proxy
 
 _CRED_TOOLS = {"credential_store", "credential_get", "credential_list", "credential_delete"}
@@ -175,8 +176,22 @@ async def test_memory_stats_reports_the_local_vault_not_the_brains(brain, local_
             multi = await session.call_tool("memory_stats", {"namespace": "alpha,beta"})
     assert payload(single)["stats"]["credentials"]["total"] == 1
     assert payload(multi)["global"]["credentials"]["total"] == 1
+    for creds in (payload(single)["stats"]["credentials"], payload(multi)["global"]["credentials"]):
+        assert creds["machine"] == machine.name() and "note" not in creds
     for result in (single, multi):
         assert json.dumps(result.structured_content or {}).count('"total": 0') == 0
+
+
+async def test_an_empty_local_vault_says_zero_is_this_machine_and_expected(brain, local_db):
+    async with serving(brain.app()) as served:
+        async with through_proxy(served.url, brain.machine, vault_db=local_db) as (session, _):
+            await session.initialize()
+            await _two_namespaces(session)
+            single = payload(await session.call_tool("memory_stats", {}))
+            multi = payload(await session.call_tool("memory_stats", {"namespace": "alpha,beta"}))
+    for creds in (single["stats"]["credentials"], multi["global"]["credentials"]):
+        assert creds["total"] == 0 and creds["machine"] == machine.name()
+        assert "per machine" in creds["note"]
 
 
 async def test_without_a_vault_memory_stats_passes_through(brain):

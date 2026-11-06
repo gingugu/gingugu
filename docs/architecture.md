@@ -558,6 +558,13 @@ Never pruned: a finished task leaves the inbox by status, not by delete.
 Only a hash of the agent session is stored (`sha256(CLAUDE_CODE_SESSION_ID)[:32]`,
 `agent_session.py`): the raw id is a handle to a live transcript.
 
+A reader is persona + machine + session. Its own persona's post is mail when it
+comes from a twin (both `author_origin` and the reader's machine known and
+different) or a sibling session on the same machine (both `author_agent` and the
+reader's session known and different); the session that wrote a post never gets
+it, and an unknown machine or session on either side keeps the persona as the
+identity (`board.is_me`, `_inbox_where`).
+
 #### `xray_snapshots` / `xray_files` / `xray_edges`
 Codebase X-ray import graphs (migration 019, `migrations/xray.py`). A snapshot
 is keyed `UNIQUE(namespace_id, fingerprint)` - a content fingerprint over every
@@ -1510,7 +1517,9 @@ Get health overview of the memory system.
   ...}}` - `global` is the four namespace-independent fields
   (`namespaces`, `access_log_rows`, `query_log_rows`, `credentials`) computed
   once, and each `by_namespace` entry is that namespace's own scoped stats
-  minus those four fields. This is what collapses the session-start protocol's old two-call
+  minus those four fields. `credentials` is this machine's vault summary,
+  stamped with `machine` (`machine.name()`) and, at `total: 0`, a `note` that
+  the vault is per machine. This is what collapses the session-start protocol's old two-call
   pattern (`memory_stats(namespace="crow")` then one per project) into one
   call that computes the shared block once instead of once per namespace.
   `review_limit` applies to every namespace's block.
@@ -1657,7 +1666,9 @@ when `MEMORY_SERVER_ROLE=minion`, else `local`.
 
 `inbox` returns unread posts addressed to the caller or to `*`, oldest first,
 excluding the caller's own posts (unless the post's origin and the caller's
-origin are both known and differ: a persona's twin on another machine), finished tasks, and tasks claimed by someone
+origin are both known and differ - a persona's twin on another machine - or the
+post's `author_agent` and the caller's agent session are both known and differ -
+a sibling session on the same machine), finished tasks, and tasks claimed by someone
 else - including a twin session of the caller's own persona, when both that
 session and the caller's are known - plus an `unread` count. An open task counts as unread even after it is read,
 until someone claims it or it is done: receipts are per persona, so a read in one
@@ -2189,7 +2200,11 @@ Remove a service bundle or a specific field. Cleans up Keychain entries.
   - **`expiring_soon`** — expiry within 14 days
   - **`expired`** — past the `expires_at` date
 - `memory_stats` includes a **credential health summary**: total count,
-  expired count, expiring-soon count.
+  expired count, expiring-soon count, and `machine` - the machine whose vault
+  it counts (`machine.name()`, the sanitised short hostname, also the default
+  `remote login` token name). The vault is per machine, so at `total: 0` the
+  block carries a `note` saying nothing is vaulted on this machine - expected,
+  not data loss. Remote mode reports the local vault the same way.
 - Expired credentials **still return values** — the system warns, it doesn't
   block. Rotation is the user's responsibility.
 
@@ -2358,6 +2373,7 @@ src/gingugu/
 ├── remote_args.py          # usage text + argparse for `gingugu remote`, mint ssh argv
 ├── remote_tls.py           # Client TLS: pins, verify_for, downgrade refusal, login's live check, diagnose/speaks_tls
 ├── credential_cli.py       # `gingugu credential list|delete`: the vault by hand, at a terminal
+├── showable.py             # clean(): strips ESC sequences, C0/C1, zero-width and bidi from untrusted text before a terminal shows it
 ├── confirm.py              # Destructive tools take `confirm`; omitted, a dialog (MCP elicitation) where the client can show one; MEMORY_CONFIRM_DESTRUCTIVE opt-out
 ├── destructive.py          # The big-delete gate: what counts as big, the hook's single-use approvals, the per-session hard-delete count
 ├── proxy_gate.py           # Remote mode: takes a big delete's approval at the proxy before the call is relayed to the brain
@@ -2389,8 +2405,22 @@ src/gingugu/
 │   ├── harness_retired.py  # Kit file names, sha256 manifest, symlink checks
 │   ├── harness_settings.py # Harness hooks + deny rules, merged additively; hook-command parsing
 │   ├── settings.py         # Non-destructive .claude/settings.json merge
-│   ├── theme.py            # The 90s boot sequence; degrades to monochrome off-TTY
 │   └── templates/harness/  # Hooks, minions, skill, .ai/ scaffold, CLAUDE.md block
+│
+│   # ── CLI face (human-facing commands only; machine paths never import it) ──
+├── tui/
+│   ├── __init__.py         # report() for init/harness, run() wrapper, banner, version line
+│   ├── caps.py             # Capability ladder: truecolor/256/16/plain, unicode, width, motion
+│   ├── paint.py            # RGB quantized to the terminal; gradients; CGA + amber palette
+│   ├── art.py              # Block logo, Win98 keygen window chrome, Unicode/ASCII glyph sets
+│   ├── fx.py               # Plasma, copper rasterbars, sine scroller, progress bar (pure f(t))
+│   ├── stage.py            # Draws frames in place; any key / Ctrl-C skips; cursor restored
+│   ├── keys.py             # Non-blocking keypress (cbreak / msvcrt), terminal always restored
+│   ├── keygen.py           # The report: tags, LEVELs, score, achievement, finale, fake serial
+│   ├── synth.py            # "C0R3 D3PTH": the original 8-bar chiptune loop, stdlib WAV synth
+│   ├── audio.py            # Plays the loop via /usr/bin/afplay or paplay/aplay (absolute PATH only)/winsound; killed on exit
+│   ├── signals.py          # SIGTERM/SIGHUP while a show is live: restore the terminal, stop the music, re-deliver
+│   └── party.py            # gingugu party: the cracktro on demand
 │
 │   # ── Storage ───────────────────────────────────────────────────
 ├── database.py             # The connection alone: WAL, foreign keys, busy timeout
@@ -2488,6 +2518,7 @@ src/gingugu/
 │
 │   # ── Stats + misc ──────────────────────────────────────────────
 ├── stats.py                # Counts, confidence, dormancy, review sweep; global block
+├── machine.py              # This machine's name; the vault summary that says whose vault it counts
 ├── hygiene_stats.py        # Ghost namespaces, duplicate titles
 ├── graph_stats.py          # Relation-graph health: edges, degree, orphans, spread cap
 ├── size_stats.py           # The character cost the counts do not show
@@ -2528,8 +2559,8 @@ src/gingugu/
 ```
 
 Dev-only tooling lives at the repo root and never ships in the wheel: `bench/`
-(the golden-set retrieval benchmark), `scripts/` (`release.py`, `fleet.py`, and
-`live_rig.py`, which runs this checkout's hook doorway, hook and server live in a
+(the golden-set retrieval benchmark), `scripts/` (`release.py`, `fleet.py`, `cli_demo.py` (plays every
+CLI effect and the loop), and `live_rig.py`, which runs this checkout's hook doorway, hook and server live in a
 throwaway Claude Code project on a scratch brain) and `ui/` (the Memory Explorer source,
 whose built bundle is what `webui.py` serves).
 
