@@ -26,9 +26,11 @@ def _template_bytes(name: str) -> bytes:
 def _old_doorway() -> bytes:
     """The doorway 0.47.x shipped, before the big-delete gate (8cf3d9b^).
 
-    A fixture, not `git show`: CI clones shallow.
+    A fixture, not `git show`: CI clones shallow. Normalised to LF because a
+    Windows checkout may already hand it over with CRLF.
     """
-    return (Path(__file__).parent / "fixtures" / "pre_tool_tripwire_0.47.py.txt").read_bytes()
+    raw = (Path(__file__).parent / "fixtures" / "pre_tool_tripwire_0.47.py.txt").read_bytes()
+    return raw.replace(b"\r\n", b"\n")
 
 
 @pytest.mark.parametrize("name", sorted(SHIPPED))
