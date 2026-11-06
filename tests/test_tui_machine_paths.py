@@ -54,7 +54,7 @@ def _imports_tui(path: Path) -> bool:
 
 def test_only_human_facing_modules_import_the_tui():
     importers = {
-        str(path.relative_to(SRC))
+        path.relative_to(SRC).as_posix()
         for path in SRC.rglob("*.py")
         if "tui" not in path.relative_to(SRC).parts and _imports_tui(path)
     }
