@@ -109,9 +109,7 @@ def test_animated_show_on_a_pty_is_clean(tmp_path):
         "COLUMNS": "90",
         "LINES": "40",
     }
-    proc = subprocess.Popen(
-        [sys.executable, "-c", code, EVIL], stdin=slave, stdout=slave, env=env
-    )
+    proc = subprocess.Popen([sys.executable, "-c", code, EVIL], stdin=slave, stdout=slave, env=env)
     os.close(slave)
     assert proc.wait(timeout=60) == 0
     reader.join(5)

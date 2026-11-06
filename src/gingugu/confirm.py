@@ -64,8 +64,6 @@ CALLER_SAID_NO = "gingugu:confirm:caller-said-no"  # the caller passed confirm=f
 UNAPPROVED = "gingugu:confirm:unapproved"  # a big delete the person never approved
 
 
-
-
 def shown(text: Any, limit: int = 80) -> str:
     """A model- or memory-supplied string as it may appear in a dialog: quoted,
     on one line, with no control or bidi characters, and capped - so a steered

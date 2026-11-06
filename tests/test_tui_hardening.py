@@ -134,6 +134,7 @@ def test_sigterm_mid_show_restores_the_terminal_and_kills_the_player(tmp_path):
     marker = tmp_path / "pid"
     env = {"PYTHONPATH": str(SRC), "GINGUGU_CACHE_DIR": str(tmp_path / "c")}
     env["PATH"] = "/usr/bin:/bin"
+
     proc = subprocess.Popen(
         [sys.executable, "-c", _SIGTERM_CHILD, str(marker)],
         stdin=slave, stdout=slave, stderr=subprocess.DEVNULL, env=env,

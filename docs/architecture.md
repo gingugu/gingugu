@@ -2373,6 +2373,7 @@ src/gingugu/
 ├── remote_args.py          # usage text + argparse for `gingugu remote`, mint ssh argv
 ├── remote_tls.py           # Client TLS: pins, verify_for, downgrade refusal, login's live check, diagnose/speaks_tls
 ├── credential_cli.py       # `gingugu credential list|delete`: the vault by hand, at a terminal
+├── showable.py             # clean(): strips ESC sequences, C0/C1, zero-width and bidi from untrusted text before a terminal shows it
 ├── confirm.py              # Destructive tools take `confirm`; omitted, a dialog (MCP elicitation) where the client can show one; MEMORY_CONFIRM_DESTRUCTIVE opt-out
 ├── destructive.py          # The big-delete gate: what counts as big, the hook's single-use approvals, the per-session hard-delete count
 ├── proxy_gate.py           # Remote mode: takes a big delete's approval at the proxy before the call is relayed to the brain
@@ -2417,7 +2418,8 @@ src/gingugu/
 │   ├── keys.py             # Non-blocking keypress (cbreak / msvcrt), terminal always restored
 │   ├── keygen.py           # The report: tags, LEVELs, score, achievement, finale, fake serial
 │   ├── synth.py            # "C0R3 D3PTH": the original 8-bar chiptune loop, stdlib WAV synth
-│   ├── audio.py            # Plays the loop via afplay/paplay/aplay/winsound; killed on exit
+│   ├── audio.py            # Plays the loop via /usr/bin/afplay or paplay/aplay (absolute PATH only)/winsound; killed on exit
+│   ├── signals.py          # SIGTERM/SIGHUP while a show is live: restore the terminal, stop the music, re-deliver
 │   └── party.py            # gingugu party: the cracktro on demand
 │
 │   # ── Storage ───────────────────────────────────────────────────
