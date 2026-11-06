@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -43,7 +44,7 @@ def test_the_rig_is_this_checkouts_doorway_hook_and_server_on_a_scratch_brain(tm
         assert env["MEMORY_DB_PATH"] == str(built.db)
         assert env["MEMORY_CREDENTIALS_ENABLED"] == "false"
     assert built.db.parent.is_relative_to(built.root)
-    assert built.env["PATH"].split(":")[0] == str(repo / ".venv" / "bin")
+    assert built.env["PATH"].split(os.pathsep)[0] == str(repo / ".venv" / "bin")
 
 
 def test_credentials_only_when_asked(tmp_path):
