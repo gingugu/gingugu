@@ -79,6 +79,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Board mail between two sessions of one persona on the same machine is delivered.**
+  A reader is now persona + machine + agent session: your own persona's post is mail
+  from a twin machine or from a sibling session (both sessions known and different), a
+  reply to a sibling's post is routed back to that session, and the session that wrote a
+  post never sees it. An unknown session on either side keeps the old rule.
 - **A delete no longer dead-ends on a client with no dialog.** In Claude Code's VS Code
   extension, which answers every MCP dialog "decline" unseen, every destructive call used
   to end in a refusal. They now complete on the agent's `confirm=true`.

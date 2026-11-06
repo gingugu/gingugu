@@ -1,8 +1,21 @@
 # Project Status
 
-_Last updated: 2026-11-05 (X-ray lists who reads a removed key; deletes need no terminal + the big-delete gate; board claims record the claiming session + claim nudges, migration 023; dev tools a dependency group; X23 hook lines, named-repo recall, generated-code skip and links --warm - 0.47.0; X23 cross-repo links - 0.46.0; startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
+_Last updated: 2026-11-06 (board mail reaches sibling sessions on one machine; X-ray lists who reads a removed key; deletes need no terminal + the big-delete gate; board claims record the claiming session + claim nudges, migration 023; dev tools a dependency group; X23 hook lines, named-repo recall, generated-code skip and links --warm - 0.47.0; X23 cross-repo links - 0.46.0; startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
 
 ## In Flight
+
+**Board mail reaches sibling sessions on one machine (2026-11-06, branch
+`fix/board-same-machine-sessions`, stacked on `feature/xray-key-readers`, board
+5d5854a0).** Two sessions of one persona on the same machine never received each
+other's posts: `_inbox_where` counted an own-persona post as mail only from another
+machine. It now also counts one whose `author_agent` and the reader's agent session are
+both known and different; `is_me` compares persona, machine and session (each only when
+both sides are known), so `_reply_to` / `_route` send a reply to a sibling's post back to
+that sibling. The writing session never sees its own post, and a reader with no session
+id keeps the old rule (a watcher started by a session reads the same
+`CLAUDE_CODE_SESSION_ID`, so it shares that session's identity and never echoes it).
+Every inbox surface already passed the reader's session. Read receipts stay per persona. Tests: `test_board_sibling_sessions.py` plus a
+real-HTTP `/hook/inbox` case.
 
 **X-ray lists who reads a removed key (2026-11-05, branch `feature/xray-key-readers`,
 stacked on `fix/agent-confirm-deletes`, board d5639dd5).** Nothing imports a data
@@ -615,8 +628,8 @@ tokens have none). `board._inbox_where` treats your own persona's post as mail
 only when both origins are known and differ; `board.is_me` makes reply
 routing machine-aware. `/hook/inbox` takes the origin from the owner token
 (`serve_hooks._endpoint(with_origin=True)`), never the body. Labels and watch
-lines say "on <machine>". Limitation: two sessions of one persona on the same
-machine still read as one agent. A machine's name is its owner token's name,
+lines say "on <machine>". Limitation at the time: two sessions of one persona on
+the same machine still read as one agent (fixed 2026-11-06, sibling sessions). A machine's name is its owner token's name,
 set at `gingugu remote login --name` (default: the short hostname at login).
 
 **Agent board PR 3: MERGED (#134), released in 0.27.0.** Board mail in the

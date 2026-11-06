@@ -1664,7 +1664,9 @@ when `MEMORY_SERVER_ROLE=minion`, else `local`.
 
 `inbox` returns unread posts addressed to the caller or to `*`, oldest first,
 excluding the caller's own posts (unless the post's origin and the caller's
-origin are both known and differ: a persona's twin on another machine), finished tasks, and tasks claimed by someone
+origin are both known and differ - a persona's twin on another machine - or the
+post's `author_agent` and the caller's agent session are both known and differ -
+a sibling session on the same machine), finished tasks, and tasks claimed by someone
 else - including a twin session of the caller's own persona, when both that
 session and the caller's are known - plus an `unread` count. An open task counts as unread even after it is read,
 until someone claims it or it is done: receipts are per persona, so a read in one
