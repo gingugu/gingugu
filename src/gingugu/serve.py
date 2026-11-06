@@ -62,8 +62,9 @@ environment variable, since the process is meant to run under a supervisor
   MEMORY_SERVE_TLS_SAN         Extra names for the generated cert, comma-separated
   MEMORY_LOG_LEVEL             Log verbosity (default: INFO)
   MEMORY_CREDENTIALS_ENABLED   Enable the credential_* tools (default: true)
-  MEMORY_CONFIRM_DESTRUCTIVE   off skips asking the user to confirm destructive
-                                tools, for automation (default: ask)
+  MEMORY_CONFIRM_DESTRUCTIVE   off skips the confirmation destructive tools need,
+                                dialog and big-delete approval, for automation
+                                (default: confirm)
 
 Scoped tokens, each limited to named namespaces read-only or read-write, are
 managed with `gingugu token add|list|revoke` and take effect without a restart.

@@ -30,11 +30,14 @@ observer that answers from the local DB, or with a remote brain on forwards to
 the brain's owner-only `GET /ui/api/*` (see **Explorer read path** in
 `.ai/specs/dataflow.md`). It binds loopback only and credits no recall.
 The proxy also serves this machine's credential vault locally, so a
-`credential_delete` is confirmed with the user by the proxy, while the
-brain's own confirmations (a hard forget, say) relay through it unchanged -
-except for a client known to show no dialog (Claude Code's VS Code extension),
-whose `initialize` the proxy forwards without `elicitation`, so the brain refuses
-"cannot ask" rather than relaying a question nobody sees.
+`credential_delete` is checked on this machine by the vault itself. A big delete
+(see **Destructive calls** below) is checked by the proxy before the call is
+relayed to the brain, because the person's approval is recorded here, beside the
+hook, where the brain cannot see it. The brain's own dialogs (a hard forget with
+`confirm` omitted, say) relay through unchanged - except for a client known to show
+no dialog (Claude Code's VS Code extension), whose `initialize` the proxy forwards
+without `elicitation`, so the brain tells it to ask and call again with
+`confirm=true` rather than relaying a question nobody sees.
 
 ---
 
@@ -113,7 +116,7 @@ graph LR
     C --> G
     C --> L
     C --> K
-    C -.->|confirmation dialog:<br/>destructive calls| A
+    C -.->|confirmation dialog:<br/>destructive calls, confirm omitted| A
     D --> H
     D --> I
     E --> H
@@ -1432,8 +1435,8 @@ without `memory_ids`, discover which memories are worth consolidating.
   caller that built its id list from an empty collection fails loudly).
 - `strategy` (optional) — merge|summarize|deduplicate (default: merge)
 - `keep_originals` (optional) — retain originals as deprecated (default: true).
-  `false` hard-deletes the originals, and the user confirms that through the
-  client (see `MEMORY_CONFIRM_DESTRUCTIVE`).
+  `false` hard-deletes the originals and needs `confirm=true` (see **Destructive
+  calls**); past 10 originals it is a big delete and the person approves too.
 - `namespace` (optional, suggest mode) - namespace to scan; resolved from
   config when omitted. Unknown namespaces are an error (reads never create).
 - `min_similarity` (optional, suggest mode) - pairwise similarity threshold in
@@ -1462,8 +1465,9 @@ Deprecate or permanently delete a memory.
 **Parameters:**
 - `memory_id` (required) — UUID of memory
 - `hard_delete` (optional) — permanently remove vs. mark deprecated (default: false).
-  A hard delete asks the user to confirm through the client; declining, or a
-  client that cannot ask, is a structured refusal.
+  A hard delete needs `confirm=true` (see **Destructive calls**); `confirm=false`
+  refuses, and hard deletes past 10 in one session need the person's approval.
+- `confirm` (optional) — the caller's confirmation; see **Destructive calls**.
 - `reason` (optional) — why this is being forgotten
 
 ### `memory_namespaces`
@@ -1482,8 +1486,9 @@ List and manage namespaces.
   cannot exist. `crow` and `default` are seeded `""` by migration 007.
 - `cascade` (optional, `delete` only) — delete a non-empty namespace along
   with its memories (default: false). The `default` namespace is protected.
-  The user confirms the cascade through the client, and the dialog names how
-  many memories go with it.
+  A namespace delete is a big delete (see **Destructive calls**): it needs
+  `confirm=true` and the person's approval; with `confirm` omitted the dialog
+  names how many memories go with it.
 
 ### `memory_stats`
 Get health overview of the memory system.
@@ -1947,25 +1952,44 @@ every time, with a pointer to a worktree. Primary means `git rev-parse
 `cd` earlier in the command and `git -C` decide which checkout that is. A
 `GINGUGU_PRIMARY_OK=1` prefix lets one command through.
 
-**Destructive calls ask the user, not the model.** A hard `memory_forget`, a
-cascading `memory_namespaces` delete, `memory_consolidate` with
+**Destructive calls need a confirmation, and a big one needs the person.** A hard
+`memory_forget`, a cascading `memory_namespaces` delete, `memory_consolidate` with
 `keep_originals=False`, a `memory_import` with `on_conflict="replace"` that
-would overwrite existing ids, and `credential_delete` each show the user a
-confirmation through the client (MCP elicitation) and go ahead only on accept
-with the box ticked. The answer is a hidden parameter, absent from the tool's
-input schema, so the model cannot supply it. Decline, cancel (what a headless
-client answers) and a client without elicitation each return a structured
-`ok: false`. Claude Code's VS Code extension declares elicitation but answers
-every one "decline" without showing a dialog, so a stdio server treats it as
-unable to ask (`CLAUDE_CODE_ENTRYPOINT=claude-vscode`; the variable is ignored
-over HTTP, where it says nothing about the remote client). In remote mode the
-proxy strips `elicitation` from the `initialize` it forwards to the brain and
-replays to the local vault, so both refuse the same way. The `credential_delete`
-refusal then names the way out: `gingugu credential delete NAME` in a terminal.
-`MEMORY_CONFIRM_DESTRUCTIVE=off` (also `false`/`0`/`no`,
-case-insensitive; anything else keeps confirmations on) on the server that
-executes the tool skips the dialog, for automation: in remote mode that is
-the brain for memory tools and the local proxy for the credential vault.
+would overwrite existing ids, and `credential_delete` each take a `confirm`
+argument. `confirm=true` is the confirmation for an ordinary delete: the agent
+asks the user in chat and passes it, so no terminal or dialog is needed.
+`confirm=false` refuses. Omitted, the call falls back to a confirmation dialog
+through the client (MCP elicitation) where the client can show one, and goes
+ahead only on accept with the box ticked; the dialog's answer is a hidden
+parameter absent from the tool's input schema. A client that cannot show a
+dialog gets a structured `ok: false` telling the agent to ask the user and call
+again with `confirm=true`. Claude Code's VS Code extension declares elicitation
+but answers every one "decline" without showing a dialog, so a stdio server
+treats it as unable to ask (`CLAUDE_CODE_ENTRYPOINT=claude-vscode`; the variable
+is ignored over HTTP, where it says nothing about the remote client). In remote
+mode the proxy strips `elicitation` from the `initialize` it forwards to the
+brain and replays to the local vault, so both answer the same way.
+
+**The big-delete gate.** `confirm=true` alone is the model's say-so, so a big
+delete also needs the person: a namespace delete, `credential_delete`, a
+consolidation or replace-import over 10 memories, and the hard deletes past 10 in
+one session. gingugu's PreToolUse hook (`gingugu hook tool`) answers
+`permissionDecision: "ask"`, so Claude Code shows its own permission prompt. That
+holds in auto and bypass mode, and becomes a deny where nobody can answer
+(`claude -p`). The hook leaves a single-use approval (15 minute TTL) under
+`<data dir>/hook-sessions/approvals`, keyed to that exact call. A local stdio
+server requires it before acting on `confirm=true` on a big delete (else a dialog
+if the client can show one, else a refusal: "is a big delete and needs the user's
+own approval"). In remote mode the proxy takes the approval before relaying to
+the brain; `credential_delete` goes to the local vault, which checks it itself.
+`MEMORY_CONFIRM_DESTRUCTIVE=off` (also `false`/`0`/`no`, case-insensitive; anything
+else keeps confirmations on) on the server that executes the tool skips the
+confirmation and the gate, for automation: in remote mode that is the brain for
+memory tools and the local proxy for the credential vault. The `gingugu credential
+delete` CLI remains for deleting by hand.
+
+**Forks.** A fork (`agent_type: "fork"`) inherits the whole conversation, so the
+minion fence gives it the main thread's rights.
 
 ### `memory_export`
 Export memories to a portable JSON payload (backup/transfer). Credentials are
@@ -1983,8 +2007,9 @@ Import a payload produced by `memory_export`. Namespaces are matched by
 **Parameters:**
 - `data` (required) — the export payload
 - `on_conflict` (optional) — `skip` (default) or `replace` for memories
-  sharing an id. A `replace` that would overwrite existing ids asks the user
-  to confirm through the client, naming how many.
+  sharing an id. A `replace` that would overwrite existing ids needs
+  `confirm=true` (see **Destructive calls**), and the person's approval past 10
+  memories; with `confirm` omitted the dialog names how many.
 
 ---
 
@@ -2133,12 +2158,14 @@ Remove a service bundle or a specific field. Cleans up Keychain entries.
 **Parameters:**
 - `service_name` (required) — which service
 - `field_name` (optional) — delete a single field instead of the whole service
-- `confirm` (optional, default `true`) — the user's confirmation dialog decides;
-  `confirm=false` refuses outright. Through a remote-mode proxy the dialog is
-  asked by the proxy's local vault session. Where no client can show it, the
-  refusal points at `gingugu credential delete NAME [--field F]` in a terminal,
-  which asks for the service name typed back (see `gingugu credential list` to
-  find names; secret values are never printed).
+- `confirm` (optional, default omitted) — `true` is the agent's confirmation,
+  `false` refuses outright, omitted asks via a dialog where the client can show
+  one. A credential delete is always a big delete (a keychain secret has no export
+  and no undo): it also needs the person's approval through the big-delete gate
+  (see **Destructive calls**), which the local vault checks itself, also in
+  remote mode. `gingugu credential delete NAME [--field F]` remains for deleting
+  by hand at a terminal (asks for the service name typed back; see `gingugu
+  credential list` to find names; secret values are never printed).
 
 ### Expiry Behavior
 
@@ -2316,7 +2343,9 @@ src/gingugu/
 ├── remote_args.py          # usage text + argparse for `gingugu remote`, mint ssh argv
 ├── remote_tls.py           # Client TLS: pins, verify_for, downgrade refusal, login's live check, diagnose/speaks_tls
 ├── credential_cli.py       # `gingugu credential list|delete`: the vault by hand, at a terminal
-├── confirm.py              # Destructive tools ask the user (MCP elicitation); MEMORY_CONFIRM_DESTRUCTIVE opt-out
+├── confirm.py              # Destructive tools take `confirm`; omitted, a dialog (MCP elicitation) where the client can show one; MEMORY_CONFIRM_DESTRUCTIVE opt-out
+├── destructive.py          # The big-delete gate: what counts as big, the hook's single-use approvals, the per-session hard-delete count
+├── proxy_gate.py           # Remote mode: takes a big delete's approval at the proxy before the call is relayed to the brain
 ├── grants.py               # Per-namespace read/write grants plus a home namespace (derived tokens), bound per tool call
 ├── serve_ui.py             # GET /ui/api/*: the Explorer read API on a brain, owner tokens only
 ├── webui_remote.py         # gingugu ui in remote mode: forwards /api/* to the brain's /ui/api/* (token in the header only), loopback checks
@@ -2459,7 +2488,7 @@ src/gingugu/
 └── handlers/
     ├── __init__.py         # Handler registry / dispatch table
     ├── memory.py           # store / update
-    ├── forget.py           # memory_forget; a hard delete asks the user
+    ├── forget.py           # memory_forget; a hard delete takes `confirm`
     ├── hints.py            # Write-time similar + relation hints
     ├── recall.py           # recall / context
     ├── capability_view.py  # Stamps capability {run, path, exists} onto reads + the lane entries
@@ -2470,14 +2499,14 @@ src/gingugu/
     ├── excerpt.py          # excerpt
     ├── relations.py        # relate / unrelate / edges
     ├── relation_ops.py     # Batch parsing for relate and unrelate
-    ├── consolidate.py      # consolidate; keep_originals=False asks the user
+    ├── consolidate.py      # consolidate; keep_originals=False takes `confirm`
     ├── dream.py            # dream
     ├── fence.py            # Grant policy: request grant (HTTP token or stdio MEMORY_GRANT) + whole-brain tool refusal
-    ├── credentials.py      # credential_store / get / list / delete (delete asks the user)
+    ├── credentials.py      # credential_store / get / list / delete (delete takes `confirm`; always a big delete)
     ├── tripwires.py        # memory_tripwire: add / list / remove / test
     ├── board.py            # board tool + gingugu://board/inbox/{persona} resource; derives the author
     ├── xray.py             # code_xray tool: snapshot selection, blast, overview, refresh, ingest, brief, callers, history, blindspots, docs, links
-    ├── admin.py            # namespaces, export, import (cascade delete and overwriting import ask the user)
+    ├── admin.py            # namespaces, export, import (cascade delete and overwriting import take `confirm`)
     ├── summaries.py        # Payload shapes: full summary, compact summary, the picker
     ├── choices.py          # Enum argument parsing, shared error wording
     └── helpers.py          # Shared response shaping

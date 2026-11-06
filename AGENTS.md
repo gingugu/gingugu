@@ -198,9 +198,14 @@ src/gingugu/
   namespaces.py      → namespace CRUD
   credentials.py     → OS-keychain credential vault
   credential_cli.py  → `gingugu credential list|delete`: the vault by hand, at a terminal
-  confirm.py         → destructive tools ask the user (MCP elicitation), not the model;
-                       a client known to show no dialog (Claude Code's VS Code
-                       extension) counts as unable to ask
+  confirm.py         → destructive tools take `confirm`: true is the caller's yes, false
+                       refuses, omitted asks in a dialog (MCP elicitation) where the
+                       client can show one (Claude Code's VS Code extension cannot)
+  destructive.py     → the big-delete gate: namespace/credential deletes, consolidate
+                       or import over 10, hard deletes past 10 a session; the hook asks
+                       the person and leaves a single-use approval
+  proxy_gate.py      → remote mode: the proxy takes that approval before relaying
+                       a big delete to the brain
   portability.py     → export / import a namespace
   handlers/          → MCP tool handlers: memory.py, forget.py, hints.py,
                        recall.py, search.py, stats.py, scope.py, excerpt.py,
@@ -209,8 +214,8 @@ src/gingugu/
                        tripwires.py, board.py (the `board` tool + inbox resource;
                        derives the author server-side), xray.py (`code_xray`),
                        helpers.py
-                       (forget, consolidate, admin and credentials ask the user
-                       to confirm destructive calls; see confirm.py)
+                       (forget, consolidate, admin and credentials take `confirm` on
+                       destructive calls; see confirm.py, destructive.py)
 ui/                  → Memory Explorer (React/Vite 3D frontend + vitest; api.py dev shim over webui; dump_static.py builds the static demo data)
 docs/                → architecture.md (mermaids = source of truth), roadmap.md, future-architecture.md
 tests/               → pytest suites (unit + integration MCP flows)

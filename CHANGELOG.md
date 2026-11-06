@@ -26,6 +26,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the startup contract and protocol rules say to claim a task even when the user
   hands it over in chat. An unclaimed task stays in every other session's inbox as
   new work.
+- **Every destructive tool takes `confirm`, so a delete needs no terminal.** A hard
+  `memory_forget`, a cascading `memory_namespaces` delete, `memory_consolidate` with
+  `keep_originals=false`, an overwriting `memory_import` and `credential_delete` accept
+  `confirm: bool | None`. `true` is the confirmation for an ordinary delete: the agent asks
+  you in chat and passes it, with no dialog needed. `false` refuses. Omitted, a client that
+  can show a dialog asks there, and one that cannot (Claude Code's VS Code extension) is
+  told to ask you and call again with `confirm=true`.
+- **The big-delete gate.** Some deletes are big or unrecoverable enough that the agent's
+  `confirm=true` is not the whole answer: a namespace delete, `credential_delete` (a
+  keychain secret has no export and no undo), a consolidation or replace-import of more
+  than 10 memories, and hard deletes past 10 in one session. gingugu's `PreToolUse` hook
+  answers these with Claude Code's own permission prompt, which holds in auto and bypass
+  mode and becomes a refusal where nobody can answer (`claude -p`). The hook leaves a
+  single-use approval for exactly that call (15 minutes); the local server, or the proxy
+  in remote mode, requires it before acting on `confirm=true`. `MEMORY_CONFIRM_DESTRUCTIVE=off`
+  still skips it, for automation.
+- **Forks get the main thread's rights.** A fork (`agent_type` `fork`, `/subtask`) inherits
+  the whole conversation, so the minion fence lets it through. The harness `CLAUDE.md`
+  block gains a "Forks: parallel hard work" section.
 
 ### Changed
 
@@ -36,6 +55,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   through `PATH` to another checkout's environment and tested that checkout's code.
   Use `uv sync` (no `--extra dev`); the published package no longer carries a `dev`
   extra.
+- **`credential_delete`'s `confirm` defaults to omitted (was `true`).** Its refusal no
+  longer sends you to a terminal; the `gingugu credential list|delete` CLI remains for
+  deleting by hand. A client that cannot show a dialog is told to ask the user and call
+  again with `confirm=true`.
+
+### Fixed
+
+- **A delete no longer dead-ends on a client with no dialog.** In Claude Code's VS Code
+  extension, which answers every MCP dialog "decline" unseen, every destructive call used
+  to end in a refusal. They now complete on the agent's `confirm=true`.
+- **The installed `PreToolUse` doorway passes the five destructive tools to the big-delete
+  gate** instead of dropping the main thread's own calls before the package loads. Existing
+  projects pick this up on `gingugu init`.
 
 **Upgrading:** the brain migrates to schema 23 on first open; restart MCP clients.
 

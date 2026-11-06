@@ -67,8 +67,10 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `recall_pick` (the recall pipeline the local hook and `/hook/recall` share),
    `hook_remote` + `hook_remote_flows` and `serve_hooks` (see Remote mode; `serve_hooks` also serves `POST /hook/scars` for X3, owner-only, answered by `xray/scar_query`), `hook_grant`
    (the client's `MEMORY_GRANT` as the hooks apply it), `credential_cli` (`gingugu
-   credential list|delete`: the vault by hand, for a person at a terminal), `confirm` (the user's
-   confirmation for destructive tools; see Key Decisions), `proxy_vault_link`
+   credential list|delete`: the vault by hand, for a person at a terminal), `confirm` (the confirmation
+   for destructive tools; see Key Decisions), `destructive` (the big-delete gate,
+   called from `tool_hook`), `proxy_gate` (the same gate at the remote-mode proxy),
+   `proxy_vault_link`
    (the local vault behind an in-memory MCP session; see Remote mode), `client_grants` (each server
    publishes its grant for its client's hooks; see Warm minions), `claude_trust`
    (whether Claude Code trusts a folder, for the untrusted-minion warning),
@@ -330,7 +332,7 @@ is the exception - it is `1 + 2N` writes (create, then a `supersedes` edge and a
 retirement per original), and a partial application is worse than none. Under
 `keep_originals=False` the retirement is a hard delete, so a failure halfway
 through the loop destroys memories the surviving record never absorbed. That
-hard delete is also the one the user confirms through the client before it
+hard delete is also the one that needs a `confirm` before it
 runs (see the Key Decisions entry on confirmations).
 
 `transactions.atomic()` takes components that share a connection, closes a gate
@@ -478,13 +480,17 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   cannot. The vault runs as an MCP server over in-memory streams
   (`proxy_vault_link.VaultLink`), handshaken with the client's `initialize`,
   so it sees the client's capabilities and `credential_delete` can ask the user
-  through the client: the proxy's confirmation, with
-  `MEMORY_CONFIRM_DESTRUCTIVE=off` on the proxy as its opt-out. The brain's own
-  elicitations (hard forget, cascade delete, consolidate, import) relay through
-  the proxy unchanged, except for a client known to show no dialog (Claude Code's
-  VS Code extension): the proxy strips `elicitation` from the `initialize` it
-  forwards (`confirm.withhold_dialogs`), so the brain and the vault both refuse
-  "cannot ask". A vault that fails to open ends the proxy with a
+  through the client where it can show one, and checks the big-delete gate itself
+  (`destructive.take`), with `MEMORY_CONFIRM_DESTRUCTIVE=off` on the proxy as its
+  opt-out. For the brain's tools the proxy screens a big delete with
+  `confirm=true` (`proxy_gate.screen`, from `proxy_session.Link.forward`) before
+  relaying it, because the person's approval is recorded on this machine. The
+  brain's own dialogs (hard forget, cascade delete, consolidate, import with
+  `confirm` omitted) relay through the proxy unchanged, except for a client known
+  to show no dialog (Claude Code's VS Code extension): the proxy strips
+  `elicitation` from the `initialize` it forwards (`confirm.withhold_dialogs`), so
+  the brain and the vault both tell it to ask the user and call again with
+  `confirm=true`. A vault that fails to open ends the proxy with a
   `ProxyLost` message. With credentials off, `credential_*` is stripped and
   refused. `memory_stats` is relayed, but its credential summary
   (`global.credentials` or `stats.credentials`) describes the brain's vault, so
@@ -698,7 +704,9 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `MEMORY_MINION_FENCE=off`, independent of `MEMORY_TRIPWIRES` and of
   `MEMORY_XRAY_TRIPWIRE` (the X-ray edit check's switch). The tripwire
   doorway passes `mcp__gingugu__*` through when `agent_id` is set so the fence
-  decides, and passes a main-thread board `post` through for the X20 nudge.
+  decides, and passes a main-thread board `post` through for the X20 nudge and the
+  five destructive tools for the big-delete gate. A fork (`agent_type: "fork"`) is
+  a branch of the main thread, not a cold minion, and the fence lets it through.
 - **Threat model:** prevents accidents, not a hostile same-user process. An OS
   sandbox and an audit-trigger undo log were considered and declined.
 
@@ -1034,30 +1042,47 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   line to add (`xray: <repo> <base>..<branch>`) -
   shipped in the hook `init` already wires, so every install gets it, where a
   personal tripwire would reach one brain. `MEMORY_XRAY_BOARD=off`.
-- **Destructive tools ask the user, not the model (shipped 0.25.0).** Five paths
-  confirm through MCP elicitation (SDK 2.x `Resolve` + `Elicit`): a hard
+- **Destructive tools take `confirm`; a big delete needs the person (dialog shipped
+  0.25.0; `confirm` and the big-delete gate 2026-11-05).** Five paths: a hard
   `memory_forget`, a cascading `memory_namespaces` delete of a non-empty
-  namespace, `memory_consolidate` with `keep_originals=False`, a
-  `memory_import` with `on_conflict="replace"` that would overwrite existing ids
-  (the dialog names the count), and `credential_delete`. The logic lives in
-  `confirm.py`. *The answer stays out of the input schema*: it is a resolved
-  parameter, so the model cannot supply it; a plain `confirm=true` argument was
-  the model's own say-so and protected nothing. `credential_delete`'s `confirm`
-  stays as an optional, model-side no (`confirm=false` refuses outright). *Refuse
-  when nobody can be asked*: decline, cancel (what a headless client answers),
-  and a client without elicitation each return a structured `ok: false`; an
-  unrecognised answer refuses too. Claude Code's VS Code extension declares
-  elicitation but answers every one "decline" without a dialog, so it counts as
-  unable to ask: `confirm.shows_no_dialog()` (env `CLAUDE_CODE_ENTRYPOINT` in
-  `_SHOWS_NO_DIALOG`) makes `can_ask` false, but only on a stdio server - over
-  HTTP the env says nothing about the remote client, so `ask`/`can_ask` take the
-  executing server's transport. In remote mode the proxy strips `elicitation`
-  from the `initialize` it forwards and stores (`withhold_dialogs`), so the brain
-  and the local vault refuse the same way. The refusal can carry a `by_hand`
-  pointer: `credential_delete`'s names `gingugu credential delete NAME` (new
-  `credential_cli.py`), which asks at a real terminal - it refuses a non-TTY
-  stdin and has no `--yes`, stopping accidents and piping, not an agent with a
-  shell. *The env opt-out sits on the server that
+  namespace, `memory_consolidate` with `keep_originals=False`, a `memory_import`
+  with `on_conflict="replace"` that would overwrite existing ids, and
+  `credential_delete`. The logic lives in `confirm.py`. Each takes a model-supplied
+  `confirm: bool | None`: `true` is the confirmation for an ordinary delete (the
+  agent asked the user in chat, and the harness permission prompt gates the
+  call), so no daily delete dead-ends on a client with no dialog; `false` refuses;
+  omitted falls back to the MCP elicitation dialog (SDK 2.x `Resolve` + `Elicit`,
+  a resolved parameter absent from the input schema), and a client that cannot
+  show one is told to ask the user and call again with `confirm=true`. The old
+  `by_hand` terminal pointer is gone from the MCP path; the `gingugu credential
+  delete` CLI (`credential_cli.py`) remains for a person at a terminal. *Why
+  `confirm=true` alone was not enough for everything*: a steered model could wipe a
+  namespace in bypass mode. So the **big-delete gate** (`destructive.py`; always
+  call it that) covers a namespace delete, `credential_delete` (a keychain secret
+  has no export and no undo), consolidate/import over `THRESHOLD`=10 memories and
+  hard deletes past 10 in one session. `gingugu hook tool` (`tool_hook._destructive`)
+  answers `permissionDecision: "ask"`, which is Claude Code's own permission
+  prompt: it holds in auto and bypass mode and becomes a deny where nobody can
+  answer (measured with `claude -p`). The hook writes a single-use approval (15
+  minute TTL) for exactly that call under `<data dir>/hook-sessions/approvals`;
+  the local stdio server requires it for `confirm=true` on a big delete (else a
+  dialog if the client can show one, else a refusal), and in remote mode the proxy
+  takes it before relaying (`proxy_gate`), `credential_delete` going to the local
+  vault, which checks itself. The per-session hard-delete count is the hook's
+  alone, since one tool call cannot see its siblings. A client with no gingugu
+  hook gets a dialog or a refusal, never a silent pass. A fork (`agent_type:
+  "fork"`) gets the main thread's rights in the minion fence.
+  Claude Code's VS Code extension declares elicitation but answers every one
+  "decline" without a dialog, so it counts as unable to ask:
+  `confirm.shows_no_dialog()` (env `CLAUDE_CODE_ENTRYPOINT` in `_SHOWS_NO_DIALOG`)
+  makes `can_ask` false, but only on a stdio server - over HTTP the env says
+  nothing about the remote client, so `ask`/`can_ask` take the executing server's
+  transport. In remote mode the proxy strips `elicitation` from the `initialize`
+  it forwards and stores (`withhold_dialogs`), so the brain and the local vault
+  answer the same way. The `gingugu credential delete` CLI asks at a real
+  terminal - it refuses a non-TTY stdin and has no `--yes`, stopping accidents and
+  piping, not an agent with a shell.
+  *The env opt-out sits on the server that
   executes the tool*: `MEMORY_CONFIRM_DESTRUCTIVE=off` (also `false`/`0`/`no`)
   is read straight from the environment, so in remote mode it is the brain for
   memory tools and the local proxy for the vault. *Resolvers run before the

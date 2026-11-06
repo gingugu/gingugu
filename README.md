@@ -559,15 +559,10 @@ a credential call never reaches the brain, even while it is down. `reveal` is
 refused there: every other tool is relayed, so an inline secret could be carried
 off the machine, while `into` keeps it in a local 0600 file. Set
 `MEMORY_CREDENTIALS_ENABLED=false` and they are hidden and refused. A
-`credential_delete` still asks you to confirm: the proxy's local vault shows the
-dialog through your client, just as the brain does for its own destructive tools.
+`credential_delete` is confirmed like every other delete (see **Deletes** below),
+and the vault checks it itself, on this machine.
 
-Some clients cannot show that dialog. Claude Code's VS Code extension declares
-MCP elicitation but answers every request "decline" without asking you, so under
-it (it names itself in `CLAUDE_CODE_ENTRYPOINT=claude-vscode`) a destructive call
-is refused as "this client cannot ask" rather than blamed on you - the proxy
-tells the brain the same. Use the terminal `claude` for those, or delete a
-credential by hand:
+The vault also has a CLI, in remote mode too, to list and delete credentials by hand:
 
 ```bash
 gingugu credential list                        # names and fields, never a secret value
@@ -576,6 +571,24 @@ gingugu credential delete my-api --field token # one field only
 ```
 
 `delete` needs a real terminal: input cannot be piped, and there is no `--yes`.
+
+**Deletes.** Every destructive tool (hard `memory_forget`, cascading namespace
+delete, `memory_consolidate` with `keep_originals=false`, overwriting
+`memory_import`, `credential_delete`) takes a `confirm` argument, and none of them
+needs a terminal. The agent asks you in chat and passes `confirm=true`:
+that is the confirmation for an ordinary delete. `confirm=false` refuses. Leave it
+out and a client that can show a dialog asks you there; one that cannot (Claude
+Code's VS Code extension answers every dialog "decline" unseen) tells the agent to
+ask you and call again with `confirm=true`.
+
+A **big delete** also needs you, not just the agent's say-so: a namespace delete,
+a credential delete (a keychain secret has no export and no undo), a consolidation
+or replace-import of more than 10 memories, and hard deletes past 10 in one
+session. gingugu's tool hook answers with Claude Code's own permission prompt, which
+is shown in auto and bypass mode too, and becomes a refusal where nobody can answer
+(`claude -p`). Your approval is good for that one call, for 15 minutes. With a
+remote brain the proxy takes it before relaying the call. A client with no gingugu
+hook gets a dialog if it can show one, and a refusal if not.
 
 Plain `http` to a non-loopback host starts with a warning. The proxy sends the
 machine token only to `POST /token/derive` (owner tokens only; scoped tokens get
@@ -915,6 +928,11 @@ It installs:
   Linked worktrees are never guarded, and commits, pull, push and reads pass.
   Prefix one command with `GINGUGU_PRIMARY_OK=1` to let it through, or set
   `MEMORY_CHECKOUT_GUARD=off` to disable the guard.
+  And it runs the **big-delete gate**: a big delete (a namespace delete, a credential
+  delete, a consolidation or replace-import of more than 10 memories, hard deletes
+  past 10 in one session) is answered with Claude Code's own permission prompt, in
+  every permission mode. The approval is single-use, and the server (or, with a remote
+  brain, the proxy) requires it before acting on `confirm=true`.
 - **`.claude/hooks/post_tool_xray.py`** — a `PostToolUse` hook (matched to
   `Read|Grep|Glob`) that gives the agent the **X-ray map on arrival**: the first
   Read, Grep or Glob in a repo in a session adds a compact repo map (size,
@@ -1287,7 +1305,7 @@ Environment variables (all optional):
 | `MEMORY_W_ACCESS` | `0.10` | Composite-score weight for access frequency |
 | `MEMORY_W_CONFIDENCE` | `0.35` | Composite-score weight for confidence (trust — the dominant standalone signal) |
 | `MEMORY_CREDENTIALS_ENABLED` | `true` | Expose the `credential_*` vault tools. Set `false` to run an instance without a secret vault (e.g. a shared/central server) |
-| `MEMORY_CONFIRM_DESTRUCTIVE` | *(unset: confirmations on)* | Destructive tools (hard `memory_forget`, cascading namespace delete, `memory_consolidate` with `keep_originals=false`, overwriting `memory_import`, `credential_delete`) ask *you* to confirm through the client (a client that cannot show the dialog is refused - see `gingugu credential delete` for the vault). `off` (also `false`, `0`, `no`) skips the dialog, for automation. Applies to the server that executes the tool: with a remote brain, set it on the brain for memory tools and on the local proxy for the credential vault |
+| `MEMORY_CONFIRM_DESTRUCTIVE` | *(unset: confirmations on)* | Destructive tools (hard `memory_forget`, cascading namespace delete, `memory_consolidate` with `keep_originals=false`, overwriting `memory_import`, `credential_delete`) need a confirmation: the agent's `confirm=true` for an ordinary delete, your own approval too for a big delete (see **Deletes**). `off` (also `false`, `0`, `no`) skips both, for automation. Applies to the server that executes the tool: with a remote brain, set it on the brain for memory tools and on the local proxy for the credential vault |
 | `MEMORY_GRANT` | *(unset)* | Fence a stdio server like a scoped token: `ns=read\|write,...` (e.g. `my-project=read,minions=write`). Unset is full access. A bad spec, an empty value, or `*=write` refuses to start. Used by a subagent's own `brain` server in its agent file. The client's hooks follow it too, whether it is set in the MCP server's `env` block (the server publishes it) or in the hooks' own environment: recall, tripwires and minion warm-up stay inside it, and an unusable value or a disagreement keeps them quiet |
 | `MEMORY_PERSONA` | *(unset)* | This agent's own namespace (e.g. `research`). Recall, tripwires and the SessionStart contract load `crow`, then the persona, then the repo (recall and tripwires narrowed by `MEMORY_GRANT` when set). A malformed value is ignored |
 | `MEMORY_REMOTE_URL` | *(unset)* | Use this remote brain for this client only (`off` forces local). A bare `gingugu` then relays to it; the credential vault stays local |
@@ -1341,22 +1359,22 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_relate` | Create relationships between memories; one at a time or a batch (`edges`), all-or-nothing, idempotent |
 | `memory_edges` | List edges with both endpoints' titles, namespaces, and degree; filter by namespace, type, or memory |
 | `memory_unrelate` | Retype an edge in place, reverse a backwards one, or remove it; one at a time or a batch, with `dry_run` |
-| `memory_consolidate` | Merge/summarize/deduplicate; call without ids for a read-only near-dupe scan. `keep_originals=false` deletes the originals, so you confirm it |
+| `memory_consolidate` | Merge/summarize/deduplicate; call without ids for a read-only near-dupe scan. `keep_originals=false` deletes the originals and needs `confirm=true` (a big delete past 10 memories also needs your approval) |
 | `memory_dream` | Run the deterministic consolidation pass, read its proposal queue, and accept or reject a finding. PageRank, community detection and orphan reconnection over the relation graph - staged for you to decide, never written |
 | `memory_tripwire` | Bind a memory to a tool call so it stops that call once, before it runs: `add` (a tool-name regex + an input regex), `list`, `remove`, and `test` (a dry run that never denies) |
 | `board` | Leave posts for other agents sharing this brain and read the ones left for you: `post` (to a persona or `*`, as a `message` or a `task`), `inbox`, `read` (a thread), `reply` (with no `to`, it goes to the post's author, or to whoever spoke last in the thread when that is you), `claim` (one agent wins), `done`. Posts are not memories, and you post as yourself - the author is never an argument. Your inbox is also the subscribable resource `gingugu://board/inbox/<you>`; `gingugu board watch` turns it into a command that prints a line per new post, to wake an idle agent; a post or reply to a persona returns a `delivery` receipt |
 | `code_xray` | Codebase X-ray for a Python, TypeScript/JavaScript or Go repo: `blast` (what a change to these files reaches, and the tests worth running), `overview` (the files the code leans on most, and files nothing reaches), `refresh`, `ingest`, and `brief` (`range`, `files`, `path`, `limit` up to 50: the changed files by rank with importer counts, their combined blast and a compact `text`, computed locally and never stored), and `callers` (Python: `files` one file, `symbol` such as `Store.save`; its direct callers and what reaches it by call, a lower bound, computed locally), `history` (from git log: hotspots by churn x rank x authors, and files that change together, flagged `hidden` when neither imports the other; `files` focuses the pairs; computed locally), `blindspots` (imported source no test imports or is named for, by reach over authors; computed locally), `docs` (`files`, `path`, `limit`: the docs that cite each file, here and in sibling checkouts; without `files`, totals and the most cited files; computed locally), and `links` (`files`, `path`, `limit`: the other checkouts that lean on this repo and what it leans on, inferred from hosts, routes, images, packages, tables, CI checkouts and `repo@sha` cites, each with file and line; with `files`, who leans on them and the ripple across repos; computed locally). Rebuilt automatically when the checkout changes; read on your machine even with a remote brain |
-| `memory_forget` | Deprecate or remove a memory (a hard delete asks you to confirm) |
-| `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo). Deleting a non-empty namespace asks you to confirm |
+| `memory_forget` | Deprecate or remove a memory (a hard delete needs `confirm=true`) |
+| `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo). Deleting a namespace is a big delete: `confirm=true` plus your approval |
 | `memory_export` | Export memories + tags + relations to portable JSON |
-| `memory_import` | Restore a JSON export (skip or replace on conflict; a replace that overwrites memories asks you to confirm) |
+| `memory_import` | Restore a JSON export (skip or replace on conflict; a replace that overwrites memories needs `confirm=true`, plus your approval past 10) |
 | `memory_stats` | Health overview (dormancy, counts, coverage, review sweep, the `claims` backlog, a relation-graph block whose `orphan_sample` names the memories no edge reaches - `review_limit` raises every sample's cap, a `size` block reporting the character cost of the store and of the always-loaded pinned tier, and `query_log_rows`, the count of recorded queries); a comma-separated `namespace` list returns the global block once plus each namespace's own stats |
 | `memory_search` | Advanced filtered search (type, tags, confidence, dates; one or many namespaces; optional compact mode; fetch by exact `ids`; `claims` to work the reconciliation backlog or read refs the prose never resolved, `orphans` to work the graph backlog, `pinned` to enumerate the always-present tier; `explain` for a per-hit score breakdown) |
 | `memory_excerpt` | Read inside ONE memory: find literal matches with their character offsets, line numbers and surrounding context, and/or slice an exact character range |
 | `credential_store` | Store/update a service credential bundle |
 | `credential_get` | Retrieve a credential bundle - secrets redacted; `into` writes one to a 0600 file, `reveal` shows it inline |
 | `credential_list` | List services + expiry status (no secrets shown) |
-| `credential_delete` | Remove a service or specific credential field (asks you to confirm) |
+| `credential_delete` | Remove a service or specific credential field (a big delete: `confirm=true` plus your approval) |
 
 ---
 

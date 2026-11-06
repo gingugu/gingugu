@@ -119,13 +119,16 @@ a `home` namespace (its `MEMORY_NAMESPACE`). A call that names no namespace
 defaults to that home rather than the server's configured namespace (read by
 `NamespaceManager.resolve_name` and `handlers/scope.read_scope`), and a derived
 grant never reaches `credential_*`. A destructive call over the proxy (a hard
-forget, say) is asked on the client exactly as locally: the brain's elicitation
-relays through the proxy unchanged and the user's answer relays back - except
-for a client known to show no dialog (Claude Code's VS Code extension), whose
+forget, say) takes `confirm` exactly as locally. With `confirm` omitted the brain's
+elicitation relays through the proxy unchanged and the user's answer relays back -
+except for a client known to show no dialog (Claude Code's VS Code extension), whose
 `initialize` the proxy forwards without `elicitation` (`confirm.withhold_dialogs`),
-so the brain refuses "cannot ask". The
-proxy's own `credential_delete` is asked by the local vault's in-memory MCP
-session (`proxy_vault_link.VaultLink`), whose requests go to the client as
+so the brain tells it to ask the user and call again with `confirm=true`. A big
+delete with `confirm=true` is screened by the proxy first (`proxy_gate.screen`, from
+`Link.forward`): the person's approval is on this machine, so the proxy takes it
+(`destructive.take`) before relaying, and refuses without it. The
+proxy's own `credential_delete` goes to the local vault's in-memory MCP
+session (`proxy_vault_link.VaultLink`), which checks the gate itself; its requests go to the client as
 `vault-<nonce>:<id>` (a per-process nonce) so they never collide with the brain's.
 
 ## Reconcile
@@ -1200,12 +1203,12 @@ without a person passing through the accept step first.
   does re-embed, since it is part of the text the vector is built from.
   Neither advances `last_confirmed`.
 - `memory_forget` — deprecate, or hard-delete. Nothing is auto-forgotten. A hard
-  delete asks the user first (see Destructive confirmations below) and cascades
+  delete takes `confirm` first (see Destructive confirmations below) and cascades
   to the memory's `tripwires` rows.
 - `memory_consolidate` - merge / summarize / deduplicate a cluster; without
   `memory_ids`, a read-only suggest scan surfaces near-dupe clusters
   (pairwise embedding cosine, title-only fallback) to feed back in.
-  `keep_originals=False` hard-deletes the originals and asks the user first.
+  `keep_originals=False` hard-deletes the originals and takes `confirm` first.
 - `memory_export` / `memory_import` — back up or transfer a namespace (export
   before any large destructive op). `memory_import` embeds what it writes and
   reports `embeddings_written`; without that, restored memories were reachable
@@ -1215,9 +1218,10 @@ without a person passing through the accept step first.
   discarded anyway, and they are derived from the text sitting beside them.
   Encoding happens **after** the commit, so a failing model costs the vectors,
   never the restore. `on_conflict="replace"` that would overwrite existing ids
-  asks the user first, naming how many.
-- `memory_namespaces` `delete` with `cascade=True` on a non-empty namespace asks
-  the user first, naming how many memories go with it.
+  takes `confirm` first (a dialog names how many; over 10 it is a big delete).
+- `memory_namespaces` `delete` with `cascade=True` on a non-empty namespace takes
+  `confirm` first and is always a big delete (a dialog names how many memories go
+  with it).
 - `decay.py` — recomputes dormancy as a resting signal; never mutates confidence.
 
 ### Destructive confirmations
@@ -1228,20 +1232,33 @@ memory_consolidate(keep_originals=False) / memory_import(on_conflict="replace") 
 credential_delete
   → resolver (confirm.py; runs BEFORE the tool wrapper, so it checks the fence
     itself): not destructive, or nothing to lose (id absent or out of grant,
-    namespace empty, no id overwritten) → no dialog
-  → MEMORY_CONFIRM_DESTRUCTIVE=off on this server → no dialog, proceed
-  → client declared no elicitation, or is a stdio client known to show no
-    dialog (CLAUDE_CODE_ENTRYPOINT=claude-vscode; ignored over HTTP), or is the
-    proxy's brain behind a withheld `initialize` → refuse
-  → else Elicit(Confirm): the client shows the user a dialog
-  → body: confirm.refusal(answer, what, by_hand) → proceed only on accept with
-    confirm=true; decline, cancel (a headless client) and confirm=false are
-    `ok: false`; a cannot-ask refusal appends by_hand (credential_delete:
-    run `gingugu credential delete NAME` in a terminal)
+    namespace empty, no id overwritten) → no confirmation needed
+  → confirm=false → refuse; confirm=true → the caller's yes (BY_CALLER), no dialog
+      and, if destructive.gate says this is a BIG delete (namespace delete,
+      credential_delete, consolidate/import over 10, hard deletes past 10 this
+      session), it also needs the person:
+        hook (tool_hook -> destructive.hook_check) answered `ask` → Claude
+        Code's permission prompt (any mode; a deny where nobody can answer) and
+        left a single-use approval (15 min) under hook-sessions/approvals
+        → stdio server: destructive.take consumes it → proceed; none → a dialog if
+          the client can show one, else refuse "is a big delete and needs the
+          user's own approval"
+        → remote mode: proxy_gate.screen takes it before relaying to the brain
+  → confirm omitted (the old path):
+      MEMORY_CONFIRM_DESTRUCTIVE=off on this server → proceed
+      client declared no elicitation, or is a stdio client known to show no
+      dialog (CLAUDE_CODE_ENTRYPOINT=claude-vscode; ignored over HTTP), or is the
+      proxy's brain behind a withheld `initialize` → refuse: ask the user and call
+      again with confirm=true
+      else Elicit(Confirm): the client shows the user a dialog
+  → body: confirm.refusal(answer, what) → proceed only on a dialog accept with
+    confirm=true, or BY_CALLER / OPTED_OUT; decline, cancel (a headless client)
+    and confirm=false are `ok: false`
 ```
 
-The answer is a hidden parameter, not in the tool's input schema, so the model
-cannot supply it. Each body re-derives whether the call is destructive and checks
+The dialog's answer is a hidden parameter, not in the tool's input schema, so the
+model cannot supply it; `confirm` is the model's own say-so, which is why a big
+delete also needs the hook's approval. Each body re-derives whether the call is destructive and checks
 existence before it reads the answer, so a hidden id reads "not found".
 
 ## Storage / migrations
@@ -1297,10 +1314,10 @@ backfill for DBs stamped v5 by a build whose 005 did not have one.
 
 ```
 credential_store / credential_list / credential_delete
-  (credential_delete: asks the user; `confirm` is optional, default true, and
-   confirm=false refuses outright; on the remote proxy the local vault asks;
-   with no dialog available the person runs `gingugu credential list|delete NAME`
-   in a terminal - the same vault, secret values never printed)
+  (credential_delete: always a big delete; `confirm` is optional, default omitted:
+   confirm=false refuses outright, confirm=true needs the hook's approval; on the
+   remote proxy the local vault checks it; a person at a terminal can run
+   `gingugu credential list|delete NAME` - the same vault, secret values never printed)
   → credentials.py reads/writes secret values in the OS keychain
   → only non-secret metadata is listed; secret values never touch the DB or logs
 
