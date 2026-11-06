@@ -545,7 +545,8 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.48.0** (PyPI, 2026-11-06). Minor: deletes take `confirm` + the big-delete gate (#181), X-ray key readers (#182), same-machine board mail + claimer identity (migration 023, #180/#183), per-machine vault stats (#184), the Win95 keygen CLI (#185).
+- Current version: **0.48.1** (PyPI, 2026-11-06). Patch: plain `gingugu init` refreshes a hook that is a stock copy of an older version (`bootstrap/shipped.py`, #186).
+- 0.48.0 (PyPI, 2026-11-06). Minor: deletes take `confirm` + the big-delete gate (#181), X-ray key readers (#182), same-machine board mail + claimer identity (migration 023, #180/#183), per-machine vault stats (#184), the Win95 keygen CLI (#185).
 - 0.47.1 (PyPI, 2026-11-03). Patch: X23 cold reads on worker processes (48 checkouts ~9s, #179); first release cut from the rewritten, work-name-free history.
 - 0.47.0 (PyPI, 2026-11-03). Minor: X23 links read repos named
   outright (edge-level recall 11/26 -> 21/26 on a real ecosystem), the read hook and
