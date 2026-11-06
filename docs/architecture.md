@@ -1517,7 +1517,9 @@ Get health overview of the memory system.
   ...}}` - `global` is the four namespace-independent fields
   (`namespaces`, `access_log_rows`, `query_log_rows`, `credentials`) computed
   once, and each `by_namespace` entry is that namespace's own scoped stats
-  minus those four fields. This is what collapses the session-start protocol's old two-call
+  minus those four fields. `credentials` is this machine's vault summary,
+  stamped with `machine` (`machine.name()`) and, at `total: 0`, a `note` that
+  the vault is per machine. This is what collapses the session-start protocol's old two-call
   pattern (`memory_stats(namespace="crow")` then one per project) into one
   call that computes the shared block once instead of once per namespace.
   `review_limit` applies to every namespace's block.

@@ -195,6 +195,8 @@ src/gingugu/
                        per-namespace split so a multi-namespace call computes
                        the shared block once, not once per namespace
   hygiene_stats.py   → memory_stats' hygiene block (ghost namespaces, duplicate titles)
+  machine.py         → this machine's name; stamps memory_stats' credentials block
+                       with it (and a note at zero: the vault is per machine)
   namespaces.py      → namespace CRUD
   credentials.py     → OS-keychain credential vault
   credential_cli.py  → `gingugu credential list|delete`: the vault by hand, at a terminal

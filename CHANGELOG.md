@@ -79,6 +79,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`memory_stats` says whose vault its credential count is.** The vault is per
+  machine, so a machine that never vaulted anything reported `credentials.total: 0`
+  with nothing to say that was expected. The `credentials` block now carries `machine`
+  (this machine's name, the same one `gingugu remote login` gives its token by
+  default) and, at zero, a `note` that nothing is vaulted on this machine - expected,
+  not data loss. Same in local and remote mode.
 - **Board mail between two sessions of one persona on the same machine is delivered.**
   A reader is now persona + machine + agent session: your own persona's post is mail
   from a twin machine or from a sibling session (both sessions known and different), a

@@ -1,8 +1,18 @@
 # Project Status
 
-_Last updated: 2026-11-06 (board mail reaches sibling sessions on one machine; X-ray lists who reads a removed key; deletes need no terminal + the big-delete gate; board claims record the claiming session + claim nudges, migration 023; dev tools a dependency group; X23 hook lines, named-repo recall, generated-code skip and links --warm - 0.47.0; X23 cross-repo links - 0.46.0; startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
+_Last updated: 2026-11-06 (memory_stats names the vault's machine; board mail reaches sibling sessions on one machine; X-ray lists who reads a removed key; deletes need no terminal + the big-delete gate; board claims record the claiming session + claim nudges, migration 023; dev tools a dependency group; X23 hook lines, named-repo recall, generated-code skip and links --warm - 0.47.0; X23 cross-repo links - 0.46.0; startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
 
 ## In Flight
+
+**memory_stats names the vault's machine (2026-11-06, branch
+`fix/stats-vault-per-machine`, stacked on `fix/board-same-machine-sessions`).**
+Sessions on a machine with no vaulted credentials kept reading `credentials.total: 0`
+as data loss. New `machine.py`: `name()` (sanitised short hostname, moved from
+`remote._default_name` so the login token name, the board's machine and stats agree)
+and `describe(health)`, which stamps the block with `machine` and adds a zero-count
+`note`. Both local `stats.py` and the remote-mode `LocalVault.health` / `patch_stats`
+go through it; the `memory_stats` docstring says the count is this machine's vault.
+Tests: `test_stats_vault_machine.py` plus an empty-vault case through the real proxy.
 
 **Board mail reaches sibling sessions on one machine (2026-11-06, branch
 `fix/board-same-machine-sessions`, stacked on `feature/xray-key-readers`, board
