@@ -119,13 +119,16 @@ a `home` namespace (its `MEMORY_NAMESPACE`). A call that names no namespace
 defaults to that home rather than the server's configured namespace (read by
 `NamespaceManager.resolve_name` and `handlers/scope.read_scope`), and a derived
 grant never reaches `credential_*`. A destructive call over the proxy (a hard
-forget, say) is asked on the client exactly as locally: the brain's elicitation
-relays through the proxy unchanged and the user's answer relays back - except
-for a client known to show no dialog (Claude Code's VS Code extension), whose
+forget, say) takes `confirm` exactly as locally. With `confirm` omitted the brain's
+elicitation relays through the proxy unchanged and the user's answer relays back -
+except for a client known to show no dialog (Claude Code's VS Code extension), whose
 `initialize` the proxy forwards without `elicitation` (`confirm.withhold_dialogs`),
-so the brain refuses "cannot ask". The
-proxy's own `credential_delete` is asked by the local vault's in-memory MCP
-session (`proxy_vault_link.VaultLink`), whose requests go to the client as
+so the brain tells it to ask the user and call again with `confirm=true`. A big
+delete with `confirm=true` is screened by the proxy first (`proxy_gate.screen`, from
+`Link.forward`): the person's approval is on this machine, so the proxy takes it
+(`destructive.take`) before relaying, and refuses without it. The
+proxy's own `credential_delete` goes to the local vault's in-memory MCP
+session (`proxy_vault_link.VaultLink`), which checks the gate itself; its requests go to the client as
 `vault-<nonce>:<id>` (a per-process nonce) so they never collide with the brain's.
 
 ## Reconcile
@@ -544,8 +547,10 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
   → on the main thread, drops mcp__gingugu__* HERE, before the package is
     imported: our own tools are how a bad tripwire gets repaired, so they never
     trip (inside a subagent they pass through - see "Warm minions" below).
-    Exception: a board call with action "post" passes, for the X20 nudge;
-    tool_hook still skips memory tripwires for it (_SELF_PREFIX)
+    Exceptions: a board call with action "post" passes, for the X20 nudge;
+    tool_hook still skips memory tripwires for it (_SELF_PREFIX); and the five
+    destructive tools (memory_forget, memory_namespaces, memory_consolidate,
+    memory_import, credential_delete) pass, for the big-delete gate
   → survivors piped to `gingugu hook tool`
       → minion fence / spawn stash first (see "Warm minions"; independent of
         MEMORY_TRIPWIRES)
@@ -559,6 +564,10 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
           that dir is a PRIMARY checkout (git-dir == git-common-dir)
             → deny EVERY time, pointing at a worktree; the hook exits here
           GINGUGU_PRIMARY_OK=1 prefix, a linked worktree, or any failure: pass
+      → big-delete gate (tool_hook._destructive → destructive.hook_output):
+          a big delete → permissionDecision "ask" (Claude Code's prompt) and a
+          single-use approval written; the hook exits here. Chain: minion fence →
+          checkout guard → big-delete gate → X-ray
       → X-ray edit check (xray/edit_hook; its own switch, runs before the
         MEMORY_TRIPWIRES check and does not exit the hook)
           Edit/Write/MultiEdit of a file an X-ray adapter parses (lang.for_path:
@@ -821,6 +830,27 @@ edit note (PostToolUse Edit/Write/MultiEdit): any file type -> inbound.file_line
 MEMORY_XRAY_LINKS=off silences every line
 ```
 
+**Readers of a removed key (xray/literals, board d5639dd5).** The edit note also
+runs for any file type, on Edit/MultiEdit only (a Write has no old text):
+
+```
+edit_note.check → literals.lines(payload, root, rel, state_dir, session)
+  → quoted literals: "x"/'x' in an old_string no new_string still quotes
+  → unquoted keys: Python kwarg `x=` (.py), TS/JS object key `x:` (.ts .tsx .js .jsx
+    .mjs .cjs) in an old_string no new_string still names
+  → qualifies (3-80 chars, identifier-shaped, not a STOP value); at most 3 per edit
+  → one `git grep -n -I -F --untracked` per key, 1s timeout; failure drops the line
+  → boundary check in Python: "x" 'x' `x` @x anywhere, `x:` outside non-test code; unquoted
+    keys also `x=` / `.x`, in tests, fixtures, docs and non-code only (symbol graph
+    covers other code); skips the edited file, generated files, lockfiles
+  → once per (session, repo, key): hook-sessions/xray-literal-<session>/
+  → "- Text matches, not import edges: `x` removed by this edit is still named in N
+    files - path:line, ... (+K more)"; over 40 files: "is named in N files - too
+    common to list"; an unquoted key adds " (unquoted key)" after `x` and
+    " (read outside non-test code)" at the end; "file" when N is 1
+MEMORY_XRAY_TRIPWIRE=off silences it
+```
+
 The hooks hash the checkout once and hand that fingerprint to both cache reads.
 
 **After an edit, and the test ledger.** The note after an edit and the ledger that
@@ -949,7 +979,9 @@ UserPromptSubmit → `gingugu hook prompt`
     POST /hook/inbox {persona, namespaces (grant names, null = unfenced),
     shown} -> {posts}; 3s timeout; brain: read-only grant-bound inbox query
     for persona + origin (the calling owner token's name, never the body; a
-    twin persona on another machine's posts count as mail), minus the shown ids; shown ids stay in local hook-sessions/ under
+    twin persona on another machine's posts count as mail, and so do a sibling
+    session's on the same machine when both sessions are known; the writing
+    session never gets its own), minus the shown ids; shown ids stay in local hook-sessions/ under
     board:<session>. The body also carries agent_session (the raw Claude Code
     session id, hashed by the brain): a post routed to another session of the
     persona is held back until it has gone unread for ROUTE_GRACE_SECONDS (1h). A persona agent's one-liner therefore makes this request
@@ -1200,12 +1232,12 @@ without a person passing through the accept step first.
   does re-embed, since it is part of the text the vector is built from.
   Neither advances `last_confirmed`.
 - `memory_forget` — deprecate, or hard-delete. Nothing is auto-forgotten. A hard
-  delete asks the user first (see Destructive confirmations below) and cascades
+  delete takes `confirm` first (see Destructive confirmations below) and cascades
   to the memory's `tripwires` rows.
 - `memory_consolidate` - merge / summarize / deduplicate a cluster; without
   `memory_ids`, a read-only suggest scan surfaces near-dupe clusters
   (pairwise embedding cosine, title-only fallback) to feed back in.
-  `keep_originals=False` hard-deletes the originals and asks the user first.
+  `keep_originals=False` hard-deletes the originals and takes `confirm` first.
 - `memory_export` / `memory_import` — back up or transfer a namespace (export
   before any large destructive op). `memory_import` embeds what it writes and
   reports `embeddings_written`; without that, restored memories were reachable
@@ -1215,9 +1247,12 @@ without a person passing through the accept step first.
   discarded anyway, and they are derived from the text sitting beside them.
   Encoding happens **after** the commit, so a failing model costs the vectors,
   never the restore. `on_conflict="replace"` that would overwrite existing ids
-  asks the user first, naming how many.
-- `memory_namespaces` `delete` with `cascade=True` on a non-empty namespace asks
-  the user first, naming how many memories go with it.
+  takes `confirm` first (a dialog names how many; over 10 it is a big delete). The
+  hook counts the payload's memories, the server the ids it would overwrite.
+- `memory_namespaces` `delete` with `cascade=True` on a non-empty namespace takes
+  `confirm` first and is a big delete (a dialog names how many memories go with
+  it). The hook asks about ANY `delete`, even an empty namespace; the server's
+  dialog and approval apply only to the non-empty cascade.
 - `decay.py` — recomputes dormancy as a resting signal; never mutates confidence.
 
 ### Destructive confirmations
@@ -1228,20 +1263,39 @@ memory_consolidate(keep_originals=False) / memory_import(on_conflict="replace") 
 credential_delete
   → resolver (confirm.py; runs BEFORE the tool wrapper, so it checks the fence
     itself): not destructive, or nothing to lose (id absent or out of grant,
-    namespace empty, no id overwritten) → no dialog
-  → MEMORY_CONFIRM_DESTRUCTIVE=off on this server → no dialog, proceed
-  → client declared no elicitation, or is a stdio client known to show no
-    dialog (CLAUDE_CODE_ENTRYPOINT=claude-vscode; ignored over HTTP), or is the
-    proxy's brain behind a withheld `initialize` → refuse
-  → else Elicit(Confirm): the client shows the user a dialog
-  → body: confirm.refusal(answer, what, by_hand) → proceed only on accept with
-    confirm=true; decline, cancel (a headless client) and confirm=false are
-    `ok: false`; a cannot-ask refusal appends by_hand (credential_delete:
-    run `gingugu credential delete NAME` in a terminal)
+    namespace empty, no id overwritten) → no confirmation needed
+  → confirm=false → refuse; confirm=true → the caller's yes (BY_CALLER), no dialog
+      and, if destructive.gate says this is a BIG delete (namespace delete,
+      credential_delete, consolidate/import over 10, hard deletes past 10 this
+      session), it also needs the person:
+        hook (tool_hook -> destructive.hook_check) answered `ask` → Claude
+        Code's permission prompt (any mode; a deny where nobody can answer) and
+        left a single-use approval (15 min) under hook-sessions/approvals
+        → order in confirm._big: no gate → pass; MEMORY_CONFIRM_DESTRUCTIVE=off
+          on the executing server → pass; over HTTP only the owner (full grant)
+          passes on confirm=true (its proxy took the approval), a scoped token gets
+          a dialog if its client can ask, else "needs the user's own approval";
+          on stdio destructive.take consumes the approval → proceed, none → a
+          dialog if can_ask, else the same refusal
+        → remote mode: proxy_gate.screen takes it before relaying to the brain
+        → hard deletes past 10 a session: the hook's `ask` only; nothing here
+          consumes an approval and the proxy does not screen memory_forget
+  → confirm omitted (the old path):
+      MEMORY_CONFIRM_DESTRUCTIVE=off on this server → proceed (it never stops the
+      hook's `ask`; the proxy reads it too for its own screen)
+      client declared no elicitation, or is a stdio client known to show no
+      dialog (CLAUDE_CODE_ENTRYPOINT=claude-vscode; ignored over HTTP), or is the
+      proxy's brain behind a withheld `initialize` → refuse: ask the user and call
+      again with confirm=true
+      else Elicit(Confirm): the client shows the user a dialog
+  → body: confirm.refusal(answer, what) → proceed only on a dialog accept with
+    confirm=true, or BY_CALLER / OPTED_OUT; decline, cancel (a headless client)
+    and confirm=false are `ok: false`
 ```
 
-The answer is a hidden parameter, not in the tool's input schema, so the model
-cannot supply it. Each body re-derives whether the call is destructive and checks
+The dialog's answer is a hidden parameter, not in the tool's input schema, so the
+model cannot supply it; `confirm` is the model's own say-so, which is why a big
+delete also needs the hook's approval. Each body re-derives whether the call is destructive and checks
 existence before it reads the answer, so a hidden id reads "not found".
 
 ## Storage / migrations
@@ -1297,10 +1351,10 @@ backfill for DBs stamped v5 by a build whose 005 did not have one.
 
 ```
 credential_store / credential_list / credential_delete
-  (credential_delete: asks the user; `confirm` is optional, default true, and
-   confirm=false refuses outright; on the remote proxy the local vault asks;
-   with no dialog available the person runs `gingugu credential list|delete NAME`
-   in a terminal - the same vault, secret values never printed)
+  (credential_delete: always a big delete; `confirm` is optional, default omitted:
+   confirm=false refuses outright, confirm=true needs the hook's approval; on the
+   remote proxy the local vault checks it; a person at a terminal can run
+   `gingugu credential list|delete NAME` - the same vault, secret values never printed)
   → credentials.py reads/writes secret values in the OS keychain
   → only non-secret metadata is listed; secret values never touch the DB or logs
 

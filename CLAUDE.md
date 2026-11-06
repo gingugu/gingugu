@@ -245,6 +245,12 @@ Not defined on purpose: there is no `backend` or `planner` agent. Both describe
 Opus-tier work (schema, scoring, retrieval, sequencing), and that stays on the
 main thread.
 
+**Forks are the parallel path for that work.** `subagent_type: "fork"` (or
+`/subtask`) inherits the whole conversation and model - a branch of the main
+thread, so `gingugu hook tool` gives it the main thread's rights (it shows as
+`agent_type: "fork"`). Use `isolation: "worktree"` when it writes. Forks design
+and write the tests; the main thread approves; a Sonnet minion implements.
+
 **A brand-new `.claude/agents/` directory is picked up mid-session, but on a
 delay of minutes** - unlike `.claude/skills/`, which surfaces in seconds. The
 first spawn after creating one will fail with "agent type not found"; that

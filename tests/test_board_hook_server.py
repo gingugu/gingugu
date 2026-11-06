@@ -110,3 +110,22 @@ async def test_only_an_owner_token_may_ask(brain, served):
 async def test_a_malformed_body_is_refused(brain, served, over):
     r = await _inbox(served, _body(**over), brain.machine)
     assert r.status_code == 400
+
+
+async def test_a_sibling_sessions_post_reaches_me_and_not_its_writer(brain, served):
+    """Same persona, same machine, another session: mail. The writing session: never."""
+    from gingugu import agent_session
+
+    raw_a, raw_b = "11111111-aaaa-4aaa-8aaa-111111111111", "22222222-bbbb-4bbb-8bbb-222222222222"
+    database = Database(brain.tmp_path / "brain.db")
+    conn = database.connect()
+    ns = conn.execute("SELECT id FROM namespaces WHERE name = 'crow'").fetchone()[0]
+    mine = board.post(
+        conn, namespace_id=ns, author="beepboop", body="sib", author_agent=agent_session.key(raw_a)
+    )["id"]
+    conn.commit()
+    database.close()
+    sibling = await _inbox(served, _body(agent_session=raw_b), brain.machine)
+    assert mine in [p["id"] for p in sibling.json()["posts"]]
+    writer = await _inbox(served, _body(agent_session=raw_a), brain.machine)
+    assert mine not in [p["id"] for p in writer.json()["posts"]]

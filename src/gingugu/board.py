@@ -79,36 +79,50 @@ def _require(conn: sqlite3.Connection, post_id: str) -> dict:
     return found
 
 
-def is_me(author: str, origin: str | None, me: str, my_origin: str | None) -> bool:
-    """Whether a post by ``author`` on ``origin`` is the caller's own.
+def _differ(a: str | None, b: str | None) -> bool:
+    return a is not None and b is not None and a != b
 
-    Same persona on a different machine is a twin, not me - but only when both
-    machines are known; an unknown origin keeps the persona as the identity.
+
+def is_me(
+    author: str,
+    origin: str | None,
+    agent: str | None,
+    me: str,
+    my_origin: str | None,
+    my_agent: str | None,
+) -> bool:
+    """Whether a post by ``author`` (machine ``origin``, session ``agent``) is the caller's own.
+
+    Same persona on a different machine is a twin, and in a different session
+    on the same machine a sibling - neither is me. Each only counts when both
+    sides are known; an unknown one keeps the persona as the identity.
     """
     if author != me:
         return False
-    return origin is None or my_origin is None or origin == my_origin
+    return not (_differ(origin, my_origin) or _differ(agent, my_agent))
 
 
-def _reply_to(
-    conn: sqlite3.Connection, parent: dict, root_id: str, author: str, origin: str | None
-) -> str:
+def _mine(row, me: str, who: tuple) -> bool:
+    return is_me(row["author"], row["author_origin"], row["author_agent"], me, *who)
+
+
+def _reply_to(conn: sqlite3.Connection, parent: dict, root_id: str, me: str, who: tuple) -> str:
     """Who a reply is for: the post's author, unless that is me - then whoever spoke last."""
-    if not is_me(parent["author"], parent["author_origin"], author, origin):
+    if not _mine(parent, me, who):
         return parent["author"]
     rows = conn.execute(
-        "SELECT author, author_origin FROM board_posts WHERE id = ? OR parent_id = ? "
+        "SELECT author, author_origin, author_agent FROM board_posts WHERE id = ? OR parent_id = ? "
         "ORDER BY created_at DESC, rowid DESC",
         (root_id, root_id),
     ).fetchall()
     for row in rows:
-        if not is_me(row["author"], row["author_origin"], author, origin):
+        if not _mine(row, me, who):
             return row["author"]
     return _require(conn, root_id)["recipient"]  # nobody has answered: nudge whoever I asked
 
 
 def _route(
-    conn: sqlite3.Connection, parent: dict, root_id: str, recipient: str, me: str, origin
+    conn: sqlite3.Connection, parent: dict, root_id: str, recipient: str, me: str, who: tuple
 ) -> str | None:
     """The agent session a reply to ``recipient`` is for, or None (unrouted).
 
@@ -119,9 +133,7 @@ def _route(
     """
     if recipient == BROADCAST:
         return None
-    if parent["author"] == recipient and not is_me(
-        parent["author"], parent["author_origin"], me, origin
-    ):
+    if parent["author"] == recipient and not _mine(parent, me, who):
         return parent["author_agent"]
     rows = conn.execute(
         "SELECT author, author_origin, author_agent FROM board_posts "
@@ -129,7 +141,7 @@ def _route(
         (recipient, root_id, root_id),
     ).fetchall()
     for row in rows:
-        if not is_me(row["author"], row["author_origin"], me, origin):
+        if not _mine(row, me, who):
             return row["author_agent"]
     return None
 
@@ -155,15 +167,16 @@ def post(
     if len(body) > MAX_BODY:
         raise BoardError(f"body is over {MAX_BODY} characters")
     parent = None
+    who = (author_origin, author_agent)
     if parent_id is not None:
         parent = _require(conn, parent_id)
         parent_id = parent["parent_id"] or parent["id"]  # threads are one level deep
         namespace_id = parent["namespace_id"]
-        recipient = recipient or _reply_to(conn, parent, parent_id, author, author_origin)
+        recipient = recipient or _reply_to(conn, parent, parent_id, author, who)
     recipient = recipient or BROADCAST
     if not is_persona(recipient):
         raise BoardError(f"recipient {recipient!r} is not a persona name or '*'")
-    route = _route(conn, parent, parent_id, recipient, author, author_origin) if parent else None
+    route = _route(conn, parent, parent_id, recipient, author, who) if parent else None
     grants.require_write_id(namespace_id, "this namespace's board")
     now = utcnow_iso()
     post_id = str(uuid.uuid4())
@@ -194,11 +207,13 @@ def post(
 def _inbox_where(
     reader: str, include_read: bool, origin: str | None = None, agent: str | None = None
 ) -> tuple[str, list[object]]:
-    # My own persona's post is mail only from a twin: both machines known, and not mine.
+    # My own persona's post is mail only from a twin (another machine) or a sibling
+    # (another session on this one) - each only when both sides are known.
     clauses = [
         "p.recipient IN (?, ?)",
         "(p.author != ? OR (? IS NOT NULL AND p.author_origin IS NOT NULL "
-        "AND p.author_origin != ?))",
+        "AND p.author_origin != ?) OR (? IS NOT NULL AND p.author_agent IS NOT NULL "
+        "AND p.author_agent != ?))",
         "p.status != 'done'",
         # A claimed task is mail for its claimer only - and not for a twin session
         # of the claimer's persona, when both sessions are known.
@@ -208,7 +223,8 @@ def _inbox_where(
         "(p.recipient_agent IS NULL OR ? IS NULL OR p.recipient_agent = ? OR p.created_at <= ?)",
     ]
     cutoff = (datetime.now(UTC) - timedelta(seconds=ROUTE_GRACE_SECONDS)).isoformat()
-    params: list[object] = [reader, BROADCAST, reader, origin, origin, reader, agent, agent]
+    params: list[object] = [reader, BROADCAST, reader, origin, origin, agent, agent]
+    params += [reader, agent, agent]
     params += [agent, agent, cutoff]
     if not include_read:
         # Receipts are per persona, so one session's read is every twin's. An open

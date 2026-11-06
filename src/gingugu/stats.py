@@ -257,7 +257,8 @@ def compute_review(
 
 
 def _credential_health(conn: sqlite3.Connection) -> dict:
-    """Credential expiry summary (no keychain access)."""
+    """Credential expiry summary (no keychain access), named for this machine."""
     from .credentials import CredentialVault
+    from .machine import describe
 
-    return CredentialVault(conn).health()
+    return describe(CredentialVault(conn).health())

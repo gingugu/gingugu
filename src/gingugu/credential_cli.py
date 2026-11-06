@@ -1,7 +1,7 @@
 """`gingugu credential`: this machine's vault by hand, for a person at a terminal.
 
-The way out when no client can show the confirmation ``credential_delete``
-asks for (``confirm``). Typing the name back at a real terminal is that
+Optional: an agent deletes with ``credential_delete(confirm=true)`` once the
+user agrees (``confirm``). Here, typing the name back at a real terminal is the
 confirmation, so a delete refuses a stdin that is not a TTY and there is no
 ``--yes``: piping an answer in is not confirming. It stops accidents, not a
 determined agent with a shell - that agent can reach the keychain directly.

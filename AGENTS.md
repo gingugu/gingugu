@@ -169,10 +169,10 @@ src/gingugu/
   project_name.py    → `project_name(cwd)`: the project namespace a directory names (its folder; a linked git worktree's main checkout)
   prompt_hook.py     → `gingugu hook prompt` (UserPromptSubmit): involuntary recall entry point; also injects board mail on every prompt for persona agents
   board_delivery.py  → the board post/reply delivery receipt (visible true/false/null)
-  xray/              → Codebase X-ray: scan/extract/resolve/local (client), validate/rank/store (brain), lang/ (per-language adapters), hook_common + edit_hook (PreToolUse edit tripwire) + board_brief (X20: the brief a board post's `xray:` line asks for) + repo_id (X20: which checkout an `xray: <repo> <range>` line means here) + board_nudge (X20 sender: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line) + read_hook (PostToolUse map on arrival) + tool_xray (the PreToolUse X-ray decision, apart from tool_hook) + history (X4: git log as churn, author counts and co-changed pairs, cached by HEAD) + hotspots (X4 hotspots/coupling, X6 blind spots) + history_tool (`code_xray` `history`/`blindspots`, local only) + docs_map + docs_cites + docs_tool (X22: which docs cite a file, here and in sibling checkouts; `code_xray` `docs`, local only) + bash_hook + bash_state (X15: snapshot a shell command's dirty set before, diff it after, name what the changed source reaches; the repos a session touched), brief (X19 handoff brief), resolve_walk + parse_cache (X16 incremental refresh), symbols_walk + symbols (X17 Python symbol graph, client only) + edit_symbols (the tripwire's `Edit lands in` lines) + callers_tool (`code_xray callers`) + edit_note (the note after an edit) + ledger (X11 lean test ledger) + scar_query + scars (X3 scar tissue: brain query, client scoring) + links/ (X23 cross-repo links, client only: model, provides*/mentions* (incl. mentions_repos)/prose extractors, index, cache, join, join_index, ripple, inbound (per-repo summaries for the hooks), tool, render)
+  xray/              → Codebase X-ray: scan/extract/resolve/local (client), validate/rank/store (brain), lang/ (per-language adapters), hook_common + edit_hook (PreToolUse edit tripwire) + board_brief (X20: the brief a board post's `xray:` line asks for) + repo_id (X20: which checkout an `xray: <repo> <range>` line means here) + board_nudge (X20 sender: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line) + read_hook (PostToolUse map on arrival) + tool_xray (the PreToolUse X-ray decision, apart from tool_hook) + history (X4: git log as churn, author counts and co-changed pairs, cached by HEAD) + hotspots (X4 hotspots/coupling, X6 blind spots) + history_tool (`code_xray` `history`/`blindspots`, local only) + docs_map + docs_cites + docs_tool (X22: which docs cite a file, here and in sibling checkouts; `code_xray` `docs`, local only) + bash_hook + bash_state (X15: snapshot a shell command's dirty set before, diff it after, name what the changed source reaches; the repos a session touched), brief (X19 handoff brief), resolve_walk + parse_cache (X16 incremental refresh), symbols_walk + symbols (X17 Python symbol graph, client only) + edit_symbols (the tripwire's `Edit lands in` lines) + callers_tool (`code_xray callers`) + edit_note (the note after an edit) + literals (who still reads a key an edit removed: git grep text matches, not import edges) + ledger (X11 lean test ledger) + scar_query + scars (X3 scar tissue: brain query, client scoring) + links/ (X23 cross-repo links, client only: model, provides*/mentions* (incl. mentions_repos)/prose extractors, index, cache, join, join_index, ripple, inbound (per-repo summaries for the hooks), tool, render)
   proxy_xray.py      → the proxy reads the checkout for code_xray, asks the brain by fingerprint; answers `brief`, `callers`, `history`, `blindspots`, `docs` and `links` here whole
   xray_cli.py        → `gingugu xray brief`: the X-ray brief from a shell; `gingugu xray history` / `blindspots`: X4/X6 from a shell; `gingugu xray docs`: X22 from a shell; `gingugu xray links`: X23 from a shell; `gingugu xray score`: the test ledger's score
-  post_tool_hook.py  → `gingugu hook read` (PostToolUse): the X-ray map on arrival; also `gingugu hook bash` (X15: what a shell command's writes reach; records pytest failures in the X-ray test ledger) and `gingugu hook edit` (the note after an edit: callers of the definitions touched)
+  post_tool_hook.py  → `gingugu hook read` (PostToolUse): the X-ray map on arrival; also `gingugu hook bash` (X15: what a shell command's writes reach; records pytest failures in the X-ray test ledger) and `gingugu hook edit` (the note after an edit: callers of the definitions touched, and who still reads a key the edit removed - `xray/literals.py`)
   board_hook.py      → board mail for the prompt hook: unread posts (max 5, labelled with the author's machine when known), fenced by the client's grant, local or POST /hook/inbox, nothing marked read; a task gets its claim call (open) or holder (claimed); appends the X20 brief for the first shown post with an `xray:` line
   tripwire.py        → tripwire matching (pure regex) + load_tripwires, the seam a remote brain would replace
   agent_session.py   → which agent session is speaking (hashed CLAUDE_CODE_SESSION_ID, X-Gingugu-Agent-Session header); routes board replies to the asking session
@@ -183,7 +183,9 @@ src/gingugu/
   board_watch_remote.py → the remote half: session token named for the persona, subscriptions/listen, reconnect with backoff
   board_watch_emit.py → the line (labelled as from another agent; `xray` field carries the X20 brief, <= 3 per batch), the delivery cursor, --exec (env only, stdout to stderr, 10 per batch, group-killed at 120s)
   cli_usage.py       → the top-level `gingugu --help` text (USAGE), kept out of server.py
-  tool_hook.py       → `gingugu hook tool` (PreToolUse): denies the first matching call per session; re-issue passes; also the X-ray deny on a blind edit of an imported source file (Python, TS/JS, Go; one this session never read or wrote), the X20 board nudge (first board post of a session from a branch ahead of the default branch, naming no range), and the checkout guard's deny, every time, of a git command that moves or empties the shared primary checkout
+  tui/               → the CLI's keygen show, music and plain fallback; human-facing
+                       commands only, never imported by a machine path
+  tool_hook.py       → `gingugu hook tool` (PreToolUse): denies the first matching call per session; re-issue passes; also the X-ray deny on a blind edit of an imported source file (Python, TS/JS, Go; one this session never read or wrote), the X20 board nudge (first board post of a session from a branch ahead of the default branch, naming no range), the checkout guard's deny, every time, of a git command that moves or empties the shared primary checkout, and the big-delete gate's `ask` (Claude Code's own permission prompt) for a big delete
   storage.py         → memory CRUD (store/update/forget)
   search.py          → hybrid BM25 (FTS5) + semantic ranking
   embeddings.py      → semantic vector generation
@@ -195,12 +197,19 @@ src/gingugu/
                        per-namespace split so a multi-namespace call computes
                        the shared block once, not once per namespace
   hygiene_stats.py   → memory_stats' hygiene block (ghost namespaces, duplicate titles)
+  machine.py         → this machine's name; stamps memory_stats' credentials block
+                       with it (and a note at zero: the vault is per machine)
   namespaces.py      → namespace CRUD
   credentials.py     → OS-keychain credential vault
   credential_cli.py  → `gingugu credential list|delete`: the vault by hand, at a terminal
-  confirm.py         → destructive tools ask the user (MCP elicitation), not the model;
-                       a client known to show no dialog (Claude Code's VS Code
-                       extension) counts as unable to ask
+  confirm.py         → destructive tools take `confirm`: true is the caller's yes, false
+                       refuses, omitted asks in a dialog (MCP elicitation) where the
+                       client can show one (Claude Code's VS Code extension cannot)
+  destructive.py     → the big-delete gate: namespace/credential deletes, consolidate
+                       or import over 10, hard deletes past 10 a session; the hook asks
+                       the person and leaves a single-use approval
+  proxy_gate.py      → remote mode: the proxy takes that approval before relaying
+                       a big delete to the brain
   portability.py     → export / import a namespace
   handlers/          → MCP tool handlers: memory.py, forget.py, hints.py,
                        recall.py, search.py, stats.py, scope.py, excerpt.py,
@@ -209,11 +218,15 @@ src/gingugu/
                        tripwires.py, board.py (the `board` tool + inbox resource;
                        derives the author server-side), xray.py (`code_xray`),
                        helpers.py
-                       (forget, consolidate, admin and credentials ask the user
-                       to confirm destructive calls; see confirm.py)
+                       (forget, consolidate, admin and credentials take `confirm` on
+                       destructive calls; see confirm.py, destructive.py)
 ui/                  → Memory Explorer (React/Vite 3D frontend + vitest; api.py dev shim over webui; dump_static.py builds the static demo data)
 docs/                → architecture.md (mermaids = source of truth), roadmap.md, future-architecture.md
 tests/               → pytest suites (unit + integration MCP flows)
+scripts/             → release.py (cut a release), fleet.py (roll it out to every machine),
+                       cli_demo.py (plays every CLI effect and the loop),
+                       live_rig.py (this checkout's doorway, hook and server live in a
+                       throwaway Claude Code project on a scratch brain)
 ```
 
 ---
@@ -271,7 +284,14 @@ watch item (see `.ai/plans/status.md`).
 
 - Define clear acceptance criteria before starting work
 - `uv run pytest -n auto` green before opening a PR
+- **In a worktree, test the worktree.** Run `uv sync` there (dev tools are a
+  dependency group, installed by default). Never `uv sync --active`: the editor
+  may export `VIRTUAL_ENV` pointing at the primary checkout's `.venv`, and
+  `--active` re-points THAT venv's editable install at your worktree - every
+  other session then tests your tree.
 - `ruff` + `black` clean
+- A hook feature is tested through the installed doorway, not `tool_hook.run` alone;
+  see the doorway rule in `.ai/standards/01-code-and-testing.md`
 - Surface performance characteristics (DB size, query latency) when relevant
 - Surface uncertainties — never guess
 

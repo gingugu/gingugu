@@ -164,6 +164,21 @@ def test_the_main_thread_is_never_fenced():
     assert decide(_p("mcp__gingugu__memory_store", {}, agent=None), DATA) is None
 
 
+def test_a_fork_is_the_main_thread_and_is_never_fenced():
+    # A fork inherits the whole conversation and model: a branch of the main
+    # thread, not a cold minion. Claude Code names it agent_type "fork"
+    # (measured on SubagentStart, 2026-11-05) and forbids it nested forks.
+    for tool, tool_input in [
+        ("mcp__gingugu__memory_store", {}),
+        ("Bash", {"command": "sqlite3 memories.db"}),
+    ]:
+        payload = _p(tool, tool_input)
+        payload["agent_type"] = "fork"
+        assert decide(payload, DATA) is None
+    named = _p("mcp__gingugu__memory_store", {})
+    assert decide(named, DATA) is not None  # a named minion still is
+
+
 @pytest.mark.parametrize("tool", ["Agent", "Task"])
 def test_a_minion_never_spawns_a_minion(tool):
     # general-purpose carries the Agent tool; a nested minion's findings come

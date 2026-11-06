@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The CLI is a Win95 keygen.** `init` and `harness` play a keygen window (copper
+  bars, plasma logo, sine scroller, a serial being cracked), then the real results as
+  tagged lines grouped into LEVELs, with a score, an achievement and a finale counted
+  from them. `remote`, `credential`, `token`, `promote`, `embed` and the release script
+  get an intro and an exit-code outro around their unchanged output; `gingugu party`
+  (alias `iddqd`) plays the cracktro, `--help` gets the logo and `--version` a gradient. An original synthesized chiptune loop plays through
+  `afplay` / `paplay` / `aplay` / `winsound` and stops with the command
+  (`GINGUGU_QUIET=1` mutes it). Truecolor, 256 and 16 colours with an ASCII fallback;
+  plain ASCII with the same words on a pipe, `NO_COLOR`, `TERM=dumb` or
+  `GINGUGU_PLAIN`, and no motion under `CI` or `GINGUGU_NO_ANIM`; `GINGUGU_COLORS`
+  forces a colour level, `GINGUGU_ASCII` ASCII glyphs, and `GINGUGU_CACHE_DIR` moves
+  the cached loop. Any key or Ctrl-C skips the show. `scripts/cli_demo.py` plays every
+  effect. Hooks, the stdio server, the proxy and every other machine path are
+  byte-for-byte unchanged.
+- **The X-ray note after an edit lists who still reads a key the edit removed.**
+  Nothing imports a data contract: renaming the key of an emitted JSON line left its
+  readers (tests, runbooks, monitor queries) invisible to the import graph. After an
+  `Edit`/`MultiEdit` that drops a quoted literal (`"status"`) or an unquoted key (a
+  Python keyword argument `status=`, a TS/JS object key `status:`), the note names up to
+  five files still reading it as `Text matches, not import edges` (`(+N more)` past
+  five; over 40 files it gives the count and says `too common to list`). One
+  `git grep` per key with a 1s timeout, whole-word, delimited forms only; unquoted keys
+  are searched everywhere but non-test code, since the symbol graph covers
+  other code. At most 3 keys per edit, each once per session and repo, off with
+  `MEMORY_XRAY_TRIPWIRE`. New `xray/literals.py`.
 - **A board claim says which session holds the task (migration 023).** One persona
   runs several sessions, and a claim recorded only the persona, so a task one
   session was working could not be told apart from another session's claim. A
@@ -26,6 +51,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the startup contract and protocol rules say to claim a task even when the user
   hands it over in chat. An unclaimed task stays in every other session's inbox as
   new work.
+- **Every destructive tool takes `confirm`, so a delete needs no terminal.** A hard
+  `memory_forget`, a cascading `memory_namespaces` delete, `memory_consolidate` with
+  `keep_originals=false`, an overwriting `memory_import` and `credential_delete` accept
+  `confirm: bool | None`. `true` is the confirmation for an ordinary delete: the agent asks
+  you in chat and passes it, with no dialog needed. `false` refuses. Omitted, a client that
+  can show a dialog asks there, and one that cannot (Claude Code's VS Code extension) is
+  told to ask you and call again with `confirm=true`.
+- **The big-delete gate.** Some deletes are big or unrecoverable enough that the agent's
+  `confirm=true` is not the whole answer: a namespace delete, `credential_delete` (a
+  keychain secret has no export and no undo), a consolidation or replace-import of more
+  than 10 memories, and hard deletes past 10 in one session. gingugu's `PreToolUse` hook
+  answers these with Claude Code's own permission prompt, which holds in auto and bypass
+  mode and becomes a refusal where nobody can answer (`claude -p`). The hook leaves a
+  single-use approval for exactly that call (15 minutes); the local server, or the proxy
+  in remote mode, requires it before acting on `confirm=true`. Hard deletes past 10 are
+  gated by the hook alone. Over HTTP only the owner's `confirm=true` stands; a scoped
+  token gets a dialog or a refusal. `MEMORY_CONFIRM_DESTRUCTIVE=off` on the executing
+  server (and the local proxy) skips the server-side check, for automation; the hook's
+  prompt stays.
+- **`scripts/live_rig.py`** runs a checkout's hook doorway, hook and server live in a
+  throwaway Claude Code project on a scratch brain (`--headless`, `--mode`,
+  `--credentials`), so a hook change can be watched working before it ships.
+- **Forks get the main thread's rights.** A fork (`agent_type` `fork`, `/subtask`) inherits
+  the whole conversation, so the minion fence lets it through. The harness `CLAUDE.md`
+  block gains a "Forks: parallel hard work" section.
+
+### Removed
+
+- `bootstrap/theme.py`, replaced by the `gingugu.tui` package.
 
 ### Changed
 
@@ -36,6 +90,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   through `PATH` to another checkout's environment and tested that checkout's code.
   Use `uv sync` (no `--extra dev`); the published package no longer carries a `dev`
   extra.
+- **`credential_delete`'s `confirm` defaults to omitted (was `true`).** Its refusal no
+  longer sends you to a terminal; the `gingugu credential list|delete` CLI remains for
+  deleting by hand. A client that cannot show a dialog is told to ask the user and call
+  again with `confirm=true`.
+
+### Fixed
+
+- **`memory_stats` says whose vault its credential count is.** The vault is per
+  machine, so a machine that never vaulted anything reported `credentials.total: 0`
+  with nothing to say that was expected. The `credentials` block now carries `machine`
+  (this machine's name, the same one `gingugu remote login` gives its token by
+  default) and, at zero, a `note` that nothing is vaulted on this machine - expected,
+  not data loss. Same in local and remote mode.
+- **Board mail between two sessions of one persona on the same machine is delivered.**
+  A reader is now persona + machine + agent session: your own persona's post is mail
+  from a twin machine or from a sibling session (both sessions known and different), a
+  reply to a sibling's post is routed back to that session, and the session that wrote a
+  post never sees it. An unknown session on either side keeps the old rule.
+- **A delete no longer dead-ends on a client with no dialog.** In Claude Code's VS Code
+  extension, which answers every MCP dialog "decline" unseen, every destructive call used
+  to end in a refusal. They now complete on the agent's `confirm=true`.
+- **The installed `PreToolUse` doorway passes the five destructive tools to the big-delete
+  gate** instead of dropping the main thread's own calls before the package loads. Existing
+  projects pick this up on `gingugu init`.
 
 **Upgrading:** the brain migrates to schema 23 on first open; restart MCP clients.
 

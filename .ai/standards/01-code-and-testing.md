@@ -56,6 +56,10 @@
 
 - **`pytest` + `pytest-asyncio`** — MCP handlers are async.
 - **No PR without tests** for the changed surface.
+- **Output a program reads stays byte-identical.** Hooks, the stdio server, the
+  proxy and JSON modes never import `gingugu.tui`, and a change near them carries a
+  byte-identity test (see `tests/test_tui_machine_paths.py`: a static import check plus
+  the hook entry points under a pty on a colour and a plain terminal).
 - **The suite is offline and bounded.** Two autouse fixtures in
   `tests/conftest.py` enforce it: `fake_keyring` keeps tests off the OS
   keychain, `offline_embeddings` keeps them off the network (the fastembed
@@ -84,6 +88,13 @@
   changes; CI's `ui` job runs `npm ci`, typecheck, test and build on Node 22.
   Unit tests cannot see a 3D scene, so a visual change is verified by rendering
   it (a headless Chrome screenshot) and looking at the result.
+- **A hook feature is tested through the installed doorway.** The doorway
+  scripts (`bootstrap/templates/*.py.tmpl`) filter before `gingugu hook ...`
+  ever runs - the PreToolUse one drops the main thread's own `mcp__gingugu__`
+  calls (all but a board post and the five destructive tools) - so a test that calls `tool_hook.run` directly can stay green while the
+  feature never fires. Twice now (X20's board nudge, the big-delete gate). Add a
+  case to the `doorways` fixture in `tests/test_minion_wiring.py`, then watch it
+  live with `scripts/live_rig.py` (interactive, or `--headless PROMPT`).
 - **Unit tests** for storage, search, relations, context, decay, consolidation.
 - **Integration tests** for end-to-end MCP flows (store → recall → context;
   store → relate → recall include_related).

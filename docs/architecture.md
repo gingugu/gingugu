@@ -30,11 +30,14 @@ observer that answers from the local DB, or with a remote brain on forwards to
 the brain's owner-only `GET /ui/api/*` (see **Explorer read path** in
 `.ai/specs/dataflow.md`). It binds loopback only and credits no recall.
 The proxy also serves this machine's credential vault locally, so a
-`credential_delete` is confirmed with the user by the proxy, while the
-brain's own confirmations (a hard forget, say) relay through it unchanged -
-except for a client known to show no dialog (Claude Code's VS Code extension),
-whose `initialize` the proxy forwards without `elicitation`, so the brain refuses
-"cannot ask" rather than relaying a question nobody sees.
+`credential_delete` is checked on this machine by the vault itself. A big delete
+(see **Destructive calls** below) is checked by the proxy before the call is
+relayed to the brain, because the person's approval is recorded here, beside the
+hook, where the brain cannot see it. The brain's own dialogs (a hard forget with
+`confirm` omitted, say) relay through unchanged - except for a client known to show
+no dialog (Claude Code's VS Code extension), whose `initialize` the proxy forwards
+without `elicitation`, so the brain tells it to ask and call again with
+`confirm=true` rather than relaying a question nobody sees.
 
 ---
 
@@ -66,7 +69,7 @@ graph LR
 
     subgraph Claude Code Hooks
         PH[UserPromptSubmit<br/>gingugu hook prompt]
-        Y[PreToolUse<br/>gingugu hook tool<br/>tripwires · X-ray · minion fence · checkout guard]
+        Y[PreToolUse<br/>gingugu hook tool<br/>tripwires · X-ray · minion fence · checkout guard · big-delete gate]
         PO[PostToolUse<br/>gingugu hook read · hook bash · hook edit<br/>X-ray map on arrival · shell writes · after an edit]
         Z[SubagentStart<br/>gingugu hook subagent]
     end
@@ -113,7 +116,7 @@ graph LR
     C --> G
     C --> L
     C --> K
-    C -.->|confirmation dialog:<br/>destructive calls| A
+    C -.->|confirmation dialog:<br/>destructive calls, confirm omitted| A
     D --> H
     D --> I
     E --> H
@@ -178,8 +181,10 @@ is built locally from the checkout and never touches the brain (only the scar lo
 over `POST /hook/scars` in remote mode), the deny is not
 logged, and when a tripwire fires on the same call the two share one deny. It
 also runs the checkout guard, which denies every time a git command that would
-move or empty a repo's shared primary checkout. It never touches the MCP server
-process.
+move or empty a repo's shared primary checkout, and the big-delete gate, which answers
+`ask` for a big delete so Claude Code shows its own permission prompt (see
+**Destructive calls**). Order: minion fence, checkout guard, big-delete gate, X-ray. It
+never touches the MCP server process.
 
 `PostToolUse` is a fourth: `gingugu hook read` runs after every `Read`, `Grep`
 or `Glob` and adds context next to the result, never a block. The first such call
@@ -193,8 +198,13 @@ repo's own project namespace, never stored; switch `MEMORY_XRAY_SCARS`), after a
 though neither imports the other (X4; switch `MEMORY_XRAY_HISTORY`). `gingugu hook edit` runs after every `Edit`,
 `Write` or `MultiEdit` (doorway `post_edit_xray.py`): after an edit of a Python file it
 names the cross-file callers of the definitions the new text landed in and the tests
-nearest them, once per definition per session, from the cached symbol graph. Each
-such note records its test predictions in a local ledger, and the Bash `PostToolUse`
+nearest them, once per definition per session, from the cached symbol graph. After an
+`Edit` or `MultiEdit` of any file it also lists who still reads a key the edit removed
+(`xray/literals.py`): a quoted literal, or an unquoted Python keyword argument or TS/JS
+object key, found with one `git grep` per key (1s timeout) and labelled `Text matches,
+not import edges`; five are named, more than 40 files gives a count, and unquoted keys
+are read everywhere but non-test code. At most three keys per edit, each once per session
+per repo. Each such note records its test predictions in a local ledger, and the Bash `PostToolUse`
 path records the failed test files of every `pytest` run; `gingugu xray score` says
 how the predictions fared. It uses the same locally built graph cache as the edit
 check and never touches the MCP server process (the brain is asked only for scar tissue, in remote mode), and `MEMORY_XRAY_MAP=off`
@@ -547,6 +557,13 @@ Never pruned: a finished task leaves the inbox by status, not by delete.
 
 Only a hash of the agent session is stored (`sha256(CLAUDE_CODE_SESSION_ID)[:32]`,
 `agent_session.py`): the raw id is a handle to a live transcript.
+
+A reader is persona + machine + session. Its own persona's post is mail when it
+comes from a twin (both `author_origin` and the reader's machine known and
+different) or a sibling session on the same machine (both `author_agent` and the
+reader's session known and different); the session that wrote a post never gets
+it, and an unknown machine or session on either side keeps the persona as the
+identity (`board.is_me`, `_inbox_where`).
 
 #### `xray_snapshots` / `xray_files` / `xray_edges`
 Codebase X-ray import graphs (migration 019, `migrations/xray.py`). A snapshot
@@ -1432,8 +1449,8 @@ without `memory_ids`, discover which memories are worth consolidating.
   caller that built its id list from an empty collection fails loudly).
 - `strategy` (optional) — merge|summarize|deduplicate (default: merge)
 - `keep_originals` (optional) — retain originals as deprecated (default: true).
-  `false` hard-deletes the originals, and the user confirms that through the
-  client (see `MEMORY_CONFIRM_DESTRUCTIVE`).
+  `false` hard-deletes the originals and needs `confirm=true` (see **Destructive
+  calls**); past 10 originals it is a big delete and the person approves too.
 - `namespace` (optional, suggest mode) - namespace to scan; resolved from
   config when omitted. Unknown namespaces are an error (reads never create).
 - `min_similarity` (optional, suggest mode) - pairwise similarity threshold in
@@ -1462,8 +1479,9 @@ Deprecate or permanently delete a memory.
 **Parameters:**
 - `memory_id` (required) — UUID of memory
 - `hard_delete` (optional) — permanently remove vs. mark deprecated (default: false).
-  A hard delete asks the user to confirm through the client; declining, or a
-  client that cannot ask, is a structured refusal.
+  A hard delete needs `confirm=true` (see **Destructive calls**); `confirm=false`
+  refuses, and hard deletes past 10 in one session need the person's approval.
+- `confirm` (optional) — the caller's confirmation; see **Destructive calls**.
 - `reason` (optional) — why this is being forgotten
 
 ### `memory_namespaces`
@@ -1482,8 +1500,9 @@ List and manage namespaces.
   cannot exist. `crow` and `default` are seeded `""` by migration 007.
 - `cascade` (optional, `delete` only) — delete a non-empty namespace along
   with its memories (default: false). The `default` namespace is protected.
-  The user confirms the cascade through the client, and the dialog names how
-  many memories go with it.
+  A namespace delete is a big delete (see **Destructive calls**): the hook asks
+  about any `delete`, even of an empty namespace; the server's dialog and approval
+  apply to a non-empty cascade, where the dialog names how many memories go with it.
 
 ### `memory_stats`
 Get health overview of the memory system.
@@ -1498,7 +1517,9 @@ Get health overview of the memory system.
   ...}}` - `global` is the four namespace-independent fields
   (`namespaces`, `access_log_rows`, `query_log_rows`, `credentials`) computed
   once, and each `by_namespace` entry is that namespace's own scoped stats
-  minus those four fields. This is what collapses the session-start protocol's old two-call
+  minus those four fields. `credentials` is this machine's vault summary,
+  stamped with `machine` (`machine.name()`) and, at `total: 0`, a `note` that
+  the vault is per machine. This is what collapses the session-start protocol's old two-call
   pattern (`memory_stats(namespace="crow")` then one per project) into one
   call that computes the shared block once instead of once per namespace.
   `review_limit` applies to every namespace's block.
@@ -1645,7 +1666,9 @@ when `MEMORY_SERVER_ROLE=minion`, else `local`.
 
 `inbox` returns unread posts addressed to the caller or to `*`, oldest first,
 excluding the caller's own posts (unless the post's origin and the caller's
-origin are both known and differ: a persona's twin on another machine), finished tasks, and tasks claimed by someone
+origin are both known and differ - a persona's twin on another machine - or the
+post's `author_agent` and the caller's agent session are both known and differ -
+a sibling session on the same machine), finished tasks, and tasks claimed by someone
 else - including a twin session of the caller's own persona, when both that
 session and the caller's are known - plus an `unread` count. An open task counts as unread even after it is read,
 until someone claims it or it is done: receipts are per persona, so a read in one
@@ -1844,7 +1867,7 @@ shows as `<repo>:<doc>`; data keys `docs` and `docs_gone`), and a docs failure n
 the brief. `code_xray` `docs` (`xray/docs_tool.py`) answers the citing docs per file, or
 without `files` the totals and the most cited files; it answers locally like `history`:
 `gingugu serve` refuses it and the proxy answers it on the caller's machine. Switch
-`MEMORY_XRAY_DOCS` (default on). No migration, no brain change. The hook surfaces (the
+`MEMORY_XRAY_DOCS` (default on). No migration, no brain change. The docs-map hook surfaces (the
 edit note, the Bash X-ray, the read hook) are not built yet.
 
 **Cross-repo links (X23).** A service ecosystem is wired by names, not imports. The
@@ -1947,25 +1970,52 @@ every time, with a pointer to a worktree. Primary means `git rev-parse
 `cd` earlier in the command and `git -C` decide which checkout that is. A
 `GINGUGU_PRIMARY_OK=1` prefix lets one command through.
 
-**Destructive calls ask the user, not the model.** A hard `memory_forget`, a
-cascading `memory_namespaces` delete, `memory_consolidate` with
+**Destructive calls need a confirmation, and a big one needs the person.** A hard
+`memory_forget`, a cascading `memory_namespaces` delete, `memory_consolidate` with
 `keep_originals=False`, a `memory_import` with `on_conflict="replace"` that
-would overwrite existing ids, and `credential_delete` each show the user a
-confirmation through the client (MCP elicitation) and go ahead only on accept
-with the box ticked. The answer is a hidden parameter, absent from the tool's
-input schema, so the model cannot supply it. Decline, cancel (what a headless
-client answers) and a client without elicitation each return a structured
-`ok: false`. Claude Code's VS Code extension declares elicitation but answers
-every one "decline" without showing a dialog, so a stdio server treats it as
-unable to ask (`CLAUDE_CODE_ENTRYPOINT=claude-vscode`; the variable is ignored
-over HTTP, where it says nothing about the remote client). In remote mode the
-proxy strips `elicitation` from the `initialize` it forwards to the brain and
-replays to the local vault, so both refuse the same way. The `credential_delete`
-refusal then names the way out: `gingugu credential delete NAME` in a terminal.
-`MEMORY_CONFIRM_DESTRUCTIVE=off` (also `false`/`0`/`no`,
-case-insensitive; anything else keeps confirmations on) on the server that
-executes the tool skips the dialog, for automation: in remote mode that is
-the brain for memory tools and the local proxy for the credential vault.
+would overwrite existing ids, and `credential_delete` each take a `confirm`
+argument. `confirm=true` is the confirmation for an ordinary delete: the agent
+asks the user in chat and passes it, so no terminal or dialog is needed.
+`confirm=false` refuses. Omitted, the call falls back to a confirmation dialog
+through the client (MCP elicitation) where the client can show one, and goes
+ahead only on accept with the box ticked; the dialog's answer is a hidden
+parameter absent from the tool's input schema. A client that cannot show a
+dialog gets a structured `ok: false` telling the agent to ask the user and call
+again with `confirm=true`. Claude Code's VS Code extension declares elicitation
+but answers every one "decline" without showing a dialog, so a stdio server
+treats it as unable to ask (`CLAUDE_CODE_ENTRYPOINT=claude-vscode`; the variable
+is ignored over HTTP, where it says nothing about the remote client). In remote
+mode the proxy strips `elicitation` from the `initialize` it forwards to the
+brain and replays to the local vault, so both answer the same way.
+
+**The big-delete gate.** `confirm=true` alone is the model's say-so, so a big
+delete also needs the person: a namespace delete, `credential_delete`, a
+consolidation or replace-import over 10 memories, and the hard deletes past 10 in
+one session. gingugu's PreToolUse hook (`gingugu hook tool`) answers
+`permissionDecision: "ask"`, so Claude Code shows its own permission prompt. That
+holds in auto and bypass mode, and becomes a deny where nobody can answer
+(`claude -p`). The hook leaves a single-use approval (15 minute TTL) under
+`<data dir>/hook-sessions/approvals`, keyed to that exact call. A local stdio
+server requires it before acting on `confirm=true` on a big delete (else a dialog
+if the client can show one, else a refusal: "is a big delete and needs the user's
+own approval"). In remote mode the proxy takes the approval before relaying to
+the brain; `credential_delete` goes to the local vault, which checks it itself.
+Over HTTP only the owner (full grant) passes on `confirm=true`, since its proxy
+took the approval; a scoped token gets a dialog if its client can ask, else the
+refusal. Two asymmetries: the hook asks about any namespace `delete` while the
+server checks only a non-empty cascade, and for an import the hook counts the
+payload's memories while the server counts the ids it would overwrite. Hard
+deletes past 10 in a session are gated by the hook alone: no approval is consumed
+server-side and the proxy does not screen `memory_forget`.
+`MEMORY_CONFIRM_DESTRUCTIVE=off` (also `false`/`0`/`no`, case-insensitive; anything
+else keeps confirmations on) is read by the server that executes the tool (in
+remote mode the brain for memory tools, the local proxy for the credential vault,
+and the proxy again for its own screen) and skips the dialog and the server-side
+approval check, for automation. It does not silence the hook's `ask`. The
+`gingugu credential delete` CLI remains for deleting by hand.
+
+**Forks.** A fork (`agent_type: "fork"`) inherits the whole conversation, so the
+minion fence gives it the main thread's rights.
 
 ### `memory_export`
 Export memories to a portable JSON payload (backup/transfer). Credentials are
@@ -1983,8 +2033,9 @@ Import a payload produced by `memory_export`. Namespaces are matched by
 **Parameters:**
 - `data` (required) — the export payload
 - `on_conflict` (optional) — `skip` (default) or `replace` for memories
-  sharing an id. A `replace` that would overwrite existing ids asks the user
-  to confirm through the client, naming how many.
+  sharing an id. A `replace` that would overwrite existing ids needs
+  `confirm=true` (see **Destructive calls**), and the person's approval past 10
+  memories; with `confirm` omitted the dialog names how many.
 
 ---
 
@@ -2133,12 +2184,14 @@ Remove a service bundle or a specific field. Cleans up Keychain entries.
 **Parameters:**
 - `service_name` (required) — which service
 - `field_name` (optional) — delete a single field instead of the whole service
-- `confirm` (optional, default `true`) — the user's confirmation dialog decides;
-  `confirm=false` refuses outright. Through a remote-mode proxy the dialog is
-  asked by the proxy's local vault session. Where no client can show it, the
-  refusal points at `gingugu credential delete NAME [--field F]` in a terminal,
-  which asks for the service name typed back (see `gingugu credential list` to
-  find names; secret values are never printed).
+- `confirm` (optional, default omitted) — `true` is the agent's confirmation,
+  `false` refuses outright, omitted asks via a dialog where the client can show
+  one. A credential delete is always a big delete (a keychain secret has no export
+  and no undo): it also needs the person's approval through the big-delete gate
+  (see **Destructive calls**), which the local vault checks itself, also in
+  remote mode. `gingugu credential delete NAME [--field F]` remains for deleting
+  by hand at a terminal (asks for the service name typed back; see `gingugu
+  credential list` to find names; secret values are never printed).
 
 ### Expiry Behavior
 
@@ -2147,7 +2200,11 @@ Remove a service bundle or a specific field. Cleans up Keychain entries.
   - **`expiring_soon`** — expiry within 14 days
   - **`expired`** — past the `expires_at` date
 - `memory_stats` includes a **credential health summary**: total count,
-  expired count, expiring-soon count.
+  expired count, expiring-soon count, and `machine` - the machine whose vault
+  it counts (`machine.name()`, the sanitised short hostname, also the default
+  `remote login` token name). The vault is per machine, so at `total: 0` the
+  block carries a `note` saying nothing is vaulted on this machine - expected,
+  not data loss. Remote mode reports the local vault the same way.
 - Expired credentials **still return values** — the system warns, it doesn't
   block. Rotation is the user's responsibility.
 
@@ -2309,14 +2366,17 @@ src/gingugu/
 ├── proxy_vault.py          # Remote mode: the machine's credential vault, screened (reveal refused) and exposed as a server
 ├── proxy_vault_link.py     # Remote mode: runs that vault behind an in-memory MCP session so it can ask the user
 ├── proxy_xray.py           # Remote mode: code_xray reads the checkout here, asks the brain by fingerprint
-├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), tool_xray (the PreToolUse X-ray decision, kept apart from tool_hook), bash_hook + bash_state (X15: a shell command's dirty-set snapshot and diff; the repos a session touched), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only), board_nudge (X20 sender: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line), board_brief (X20: the brief a board post's `xray: <range>` line asks for, rendered on the receiver), repo_id (X20: a checkout's identity, and the local checkout an `xray: <repo> <range>` line names), resolve_walk + parse_cache (X16: content-only import records, the per-file parse cache), symbols_walk + symbols (X17: the Python symbol graph, client only), edit_symbols (X17: the tripwire's `Edit lands in` lines), callers_tool (X17: `code_xray` `callers`, local only), edit_note (the note after an edit), ledger (X11 lean: test predictions vs pytest failures), scar_query (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace), scars (X3, client side: resolves and ranks those hits against the checkout), history (X4: git log summarized as churn, author counts and co-changed pairs, cached by HEAD), hotspots (X4 hotspots + coupling, X6 blind spots, pure), history_tool (`code_xray` `history` / `blindspots`, local only), docs_map + docs_cites + docs_tool (X22: which docs cite a file, here and in sibling checkouts; `code_xray` `docs`, local only), links/ (X23: model + provides* + mentions* (incl. mentions_repos: a repo named outright) + prose read a checkout into provided and mentioned names; index reads checkouts (8 threads) and cache holds the per-checkout facts; join + join_index (provider index and matchers) + ripple turn them into links, `shared` hosts and the cross-repo ripple; render + tool answer `code_xray` `links` and the brief's section, local only; inbound writes and reads the per-repo summaries the read hook and edit note use)
+├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), tool_xray (the PreToolUse X-ray decision, kept apart from tool_hook), bash_hook + bash_state (X15: a shell command's dirty-set snapshot and diff; the repos a session touched), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only), board_nudge (X20 sender: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line), board_brief (X20: the brief a board post's `xray: <range>` line asks for, rendered on the receiver), repo_id (X20: a checkout's identity, and the local checkout an `xray: <repo> <range>` line names), resolve_walk + parse_cache (X16: content-only import records, the per-file parse cache), symbols_walk + symbols (X17: the Python symbol graph, client only), edit_symbols (X17: the tripwire's `Edit lands in` lines), callers_tool (X17: `code_xray` `callers`, local only), edit_note (the note after an edit), literals (who still reads a key an edit removed: `git grep` text matches, not import edges), ledger (X11 lean: test predictions vs pytest failures), scar_query (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace), scars (X3, client side: resolves and ranks those hits against the checkout), history (X4: git log summarized as churn, author counts and co-changed pairs, cached by HEAD), hotspots (X4 hotspots + coupling, X6 blind spots, pure), history_tool (`code_xray` `history` / `blindspots`, local only), docs_map + docs_cites + docs_tool (X22: which docs cite a file, here and in sibling checkouts; `code_xray` `docs`, local only), links/ (X23: model + provides* + mentions* (incl. mentions_repos: a repo named outright) + prose read a checkout into provided and mentioned names; index reads checkouts (8 threads) and cache holds the per-checkout facts; join + join_index (provider index and matchers) + ripple turn them into links, `shared` hosts and the cross-repo ripple; render + tool answer `code_xray` `links` and the brief's section, local only; inbound writes and reads the per-repo summaries the read hook and edit note use)
 ├── xray_cli.py             # `gingugu xray brief` (--range / --files / --path / --json), `gingugu xray history` (--files / --path / --limit / --json), `gingugu xray blindspots` (--path / --limit / --json), `gingugu xray docs` (--files / --path / --limit / --json), `gingugu xray links` (--files / --path / --limit / --json / --warm) and `gingugu xray score` (--json)
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine
 ├── remote_args.py          # usage text + argparse for `gingugu remote`, mint ssh argv
 ├── remote_tls.py           # Client TLS: pins, verify_for, downgrade refusal, login's live check, diagnose/speaks_tls
 ├── credential_cli.py       # `gingugu credential list|delete`: the vault by hand, at a terminal
-├── confirm.py              # Destructive tools ask the user (MCP elicitation); MEMORY_CONFIRM_DESTRUCTIVE opt-out
+├── showable.py             # clean(): strips ESC sequences, C0/C1, zero-width and bidi from untrusted text before a terminal shows it
+├── confirm.py              # Destructive tools take `confirm`; omitted, a dialog (MCP elicitation) where the client can show one; MEMORY_CONFIRM_DESTRUCTIVE opt-out
+├── destructive.py          # The big-delete gate: what counts as big, the hook's single-use approvals, the per-session hard-delete count
+├── proxy_gate.py           # Remote mode: takes a big delete's approval at the proxy before the call is relayed to the brain
 ├── grants.py               # Per-namespace read/write grants plus a home namespace (derived tokens), bound per tool call
 ├── serve_ui.py             # GET /ui/api/*: the Explorer read API on a brain, owner tokens only
 ├── webui_remote.py         # gingugu ui in remote mode: forwards /api/* to the brain's /ui/api/* (token in the header only), loopback checks
@@ -2345,8 +2405,22 @@ src/gingugu/
 │   ├── harness_retired.py  # Kit file names, sha256 manifest, symlink checks
 │   ├── harness_settings.py # Harness hooks + deny rules, merged additively; hook-command parsing
 │   ├── settings.py         # Non-destructive .claude/settings.json merge
-│   ├── theme.py            # The 90s boot sequence; degrades to monochrome off-TTY
 │   └── templates/harness/  # Hooks, minions, skill, .ai/ scaffold, CLAUDE.md block
+│
+│   # ── CLI face (human-facing commands only; machine paths never import it) ──
+├── tui/
+│   ├── __init__.py         # report() for init/harness, run() wrapper, banner, version line
+│   ├── caps.py             # Capability ladder: truecolor/256/16/plain, unicode, width, motion
+│   ├── paint.py            # RGB quantized to the terminal; gradients; CGA + amber palette
+│   ├── art.py              # Block logo, Win98 keygen window chrome, Unicode/ASCII glyph sets
+│   ├── fx.py               # Plasma, copper rasterbars, sine scroller, progress bar (pure f(t))
+│   ├── stage.py            # Draws frames in place; any key / Ctrl-C skips; cursor restored
+│   ├── keys.py             # Non-blocking keypress (cbreak / msvcrt), terminal always restored
+│   ├── keygen.py           # The report: tags, LEVELs, score, achievement, finale, fake serial
+│   ├── synth.py            # "C0R3 D3PTH": the original 8-bar chiptune loop, stdlib WAV synth
+│   ├── audio.py            # Plays the loop via /usr/bin/afplay or paplay/aplay (absolute PATH only)/winsound; killed on exit
+│   ├── signals.py          # SIGTERM/SIGHUP while a show is live: restore the terminal, stop the music, re-deliver
+│   └── party.py            # gingugu party: the cracktro on demand
 │
 │   # ── Storage ───────────────────────────────────────────────────
 ├── database.py             # The connection alone: WAL, foreign keys, busy timeout
@@ -2444,6 +2518,7 @@ src/gingugu/
 │
 │   # ── Stats + misc ──────────────────────────────────────────────
 ├── stats.py                # Counts, confidence, dormancy, review sweep; global block
+├── machine.py              # This machine's name; the vault summary that says whose vault it counts
 ├── hygiene_stats.py        # Ghost namespaces, duplicate titles
 ├── graph_stats.py          # Relation-graph health: edges, degree, orphans, spread cap
 ├── size_stats.py           # The character cost the counts do not show
@@ -2459,7 +2534,7 @@ src/gingugu/
 └── handlers/
     ├── __init__.py         # Handler registry / dispatch table
     ├── memory.py           # store / update
-    ├── forget.py           # memory_forget; a hard delete asks the user
+    ├── forget.py           # memory_forget; a hard delete takes `confirm`
     ├── hints.py            # Write-time similar + relation hints
     ├── recall.py           # recall / context
     ├── capability_view.py  # Stamps capability {run, path, exists} onto reads + the lane entries
@@ -2470,21 +2545,23 @@ src/gingugu/
     ├── excerpt.py          # excerpt
     ├── relations.py        # relate / unrelate / edges
     ├── relation_ops.py     # Batch parsing for relate and unrelate
-    ├── consolidate.py      # consolidate; keep_originals=False asks the user
+    ├── consolidate.py      # consolidate; keep_originals=False takes `confirm`
     ├── dream.py            # dream
     ├── fence.py            # Grant policy: request grant (HTTP token or stdio MEMORY_GRANT) + whole-brain tool refusal
-    ├── credentials.py      # credential_store / get / list / delete (delete asks the user)
+    ├── credentials.py      # credential_store / get / list / delete (delete takes `confirm`; always a big delete)
     ├── tripwires.py        # memory_tripwire: add / list / remove / test
     ├── board.py            # board tool + gingugu://board/inbox/{persona} resource; derives the author
     ├── xray.py             # code_xray tool: snapshot selection, blast, overview, refresh, ingest, brief, callers, history, blindspots, docs, links
-    ├── admin.py            # namespaces, export, import (cascade delete and overwriting import ask the user)
+    ├── admin.py            # namespaces, export, import (cascade delete and overwriting import take `confirm`)
     ├── summaries.py        # Payload shapes: full summary, compact summary, the picker
     ├── choices.py          # Enum argument parsing, shared error wording
     └── helpers.py          # Shared response shaping
 ```
 
 Dev-only tooling lives at the repo root and never ships in the wheel: `bench/`
-(the golden-set retrieval benchmark) and `ui/` (the Memory Explorer source,
+(the golden-set retrieval benchmark), `scripts/` (`release.py`, `fleet.py`, `cli_demo.py` (plays every
+CLI effect and the loop), and `live_rig.py`, which runs this checkout's hook doorway, hook and server live in a
+throwaway Claude Code project on a scratch brain) and `ui/` (the Memory Explorer source,
 whose built bundle is what `webui.py` serves).
 
 ---

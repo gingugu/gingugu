@@ -59,16 +59,18 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `xray/` (Codebase X-ray: `scan` + `extract` + `lang/` (one adapter per language: `python`
    on `ast` with `resolve`; `typescript` + `ts_*` + `jsonc` and `golang` on tree-sitter) +
    `model` + `local` + `parse_cache` + `resolve_walk` on the client, `validate` +
-   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check), `tool_xray` (the PreToolUse X-ray decision, apart from `tool_hook`), `bash_hook` + `bash_state` (X15: a shell command's writes get their X-ray; the repos a session touched) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), `symbols_walk` + `symbols` (X17: the Python symbol graph - per-file definition/binding/call/type records, resolved to call edges; client only, cached beside the graph), `edit_symbols` (X17: the tripwire's `Edit lands in` lines), `callers_tool` (X17: `code_xray` `callers`, local only), `edit_note` (the PostToolUse note after an edit: cross-file callers of the definitions touched, nearest tests), `ledger` (X11 lean: X-ray's test predictions vs pytest failures, local; `gingugu xray score`), `board_nudge` (X20 sender: asks a board post from a branch ahead of the default branch for its range, once per session, from `gingugu hook tool`), `board_brief` (X20: the brief a board post's `xray:` line asks for, rendered on the receiver), `repo_id` (X20: a checkout's identity and where the repo a post names is checked out here), `scar_query` (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace, bug/decision/architecture/fact/pattern only; never sees a checkout) + `scars` (X3, client side: resolves a hit's path tokens against the checkout's source files, ranks by type weight over files named, reads only the repo's own namespace, never `crow`; derived at read time, no table, no migration; appended to the read neighbourhood and the blind-edit deny), `history` (X4: git log summarized as churn, author counts and co-changed pairs, cached by HEAD), `hotspots` (X4 hotspots + coupling, X6 blind spots; pure), `history_tool` (`code_xray` `history`/`blindspots`, local only), `docs_map` + `docs_cites` + `docs_tool` (X22: the reverse index from a file to the docs that cite it, here and in sibling checkouts; `code_xray` `docs`, local only) and the `links/` package (X23: zero-config cross-repo links - what each checkout provides and mentions, joined into links, `shared` hosts and a cross-repo ripple; `code_xray` `links`, local only), the hook side that builds the graph itself and never
+   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check), `tool_xray` (the PreToolUse X-ray decision, apart from `tool_hook`), `bash_hook` + `bash_state` (X15: a shell command's writes get their X-ray; the repos a session touched) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), `symbols_walk` + `symbols` (X17: the Python symbol graph - per-file definition/binding/call/type records, resolved to call edges; client only, cached beside the graph), `edit_symbols` (X17: the tripwire's `Edit lands in` lines), `callers_tool` (X17: `code_xray` `callers`, local only), `edit_note` (the PostToolUse note after an edit: cross-file callers of the definitions touched, nearest tests), `literals` (who still reads a key an Edit/MultiEdit removed: a `git grep` text match, labelled as such, never an import edge), `ledger` (X11 lean: X-ray's test predictions vs pytest failures, local; `gingugu xray score`), `board_nudge` (X20 sender: asks a board post from a branch ahead of the default branch for its range, once per session, from `gingugu hook tool`), `board_brief` (X20: the brief a board post's `xray:` line asks for, rendered on the receiver), `repo_id` (X20: a checkout's identity and where the repo a post names is checked out here), `scar_query` (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace, bug/decision/architecture/fact/pattern only; never sees a checkout) + `scars` (X3, client side: resolves a hit's path tokens against the checkout's source files, ranks by type weight over files named, reads only the repo's own namespace, never `crow`; derived at read time, no table, no migration; appended to the read neighbourhood and the blind-edit deny), `history` (X4: git log summarized as churn, author counts and co-changed pairs, cached by HEAD), `hotspots` (X4 hotspots + coupling, X6 blind spots; pure), `history_tool` (`code_xray` `history`/`blindspots`, local only), `docs_map` + `docs_cites` + `docs_tool` (X22: the reverse index from a file to the docs that cite it, here and in sibling checkouts; `code_xray` `docs`, local only) and the `links/` package (X23: zero-config cross-repo links - what each checkout provides and mentions, joined into links, `shared` hosts and a cross-repo ripple; `code_xray` `links`, local only), the hook side that builds the graph itself and never
    touches the brain; see Key Decisions), `proxy_xray` (the proxy's local half of `code_xray`),
    `board_watch` +
    `board_watch_remote`, `board_watch_emit` (the `gingugu board watch` wake-up command; see Key
-   Decisions), `board_hook` (board mail for the prompt hook; see Key Decisions), `board_tasks` (claim and done, re-exported by `board`), `cli_usage` (the top-level help text), `minion_fence`, `subagent_hook` and `subagent_warmup` (see Warm minions),
+   Decisions), `board_hook` (board mail for the prompt hook; see Key Decisions), `board_tasks` (claim and done, re-exported by `board`), `cli_usage` (the top-level help text), `tui` (the CLI's keygen show, music and plain fallback; human-facing commands only - see Key Decisions), `minion_fence`, `subagent_hook` and `subagent_warmup` (see Warm minions),
    `recall_pick` (the recall pipeline the local hook and `/hook/recall` share),
    `hook_remote` + `hook_remote_flows` and `serve_hooks` (see Remote mode; `serve_hooks` also serves `POST /hook/scars` for X3, owner-only, answered by `xray/scar_query`), `hook_grant`
    (the client's `MEMORY_GRANT` as the hooks apply it), `credential_cli` (`gingugu
-   credential list|delete`: the vault by hand, for a person at a terminal), `confirm` (the user's
-   confirmation for destructive tools; see Key Decisions), `proxy_vault_link`
+   credential list|delete`: the vault by hand, for a person at a terminal), `confirm` (the confirmation
+   for destructive tools; see Key Decisions), `destructive` (the big-delete gate,
+   used by `tool_hook`, the handlers (`gate`), `confirm` (`take`) and `proxy_gate`), `proxy_gate` (the same gate at the remote-mode proxy),
+   `proxy_vault_link`
    (the local vault behind an in-memory MCP session; see Remote mode), `client_grants` (each server
    publishes its grant for its client's hooks; see Warm minions), `claude_trust`
    (whether Claude Code trusts a folder, for the untrusted-minion warning),
@@ -330,7 +332,7 @@ is the exception - it is `1 + 2N` writes (create, then a `supersedes` edge and a
 retirement per original), and a partial application is worse than none. Under
 `keep_originals=False` the retirement is a hard delete, so a failure halfway
 through the loop destroys memories the surviving record never absorbed. That
-hard delete is also the one the user confirms through the client before it
+hard delete is also the one that needs a `confirm` before it
 runs (see the Key Decisions entry on confirmations).
 
 `transactions.atomic()` takes components that share a connection, closes a gate
@@ -478,19 +480,25 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   cannot. The vault runs as an MCP server over in-memory streams
   (`proxy_vault_link.VaultLink`), handshaken with the client's `initialize`,
   so it sees the client's capabilities and `credential_delete` can ask the user
-  through the client: the proxy's confirmation, with
-  `MEMORY_CONFIRM_DESTRUCTIVE=off` on the proxy as its opt-out. The brain's own
-  elicitations (hard forget, cascade delete, consolidate, import) relay through
-  the proxy unchanged, except for a client known to show no dialog (Claude Code's
-  VS Code extension): the proxy strips `elicitation` from the `initialize` it
-  forwards (`confirm.withhold_dialogs`), so the brain and the vault both refuse
-  "cannot ask". A vault that fails to open ends the proxy with a
+  through the client where it can show one, and checks the big-delete gate itself
+  (`destructive.take`), with `MEMORY_CONFIRM_DESTRUCTIVE=off` on the proxy as its
+  opt-out. For the brain's tools the proxy screens a big delete with
+  `confirm=true` (`proxy_gate.screen`, from `proxy_session.Link.forward`) before
+  relaying it, because the person's approval is recorded on this machine. The
+  brain's own dialogs (hard forget, cascade delete, consolidate, import with
+  `confirm` omitted) relay through the proxy unchanged, except for a client known
+  to show no dialog (Claude Code's VS Code extension): the proxy strips
+  `elicitation` from the `initialize` it forwards (`confirm.withhold_dialogs`), so
+  the brain and the vault both tell it to ask the user and call again with
+  `confirm=true`. A vault that fails to open ends the proxy with a
   `ProxyLost` message. With credentials off, `credential_*` is stripped and
   refused. `memory_stats` is relayed, but its credential summary
   (`global.credentials` or `stats.credentials`) describes the brain's vault, so
   `Link` tracks each `memory_stats` call and `patch_stats` replaces that block
-  with `LocalVault.health()` (metadata only, no keychain); an unrecognised reply
-  passes through.
+  with `LocalVault.health()` (metadata only, no keychain; stamped by
+  `machine.describe` with this machine's `machine` name, plus a `note` at
+  `total: 0`, exactly as local mode reports it); an unrecognised reply passes
+  through.
 - **Derive route** (`serve_derive.py`, `POST /token/derive`): `BearerAuthMiddleware`
   tags each request `token_kind` (owner, derived, scoped); only an owner token
   may derive (others get 403). `DerivedTokens` (`derived_tokens.py`) keeps
@@ -698,7 +706,9 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `MEMORY_MINION_FENCE=off`, independent of `MEMORY_TRIPWIRES` and of
   `MEMORY_XRAY_TRIPWIRE` (the X-ray edit check's switch). The tripwire
   doorway passes `mcp__gingugu__*` through when `agent_id` is set so the fence
-  decides, and passes a main-thread board `post` through for the X20 nudge.
+  decides, and passes a main-thread board `post` through for the X20 nudge and the
+  five destructive tools for the big-delete gate. A fork (`agent_type: "fork"`) is
+  a branch of the main thread, not a cold minion, and the fence lets it through.
 - **Threat model:** prevents accidents, not a hostile same-user process. An OS
   sandbox and an audit-trigger undo log were considered and declined.
 
@@ -765,7 +775,9 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   it re-issued every deny of a file it had just read without reading the reason; the
   import blast was already in front of it from the read neighbourhood. An informed edit
   gets the post-edit note (`xray/edit_note`, PostToolUse `gingugu hook edit`) instead:
-  cross-file callers of the definitions touched and their nearest tests. The deny text
+  cross-file callers of the definitions touched and their nearest tests, plus, after an
+  Edit/MultiEdit of any file, who still reads a key it removed (`xray/literals`: `git grep`
+  text matches, not import edges; board d5639dd5). The deny text
   below was later changed to lead with direct importers (`is imported directly by D;
   a change reaches N`, `Direct importers by rank` (top 5), `Nearest tests` (top 5:
   `test_*` files, one named for the file first, then hops) and an "import-based
@@ -982,7 +994,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   like `history`: `code_xray` `docs` (`xray/docs_tool`) is refused by `gingugu serve`
   and answered by the proxy; the X-ray brief gains `Docs citing the changed files:` and
   `Docs still citing a deleted or renamed file:` (`MEMORY_XRAY_DOCS`, default on; a docs
-  failure never costs the brief). Hook surfaces (edit note, Bash X-ray, read hook) are
+  failure never costs the brief). Docs-map hook surfaces (edit note, Bash X-ray, read hook) are
   not built yet. No migration, no brain change.
 - **Codebase X-ray: cross-repo links (X23, built, unreleased).** A service ecosystem
   is wired by names, not imports. `xray/links/` reads this checkout and its sibling
@@ -1034,33 +1046,62 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   line to add (`xray: <repo> <base>..<branch>`) -
   shipped in the hook `init` already wires, so every install gets it, where a
   personal tripwire would reach one brain. `MEMORY_XRAY_BOARD=off`.
-- **Destructive tools ask the user, not the model (shipped 0.25.0).** Five paths
-  confirm through MCP elicitation (SDK 2.x `Resolve` + `Elicit`): a hard
+- **Destructive tools take `confirm`; a big delete needs the person (dialog shipped
+  0.25.0; `confirm` and the big-delete gate 2026-11-05).** Five paths: a hard
   `memory_forget`, a cascading `memory_namespaces` delete of a non-empty
-  namespace, `memory_consolidate` with `keep_originals=False`, a
-  `memory_import` with `on_conflict="replace"` that would overwrite existing ids
-  (the dialog names the count), and `credential_delete`. The logic lives in
-  `confirm.py`. *The answer stays out of the input schema*: it is a resolved
-  parameter, so the model cannot supply it; a plain `confirm=true` argument was
-  the model's own say-so and protected nothing. `credential_delete`'s `confirm`
-  stays as an optional, model-side no (`confirm=false` refuses outright). *Refuse
-  when nobody can be asked*: decline, cancel (what a headless client answers),
-  and a client without elicitation each return a structured `ok: false`; an
-  unrecognised answer refuses too. Claude Code's VS Code extension declares
-  elicitation but answers every one "decline" without a dialog, so it counts as
-  unable to ask: `confirm.shows_no_dialog()` (env `CLAUDE_CODE_ENTRYPOINT` in
-  `_SHOWS_NO_DIALOG`) makes `can_ask` false, but only on a stdio server - over
-  HTTP the env says nothing about the remote client, so `ask`/`can_ask` take the
-  executing server's transport. In remote mode the proxy strips `elicitation`
-  from the `initialize` it forwards and stores (`withhold_dialogs`), so the brain
-  and the local vault refuse the same way. The refusal can carry a `by_hand`
-  pointer: `credential_delete`'s names `gingugu credential delete NAME` (new
-  `credential_cli.py`), which asks at a real terminal - it refuses a non-TTY
-  stdin and has no `--yes`, stopping accidents and piping, not an agent with a
-  shell. *The env opt-out sits on the server that
+  namespace, `memory_consolidate` with `keep_originals=False`, a `memory_import`
+  with `on_conflict="replace"` that would overwrite existing ids, and
+  `credential_delete`. The logic lives in `confirm.py`. Each takes a model-supplied
+  `confirm: bool | None`: `true` is the confirmation for an ordinary delete (the
+  agent asked the user in chat, and the harness permission prompt gates the
+  call), so no daily delete dead-ends on a client with no dialog; `false` refuses;
+  omitted falls back to the MCP elicitation dialog (SDK 2.x `Resolve` + `Elicit`,
+  a resolved parameter absent from the input schema), and a client that cannot
+  show one is told to ask the user and call again with `confirm=true`. The old
+  `by_hand` terminal pointer is gone from the MCP path; the `gingugu credential
+  delete` CLI (`credential_cli.py`) remains for a person at a terminal. *Why
+  `confirm=true` alone was not enough for everything*: a steered model could wipe a
+  namespace in bypass mode. So the **big-delete gate** (`destructive.py`; always
+  call it that) covers a namespace delete, `credential_delete` (a keychain secret
+  has no export and no undo), consolidate/import over `THRESHOLD`=10 memories and
+  hard deletes past 10 in one session. `gingugu hook tool` (`tool_hook._destructive`)
+  answers `permissionDecision: "ask"`, which is Claude Code's own permission
+  prompt: it holds in auto and bypass mode and becomes a deny where nobody can
+  answer (measured with `claude -p`). The hook writes a single-use approval (15
+  minute TTL) for exactly that call under `<data dir>/hook-sessions/approvals`;
+  the local stdio server requires it for `confirm=true` on a big delete (else a
+  dialog if the client can show one, else a refusal), and in remote mode the proxy
+  takes it before relaying (`proxy_gate`), `credential_delete` going to the local
+  vault, which checks itself. The per-session hard-delete count is the hook's
+  alone, since one tool call cannot see its siblings: hard deletes past 10 are
+  gated by the hook only (it asks; no approval is consumed server-side and the
+  proxy does not screen `memory_forget`). Order in `confirm._big`: no gate -> pass;
+  `MEMORY_CONFIRM_DESTRUCTIVE=off` on the executing server -> pass; over HTTP only
+  the owner (full grant) passes on `confirm=true` (its proxy took the approval), a
+  scoped token gets a dialog if its client can ask, else a refusal; on stdio
+  `take()` the approval, else a dialog if `can_ask`, else a refusal. Scoped tokens
+  are already fenced out of namespace deletes, import and `credential_*`, so the
+  HTTP rule bites on `memory_consolidate` over 10. The hook asks about any
+  namespace `delete` (even empty); the server gates only a non-empty cascade. For an
+  import the hook counts the payload's memories, the server the ids it would
+  overwrite. A fork (`agent_type:
+  "fork"`) gets the main thread's rights in the minion fence.
+  Claude Code's VS Code extension declares elicitation but answers every one
+  "decline" without a dialog, so it counts as unable to ask:
+  `confirm.shows_no_dialog()` (env `CLAUDE_CODE_ENTRYPOINT` in `_SHOWS_NO_DIALOG`)
+  makes `can_ask` false, but only on a stdio server - over HTTP the env says
+  nothing about the remote client, so `ask`/`can_ask` take the executing server's
+  transport. In remote mode the proxy strips `elicitation` from the `initialize`
+  it forwards and stores (`withhold_dialogs`), so the brain and the local vault
+  answer the same way. The `gingugu credential delete` CLI asks at a real
+  terminal - it refuses a non-TTY stdin and has no `--yes`, stopping accidents and
+  piping, not an agent with a shell.
+  *The env opt-out sits on the server that
   executes the tool*: `MEMORY_CONFIRM_DESTRUCTIVE=off` (also `false`/`0`/`no`)
   is read straight from the environment, so in remote mode it is the brain for
-  memory tools and the local proxy for the vault. *Resolvers run before the
+  memory tools and the local proxy for the vault (and for its own screen,
+  `proxy_gate`). It skips the dialog and the approval check; it does not silence
+  the hook's `ask` (`destructive.hook_check` never reads it). *Resolvers run before the
   wrapper*, so they check the fence themselves and are `async`; each body
   re-derives whether the call is destructive and checks existence first, so a
   hidden or out-of-grant id reads "not found" with no dialog. *The proxy's
@@ -1195,8 +1236,13 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `.claude/worktrees/`, `.claude/hooks/**/__pycache__/`, `.claude/**/*.bak`, `CLAUDE.md.bak`,
   `AGENTS.md.bak`) to the target's `.gitignore` so transcripts never get
   committed (`bootstrap/gitignore.py`; a rerun adds missing rules under the
-  block an earlier run wrote, never a second block under the same header). Output is a themed 90s boot sequence
-  (`theme.py`, degrades to monochrome off-TTY). Other clients (`--client`) get a
+  block an earlier run wrote, never a second block under the same header). Output is the keygen show
+  (`tui/`: Win98 keygen window, plasma/copper/scroller effects, LEVEL headers,
+  score + achievement counted from the result lines, a synthesized chiptune loop;
+  plain ASCII with the same words off a TTY, under CI/`NO_COLOR`/`TERM=dumb`/`GINGUGU_PLAIN`);
+  `harness` plays the same show, and `remote`, `credential`, `token`, `promote`, `embed`
+  and `scripts/release.py` get a short intro and an exit-code outro around their own
+  output (`tui.run`). Other clients (`--client`) get a
   rules file. This closes the gap where the repo's own hook-based install
   outperformed the copy-paste setup shipped to users.
 - **`gingugu harness` is `init` plus the working kit, as a separate command.**
@@ -1605,7 +1651,20 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `Mcp-Session-Id` changes on every reconnect and a watcher holds a different
   one than its agent, so session-based filtering would echo an agent's own
   posts back through its own watcher. Replies are routed per agent session
-  separately (below).
+  separately (below). Superseded for same-machine siblings on 2026-11-06 (next
+  bullet), using the stable hashed Claude Code session, not `Mcp-Session-Id`.
+- **Board identity adds the agent session (2026-11-06).** Two sessions of one
+  persona on one machine never got each other's posts: the 2026-10-26 rule only
+  lifted the own-persona exclusion across machines. `_inbox_where` now also
+  counts an own-persona post as mail when `author_agent` and the reader's agent
+  session are both known and differ, and `is_me` compares persona, machine and
+  session (each only when both sides are known), so `_reply_to` / `_route` send
+  a reply to a sibling's post back to that sibling. The agent session is the
+  hashed `CLAUDE_CODE_SESSION_ID`, stable across reconnects; a watcher reads the
+  same env (`board_watch.py`, `proxy_auth.brain_client` headers), so a watcher
+  started by a session shares its identity and never echoes that session's own
+  posts, and one with no session keeps the persona + machine rule. Read
+  receipts stay per persona.
 - **Route replies by agent session, not just persona.** (2026-10.) Several
   sessions of one persona share one inbox, so a reply meant for
   the session that asked reached all of them. A post records `author_agent`
@@ -1635,6 +1694,14 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `memory_tripwire` (a capability is 1:1 with its memory, and a two-call write
   goes unused). The lane's 0.68 cosine floor was measured on real recall
   queries; the prompt gate's 0.78 missed most of them.
+- **The CLI show never reaches a machine path (2026-11-06).** Output that a program
+  reads - hooks, the stdio server, the proxy, `serve`, `board watch`, `xray`, `dream` -
+  never imports `tui`, so a hook's JSON or an MCP frame can never pick up colour, motion
+  or a stray escape. Only `server.py`'s human-facing dispatch, `bootstrap/` and
+  `scripts/release.py` call it. Enforced by `tests/test_tui_machine_paths.py`: a static
+  check that nothing else imports `gingugu.tui`, and the hook entry points run under a
+  pty on a truecolor and a plain terminal with byte-identical output and the package
+  never loaded.
 - **Server resilience over strictness.** Handlers fail soft (structured errors)
   so a bad call never takes down the client's memory layer.
 

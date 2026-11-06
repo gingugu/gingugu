@@ -3,8 +3,10 @@
 All handlers wrap their work in try/except and return structured dict responses
 so the MCP server never crashes the client flow.
 
-A cascading namespace delete and an overwriting import ask the user, never the
-model (see ``confirm``). No ``from __future__ import annotations``: the SDK
+A cascading namespace delete and an overwriting import need a confirmation (see
+``confirm``); a namespace delete, or an import over ten memories, is a big delete
+the user approves themselves (``destructive``). No
+``from __future__ import annotations``: the SDK
 evaluates tool annotations against module globals, and ``Resolve(...)`` names
 closures.
 """
@@ -16,7 +18,8 @@ from mcp.server.elicitation import ElicitationResult
 from mcp.server.mcpserver import Context
 from mcp.server.mcpserver.resolve import Resolve
 
-from .. import confirm, grants, portability
+from .. import confirm as confirmation
+from .. import destructive, grants, portability
 from ..namespaces import DEFAULT_NAMESPACE
 from . import ServerContext
 from .helpers import _err, _single_namespace_not_found
@@ -62,37 +65,55 @@ def register(mcp, ctx: ServerContext) -> None:
         return ctx.namespaces.count_memories(ns.id) if ns is not None else 0
 
     async def _ask_namespace(
-        ctx_: Context, action: str = "list", name: str | None = None, cascade: bool = False
+        ctx_: Context,
+        action: str = "list",
+        name: str | None = None,
+        cascade: bool = False,
+        confirm: bool | None = None,
     ) -> object:
         if action != "delete" or not cascade:
-            return confirm.NOT_NEEDED
-        grant = confirm.fenced(ctx, "memory_namespaces", {"action": action})
+            return confirmation.NOT_NEEDED
+        grant = confirmation.fenced(ctx, "memory_namespaces", {"action": action})
         if grant is None:
-            return confirm.FENCED
+            return confirmation.FENCED
         with grants.bind(grant, ctx.conn):
             count = _cascades(name)
         if count == 0:
-            return confirm.NOT_NEEDED
-        return confirm.ask(
+            return confirmation.NOT_NEEDED
+        return confirmation.ask(
             ctx_,
-            f"Delete namespace {confirm.shown(name)} and all {count} memories in it? "
+            f"Delete namespace {confirmation.shown(name)} and all {count} memories in it? "
             "This cannot be undone.",
             ctx.transport,
+            confirm,
+            destructive.gate(
+                ctx,
+                "memory_namespaces",
+                {"action": action, "name": name, "cascade": cascade},
+            ),
         )
 
-    async def _ask_import(ctx_: Context, data: dict, on_conflict: str = "skip") -> object:
+    async def _ask_import(
+        ctx_: Context, data: dict, on_conflict: str = "skip", confirm: bool | None = None
+    ) -> object:
         if on_conflict != "replace":
-            return confirm.NOT_NEEDED
-        if confirm.fenced(ctx, "memory_import") is None:
-            return confirm.FENCED
+            return confirmation.NOT_NEEDED
+        if confirmation.fenced(ctx, "memory_import") is None:
+            return confirmation.FENCED
         count = _overwrites(ctx.conn, data)
         if count == 0:
-            return confirm.NOT_NEEDED
-        return confirm.ask(
+            return confirmation.NOT_NEEDED
+        return confirmation.ask(
             ctx_,
             f"Overwrite {count} existing memories with the imported copies? "
             "This cannot be undone.",
             ctx.transport,
+            confirm,
+            destructive.gate(
+                ctx,
+                "memory_import",
+                {"data": data, "on_conflict": on_conflict},
+            ),
         )
 
     @mcp.tool()
@@ -103,7 +124,8 @@ def register(mcp, ctx: ServerContext) -> None:
         description: str | None = None,
         default_repo: str | None = None,
         cascade: bool = False,
-        answer: Annotated[ElicitationResult[confirm.Confirm], Resolve(_ask_namespace)] = None,
+        confirm: bool | None = None,
+        answer: Annotated[ElicitationResult[confirmation.Confirm], Resolve(_ask_namespace)] = None,
     ) -> dict:
         """Manage namespaces. ``action`` is one of: list, create, update, delete.
 
@@ -113,7 +135,8 @@ def register(mcp, ctx: ServerContext) -> None:
           provided fields).
         - ``delete`` — remove ``name``; the ``default`` namespace is protected and
           a non-empty namespace requires ``cascade=True`` (deletes its memories),
-          and the user confirms that through the client.
+          and ``confirm=true`` once the user agrees (omitted, a client with a
+          dialog asks them there).
 
         ``default_repo`` controls what a bare "PR #12" in this namespace means.
         Leave it unset and the namespace's own name is used — the
@@ -152,7 +175,7 @@ def register(mcp, ctx: ServerContext) -> None:
 
             # action == "delete"
             if cascade and (count := _cascades(name)) > 0:
-                refused = confirm.refusal(
+                refused = confirmation.refusal(
                     answer, f"deleting namespace {name!r} and its {count} memories"
                 )
                 if refused is not None:
@@ -193,13 +216,15 @@ def register(mcp, ctx: ServerContext) -> None:
     def memory_import(
         data: dict,
         on_conflict: str = "skip",
-        answer: Annotated[ElicitationResult[confirm.Confirm], Resolve(_ask_import)] = None,
+        confirm: bool | None = None,
+        answer: Annotated[ElicitationResult[confirmation.Confirm], Resolve(_ask_import)] = None,
     ) -> dict:
         """Import a JSON payload produced by ``memory_export``.
 
         ``on_conflict`` is ``skip`` (default — leave existing memories untouched)
-        or ``replace`` (overwrite existing memories with the same id; the user
-        confirms through the client when anything would be overwritten). Namespaces
+        or ``replace`` (overwrite existing memories with the same id; when anything
+        would be overwritten that needs ``confirm=true`` once the user agrees, or
+        omitted, a client with a dialog asks them there). Namespaces
         are created if missing; tags and relations are restored.
 
         Imported memories are embedded as part of the import, so they are
@@ -211,7 +236,7 @@ def register(mcp, ctx: ServerContext) -> None:
             if on_conflict not in ("skip", "replace"):
                 return _err(f"invalid on_conflict {on_conflict!r}; expected 'skip' or 'replace'")
             if on_conflict == "replace" and (count := _overwrites(ctx.conn, data)) > 0:
-                refused = confirm.refusal(answer, f"overwriting {count} memories by import")
+                refused = confirmation.refusal(answer, f"overwriting {count} memories by import")
                 if refused is not None:
                     return _err(refused)
             result = portability.import_data(

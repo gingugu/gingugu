@@ -1,7 +1,7 @@
 """The local vault behind a real MCP session, so its tools can ask the person.
 
-``credential_delete`` confirms with the user through the client (``confirm``).
-That needs what a direct ``call_tool`` lacks: a session that carries the
+``credential_delete`` called without ``confirm`` asks the user through the
+client (``confirm``). That needs what a direct ``call_tool`` lacks: a session that carries the
 client's capabilities, and a channel back to the client. So the vault runs as
 an MCP server over in-memory streams, handshaken with the client's own
 ``initialize``, and the proxy relays raw JSON-RPC to it as it does to the brain.

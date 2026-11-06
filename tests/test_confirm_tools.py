@@ -225,9 +225,7 @@ async def _services(server) -> list[str]:
 async def test_credential_delete_asks_the_person(vault_server, mode):
     await _cred(vault_server)
     person = Person()
-    out = await call(
-        vault_server, person, mode, "credential_delete", {"service_name": "svc", "confirm": True}
-    )
+    out = await call(vault_server, person, mode, "credential_delete", {"service_name": "svc"})
     assert out["ok"] is True and len(person.asked) == 1 and '"svc"' in person.asked[0]
     assert await _services(vault_server) == []
 
@@ -236,15 +234,13 @@ async def test_credential_delete_asks_the_person(vault_server, mode):
 @pytest.mark.parametrize("person", NO)
 async def test_a_refused_credential_delete_keeps_the_secret(vault_server, mode, person):
     await _cred(vault_server)
-    out = await call(
-        vault_server, person, mode, "credential_delete", {"service_name": "svc", "confirm": True}
-    )
+    out = await call(vault_server, person, mode, "credential_delete", {"service_name": "svc"})
     assert out["ok"] is False
     assert await _services(vault_server) == ["svc"]
 
 
 @pytest.mark.parametrize("mode", MODES)
-async def test_the_models_confirm_only_ever_says_no(vault_server, mode):
+async def test_confirm_false_refuses_unasked_and_omitted_asks(vault_server, mode):
     await _cred(vault_server)
     person = Person()
     out = await call(

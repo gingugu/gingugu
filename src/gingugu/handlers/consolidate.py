@@ -4,8 +4,9 @@ Split out of ``handlers/relations.py`` when the edge-repair tools landed there.
 Consolidation merges *memories*; the relations module now deals exclusively in
 *edges*, so the two no longer share a file.
 
-Consolidating with ``keep_originals=False`` hard-deletes the originals, so the
-user confirms it through the client, never the model (see ``confirm``). No
+Consolidating with ``keep_originals=False`` hard-deletes the originals, so it
+needs a confirmation (see ``confirm``); over ten memories it is a big delete
+the user approves themselves (``destructive``). No
 ``from __future__ import annotations``: ``Resolve(_ask)`` names a closure.
 """
 
@@ -16,7 +17,8 @@ from mcp.server.elicitation import ElicitationResult
 from mcp.server.mcpserver import Context
 from mcp.server.mcpserver.resolve import Resolve
 
-from .. import confirm, consolidation, duplicate_scan, grants
+from .. import confirm as confirmation
+from .. import consolidation, destructive, duplicate_scan, grants
 from ..relations import RelationManager
 from . import ServerContext
 from .helpers import _err, _single_namespace_not_found
@@ -30,25 +32,34 @@ def register(mcp, ctx: ServerContext) -> None:
     relations = RelationManager(ctx.conn)
 
     async def _ask(
-        ctx_: Context, memory_ids: str | None = None, keep_originals: bool = True
+        ctx_: Context,
+        memory_ids: str | None = None,
+        keep_originals: bool = True,
+        confirm: bool | None = None,
     ) -> object:
         ids = [m.strip() for m in (memory_ids or "").split(",") if m.strip()]
         if keep_originals or len(ids) < 2:
-            return confirm.NOT_NEEDED
-        grant = confirm.fenced(ctx, "memory_consolidate")
+            return confirmation.NOT_NEEDED
+        grant = confirmation.fenced(ctx, "memory_consolidate")
         if grant is None:
-            return confirm.FENCED
+            return confirmation.FENCED
         with grants.bind(grant, ctx.conn):
             found = [ctx.store.get(mid, record_access=False) for mid in ids]
         if any(mem is None for mem in found):
-            return confirm.NOT_NEEDED  # the body answers "not found" before the answer
-        titles = ", ".join(confirm.shown(mem.title, 40) for mem in found[:3])
+            return confirmation.NOT_NEEDED  # the body answers "not found" before the answer
+        titles = ", ".join(confirmation.shown(mem.title, 40) for mem in found[:3])
         more = f" and {len(found) - 3} more" if len(found) > 3 else ""
-        return confirm.ask(
+        return confirmation.ask(
             ctx_,
             f"Consolidate {len(ids)} memories ({titles}{more}) and permanently delete "
             "the originals? This cannot be undone.",
             ctx.transport,
+            confirm,
+            destructive.gate(
+                ctx,
+                "memory_consolidate",
+                {"memory_ids": memory_ids, "keep_originals": keep_originals},
+            ),
         )
 
     @mcp.tool()
@@ -58,7 +69,8 @@ def register(mcp, ctx: ServerContext) -> None:
         keep_originals: bool = True,
         namespace: str | None = None,
         min_similarity: float = duplicate_scan.SUGGEST_MIN_SIMILARITY,
-        answer: Annotated[ElicitationResult[confirm.Confirm], Resolve(_ask)] = None,
+        confirm: bool | None = None,
+        answer: Annotated[ElicitationResult[confirmation.Confirm], Resolve(_ask)] = None,
     ) -> dict:
         """Combine multiple memories into one to reduce redundancy and knowledge bloat.
         Use when several related memories about the same topic have accumulated over time.
@@ -69,8 +81,8 @@ def register(mcp, ctx: ServerContext) -> None:
         of: merge (concatenate all content into one memory), summarize (produce a
         condensed combined summary), deduplicate (keep the highest-confidence entry and
         deprecate the rest). ``keep_originals=True`` (default) preserves originals as
-        deprecated; set False to hard-delete them (the user confirms that through
-        the client).
+        deprecated; set False to hard-delete them, which needs ``confirm=true`` once
+        the user agrees (omitted, a client with a dialog asks them there).
 
         **Suggest mode:** omit ``memory_ids`` entirely for a read-only near-duplicate
         scan of ``namespace`` (or the resolved default). Returns candidate clusters
@@ -112,7 +124,9 @@ def register(mcp, ctx: ServerContext) -> None:
                 for mid in ids:  # before the answer: a missing id never costs a dialog
                     if ctx.store.get(mid, record_access=False) is None:
                         return _err(f"memory {mid!r} not found")
-                refused = confirm.refusal(answer, f"deleting {len(ids)} originals by consolidation")
+                refused = confirmation.refusal(
+                    answer, f"deleting {len(ids)} originals by consolidation"
+                )
                 if refused is not None:
                     return _err(refused)
             result = consolidation.consolidate(

@@ -146,6 +146,17 @@ def test_claude_md_steers_minion_work_off_general_purpose(repo):
     assert "general-purpose" in text
 
 
+def test_claude_md_names_the_fork_as_the_parallel_path_for_hard_work(repo):
+    # Opus is never a cold minion; a fork is a branch of the main thread (same
+    # context, same model, the main thread's rights), so hard work in parallel
+    # goes there, and its verdict comes back to the main thread to approve.
+    _run(repo)
+    text = (repo / "CLAUDE.md").read_text()
+    assert 'subagent_type: "fork"' in text
+    assert "/subtask" in text
+    assert 'isolation: "worktree"' in text
+
+
 def test_installs_the_creating_pr_skill(repo):
     _run(repo)
     skill = repo / ".claude" / "skills" / "creating-pr"

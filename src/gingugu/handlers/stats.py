@@ -83,6 +83,12 @@ def register(mcp, ctx: ServerContext) -> None:
         nothing, so they are excluded from ``open`` and from ``sample`` on purpose.
         Read them with ``memory_search(claims="unverified")``.
 
+        ``credentials`` counts THIS machine's vault only - secrets live in the
+        keychain of the machine they were vaulted on, also in remote mode. Its
+        ``machine`` field names that machine; at ``total: 0`` a ``note`` says so.
+        Zero on a machine that never vaulted anything is expected, not data loss:
+        do not raise it as a problem.
+
         ``flag_stale`` is deprecated and ignored — auto-demotion to stale contradicted
         the never-forget model and has been removed. Retained so existing callers do not
         error."""

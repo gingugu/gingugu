@@ -214,6 +214,26 @@ def test_tripwire_doorway_passes_the_main_threads_board_post(doorways):
 
 
 @posix_only
+@pytest.mark.parametrize(
+    "tool",
+    [
+        "memory_forget",
+        "memory_namespaces",
+        "memory_consolidate",
+        "memory_import",
+        "credential_delete",
+    ],
+)
+def test_tripwire_doorway_passes_the_main_threads_destructive_calls(doorways, tool):
+    # The big-delete gate lives in `gingugu hook tool`: without this the doorway
+    # would drop every main-thread delete before the gate ever saw it.
+    hooks, log, env = doorways
+    payload = {"tool_name": f"mcp__gingugu__{tool}", "tool_input": {"confirm": True}}
+    assert _door(hooks / "pre_tool_tripwire.py", payload, env).strip() == '{"ok": 1}'
+    assert log.read_text().split() == ["hook", "tool"]
+
+
+@posix_only
 @pytest.mark.parametrize("tool_input", [{"action": "inbox"}, {"action": "reply"}, "post", None])
 def test_tripwire_doorway_drops_the_main_threads_other_board_calls(doorways, tool_input):
     hooks, log, env = doorways
