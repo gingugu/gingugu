@@ -379,17 +379,18 @@ memories are never rewritten by an upgrade.
 hooks and the session protocol:
 
 ```bash
-cd ~/code/my-repo && gingugu init --force
+cd ~/code/my-repo && gingugu init
 ```
 
-`--force` is what refreshes managed files that already exist; without it,
-`init` leaves them alone and you stay on the old hooks. Run `--dry-run` first
-if you want to see the changes before they land. Your `.claude/settings.json`
-is merged, not overwritten.
+A hook that is still a stock copy of an older version is refreshed (reported as
+`refresh`), with the old copy saved as `<name>.bak`. A hook you have edited is
+left alone. `--force` replaces it too, and every other managed file with it.
+Run `--dry-run` first if you want to see the changes before they land. Your
+`.claude/settings.json` is merged, not overwritten.
 
-If you have edited a managed file yourself, `--force` saves your version
-alongside it as `<name>.bak` before writing the new one, and says so in the
-output. A file it would not change is left untouched and gets no `.bak`.
+Whenever `init` replaces a file whose bytes differ, it saves the old version
+alongside it as `<name>.bak` first and says so in the output. A file it would
+not change is left untouched and gets no `.bak`.
 
 <details>
 <summary><strong>If an upgrade doesn't seem to take effect</strong></summary>
@@ -1038,9 +1039,10 @@ It installs:
   already exist (it never creates one), same append-only / marked-block rules.
 
 It's idempotent (re-run any time — that's how you pick up protocol changes after
-upgrading), `--dry-run` previews without writing, and `--force` overwrites
-existing hook files **in the target repo only** — it never authorizes appending
-to your user-level rules file. Anything `--force` replaces is copied to
+upgrading), `--dry-run` previews without writing, a hook that is a stock copy of an older
+version is refreshed on a plain run, and `--force` overwrites every existing hook
+file, edited ones included, **in the target repo only** — it never authorizes appending
+to your user-level rules file. Anything `init` replaces is copied to
 `<name>.bak` first, including a `--client` rules file you wrote yourself.
 
 If a rules file already carries its own hand-written protocol, `init` refuses

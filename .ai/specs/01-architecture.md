@@ -1321,6 +1321,14 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   leaves no litter. Both write paths (`_write_file` for hooks and commands,
   `init_rules_file` for `--client`) share the one implementation specifically so
   the guarantee cannot drift apart again.
+- **A plain `init` refreshes a hook by content, too.** Without `--force`, an
+  existing hook is replaced only when its sha256 matches a version we shipped
+  (`bootstrap/shipped.py`): a stock copy holds nothing of the user's. Anything
+  else, edited or foreign, is skipped. The marker cannot answer this question,
+  for the same reason it cannot answer the backup one. Before this, a hook
+  change never reached an existing project without `--force`, which rewrites
+  every hook. The cost is the registry: every template edit has to move the
+  outgoing hash into `previous`, and a pinned-hash test fails until it does.
 - **The semantic cohort is fixed; relevance is never a function of `limit`.**
   `semantic_pool.SEMANTIC_COHORT` / `ENTRANT_CAP` are constants. They used to be
   `limit * 4` and `limit // 2`, which made a memory's semantic rank depend on how

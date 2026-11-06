@@ -95,6 +95,10 @@
   feature never fires. Twice now (X20's board nudge, the big-delete gate). Add a
   case to the `doorways` fixture in `tests/test_minion_wiring.py`, then watch it
   live with `scripts/live_rig.py` (interactive, or `--headless PROMPT`).
+- **Editing a hook template moves its old hash.** `tests/test_bootstrap_refresh.py`
+  pins each `bootstrap/templates/*.py.tmpl` sha256 in `bootstrap/shipped.py`. When
+  you change a template, move the old `current` into `previous` and pin the new
+  one; that is what lets plain `gingugu init` refresh the old stock copies.
 - **Unit tests** for storage, search, relations, context, decay, consolidation.
 - **Integration tests** for end-to-end MCP flows (store → recall → context;
   store → relate → recall include_related).
