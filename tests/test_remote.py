@@ -14,7 +14,7 @@ import sys
 
 import pytest
 
-from gingugu import remote
+from gingugu import machine, remote
 
 URL = "http://brain.local:8765"
 TOKEN = "A" * 43
@@ -150,7 +150,7 @@ def test_login_does_not_switch_the_machine(env, monkeypatch):
 def test_login_defaults_name_to_short_hostname_and_key_to_gingugu_pi(env, monkeypatch):
     calls: list = []
     monkeypatch.setattr(remote, "_run", _ok_runner(calls))
-    monkeypatch.setattr(remote.socket, "gethostname", lambda: "Work-Laptop.local")
+    monkeypatch.setattr(machine.socket, "gethostname", lambda: "Work-Laptop.local")
     remote.main(["login", URL, "--ssh", "pi@brain.local"])
     argv = calls[0]
     assert argv[-1] == "work-laptop"

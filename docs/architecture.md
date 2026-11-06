@@ -2198,7 +2198,11 @@ Remove a service bundle or a specific field. Cleans up Keychain entries.
   - **`expiring_soon`** — expiry within 14 days
   - **`expired`** — past the `expires_at` date
 - `memory_stats` includes a **credential health summary**: total count,
-  expired count, expiring-soon count.
+  expired count, expiring-soon count, and `machine` - the machine whose vault
+  it counts (`machine.name()`, the sanitised short hostname, also the default
+  `remote login` token name). The vault is per machine, so at `total: 0` the
+  block carries a `note` saying nothing is vaulted on this machine - expected,
+  not data loss. Remote mode reports the local vault the same way.
 - Expired credentials **still return values** — the system warns, it doesn't
   block. Rotation is the user's responsibility.
 
@@ -2497,6 +2501,7 @@ src/gingugu/
 │
 │   # ── Stats + misc ──────────────────────────────────────────────
 ├── stats.py                # Counts, confidence, dormancy, review sweep; global block
+├── machine.py              # This machine's name; the vault summary that says whose vault it counts
 ├── hygiene_stats.py        # Ghost namespaces, duplicate titles
 ├── graph_stats.py          # Relation-graph health: edges, degree, orphans, spread cap
 ├── size_stats.py           # The character cost the counts do not show
