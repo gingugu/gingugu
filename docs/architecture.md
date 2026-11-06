@@ -558,6 +558,13 @@ Never pruned: a finished task leaves the inbox by status, not by delete.
 Only a hash of the agent session is stored (`sha256(CLAUDE_CODE_SESSION_ID)[:32]`,
 `agent_session.py`): the raw id is a handle to a live transcript.
 
+A reader is persona + machine + session. Its own persona's post is mail when it
+comes from a twin (both `author_origin` and the reader's machine known and
+different) or a sibling session on the same machine (both `author_agent` and the
+reader's session known and different); the session that wrote a post never gets
+it, and an unknown machine or session on either side keeps the persona as the
+identity (`board.is_me`, `_inbox_where`).
+
 #### `xray_snapshots` / `xray_files` / `xray_edges`
 Codebase X-ray import graphs (migration 019, `migrations/xray.py`). A snapshot
 is keyed `UNIQUE(namespace_id, fingerprint)` - a content fingerprint over every
