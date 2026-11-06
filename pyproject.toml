@@ -38,7 +38,10 @@ dependencies = [
 [project.scripts]
 gingugu = "gingugu.server:main"
 
-[project.optional-dependencies]
+# A dependency group, not an extra: `uv sync` / `uv run` install the `dev` group by
+# default, so a fresh worktree gets its own pytest instead of falling through PATH
+# to another checkout's (which then imports that checkout's code). Not published.
+[dependency-groups]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",

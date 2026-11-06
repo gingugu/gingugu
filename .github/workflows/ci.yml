@@ -23,7 +23,7 @@ jobs:
           enable-cache: true
 
       - name: Sync dependencies
-        run: uv sync --extra dev --python 3.13
+        run: uv sync --python 3.13
 
       - name: Ruff (lint)
         run: uv run ruff check .
@@ -61,7 +61,7 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Sync dependencies
-        run: uv sync --extra dev --python ${{ matrix.python-version }}
+        run: uv sync --python ${{ matrix.python-version }}
 
       - name: Temp on D (Windows)
         # The runner's C: temp drive is the bottleneck: measured 720s for the
@@ -122,7 +122,7 @@ jobs:
         run: uv python install "3.13"
 
       - name: Sync dependencies
-        run: uv sync --extra dev --python "3.13"
+        run: uv sync --python "3.13"
 
       - name: Cache fastembed model
         # fastembed's default cache_dir is tempfile.gettempdir()/fastembed_cache
