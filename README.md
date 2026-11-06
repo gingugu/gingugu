@@ -984,7 +984,7 @@ It installs:
   tests nearest them, once per definition per session, from the cached symbol graph.
   An `Edit`/`MultiEdit` that removes a key (a quoted `"status"`, a Python keyword
   argument, a TS/JS object key) also lists, as `Text matches, not import edges`, up to
-  five files that still read it - tests, docs and config for an unquoted key - or a count
+  five files that still read it - anything but non-test code for an unquoted key - or a count
   when more than 40 do.
   Each note records the tests it named in a local ledger (`xray-ledger.jsonl`, beside
   the hook state); `gingugu xray score` says how often the tests that then failed were

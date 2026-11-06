@@ -992,7 +992,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   like `history`: `code_xray` `docs` (`xray/docs_tool`) is refused by `gingugu serve`
   and answered by the proxy; the X-ray brief gains `Docs citing the changed files:` and
   `Docs still citing a deleted or renamed file:` (`MEMORY_XRAY_DOCS`, default on; a docs
-  failure never costs the brief). Hook surfaces (edit note, Bash X-ray, read hook) are
+  failure never costs the brief). Docs-map hook surfaces (edit note, Bash X-ray, read hook) are
   not built yet. No migration, no brain change.
 - **Codebase X-ray: cross-repo links (X23, built, unreleased).** A service ecosystem
   is wired by names, not imports. `xray/links/` reads this checkout and its sibling

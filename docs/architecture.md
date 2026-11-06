@@ -203,7 +203,7 @@ nearest them, once per definition per session, from the cached symbol graph. Aft
 (`xray/literals.py`): a quoted literal, or an unquoted Python keyword argument or TS/JS
 object key, found with one `git grep` per key (1s timeout) and labelled `Text matches,
 not import edges`; five are named, more than 40 files gives a count, and unquoted keys
-are read in tests, docs and config only. At most three keys per edit, once per session
+are read everywhere but non-test code. At most three keys per edit, each once per session
 per repo. Each such note records its test predictions in a local ledger, and the Bash `PostToolUse`
 path records the failed test files of every `pytest` run; `gingugu xray score` says
 how the predictions fared. It uses the same locally built graph cache as the edit
@@ -1856,7 +1856,7 @@ shows as `<repo>:<doc>`; data keys `docs` and `docs_gone`), and a docs failure n
 the brief. `code_xray` `docs` (`xray/docs_tool.py`) answers the citing docs per file, or
 without `files` the totals and the most cited files; it answers locally like `history`:
 `gingugu serve` refuses it and the proxy answers it on the caller's machine. Switch
-`MEMORY_XRAY_DOCS` (default on). No migration, no brain change. The hook surfaces (the
+`MEMORY_XRAY_DOCS` (default on). No migration, no brain change. The docs-map hook surfaces (the
 edit note, the Bash X-ray, the read hook) are not built yet.
 
 **Cross-repo links (X23).** A service ecosystem is wired by names, not imports. The

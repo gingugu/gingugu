@@ -13,7 +13,7 @@ still reads a KEY an `Edit`/`MultiEdit` removed: a quoted literal (`"status"` /
 `'status'`) no new string still quotes, or an unquoted key (Python kwarg `status=`,
 TS/JS object key `status:`). One `git grep -n -I -F --untracked` per key (1s timeout),
 word-boundary checked; delimited forms only (`"x"`, `'x'`, `` `x` ``, `@x` facet, and
-`x:` outside code). Unquoted keys search only tests, fixtures, docs, yaml and json, not
+`x:` outside non-test code). Unquoted keys search everything but non-test code, not
 other code (the symbol graph covers that). Excludes the edited file, generated files and
 lockfiles. Labelled `Text matches, not import edges`; 5 named plus `(+N more)`; over
 `TOO_COMMON = 40` files it says `too common to list` with the count (40 measured on

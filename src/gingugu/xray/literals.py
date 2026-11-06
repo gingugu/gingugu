@@ -190,7 +190,7 @@ def consumers(root: Path, literal: str, exclude: str, *, bare: bool = False) -> 
     timeout.
 
     Quoted (``bare=False``): ``"x"``, ``'x'``, `` `x` `` or ``@x`` anywhere, or a
-    ``x:`` key in a non-code file.
+    ``x:`` key in a test or non-code file.
 
     Unquoted (``bare=True``): the quoted forms plus ``x=``, ``x:`` and ``.x``, but
     only in test files (``links.model.is_test``) and non-code files. Non-test code
@@ -232,7 +232,7 @@ def _edits(payload: dict) -> tuple[list[str], list[str]] | None:
 def _line(literal: str, found: Found, bare: bool) -> str:
     what = f"`{literal}`" + (" (unquoted key)" if bare else "")
     head = f"- {LABEL}: {what} removed by this edit"
-    tail = " (read in tests, docs and config only)" if bare else ""
+    tail = " (read outside non-test code)" if bare else ""
     if found.files > TOO_COMMON:
         return f"{head} is named in {found.files} files - too common to list{tail}."
     named = ", ".join(f"{_show(p)}:{n}" for p, n in found.hits[:NAMED])
@@ -245,7 +245,7 @@ def lines(payload: dict, root: Path, rel: str, state_dir: Path, session_id: str)
     """The note's lines for this edit, one per removed literal with consumers:
     quoted literals first, then unquoted keys (``changed_bare``), a key found both
     ways swept once as quoted, at most ``MAX_LITERALS`` in all. An unquoted key's
-    line says ``unquoted key`` and that only tests, docs and config were read.
+    line says ``unquoted key`` and that non-test code was not read.
     Each literal is claimed once per (session, repo). Never raises."""
     try:
         edits = _edits(payload)

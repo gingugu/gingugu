@@ -2,7 +2,7 @@
 
 A key need not be quoted to be a data contract: ``emit(status="ok")`` and a TS
 ``{status: x}`` both write a ``status`` field. Detection reads each language's
-own form only; readers are searched in tests, docs and config, never in non-test
+own form only; readers are searched everywhere but non-test code, never in non-test
 code, where the symbol graph already follows a renamed keyword.
 """
 
@@ -92,7 +92,7 @@ def test_at_most_max_literals_bare_keys():
     assert literals.changed_bare([old], ["f()"], "a.py") == keys[: literals.MAX_LITERALS]
 
 
-# --- consumers(bare=True): tests, docs and config only ------------------------------
+# --- consumers(bare=True): everything but non-test code ----------------------------
 
 BARE = {
     "sync/cli.py": "emit(status='ok')\n",

@@ -19,8 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   five files still reading it as `Text matches, not import edges` (`(+N more)` past
   five; over 40 files it gives the count and says `too common to list`). One
   `git grep` per key with a 1s timeout, whole-word, delimited forms only; unquoted keys
-  are searched in tests, fixtures, docs and config only, since the symbol graph covers
-  other code. At most 3 keys per edit, once per session per repo, off with
+  are searched everywhere but non-test code, since the symbol graph covers
+  other code. At most 3 keys per edit, each once per session and repo, off with
   `MEMORY_XRAY_TRIPWIRE`. New `xray/literals.py`.
 - **A board claim says which session holds the task (migration 023).** One persona
   runs several sessions, and a claim recorded only the persona, so a task one

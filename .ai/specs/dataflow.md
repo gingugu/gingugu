@@ -840,13 +840,14 @@ edit_note.check → literals.lines(payload, root, rel, state_dir, session)
     .mjs .cjs) in an old_string no new_string still names
   → qualifies (3-80 chars, identifier-shaped, not a STOP value); at most 3 per edit
   → one `git grep -n -I -F --untracked` per key, 1s timeout; failure drops the line
-  → boundary check in Python: "x" 'x' `x` @x anywhere, `x:` outside code; unquoted
+  → boundary check in Python: "x" 'x' `x` @x anywhere, `x:` outside non-test code; unquoted
     keys also `x=` / `.x`, in tests, fixtures, docs and non-code only (symbol graph
     covers other code); skips the edited file, generated files, lockfiles
   → once per (session, repo, key): hook-sessions/xray-literal-<session>/
   → "- Text matches, not import edges: `x` removed by this edit is still named in N
     files - path:line, ... (+K more)"; over 40 files: "is named in N files - too
-    common to list"
+    common to list"; an unquoted key adds " (unquoted key)" after `x` and
+    " (read outside non-test code)" at the end; "file" when N is 1
 MEMORY_XRAY_TRIPWIRE=off silences it
 ```
 
