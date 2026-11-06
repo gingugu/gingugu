@@ -9,7 +9,7 @@ gingugu's PreToolUse hook (``hook_check``) answers ``ask`` for them, so Claude
 Code shows its own permission prompt. That holds in auto and bypass mode and
 becomes a deny where nobody can answer (measured 2026-11-05, ``claude -p``).
 The hook also leaves a single-use approval for exactly that call; a local server
-(``confirm.ask``) and the proxy in remote mode (``proxy_vault.screen_destructive``)
+(``confirm.ask``) and the proxy in remote mode (``proxy_gate.screen``)
 require it before acting on ``confirm=true``. A client with no gingugu hook
 gets a dialog instead, or a refusal. Per-session hard-delete counting is the
 hook's alone: one tool call cannot see its siblings.

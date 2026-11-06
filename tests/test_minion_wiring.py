@@ -216,7 +216,13 @@ def test_tripwire_doorway_passes_the_main_threads_board_post(doorways):
 @posix_only
 @pytest.mark.parametrize(
     "tool",
-    ["memory_forget", "memory_namespaces", "memory_consolidate", "memory_import", "credential_delete"],
+    [
+        "memory_forget",
+        "memory_namespaces",
+        "memory_consolidate",
+        "memory_import",
+        "credential_delete",
+    ],
 )
 def test_tripwire_doorway_passes_the_main_threads_destructive_calls(doorways, tool):
     # The big-delete gate lives in `gingugu hook tool`: without this the doorway

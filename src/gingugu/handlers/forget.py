@@ -5,7 +5,9 @@ is the one worth having in this corner of the surface: ``memory_store`` and
 ``memory_update`` add and correct, while everything here can take something
 away permanently. Nothing else in the codebase deletes a memory.
 
-A hard delete asks the user, never the model (see ``confirm``).
+A hard delete needs ``confirm=true`` once the user agrees, or their answer in a
+dialog (see ``confirm``); past ten in one session the big-delete gate puts each
+one in front of them (``destructive``).
 
 No ``from __future__ import annotations``: the SDK evaluates the tool's
 annotations against module globals, and ``Resolve(_ask)`` names a closure.

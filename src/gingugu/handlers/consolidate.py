@@ -4,8 +4,9 @@ Split out of ``handlers/relations.py`` when the edge-repair tools landed there.
 Consolidation merges *memories*; the relations module now deals exclusively in
 *edges*, so the two no longer share a file.
 
-Consolidating with ``keep_originals=False`` hard-deletes the originals, so the
-user confirms it through the client, never the model (see ``confirm``). No
+Consolidating with ``keep_originals=False`` hard-deletes the originals, so it
+needs a confirmation (see ``confirm``); over ten memories it is a big delete
+the user approves themselves (``destructive``). No
 ``from __future__ import annotations``: ``Resolve(_ask)`` names a closure.
 """
 

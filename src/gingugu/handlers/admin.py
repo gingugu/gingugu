@@ -3,8 +3,10 @@
 All handlers wrap their work in try/except and return structured dict responses
 so the MCP server never crashes the client flow.
 
-A cascading namespace delete and an overwriting import ask the user, never the
-model (see ``confirm``). No ``from __future__ import annotations``: the SDK
+A cascading namespace delete and an overwriting import need a confirmation (see
+``confirm``); a namespace delete, or an import over ten memories, is a big delete
+the user approves themselves (``destructive``). No
+``from __future__ import annotations``: the SDK
 evaluates tool annotations against module globals, and ``Resolve(...)`` names
 closures.
 """
