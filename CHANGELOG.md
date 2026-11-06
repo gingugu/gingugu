@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Plain `gingugu init` refreshes a hook that is a stock copy of an older version.**
+  It used to skip every existing hook unless `--force`, which rewrites them all, so
+  a hook change (like 0.48.0's PreToolUse doorway for the big-delete gate) never
+  reached an existing project. A hook byte-identical to a version gingugu shipped
+  holds nothing of yours: `init` now replaces it, saving a `.bak` first, and reports
+  `refresh`. A hook you edited is still skipped unless `--force`. Without this, 0.48.0's
+  doorway reached an existing project only with `gingugu init --force`.
+
 ---
 
 ## [0.48.0] - 2026-11-06

@@ -14,7 +14,8 @@ access to the database, no writes through the inherited gingugu server. The deci
 The pre-filter here is pure stdlib so the common case costs bare interpreter
 startup: a payload with no tool name, and gingugu's own mcp__gingugu__ tools
 on the main thread (which must never trip), are dropped before the package is
-ever loaded - except a board post, which the X-ray asks for its range. Inside
+ever loaded - except a board post, which the X-ray asks for its range, and a
+delete, which the big-delete gate may put in front of the person. Inside
 a subagent (`agent_id` set) those same tools are the inherited full brain, so
 they go through to the minion fence.
 
@@ -25,6 +26,14 @@ import json
 import shutil
 import subprocess
 import sys
+
+_DELETES = {
+    "memory_forget",
+    "memory_namespaces",
+    "memory_consolidate",
+    "memory_import",
+    "credential_delete",
+}
 
 
 def main() -> None:
@@ -39,11 +48,12 @@ def main() -> None:
             sys.exit(0)
         if tool_name.startswith("mcp__gingugu__") and not payload.get("agent_id"):
             # A board post still goes through: the X-ray asks it for its range.
+            # So does every delete: the big-delete gate decides whether to ask.
             tool_input = payload.get("tool_input")
             is_post = tool_name == "mcp__gingugu__board" and (
                 isinstance(tool_input, dict) and tool_input.get("action") == "post"
             )
-            if not is_post:
+            if not is_post and tool_name[len("mcp__gingugu__") :] not in _DELETES:
                 sys.exit(0)
 
         if shutil.which("gingugu") is None:

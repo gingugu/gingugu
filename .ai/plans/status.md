@@ -1,8 +1,18 @@
 # Project Status
 
-_Last updated: 2026-11-06 (the CLI is a Win95 keygen with a techno loop; memory_stats names the vault's machine; board mail reaches sibling sessions on one machine; X-ray lists who reads a removed key; deletes need no terminal + the big-delete gate; board claims record the claiming session + claim nudges, migration 023; dev tools a dependency group; X23 hook lines, named-repo recall, generated-code skip and links --warm - 0.47.0; X23 cross-repo links - 0.46.0; startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
+_Last updated: 2026-11-06 (plain `gingugu init` refreshes a stock old hook; 0.48.0 released; the CLI is a Win95 keygen with a techno loop; memory_stats names the vault's machine; board mail reaches sibling sessions on one machine; X-ray lists who reads a removed key; deletes need no terminal + the big-delete gate; board claims record the claiming session + claim nudges, migration 023; dev tools a dependency group; X23 hook lines, named-repo recall, generated-code skip and links --warm - 0.47.0; X23 cross-repo links - 0.46.0; startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
 
 ## In Flight
+
+**Plain `gingugu init` refreshes a stock old hook (2026-11-06, branch
+`fix/init-refresh-stock-hooks`).** Rolling out 0.48.0 showed `init` skipping every
+existing hook ("exists; use --force"), so the new PreToolUse doorway reached no
+existing repo without `--force`, which rewrites every hook. New
+`bootstrap/shipped.py` records the sha256 of every shipped version of the 8 hook
+templates. `write_file` refreshes a file matching an older version (it holds nothing
+of the user's; a .bak is still written) and skips anything else. A pinned-hash test
+fails whenever a template changes until the outgoing hash moves to `previous`. The 7
+wired repos across both Macs got the 0.48.0 doorway by a one-file copy at rollout.
 
 **The CLI is a Win95 keygen (2026-11-06, branch `feature/cli-keygen`, stacked on
 `fix/stats-vault-per-machine`).** The human-facing commands were plain text. New

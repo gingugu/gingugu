@@ -16,6 +16,8 @@ from __future__ import annotations
 from importlib.resources import files
 from pathlib import Path
 
+from .shipped import fingerprint
+
 # A distinctive marker every file we ship carries. Its absence in a file we are
 # about to overwrite means that file is NOT ours, so back it up first.
 #
@@ -55,17 +57,28 @@ def write_file(
     dry_run: bool,
     results: list[str],
     skip_hint: str = "",
+    previous: frozenset[str] = frozenset(),
 ) -> None:
+    """Write ``content`` to ``path``, never destroying the user's bytes.
+
+    An existing file is skipped unless ``force`` - or unless its sha256 is in
+    ``previous``, the hashes of older versions we shipped there. Such a file is
+    a stock copy holding nothing of the user's, so it is refreshed (still with a
+    .bak). The same content-not-authorship test ``retire_file`` uses.
+    """
     if path.is_symlink():
         # Writing would land wherever the link points - possibly outside the repo,
         # shared with other repos, with the .bak beside the link instead.
         results.append(f"  skip   {path}  (a symlink; never written through)")
         return
-    if path.exists() and not force:
+    existing = safe_read(path) if path.exists() else None
+    stock = existing is not None and bool(previous) and fingerprint(path.read_bytes()) in previous
+    if existing is not None and not force and not stock:
         results.append(f"  skip   {path}  (exists; use --force to overwrite){skip_hint}")
         return
+    if stock and not force:
+        results.append(f"  refresh {path}  (a stock copy of an older version)")
 
-    existing = safe_read(path) if path.exists() else None
     if existing == content:
         results.append(f"  no change {path}  (already current)")
         return

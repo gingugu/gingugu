@@ -2405,6 +2405,7 @@ src/gingugu/
 │   ├── harness_retired.py  # Kit file names, sha256 manifest, symlink checks
 │   ├── harness_settings.py # Harness hooks + deny rules, merged additively; hook-command parsing
 │   ├── settings.py         # Non-destructive .claude/settings.json merge
+│   ├── shipped.py          # sha256 of every shipped hook template; a stock old copy is refreshed
 │   └── templates/harness/  # Hooks, minions, skill, .ai/ scaffold, CLAUDE.md block
 │
 │   # ── CLI face (human-facing commands only; machine paths never import it) ──
