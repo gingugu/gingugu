@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from . import edit_hook, edit_symbols, hook_common, ledger, rank, symbols
+from . import edit_hook, edit_symbols, hook_common, ledger, literals, rank, symbols
 from .hook_common import _claim, _show
 from .lang.python import is_test
 from .scan import XrayError
@@ -171,8 +171,10 @@ def check(payload: dict, state_dir: Path) -> str | None:
             target = _any_target(payload)
             if target is None:
                 return None
+            texts = literals.lines(payload, *target, state_dir, session_id)
             outside = _outside(*target, state_dir, session_id)
-            return "\n".join(["GINGUGU X-RAY after edit:", *outside]) if outside else None
+            both = [*texts, *outside]
+            return "\n".join(["GINGUGU X-RAY after edit:", *both]) if both else None
         root, rel = target
         # The file is seen now, by whoever wrote it, in any X-ray language: the
         # blind-edit deny stands down. Only Python has a symbol graph to say more.
@@ -182,9 +184,10 @@ def check(payload: dict, state_dir: Path) -> str | None:
         news = _news(payload) if rel.endswith(".py") else None
         if news:
             lines = _lines(root, rel, state_dir, session_id, news)
-        if not lines and not outside:
+        texts = literals.lines(payload, root, rel, state_dir, session_id)
+        if not lines and not outside and not texts:
             return None
         head = HEADER if lines else "GINGUGU X-RAY after edit:"
-        return "\n".join([head, *lines, *outside])[:_MAX_CHARS]
+        return "\n".join([head, *lines, *texts, *outside])[:_MAX_CHARS]
     except (XrayError, ValueError, OSError):
         return None
