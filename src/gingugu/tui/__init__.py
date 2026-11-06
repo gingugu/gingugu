@@ -15,6 +15,7 @@ import sys
 from collections.abc import Callable
 from typing import TextIO
 
+from ..showable import clean
 from . import art, fx, keygen
 from . import paint as p
 from .audio import Music
@@ -48,7 +49,14 @@ def report(
     stream: TextIO | None = None,
     caps: Caps | None = None,
 ) -> None:
-    """Print a bootstrap command's result lines as the full keygen show."""
+    """Print a bootstrap command's result lines as the full keygen show.
+
+    ``subject`` (a repo directory name) and the result lines (paths, hook
+    names) are untrusted: each is cleaned to one escape-free line here, before
+    any mode draws it, so the only escapes on screen are the show's own.
+    """
+    results = [clean(line) for line in results]
+    subject = clean(subject)
     stream = sys.stdout if stream is None else stream
     caps = detect(stream) if caps is None else caps
     version = _version()

@@ -18,7 +18,7 @@ from collections.abc import Callable
 from types import TracebackType
 from typing import TextIO
 
-from . import art
+from . import art, signals
 from .caps import Caps
 from .keys import Keys
 
@@ -34,12 +34,18 @@ class Stage:
         self.skipped = not caps.animate
         self.interrupted = False
         self._keys = Keys(caps.keys and caps.animate)
+        self._guard: int | None = None
 
     def __enter__(self) -> Stage:
         if self.caps.animate:
             self._keys.__enter__()
+            self._guard = signals.push(self._restore)  # a kill still restores the terminal
             self._write(HIDE)
         return self
+
+    def _restore(self) -> None:
+        self._write(SHOW)
+        self._keys.__exit__(None, None, None)
 
     def __exit__(
         self,
@@ -48,6 +54,8 @@ class Stage:
         tb: TracebackType | None,
     ) -> None:
         if self.caps.animate:
+            signals.pop(self._guard)
+            self._guard = None
             self._write(SHOW)
             self._keys.__exit__(exc_type, exc, tb)
 

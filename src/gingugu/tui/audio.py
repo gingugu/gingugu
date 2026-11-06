@@ -17,16 +17,31 @@ from __future__ import annotations
 import atexit
 import os
 import shutil
+import stat
 import subprocess
 import sys
+import tempfile
 import threading
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
-from . import synth
+from . import signals, synth
 from .caps import Caps
 
+AFPLAY = "/usr/bin/afplay"  # macOS ships it here; never looked up on PATH
 _LINUX_PLAYERS = (("paplay", []), ("aplay", ["-q"]))
+
+
+def _which_absolute(name: str) -> str | None:
+    """``shutil.which`` over the absolute PATH entries only: never ``''``, ``.``
+    or a relative dir, so a player planted in the working directory is never run."""
+    dirs = [d for d in os.environ.get("PATH", "").split(os.pathsep) if os.path.isabs(d)]
+    return shutil.which(name, path=os.pathsep.join(dirs)) if dirs else None
+
+
+def _arg(path: Path) -> str:
+    text = str(path)
+    return text if not text.startswith("-") else os.path.join(".", text)  # never a flag
 
 
 def enabled(caps: Caps, env: Mapping[str, str] | None = None) -> bool:
@@ -36,38 +51,75 @@ def enabled(caps: Caps, env: Mapping[str, str] | None = None) -> bool:
 
 
 def player_command(
-    path: Path, *, platform: str | None = None, which: Callable[[str], str | None] = shutil.which
+    path: Path,
+    *,
+    platform: str | None = None,
+    which: Callable[[str], str | None] = _which_absolute,
+    exists: Callable[[str], bool] = os.path.isfile,
 ) -> list[str] | None:
     """The argv that plays ``path`` here, or None: Windows uses ``winsound`` instead."""
     platform = sys.platform if platform is None else platform
     if platform == "darwin":
-        exe = which("afplay")
-        return [exe, str(path)] if exe else None
+        return [AFPLAY, _arg(path)] if exists(AFPLAY) else None
     if platform.startswith("linux") or platform.startswith("freebsd"):
         for name, flags in _LINUX_PLAYERS:
             exe = which(name)
-            if exe:
-                return [exe, *flags, str(path)]
+            if exe and os.path.isabs(exe):
+                return [exe, *flags, _arg(path)]
     return None
 
 
 def cache_dir() -> Path:
-    override = os.environ.get("GINGUGU_CACHE_DIR")
-    if override:
-        return Path(override)
+    """``GINGUGU_CACHE_DIR`` when it is absolute, else the user cache dir; resolved."""
+    override = os.environ.get("GINGUGU_CACHE_DIR", "")
+    if override and os.path.isabs(override):
+        return Path(override).resolve()
     import platformdirs
 
-    return Path(platformdirs.user_cache_dir("gingugu", appauthor=False))
+    return Path(platformdirs.user_cache_dir("gingugu", appauthor=False)).resolve()
+
+
+def _trusted(path: Path) -> bool:
+    """A regular file (not a symlink) whose RIFF/WAVE header matches its size."""
+    try:
+        st = os.lstat(path)
+        if not stat.S_ISREG(st.st_mode):
+            return False
+        with open(path, "rb") as f:
+            head = f.read(12)
+    except OSError:
+        return False
+    return (
+        len(head) == 12
+        and head[:4] == b"RIFF"
+        and head[8:] == b"WAVE"
+        and int.from_bytes(head[4:8], "little") + 8 == st.st_size
+    )
 
 
 def track_path() -> Path:
-    """The loop on disk, written on first use; a new score gets a new file."""
+    """The loop on disk, written on first use; a new score gets a new file.
+
+    An existing file is used only if it is a regular file with a sound WAV
+    header; anything else (a symlink, a truncated write) is replaced, never
+    followed. The write is private (0600) and atomic.
+    """
     path = cache_dir() / f"c0r3-d3pth-{synth.fingerprint()}.wav"
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(f".{os.getpid()}.tmp")
-        tmp.write_bytes(synth.wav_bytes())
-        os.replace(tmp, path)  # two commands at once never see half a file
+    if _trusted(path):
+        return path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".c0r3-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(synth.wav_bytes())
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, path)  # replaces a symlink itself, never its target
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
     return path
 
 
@@ -79,11 +131,13 @@ class Music:
         self._proc: subprocess.Popen[bytes] | None = None
         self._winsound = False
         self._stopped = False
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()  # stop() may run again from a signal handler
+        self._guard: int | None = None
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
         atexit.register(self.stop)
+        self._guard = signals.push(self.stop)  # SIGTERM/SIGHUP end the music too
         self._thread = threading.Thread(target=self._run, name="gingugu-music", daemon=True)
         self._thread.start()
 
@@ -113,6 +167,8 @@ class Music:
             return  # music is a garnish: any failure is silence
 
     def stop(self) -> None:
+        signals.pop(self._guard)
+        self._guard = None
         with self._lock:
             self._stopped = True
             proc, self._proc = self._proc, None

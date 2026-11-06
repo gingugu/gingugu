@@ -56,7 +56,7 @@ def _pty_run(code: str, env: dict[str, str], stdin_bytes: bytes = b"") -> tuple[
 
 def _env(tmp_path: Path, **extra: str) -> dict[str, str]:
     return {
-        "PATH": "/nonexistent",  # no afplay/paplay/aplay: the music path runs, silently
+        "PATH": "/nonexistent",  # no paplay/aplay on PATH
         "HOME": str(tmp_path),
         "GINGUGU_CACHE_DIR": str(tmp_path / "cache"),
         "PYTHONPATH": str(SRC),
@@ -70,14 +70,15 @@ def _env(tmp_path: Path, **extra: str) -> dict[str, str]:
 
 @pytest.mark.skipif(sys.platform == "win32", reason="needs a POSIX pty")
 def test_full_show_runs_and_restores(tmp_path):
-    out, elapsed, rc = _pty_run(_SHOW, _env(tmp_path))
+    # Muted: macOS plays through the fixed /usr/bin/afplay whatever PATH says, and a
+    # test run must not make noise. Caching is covered in test_tui_audio/hardening.
+    out, elapsed, rc = _pty_run(_SHOW, _env(tmp_path, GINGUGU_QUIET="1"))
     assert rc == 0
     assert elapsed < 15
     assert out.startswith(b"\033[?25l") and out.rstrip().endswith(b"\033[?25h")
     text = re.sub(rb"\033\[[0-9;?]*[A-Za-z]", b"", out).decode()
     assert "/tmp/x/.claude/hooks/session_start.py" in text
     assert "ACHIEVEMENT UNLOCKED" in text
-    assert (tmp_path / "cache").is_dir()  # the track was written to the cache, not the repo
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="needs a POSIX pty")

@@ -36,13 +36,14 @@ putting a dialog in front of anyone.
 from __future__ import annotations
 
 import os
-import re
 from typing import Any
 
 from mcp.server.elicitation import AcceptedElicitation, CancelledElicitation, DeclinedElicitation
 from mcp.server.mcpserver.resolve import Elicit
 from mcp.shared.message import SessionMessage
 from pydantic import BaseModel, Field
+
+from .showable import clean
 
 ENV = "MEMORY_CONFIRM_DESTRUCTIVE"
 
@@ -63,15 +64,13 @@ CALLER_SAID_NO = "gingugu:confirm:caller-said-no"  # the caller passed confirm=f
 UNAPPROVED = "gingugu:confirm:unapproved"  # a big delete the person never approved
 
 
-# Control, zero-width and bidi-override characters: none may reach a dialog.
-_UNSHOWABLE = re.compile(r"[\x00-\x1f\x7f-\x9f\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]")
 
 
 def shown(text: Any, limit: int = 80) -> str:
     """A model- or memory-supplied string as it may appear in a dialog: quoted,
     on one line, with no control or bidi characters, and capped - so a steered
     model cannot make "Permanently delete ..." read as something else."""
-    flat = " ".join(_UNSHOWABLE.sub(" ", str(text)).split()).replace('"', "'")
+    flat = " ".join(clean(text).split()).replace('"', "'")
     if len(flat) > limit:
         flat = flat[: limit - 1] + "\u2026"
     return f'"{flat}"'

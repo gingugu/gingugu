@@ -38,7 +38,7 @@ def test_fingerprint_names_the_score():
 @pytest.mark.parametrize(
     "platform, present, expected",
     [
-        ("darwin", {"afplay"}, ["/bin/afplay", "T"]),
+        ("darwin", {"afplay"}, ["/usr/bin/afplay", "T"]),  # fixed path, never PATH
         ("darwin", set(), None),
         ("linux", {"paplay", "aplay"}, ["/bin/paplay", "T"]),
         ("linux", {"aplay"}, ["/bin/aplay", "-q", "T"]),
@@ -52,7 +52,11 @@ def test_player_selection(platform, present, expected):
     def which(name: str) -> str | None:
         return f"/bin/{name}" if name in present else None
 
-    assert audio.player_command(Path("T"), platform=platform, which=which) == expected
+    def exists(path: str) -> bool:
+        return Path(path).name in present
+
+    got = audio.player_command(Path("T"), platform=platform, which=which, exists=exists)
+    assert got == expected
 
 
 @pytest.mark.parametrize(

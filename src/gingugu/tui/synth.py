@@ -107,6 +107,15 @@ def wav_bytes(bars: int | None = None) -> bytes:
     return buf.getvalue()
 
 
+def _source_digest() -> str:
+    """A hash of this module's code, so a changed renderer never plays an old file."""
+    try:
+        with open(__file__, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except OSError:  # pragma: no cover - a frozen build without sources
+        return ""
+
+
 def fingerprint() -> str:
-    """Names the cached WAV: a new score never plays an old file."""
-    return hashlib.sha256(VERSION.encode()).hexdigest()[:12]
+    """Names the cached WAV: a new score or a new renderer never plays an old file."""
+    return hashlib.sha256(f"{VERSION}:{_source_digest()}".encode()).hexdigest()[:12]
