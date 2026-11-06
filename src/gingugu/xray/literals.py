@@ -24,7 +24,9 @@ from typing import NamedTuple
 MIN_LEN = 3
 MAX_LEN = 80
 MAX_LITERALS = 3  # per edit
-TOO_COMMON = 25  # consumer files above which the note gives a count, not names
+# Consumer files above which the note gives a count, not names. Measured on
+# gingugu over 150 sampled quoted keys: p50 5, p90 28, p95 44.
+TOO_COMMON = 40
 NAMED = 5  # consumer locations named per literal
 GIT_TIMEOUT_S = 1.0  # per literal; a slow grep drops the line, never the note
 LABEL = "Text matches, not import edges"
@@ -59,17 +61,41 @@ def changed(olds: list[str], news: list[str]) -> list[str]:
     raise NotImplementedError
 
 
-def consumers(root: Path, literal: str, exclude: str) -> Found:
-    """The files still naming ``literal`` as ``"x"``, ``'x'``, `` `x` `` or ``@x``
-    anywhere, or as a ``x:`` key in a non-code file - each bounded so ``x`` is
-    not a prefix or suffix of a longer word. Skips ``exclude`` (the edited file),
+def changed_bare(olds: list[str], news: list[str], rel: str) -> list[str]:
+    """Unquoted keys the old strings name and no new string still names, by the
+    edited file's language, so a form one language uses is never read in another:
+
+    - Python (``.py``): a keyword argument in a call, ``f(a, status=x)`` and
+      ``dict(status=x)`` - ``=`` after ``(`` or ``,``, never ``==``. A plain
+      assignment ``status = 1`` is a variable, not a key.
+    - TS/JS (``.ts .tsx .js .jsx .mjs .cjs``): an object-literal key,
+      ``{status: x}`` or ``status:`` leading a line inside one.
+
+    Any other language names none. Same noise rule (``qualifies``), first seen
+    first, each once, at most ``MAX_LITERALS``."""
+    raise NotImplementedError
+
+
+def consumers(root: Path, literal: str, exclude: str, *, bare: bool = False) -> Found:
+    """The files still naming ``literal``, each match bounded so ``x`` is not a
+    prefix or suffix of a longer word. Skips ``exclude`` (the edited file),
     generated files and lockfiles. Ordered tests, then docs, then other non-code,
     then code; by path within each. Raises ``XrayError`` on a git failure or
-    timeout."""
+    timeout.
+
+    Quoted (``bare=False``): ``"x"``, ``'x'``, `` `x` `` or ``@x`` anywhere, or a
+    ``x:`` key in a non-code file.
+
+    Unquoted (``bare=True``): the quoted forms plus ``x=``, ``x:`` and ``.x``, but
+    only in test files (``links.model.is_test``) and non-code files. Non-test code
+    is left to the symbol graph, which already follows a renamed keyword."""
     raise NotImplementedError
 
 
 def lines(payload: dict, root: Path, rel: str, state_dir: Path, session_id: str) -> list[str]:
-    """The note's lines for this edit, one per removed literal with consumers,
-    each literal claimed once per (session, repo). Never raises."""
+    """The note's lines for this edit, one per removed literal with consumers:
+    quoted literals first, then unquoted keys (``changed_bare``), a key found both
+    ways swept once as quoted, at most ``MAX_LITERALS`` in all. An unquoted key's
+    line says ``unquoted key`` and that only tests, docs and config were read.
+    Each literal is claimed once per (session, repo). Never raises."""
     raise NotImplementedError

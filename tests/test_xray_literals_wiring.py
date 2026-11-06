@@ -15,6 +15,7 @@ from gingugu.xray import edit_note, literals, scan
 from gingugu.xray.scan import XrayError
 from tests.test_xray_edit_hook import _payload, _repo
 from tests.test_xray_literals import CONTRACT
+from tests.test_xray_literals_bare import BARE
 
 
 @pytest.fixture
@@ -169,3 +170,57 @@ def test_the_sweep_stays_inside_the_hook_budget(tmp_path, state):
     out = literals.lines(payload, repo, "sync/cli.py", state, "cc-1")
     assert time.perf_counter() - start < 1.5
     assert len(out) == 3
+
+
+def test_the_too_common_cutoff_is_forty_and_forty_still_lists(tmp_path, state):
+    # His call 2026-11-05, from gingugu's own spread: p50 5, p90 28, p95 44.
+    assert literals.TOO_COMMON == 40
+    files = {"sync/cli.py": 'print({"state": 1})\n'}
+    files |= {f"app/m{i:02}.py": 'x = row["state"]\n' for i in range(literals.TOO_COMMON)}
+    repo = _repo(tmp_path, files)
+    note = edit_note.check(_edit(repo, "sync/cli.py", '"state"', '"phase"'), state)
+    (line,) = _literal_lines(note)
+    assert "too common" not in line
+    assert f"(+{literals.TOO_COMMON - literals.NAMED} more)" in line
+
+
+# --- unquoted keys -----------------------------------------------------------------
+
+
+@pytest.fixture
+def bare(tmp_path):
+    return _repo(tmp_path, BARE)
+
+
+def test_a_renamed_kwarg_names_its_test_doc_and_config_readers(bare, state):
+    note = edit_note.check(_edit(bare, "sync/cli.py", "status=", "outcome="), state)
+    (line,) = _literal_lines(note)
+    assert "`status`" in line and "unquoted key" in line
+    assert "tests/test_cli.py:2" in line and "monitors/sync.yaml:1" in line
+    assert "app/other.py" not in line
+
+
+def test_a_renamed_ts_object_key_is_swept(bare, state):
+    note = edit_note.check(_edit(bare, "web/form.ts", "{status: 1}", "{outcome: 1}"), state)
+    (line,) = _literal_lines(note)
+    assert "unquoted key" in line and "tests/test_cli.py" in line
+
+
+def test_a_key_removed_both_quoted_and_bare_is_swept_once_as_quoted(tmp_path, state):
+    repo = _repo(tmp_path, {**BARE, "sync/cli.py": "emit(status='ok')\nprint({\"status\": 1})\n"})
+    old = "emit(status='ok')\nprint({\"status\": 1})"
+    new = "emit(outcome='ok')\nprint({\"outcome\": 1})"
+    (line,) = _literal_lines(edit_note.check(_edit(repo, "sync/cli.py", old, new), state))
+    assert "unquoted key" not in line and "app/other.py" in line
+
+
+def test_quoted_and_bare_share_one_cap(tmp_path, state):
+    keys = [f"key_{i}" for i in range(literals.MAX_LITERALS + 1)]
+    readers = {f"tests/test_{k}.py": f'assert x["{k}"] and y.{k}\n' for k in keys}
+    head = f'print({{"{keys[0]}": 1}})\n'
+    body = "emit(" + ", ".join(f"{k}=1" for k in keys[1:]) + ")\n"
+    repo = _repo(tmp_path, {"sync/cli.py": head + body, **readers})
+    payload = _edit(repo, "sync/cli.py", head + body, "pass\n")
+    out = literals.lines(payload, repo, "sync/cli.py", state, "cc-1")
+    assert len(out) == literals.MAX_LITERALS
+    assert f"`{keys[0]}`" in out[0]  # quoted first
