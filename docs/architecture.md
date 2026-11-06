@@ -69,7 +69,7 @@ graph LR
 
     subgraph Claude Code Hooks
         PH[UserPromptSubmit<br/>gingugu hook prompt]
-        Y[PreToolUse<br/>gingugu hook tool<br/>tripwires · X-ray · minion fence · checkout guard]
+        Y[PreToolUse<br/>gingugu hook tool<br/>tripwires · X-ray · minion fence · checkout guard · big-delete gate]
         PO[PostToolUse<br/>gingugu hook read · hook bash · hook edit<br/>X-ray map on arrival · shell writes · after an edit]
         Z[SubagentStart<br/>gingugu hook subagent]
     end
@@ -181,8 +181,10 @@ is built locally from the checkout and never touches the brain (only the scar lo
 over `POST /hook/scars` in remote mode), the deny is not
 logged, and when a tripwire fires on the same call the two share one deny. It
 also runs the checkout guard, which denies every time a git command that would
-move or empty a repo's shared primary checkout. It never touches the MCP server
-process.
+move or empty a repo's shared primary checkout, and the big-delete gate, which answers
+`ask` for a big delete so Claude Code shows its own permission prompt (see
+**Destructive calls**). Order: minion fence, checkout guard, big-delete gate, X-ray. It
+never touches the MCP server process.
 
 `PostToolUse` is a fourth: `gingugu hook read` runs after every `Read`, `Grep`
 or `Glob` and adds context next to the result, never a block. The first such call
@@ -1486,9 +1488,9 @@ List and manage namespaces.
   cannot exist. `crow` and `default` are seeded `""` by migration 007.
 - `cascade` (optional, `delete` only) — delete a non-empty namespace along
   with its memories (default: false). The `default` namespace is protected.
-  A namespace delete is a big delete (see **Destructive calls**): it needs
-  `confirm=true` and the person's approval; with `confirm` omitted the dialog
-  names how many memories go with it.
+  A namespace delete is a big delete (see **Destructive calls**): the hook asks
+  about any `delete`, even of an empty namespace; the server's dialog and approval
+  apply to a non-empty cascade, where the dialog names how many memories go with it.
 
 ### `memory_stats`
 Get health overview of the memory system.
@@ -1982,11 +1984,19 @@ server requires it before acting on `confirm=true` on a big delete (else a dialo
 if the client can show one, else a refusal: "is a big delete and needs the user's
 own approval"). In remote mode the proxy takes the approval before relaying to
 the brain; `credential_delete` goes to the local vault, which checks it itself.
+Over HTTP only the owner (full grant) passes on `confirm=true`, since its proxy
+took the approval; a scoped token gets a dialog if its client can ask, else the
+refusal. Two asymmetries: the hook asks about any namespace `delete` while the
+server checks only a non-empty cascade, and for an import the hook counts the
+payload's memories while the server counts the ids it would overwrite. Hard
+deletes past 10 in a session are gated by the hook alone: no approval is consumed
+server-side and the proxy does not screen `memory_forget`.
 `MEMORY_CONFIRM_DESTRUCTIVE=off` (also `false`/`0`/`no`, case-insensitive; anything
-else keeps confirmations on) on the server that executes the tool skips the
-confirmation and the gate, for automation: in remote mode that is the brain for
-memory tools and the local proxy for the credential vault. The `gingugu credential
-delete` CLI remains for deleting by hand.
+else keeps confirmations on) is read by the server that executes the tool (in
+remote mode the brain for memory tools, the local proxy for the credential vault,
+and the proxy again for its own screen) and skips the dialog and the server-side
+approval check, for automation. It does not silence the hook's `ask`. The
+`gingugu credential delete` CLI remains for deleting by hand.
 
 **Forks.** A fork (`agent_type: "fork"`) inherits the whole conversation, so the
 minion fence gives it the main thread's rights.
@@ -2513,7 +2523,9 @@ src/gingugu/
 ```
 
 Dev-only tooling lives at the repo root and never ships in the wheel: `bench/`
-(the golden-set retrieval benchmark) and `ui/` (the Memory Explorer source,
+(the golden-set retrieval benchmark), `scripts/` (`release.py`, `fleet.py`, and
+`live_rig.py`, which runs this checkout's hook doorway, hook and server live in a
+throwaway Claude Code project on a scratch brain) and `ui/` (the Memory Explorer source,
 whose built bundle is what `webui.py` serves).
 
 ---

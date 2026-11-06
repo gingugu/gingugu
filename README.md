@@ -587,8 +587,16 @@ or replace-import of more than 10 memories, and hard deletes past 10 in one
 session. gingugu's tool hook answers with Claude Code's own permission prompt, which
 is shown in auto and bypass mode too, and becomes a refusal where nobody can answer
 (`claude -p`). Your approval is good for that one call, for 15 minutes. With a
-remote brain the proxy takes it before relaying the call. A client with no gingugu
-hook gets a dialog if it can show one, and a refusal if not.
+remote brain the proxy takes it before relaying the call. Without the hook's
+approval, a local server gives a dialog if your client can show one and a refusal
+if not; over HTTP the owner's `confirm=true` stands (its proxy checked), and a
+scoped token gets a dialog or a refusal.
+
+Two edges. The hook asks about any namespace delete, even an empty one, while the
+server's check applies to a non-empty cascade; for an import the hook counts the
+payload's memories and the server counts the ones it would actually overwrite.
+Hard deletes past 10 in a session are gated by the hook alone: it asks, and
+nothing is checked server-side.
 
 Plain `http` to a non-loopback host starts with a warning. The proxy sends the
 machine token only to `POST /token/derive` (owner tokens only; scoped tokens get
@@ -932,7 +940,8 @@ It installs:
   delete, a consolidation or replace-import of more than 10 memories, hard deletes
   past 10 in one session) is answered with Claude Code's own permission prompt, in
   every permission mode. The approval is single-use, and the server (or, with a remote
-  brain, the proxy) requires it before acting on `confirm=true`.
+  brain, the proxy) requires it before acting on `confirm=true` - except for hard
+  deletes past 10, which only the hook gates.
 - **`.claude/hooks/post_tool_xray.py`** — a `PostToolUse` hook (matched to
   `Read|Grep|Glob`) that gives the agent the **X-ray map on arrival**: the first
   Read, Grep or Glob in a repo in a session adds a compact repo map (size,
@@ -1305,7 +1314,7 @@ Environment variables (all optional):
 | `MEMORY_W_ACCESS` | `0.10` | Composite-score weight for access frequency |
 | `MEMORY_W_CONFIDENCE` | `0.35` | Composite-score weight for confidence (trust — the dominant standalone signal) |
 | `MEMORY_CREDENTIALS_ENABLED` | `true` | Expose the `credential_*` vault tools. Set `false` to run an instance without a secret vault (e.g. a shared/central server) |
-| `MEMORY_CONFIRM_DESTRUCTIVE` | *(unset: confirmations on)* | Destructive tools (hard `memory_forget`, cascading namespace delete, `memory_consolidate` with `keep_originals=false`, overwriting `memory_import`, `credential_delete`) need a confirmation: the agent's `confirm=true` for an ordinary delete, your own approval too for a big delete (see **Deletes**). `off` (also `false`, `0`, `no`) skips both, for automation. Applies to the server that executes the tool: with a remote brain, set it on the brain for memory tools and on the local proxy for the credential vault |
+| `MEMORY_CONFIRM_DESTRUCTIVE` | *(unset: confirmations on)* | Destructive tools (hard `memory_forget`, cascading namespace delete, `memory_consolidate` with `keep_originals=false`, overwriting `memory_import`, `credential_delete`) need a confirmation: the agent's `confirm=true` for an ordinary delete, your own approval too for a big delete (see **Deletes**). `off` (also `false`, `0`, `no`) skips the dialog and the server-side approval check, for automation. It is read by the server that executes the tool: with a remote brain, set it on the brain for memory tools and on the local proxy for the credential vault (the proxy also reads it for its own screen). It does not silence the hook's permission prompt for a big delete |
 | `MEMORY_GRANT` | *(unset)* | Fence a stdio server like a scoped token: `ns=read\|write,...` (e.g. `my-project=read,minions=write`). Unset is full access. A bad spec, an empty value, or `*=write` refuses to start. Used by a subagent's own `brain` server in its agent file. The client's hooks follow it too, whether it is set in the MCP server's `env` block (the server publishes it) or in the hooks' own environment: recall, tripwires and minion warm-up stay inside it, and an unusable value or a disagreement keeps them quiet |
 | `MEMORY_PERSONA` | *(unset)* | This agent's own namespace (e.g. `research`). Recall, tripwires and the SessionStart contract load `crow`, then the persona, then the repo (recall and tripwires narrowed by `MEMORY_GRANT` when set). A malformed value is ignored |
 | `MEMORY_REMOTE_URL` | *(unset)* | Use this remote brain for this client only (`off` forces local). A bare `gingugu` then relays to it; the credential vault stays local |
@@ -1364,7 +1373,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_tripwire` | Bind a memory to a tool call so it stops that call once, before it runs: `add` (a tool-name regex + an input regex), `list`, `remove`, and `test` (a dry run that never denies) |
 | `board` | Leave posts for other agents sharing this brain and read the ones left for you: `post` (to a persona or `*`, as a `message` or a `task`), `inbox`, `read` (a thread), `reply` (with no `to`, it goes to the post's author, or to whoever spoke last in the thread when that is you), `claim` (one agent wins), `done`. Posts are not memories, and you post as yourself - the author is never an argument. Your inbox is also the subscribable resource `gingugu://board/inbox/<you>`; `gingugu board watch` turns it into a command that prints a line per new post, to wake an idle agent; a post or reply to a persona returns a `delivery` receipt |
 | `code_xray` | Codebase X-ray for a Python, TypeScript/JavaScript or Go repo: `blast` (what a change to these files reaches, and the tests worth running), `overview` (the files the code leans on most, and files nothing reaches), `refresh`, `ingest`, and `brief` (`range`, `files`, `path`, `limit` up to 50: the changed files by rank with importer counts, their combined blast and a compact `text`, computed locally and never stored), and `callers` (Python: `files` one file, `symbol` such as `Store.save`; its direct callers and what reaches it by call, a lower bound, computed locally), `history` (from git log: hotspots by churn x rank x authors, and files that change together, flagged `hidden` when neither imports the other; `files` focuses the pairs; computed locally), `blindspots` (imported source no test imports or is named for, by reach over authors; computed locally), `docs` (`files`, `path`, `limit`: the docs that cite each file, here and in sibling checkouts; without `files`, totals and the most cited files; computed locally), and `links` (`files`, `path`, `limit`: the other checkouts that lean on this repo and what it leans on, inferred from hosts, routes, images, packages, tables, CI checkouts and `repo@sha` cites, each with file and line; with `files`, who leans on them and the ripple across repos; computed locally). Rebuilt automatically when the checkout changes; read on your machine even with a remote brain |
-| `memory_forget` | Deprecate or remove a memory (a hard delete needs `confirm=true`) |
+| `memory_forget` | Deprecate or remove a memory (a hard delete needs `confirm=true`; the hook asks you past 10 in a session) |
 | `memory_namespaces` | List/create/update/delete namespaces; `default_repo` sets what a bare "PR #12" means there (`""` = not a repo). Deleting a namespace is a big delete: `confirm=true` plus your approval |
 | `memory_export` | Export memories + tags + relations to portable JSON |
 | `memory_import` | Restore a JSON export (skip or replace on conflict; a replace that overwrites memories needs `confirm=true`, plus your approval past 10) |

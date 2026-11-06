@@ -40,8 +40,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   answers these with Claude Code's own permission prompt, which holds in auto and bypass
   mode and becomes a refusal where nobody can answer (`claude -p`). The hook leaves a
   single-use approval for exactly that call (15 minutes); the local server, or the proxy
-  in remote mode, requires it before acting on `confirm=true`. `MEMORY_CONFIRM_DESTRUCTIVE=off`
-  still skips it, for automation.
+  in remote mode, requires it before acting on `confirm=true`. Hard deletes past 10 are
+  gated by the hook alone. Over HTTP only the owner's `confirm=true` stands; a scoped
+  token gets a dialog or a refusal. `MEMORY_CONFIRM_DESTRUCTIVE=off` on the executing
+  server (and the local proxy) skips the server-side check, for automation; the hook's
+  prompt stays.
+- **`scripts/live_rig.py`** runs a checkout's hook doorway, hook and server live in a
+  throwaway Claude Code project on a scratch brain (`--headless`, `--mode`,
+  `--credentials`), so a hook change can be watched working before it ships.
 - **Forks get the main thread's rights.** A fork (`agent_type` `fork`, `/subtask`) inherits
   the whole conversation, so the minion fence lets it through. The harness `CLAUDE.md`
   block gains a "Forks: parallel hard work" section.

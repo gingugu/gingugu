@@ -547,8 +547,10 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
   → on the main thread, drops mcp__gingugu__* HERE, before the package is
     imported: our own tools are how a bad tripwire gets repaired, so they never
     trip (inside a subagent they pass through - see "Warm minions" below).
-    Exception: a board call with action "post" passes, for the X20 nudge;
-    tool_hook still skips memory tripwires for it (_SELF_PREFIX)
+    Exceptions: a board call with action "post" passes, for the X20 nudge;
+    tool_hook still skips memory tripwires for it (_SELF_PREFIX); and the five
+    destructive tools (memory_forget, memory_namespaces, memory_consolidate,
+    memory_import, credential_delete) pass, for the big-delete gate
   → survivors piped to `gingugu hook tool`
       → minion fence / spawn stash first (see "Warm minions"; independent of
         MEMORY_TRIPWIRES)
@@ -562,6 +564,10 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
           that dir is a PRIMARY checkout (git-dir == git-common-dir)
             → deny EVERY time, pointing at a worktree; the hook exits here
           GINGUGU_PRIMARY_OK=1 prefix, a linked worktree, or any failure: pass
+      → big-delete gate (tool_hook._destructive → destructive.hook_output):
+          a big delete → permissionDecision "ask" (Claude Code's prompt) and a
+          single-use approval written; the hook exits here. Chain: minion fence →
+          checkout guard → big-delete gate → X-ray
       → X-ray edit check (xray/edit_hook; its own switch, runs before the
         MEMORY_TRIPWIRES check and does not exit the hook)
           Edit/Write/MultiEdit of a file an X-ray adapter parses (lang.for_path:
@@ -1218,10 +1224,12 @@ without a person passing through the accept step first.
   discarded anyway, and they are derived from the text sitting beside them.
   Encoding happens **after** the commit, so a failing model costs the vectors,
   never the restore. `on_conflict="replace"` that would overwrite existing ids
-  takes `confirm` first (a dialog names how many; over 10 it is a big delete).
+  takes `confirm` first (a dialog names how many; over 10 it is a big delete). The
+  hook counts the payload's memories, the server the ids it would overwrite.
 - `memory_namespaces` `delete` with `cascade=True` on a non-empty namespace takes
-  `confirm` first and is always a big delete (a dialog names how many memories go
-  with it).
+  `confirm` first and is a big delete (a dialog names how many memories go with
+  it). The hook asks about ANY `delete`, even an empty namespace; the server's
+  dialog and approval apply only to the non-empty cascade.
 - `decay.py` — recomputes dormancy as a resting signal; never mutates confidence.
 
 ### Destructive confirmations
@@ -1240,12 +1248,18 @@ credential_delete
         hook (tool_hook -> destructive.hook_check) answered `ask` → Claude
         Code's permission prompt (any mode; a deny where nobody can answer) and
         left a single-use approval (15 min) under hook-sessions/approvals
-        → stdio server: destructive.take consumes it → proceed; none → a dialog if
-          the client can show one, else refuse "is a big delete and needs the
-          user's own approval"
+        → order in confirm._big: no gate → pass; MEMORY_CONFIRM_DESTRUCTIVE=off
+          on the executing server → pass; over HTTP only the owner (full grant)
+          passes on confirm=true (its proxy took the approval), a scoped token gets
+          a dialog if its client can ask, else "needs the user's own approval";
+          on stdio destructive.take consumes the approval → proceed, none → a
+          dialog if can_ask, else the same refusal
         → remote mode: proxy_gate.screen takes it before relaying to the brain
+        → hard deletes past 10 a session: the hook's `ask` only; nothing here
+          consumes an approval and the proxy does not screen memory_forget
   → confirm omitted (the old path):
-      MEMORY_CONFIRM_DESTRUCTIVE=off on this server → proceed
+      MEMORY_CONFIRM_DESTRUCTIVE=off on this server → proceed (it never stops the
+      hook's `ask`; the proxy reads it too for its own screen)
       client declared no elicitation, or is a stdio client known to show no
       dialog (CLAUDE_CODE_ENTRYPOINT=claude-vscode; ignored over HTTP), or is the
       proxy's brain behind a withheld `initialize` → refuse: ask the user and call

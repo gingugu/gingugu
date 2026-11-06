@@ -1,8 +1,31 @@
 # Project Status
 
-_Last updated: 2026-11-05 (board claims record the claiming session + claim nudges, migration 023; dev tools a dependency group; X23 hook lines, named-repo recall, generated-code skip and links --warm - 0.47.0; X23 cross-repo links - 0.46.0; startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
+_Last updated: 2026-11-05 (deletes need no terminal + the big-delete gate; board claims record the claiming session + claim nudges, migration 023; dev tools a dependency group; X23 hook lines, named-repo recall, generated-code skip and links --warm - 0.47.0; X23 cross-repo links - 0.46.0; startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
 
 ## In Flight
+
+**Deletes need no terminal; the big-delete gate (2026-11-05, branch
+`fix/agent-confirm-deletes`, board task 0b9ea472).** Every destructive tool
+(`memory_forget` hard delete, `memory_consolidate` dropping originals,
+`memory_namespaces` delete, `memory_import` replace, `credential_delete`) takes
+`confirm`: `true` is the confirmation for an ordinary delete, so a client with
+no MCP dialog (the VS Code extension) no longer dead-ends into a terminal
+command. A big delete - any namespace delete, any credential delete, a
+consolidate or replace-import over 10 memories, hard deletes past 10 in one
+session - goes through the big-delete gate (`destructive.py`): gingugu's
+PreToolUse hook answers `ask`, so Claude Code's own permission prompt shows in
+every mode (measured headless: an `ask` beats an allow rule and holds in auto
+and bypass, becoming a deny when nobody can answer; checked interactively in
+bypass mode), and leaves a single-use approval that the local server, or the
+proxy in remote mode (`proxy_gate.py`), requires (hard deletes past 10 are gated
+by the hook alone: it asks, nothing is checked server-side). The PreToolUse doorway now
+passes deletes through to the package. Forks (`agent_type: "fork"`) get the
+main thread's rights in the minion fence, and the harness CLAUDE.md block names
+forks as the parallel path for hard work. New `scripts/live_rig.py` runs a
+checkout's doorway, hook and server live in Claude Code on a scratch brain.
+Daily-use sweep: no other path dead-ends into a terminal (the remaining
+`run gingugu ...` messages are setup or recovery). 3930 tests passed. Existing
+projects pick up the new doorway on `gingugu init`.
 
 **Board claims say which session holds a task, and every surface asks for one
 (2026-11-05, branch `feature/board-claim-identity`, unreleased).** A task one Beepboop

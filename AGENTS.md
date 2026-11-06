@@ -183,7 +183,7 @@ src/gingugu/
   board_watch_remote.py → the remote half: session token named for the persona, subscriptions/listen, reconnect with backoff
   board_watch_emit.py → the line (labelled as from another agent; `xray` field carries the X20 brief, <= 3 per batch), the delivery cursor, --exec (env only, stdout to stderr, 10 per batch, group-killed at 120s)
   cli_usage.py       → the top-level `gingugu --help` text (USAGE), kept out of server.py
-  tool_hook.py       → `gingugu hook tool` (PreToolUse): denies the first matching call per session; re-issue passes; also the X-ray deny on a blind edit of an imported source file (Python, TS/JS, Go; one this session never read or wrote), the X20 board nudge (first board post of a session from a branch ahead of the default branch, naming no range), and the checkout guard's deny, every time, of a git command that moves or empties the shared primary checkout
+  tool_hook.py       → `gingugu hook tool` (PreToolUse): denies the first matching call per session; re-issue passes; also the X-ray deny on a blind edit of an imported source file (Python, TS/JS, Go; one this session never read or wrote), the X20 board nudge (first board post of a session from a branch ahead of the default branch, naming no range), the checkout guard's deny, every time, of a git command that moves or empties the shared primary checkout, and the big-delete gate's `ask` (Claude Code's own permission prompt) for a big delete
   storage.py         → memory CRUD (store/update/forget)
   search.py          → hybrid BM25 (FTS5) + semantic ranking
   embeddings.py      → semantic vector generation
@@ -219,6 +219,9 @@ src/gingugu/
 ui/                  → Memory Explorer (React/Vite 3D frontend + vitest; api.py dev shim over webui; dump_static.py builds the static demo data)
 docs/                → architecture.md (mermaids = source of truth), roadmap.md, future-architecture.md
 tests/               → pytest suites (unit + integration MCP flows)
+scripts/             → release.py (cut a release), fleet.py (roll it out to every machine),
+                       live_rig.py (this checkout's doorway, hook and server live in a
+                       throwaway Claude Code project on a scratch brain)
 ```
 
 ---
@@ -283,6 +286,8 @@ watch item (see `.ai/plans/status.md`).
   makes `uv run pytest` fall back to the primary's pytest - testing someone
   else's tree.
 - `ruff` + `black` clean
+- A hook feature is tested through the installed doorway, not `tool_hook.run` alone;
+  see the doorway rule in `.ai/standards/01-code-and-testing.md`
 - Surface performance characteristics (DB size, query latency) when relevant
 - Surface uncertainties — never guess
 

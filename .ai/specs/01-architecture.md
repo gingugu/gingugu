@@ -69,7 +69,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    (the client's `MEMORY_GRANT` as the hooks apply it), `credential_cli` (`gingugu
    credential list|delete`: the vault by hand, for a person at a terminal), `confirm` (the confirmation
    for destructive tools; see Key Decisions), `destructive` (the big-delete gate,
-   called from `tool_hook`), `proxy_gate` (the same gate at the remote-mode proxy),
+   used by `tool_hook`, the handlers (`gate`), `confirm` (`take`) and `proxy_gate`), `proxy_gate` (the same gate at the remote-mode proxy),
    `proxy_vault_link`
    (the local vault behind an in-memory MCP session; see Remote mode), `client_grants` (each server
    publishes its grant for its client's hooks; see Warm minions), `claude_trust`
@@ -1069,8 +1069,18 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   dialog if the client can show one, else a refusal), and in remote mode the proxy
   takes it before relaying (`proxy_gate`), `credential_delete` going to the local
   vault, which checks itself. The per-session hard-delete count is the hook's
-  alone, since one tool call cannot see its siblings. A client with no gingugu
-  hook gets a dialog or a refusal, never a silent pass. A fork (`agent_type:
+  alone, since one tool call cannot see its siblings: hard deletes past 10 are
+  gated by the hook only (it asks; no approval is consumed server-side and the
+  proxy does not screen `memory_forget`). Order in `confirm._big`: no gate -> pass;
+  `MEMORY_CONFIRM_DESTRUCTIVE=off` on the executing server -> pass; over HTTP only
+  the owner (full grant) passes on `confirm=true` (its proxy took the approval), a
+  scoped token gets a dialog if its client can ask, else a refusal; on stdio
+  `take()` the approval, else a dialog if `can_ask`, else a refusal. Scoped tokens
+  are already fenced out of namespace deletes, import and `credential_*`, so the
+  HTTP rule bites on `memory_consolidate` over 10. The hook asks about any
+  namespace `delete` (even empty); the server gates only a non-empty cascade. For an
+  import the hook counts the payload's memories, the server the ids it would
+  overwrite. A fork (`agent_type:
   "fork"`) gets the main thread's rights in the minion fence.
   Claude Code's VS Code extension declares elicitation but answers every one
   "decline" without a dialog, so it counts as unable to ask:
@@ -1085,7 +1095,9 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   *The env opt-out sits on the server that
   executes the tool*: `MEMORY_CONFIRM_DESTRUCTIVE=off` (also `false`/`0`/`no`)
   is read straight from the environment, so in remote mode it is the brain for
-  memory tools and the local proxy for the vault. *Resolvers run before the
+  memory tools and the local proxy for the vault (and for its own screen,
+  `proxy_gate`). It skips the dialog and the approval check; it does not silence
+  the hook's `ask` (`destructive.hook_check` never reads it). *Resolvers run before the
   wrapper*, so they check the fence themselves and are `async`; each body
   re-derives whether the call is destructive and checks existence first, so a
   hidden or out-of-grant id reads "not found" with no dialog. *The proxy's

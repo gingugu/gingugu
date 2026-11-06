@@ -70,7 +70,7 @@
 | `proxy_gate.py` | Remote mode: `screen(msg)`, called from `proxy_session` `Link.forward`, refuses a `tools/call` with `confirm=true` that is a big delete (`destructive.classify`) without the approval (`destructive.take`) before it is relayed, since the brain over HTTP takes `confirm=true` at its word. Skipped for `MEMORY_CONFIRM_DESTRUCTIVE=off` and for a replayed message; never raises. `credential_delete` goes to the local vault, which checks itself |
 | `serve_tokens.py` | Serve token store. Scoped tokens (per-namespace grant) and named owner tokens (`add_owner`, one full-access token per machine, `replace=True` rotates). `TokenStore` keeps only SHA-256 hashes in `<db-dir>/serve_tokens.json` (0600, atomic replace); the plaintext is printed once. Re-reads the file when it changes on disk, so a revoke lands on the next request with no restart; an unreadable file resolves to no grant (fails closed); `owner` counts only when literally `true` |
 | `token_cli.py` | The `gingugu token add NAME --ns a=write,b=read \| --owner` / `list` / `revoke NAME` / `ssh-mint` CLI. `ssh-mint` is an `authorized_keys` forced command: it accepts only `mint NAME` in `SSH_ORIGINAL_COMMAND` and prints only the rotated machine token, or exactly `cert`, which prints `serve_tls.cert_pem` (nothing when there is none) for any key, bound or not, and rotates nothing |
-| `credential_cli.py` | The `gingugu credential list` / `delete NAME [--field F]` CLI: this machine's vault by hand (also in remote mode), the way out when no client can show `credential_delete`'s dialog. `list` never prints a secret value; names print via `confirm.shown` (control/bidi stripped). `delete` refuses a non-TTY stdin (exit 2) before prompting, needs the service name typed back, has no `--yes`; a keychain error is a message (exit 1), not a traceback. Stops accidents and piping, not an agent with a shell |
+| `credential_cli.py` | The `gingugu credential list` / `delete NAME [--field F]` CLI: this machine's vault by hand (also in remote mode), the by-hand path (a client with no dialog is told to ask the user and call `credential_delete` again with `confirm=true`). `list` never prints a secret value; names print via `confirm.shown` (control/bidi stripped). `delete` refuses a non-TTY stdin (exit 2) before prompting, needs the service name typed back, has no `--yes`; a keychain error is a message (exit 1), not a traceback. Stops accidents and piping, not an agent with a shell |
 | `remote.py` | (parsing and the mint ssh argv, `ssh_argv`, in `remote_args.py`) `gingugu remote login/on/off/status`: which brain a machine talks to. Local by default (no setting); machine setting `<user-data-dir>/remote.json` (0600, never in a repo); `MEMORY_REMOTE_URL` overrides per client (`off` = local). `normalize_url` refuses a URL with userinfo (never echoed). `server.main()` consults `remote.active()` and hands a remote target to `proxy.py`. `login` mints the machine token over SSH (`-F /dev/null`, restricted per-machine key `~/.ssh/gingugu_mint`) into the OS keychain (service `gingugu-remote`), after `remote_tls.prepare_login` has settled TLS (cert over SSH, live check, pin written - a failure rotates nothing): the URL becomes https, the token is filed under it, and a machine setting on the same brain over http is upgraded. `active()` and `on` refuse http to a pinned host:port (`remote_tls.refuse_downgrade`). `_reachable` verifies through the pin; `status` adds a `hint:` line from `remote_tls.diagnose` when unreachable. A bad URL or setting raises - never a silent local fallback |
 | `remote_tls.py` | The client half of TLS: pins at `<user-data-dir>/remote-tls/<host>_<port>.pem` (0600, atomic; beside `remote.settings_path()`, so the conftest sandbox covers it), `load_pin` (a corrupt pin raises, never reads as none), `verify_for(url)` (https + pin: `create_default_context(cadata=pin)`, the pin alone; else `True`), `refuse_downgrade` (loads the pin whatever the scheme), `https_of`, `fetch_cert` (exit 2 = an older brain without the verb = no TLS), `prepare_login` (cert -> live `probe` with the exact trust -> pin written or a stale one cleared, all before the mint), `tls_failure` / `explain` / `diagnose` (a cert failure named with its fix; for http, `speaks_tls` - an unverified handshake that sends no request and no token - turns a TLS-only port into "log in over https"), `is_clock` (verify codes 9/10: retried, "check the clock"). `parse_cert` lives in `serve_tls` (exactly one PEM CERTIFICATE, nothing around it, re-encoded) |
 | `grants.py` | `Grant` (namespace name -> `read` or `write`, `*` matches any), `FULL`, the `bind`/`current` contextvar, `AccessDenied`, and the store-side helpers (`scope_clause`, `readable_memories`, `require_memory_write`). `current()` is None on stdio without `MEMORY_GRANT`, CLI, background passes, and the owner token - those run unfenced; a stdio server started with `MEMORY_GRANT` binds its grant like a scoped token. Out-of-grant reads as not found, never forbidden. `Grant.origin` (derived tokens only, stamped by `/token/derive`; `origin_name` accepts only a plain name `[A-Za-z0-9][A-Za-z0-9._-]{0,63}` and treats `full`, the shared serve token's grant name, as no origin; stdio and scoped tokens have none). `Grant.home` (derived tokens only) is the namespace a call that names none defaults to, via `grants.home()` (a separate contextvar, so a full grant still carries it); `NamespaceManager.resolve_name` and `handlers/scope.read_scope` prefer it over the server's configured namespace. `Grant.derived` marks a token minted at `/token/derive` |
@@ -193,6 +193,11 @@ deterministic, no LLM-as-judge). Committed synthetic fixture for CI regression;
 real-brain golden sets + baseline reports live in gitignored `bench/local/`.
 Run: `uv run python -m bench [--db <real-brain.db>]`.
 
+**`scripts/`** — `release.py` (cut a release), `fleet.py` (roll it out to
+every machine) and `live_rig.py` (a throwaway Claude Code project that runs this
+checkout's doorway, hook and server on a scratch brain: `--headless PROMPT`,
+`--mode`, `--credentials`; for watching a hook change work live).
+
 `bench/probes.py` generates a labelled probe set from a real brain
 (`--generate-probes <out>`), for measuring retrieval against **template
 families** - groups of memories sharing a title shape, which a long-lived store
@@ -298,9 +303,17 @@ Generated sets hold real memory content and stay in `bench/local/`.
   the PreToolUse hook answers `ask` (Claude Code's own prompt, any mode, a deny
   where nobody can answer) and leaves a single-use 15 minute approval that the
   local server - or, in remote mode, the proxy (`proxy_gate.py`) - requires for
-  `confirm=true`. `MEMORY_CONFIRM_DESTRUCTIVE=off` on the server that executes
-  the tool skips all of it, for automation (in remote mode: the brain for memory
-  tools, the local proxy for the credential vault)
+  `confirm=true`. Without it: a dialog if the client can ask, else a refusal; over
+  HTTP only the owner's `confirm=true` stands (its proxy checked), a scoped token
+  gets a dialog or a refusal. Asymmetries: the hook asks about any namespace
+  `delete` while the server gates only a non-empty cascade; for an import the hook
+  counts the payload's memories, the server the ids it would overwrite. Hard
+  deletes past 10 are gated by the hook alone (no approval consumed server-side;
+  the proxy does not screen `memory_forget`).
+  `MEMORY_CONFIRM_DESTRUCTIVE=off` is read by the server that executes the tool
+  (in remote mode the brain for memory tools, the local proxy for the vault and
+  for its own screen) and skips the dialog and the approval check, for
+  automation; it does not silence the hook's `ask`
 - **Consolidation (dream pass):** `memory_dream` (`run` / `list` / `accept` /
   `reject` / `stats`) - deterministic structure-finding over the relation
   graph, staged to a proposal queue. Also `gingugu dream --if-idle` for a
