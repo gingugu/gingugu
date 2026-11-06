@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Callable
 
 from mcp.server.mcpserver import MCPServer
 
@@ -94,6 +95,13 @@ def build(transport: str = "stdio") -> tuple[MCPServer, ServerContext]:
     return mcp, ctx
 
 
+def _show(command: str, fn: Callable[[], int]) -> int:
+    """A human-facing command, dressed by the TUI on a real terminal (plain otherwise)."""
+    from .tui import run
+
+    return run(command, fn)
+
+
 def main() -> None:
     """Console-script entry point.
 
@@ -114,11 +122,19 @@ def main() -> None:
     cmd = sys.argv[1:2]
 
     if cmd in (["-h"], ["--help"], ["help"]):
-        print(USAGE)
+        from .tui import banner
+
+        print(banner() + USAGE)
         return
     if cmd in (["-V"], ["--version"], ["version"]):
-        print(f"gingugu {__version__}")
+        from .tui import version_line
+
+        print(version_line(__version__))
         return
+    if cmd in (["party"], ["iddqd"]):
+        from .tui.party import main as party_main
+
+        raise SystemExit(party_main(sys.argv[2:]))
     if cmd == ["serve"]:
         from .serve import SERVE_USAGE, serve
 
@@ -135,20 +151,20 @@ def main() -> None:
     if cmd == ["promote"]:
         from .promote import main as promote_main
 
-        promote_main(sys.argv[2:])
+        _show("promote", lambda: promote_main(sys.argv[2:]) or 0)
         return
     if cmd == ["token"]:
         from .token_cli import main as token_main
 
-        raise SystemExit(token_main(sys.argv[2:]))
+        raise SystemExit(_show("token", lambda: token_main(sys.argv[2:])))
     if cmd == ["credential"]:
         from .credential_cli import main as credential_main
 
-        raise SystemExit(credential_main(sys.argv[2:]))
+        raise SystemExit(_show("credential", lambda: credential_main(sys.argv[2:])))
     if cmd == ["remote"]:
         from .remote import main as remote_main
 
-        raise SystemExit(remote_main(sys.argv[2:]))
+        raise SystemExit(_show("remote", lambda: remote_main(sys.argv[2:])))
     if cmd == ["init"]:
         from .bootstrap import main as init_main
 
@@ -179,7 +195,7 @@ def main() -> None:
     if cmd == ["embed"]:
         from .embed_cli import main as embed_main
 
-        raise SystemExit(embed_main(sys.argv[2:]))
+        raise SystemExit(_show("embed", lambda: embed_main(sys.argv[2:])))
     if cmd == ["hook"]:
         # Runs on the user's keystroke via a Claude Code hook. Reads the event
         # payload on stdin; never raises, never blocks a prompt.

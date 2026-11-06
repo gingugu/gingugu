@@ -63,6 +63,15 @@ Usage:
                                the Python definitions the edit touched and their
                                nearest tests. Wired by `gingugu init`.
 
+  gingugu party [SECONDS]      The cracktro, on demand: plasma, copper bars, a sine
+                               scroller and the techno loop. Any key ends it.
+
+Look and sound: human-facing commands (init, harness, remote, credential,
+token, promote, embed) play a short keygen show with music on a real terminal.
+GINGUGU_QUIET=1 mutes the music; GINGUGU_NO_ANIM=1 keeps colour but no motion;
+GINGUGU_PLAIN=1 (or NO_COLOR, a pipe, CI, TERM=dumb) prints plain ASCII.
+Hooks, the stdio server, serve, board watch, xray and dream are never dressed.
+
 Options:
   -h, --help                   Show this help and exit.
   -V, --version                Show the version and exit.

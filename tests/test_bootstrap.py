@@ -437,13 +437,15 @@ def test_dry_run_force_writes_nothing_at_all(tmp_path):
 # --- theme ---------------------------------------------------------------------
 
 
-def test_theme_renders_banner_and_boot_text():
-    from gingugu.bootstrap import theme
-
-    out = theme.render(["Claude Code bootstrap:", "  write /x/y.py"], dry_run=False)
-    assert "G I N G U G U" in out
+def test_init_report_is_plain_off_a_tty(tmp_path, capsys):
+    # Tests run without a TTY, so the keygen show must fall back to plain ASCII:
+    # same words, every path whole, no ANSI escape codes.
+    assert main(["--path", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "G I N G U G U  ::  init" in out
     assert "SYST3M 4RM3D" in out
-    # Tests run without a TTY, so output must be plain (no ANSI escape codes).
+    assert "[ OK ]" in out
+    assert str(tmp_path) in out
     assert "\033[" not in out
 
 

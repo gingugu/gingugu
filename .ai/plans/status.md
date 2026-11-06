@@ -1,8 +1,24 @@
 # Project Status
 
-_Last updated: 2026-11-06 (memory_stats names the vault's machine; board mail reaches sibling sessions on one machine; X-ray lists who reads a removed key; deletes need no terminal + the big-delete gate; board claims record the claiming session + claim nudges, migration 023; dev tools a dependency group; X23 hook lines, named-repo recall, generated-code skip and links --warm - 0.47.0; X23 cross-repo links - 0.46.0; startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
+_Last updated: 2026-11-06 (the CLI is a Win95 keygen with a techno loop; memory_stats names the vault's machine; board mail reaches sibling sessions on one machine; X-ray lists who reads a removed key; deletes need no terminal + the big-delete gate; board claims record the claiming session + claim nudges, migration 023; dev tools a dependency group; X23 hook lines, named-repo recall, generated-code skip and links --warm - 0.47.0; X23 cross-repo links - 0.46.0; startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
 
 ## In Flight
+
+**The CLI is a Win95 keygen (2026-11-06, branch `feature/cli-keygen`, stacked on
+`fix/stats-vault-per-machine`).** The human-facing commands were plain text. New
+`gingugu.tui` package (replaces `bootstrap/theme.py`): `caps` detects truecolor -> 256 ->
+16 -> plain and unicode -> ASCII; `report()` plays the keygen window, progress bar,
+LEVEL-grouped results and the score/achievement finale for `init` / `harness`; `run()`
+wraps `remote`, `credential`, `token`, `promote`, `embed` and `scripts/release.py` with an
+intro and an exit-code outro; `gingugu party` (alias `iddqd`) is the cracktro. `synth` renders an original
+8-bar 140 BPM loop deterministically to the user cache dir (`GINGUGU_CACHE_DIR`
+overrides) and `audio.Music` plays it
+(afplay / paplay / aplay / winsound), killed with the command; on whenever the show
+animates, `GINGUGU_QUIET=1` mutes. Machine paths never import it
+(`test_tui_machine_paths.py`: a static import check plus six hook entry points
+byte-identical under a pty). Demo: `scripts/cli_demo.py`. Checked on macOS
+(pty runs, and the maintainer heard it live); Windows consoles and Linux audio players
+are covered by tests only.
 
 **memory_stats names the vault's machine (2026-11-06, branch
 `fix/stats-vault-per-machine`, stacked on `fix/board-same-machine-sessions`).**

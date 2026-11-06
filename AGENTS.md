@@ -183,6 +183,8 @@ src/gingugu/
   board_watch_remote.py → the remote half: session token named for the persona, subscriptions/listen, reconnect with backoff
   board_watch_emit.py → the line (labelled as from another agent; `xray` field carries the X20 brief, <= 3 per batch), the delivery cursor, --exec (env only, stdout to stderr, 10 per batch, group-killed at 120s)
   cli_usage.py       → the top-level `gingugu --help` text (USAGE), kept out of server.py
+  tui/               → the CLI's keygen show, music and plain fallback; human-facing
+                       commands only, never imported by a machine path
   tool_hook.py       → `gingugu hook tool` (PreToolUse): denies the first matching call per session; re-issue passes; also the X-ray deny on a blind edit of an imported source file (Python, TS/JS, Go; one this session never read or wrote), the X20 board nudge (first board post of a session from a branch ahead of the default branch, naming no range), the checkout guard's deny, every time, of a git command that moves or empties the shared primary checkout, and the big-delete gate's `ask` (Claude Code's own permission prompt) for a big delete
   storage.py         → memory CRUD (store/update/forget)
   search.py          → hybrid BM25 (FTS5) + semantic ranking
@@ -222,6 +224,7 @@ ui/                  → Memory Explorer (React/Vite 3D frontend + vitest; api.p
 docs/                → architecture.md (mermaids = source of truth), roadmap.md, future-architecture.md
 tests/               → pytest suites (unit + integration MCP flows)
 scripts/             → release.py (cut a release), fleet.py (roll it out to every machine),
+                       cli_demo.py (plays every CLI effect and the loop),
                        live_rig.py (this checkout's doorway, hook and server live in a
                        throwaway Claude Code project on a scratch brain)
 ```

@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The CLI is a Win95 keygen.** `init` and `harness` play a keygen window (copper
+  bars, plasma logo, sine scroller, a serial being cracked), then the real results as
+  tagged lines grouped into LEVELs, with a score, an achievement and a finale counted
+  from them. `remote`, `credential`, `token`, `promote`, `embed` and the release script
+  get an intro and an exit-code outro around their unchanged output; `gingugu party`
+  (alias `iddqd`) plays the cracktro, `--help` gets the logo and `--version` a gradient. An original synthesized chiptune loop plays through
+  `afplay` / `paplay` / `aplay` / `winsound` and stops with the command
+  (`GINGUGU_QUIET=1` mutes it). Truecolor, 256 and 16 colours with an ASCII fallback;
+  plain ASCII with the same words on a pipe, `NO_COLOR`, `TERM=dumb` or
+  `GINGUGU_PLAIN`, and no motion under `CI` or `GINGUGU_NO_ANIM`; `GINGUGU_COLORS`
+  forces a colour level, `GINGUGU_ASCII` ASCII glyphs, and `GINGUGU_CACHE_DIR` moves
+  the cached loop. Any key or Ctrl-C skips the show. `scripts/cli_demo.py` plays every
+  effect. Hooks, the stdio server, the proxy and every other machine path are
+  byte-for-byte unchanged.
 - **The X-ray note after an edit lists who still reads a key the edit removed.**
   Nothing imports a data contract: renaming the key of an emitted JSON line left its
   readers (tests, runbooks, monitor queries) invisible to the import graph. After an
@@ -62,6 +76,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Forks get the main thread's rights.** A fork (`agent_type` `fork`, `/subtask`) inherits
   the whole conversation, so the minion fence lets it through. The harness `CLAUDE.md`
   block gains a "Forks: parallel hard work" section.
+
+### Removed
+
+- `bootstrap/theme.py`, replaced by the `gingugu.tui` package.
 
 ### Changed
 

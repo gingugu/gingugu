@@ -2373,6 +2373,7 @@ src/gingugu/
 ├── remote_args.py          # usage text + argparse for `gingugu remote`, mint ssh argv
 ├── remote_tls.py           # Client TLS: pins, verify_for, downgrade refusal, login's live check, diagnose/speaks_tls
 ├── credential_cli.py       # `gingugu credential list|delete`: the vault by hand, at a terminal
+├── showable.py             # clean(): strips ESC sequences, C0/C1, zero-width and bidi from untrusted text before a terminal shows it
 ├── confirm.py              # Destructive tools take `confirm`; omitted, a dialog (MCP elicitation) where the client can show one; MEMORY_CONFIRM_DESTRUCTIVE opt-out
 ├── destructive.py          # The big-delete gate: what counts as big, the hook's single-use approvals, the per-session hard-delete count
 ├── proxy_gate.py           # Remote mode: takes a big delete's approval at the proxy before the call is relayed to the brain
@@ -2404,8 +2405,22 @@ src/gingugu/
 │   ├── harness_retired.py  # Kit file names, sha256 manifest, symlink checks
 │   ├── harness_settings.py # Harness hooks + deny rules, merged additively; hook-command parsing
 │   ├── settings.py         # Non-destructive .claude/settings.json merge
-│   ├── theme.py            # The 90s boot sequence; degrades to monochrome off-TTY
 │   └── templates/harness/  # Hooks, minions, skill, .ai/ scaffold, CLAUDE.md block
+│
+│   # ── CLI face (human-facing commands only; machine paths never import it) ──
+├── tui/
+│   ├── __init__.py         # report() for init/harness, run() wrapper, banner, version line
+│   ├── caps.py             # Capability ladder: truecolor/256/16/plain, unicode, width, motion
+│   ├── paint.py            # RGB quantized to the terminal; gradients; CGA + amber palette
+│   ├── art.py              # Block logo, Win98 keygen window chrome, Unicode/ASCII glyph sets
+│   ├── fx.py               # Plasma, copper rasterbars, sine scroller, progress bar (pure f(t))
+│   ├── stage.py            # Draws frames in place; any key / Ctrl-C skips; cursor restored
+│   ├── keys.py             # Non-blocking keypress (cbreak / msvcrt), terminal always restored
+│   ├── keygen.py           # The report: tags, LEVELs, score, achievement, finale, fake serial
+│   ├── synth.py            # "C0R3 D3PTH": the original 8-bar chiptune loop, stdlib WAV synth
+│   ├── audio.py            # Plays the loop via /usr/bin/afplay or paplay/aplay (absolute PATH only)/winsound; killed on exit
+│   ├── signals.py          # SIGTERM/SIGHUP while a show is live: restore the terminal, stop the music, re-deliver
+│   └── party.py            # gingugu party: the cracktro on demand
 │
 │   # ── Storage ───────────────────────────────────────────────────
 ├── database.py             # The connection alone: WAL, foreign keys, busy timeout
@@ -2544,8 +2559,8 @@ src/gingugu/
 ```
 
 Dev-only tooling lives at the repo root and never ships in the wheel: `bench/`
-(the golden-set retrieval benchmark), `scripts/` (`release.py`, `fleet.py`, and
-`live_rig.py`, which runs this checkout's hook doorway, hook and server live in a
+(the golden-set retrieval benchmark), `scripts/` (`release.py`, `fleet.py`, `cli_demo.py` (plays every
+CLI effect and the loop), and `live_rig.py`, which runs this checkout's hook doorway, hook and server live in a
 throwaway Claude Code project on a scratch brain) and `ui/` (the Memory Explorer source,
 whose built bundle is what `webui.py` serves).
 
