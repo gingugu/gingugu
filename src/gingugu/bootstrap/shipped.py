@@ -12,6 +12,8 @@ version forever.
 
 from __future__ import annotations
 
+from hashlib import sha256
+
 SHIPPED: dict[str, dict] = {
     "session_start.py.tmpl": {
         "current": "8bf3e97e45b0a6ce3c724c8e249589090c672ef43f78eaff68273ac790e43aea",
@@ -84,6 +86,16 @@ SHIPPED: dict[str, dict] = {
         "previous": frozenset({}),
     },
 }
+
+
+def fingerprint(data: bytes) -> str:
+    """sha256 of a hook's raw bytes, line endings normalised to LF.
+
+    Bytes, not ``read_text()``: on Windows that decodes with the locale codepage,
+    so a template carrying non-ASCII would hash differently there; and a file
+    written there has CRLF line endings.
+    """
+    return sha256(data.replace(b"\r\n", b"\n")).hexdigest()
 
 
 def previous_versions(template: str) -> frozenset[str]:

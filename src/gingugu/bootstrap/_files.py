@@ -13,9 +13,10 @@ in the caller's care.
 
 from __future__ import annotations
 
-from hashlib import sha256
 from importlib.resources import files
 from pathlib import Path
+
+from .shipped import fingerprint
 
 # A distinctive marker every file we ship carries. Its absence in a file we are
 # about to overwrite means that file is NOT ours, so back it up first.
@@ -71,7 +72,7 @@ def write_file(
         results.append(f"  skip   {path}  (a symlink; never written through)")
         return
     existing = safe_read(path) if path.exists() else None
-    stock = existing is not None and sha256(existing.encode()).hexdigest() in previous
+    stock = existing is not None and bool(previous) and fingerprint(path.read_bytes()) in previous
     if existing is not None and not force and not stock:
         results.append(f"  skip   {path}  (exists; use --force to overwrite){skip_hint}")
         return
