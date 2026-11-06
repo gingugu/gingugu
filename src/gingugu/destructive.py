@@ -22,6 +22,7 @@ import json
 import os
 import time
 from pathlib import Path
+from typing import NamedTuple
 
 from .confirm import shown
 
@@ -67,7 +68,14 @@ def classify(tool: str, args: dict) -> str | None:
     return None
 
 
-def gate(server: object, tool: str, args: dict) -> tuple | None:
+class Gate(NamedTuple):
+    data_dir: Path
+    tool: str
+    args: dict
+    owner: bool  # the full grant: over HTTP, the owner's proxy took the approval
+
+
+def gate(server: object, tool: str, args: dict) -> Gate | None:
     """What a resolver hands ``confirm.ask``: set only for a big delete.
     ``server`` is the ``ServerContext``; the proxy's local vault builds one
     without a config, so the data dir then comes from this process's own."""
@@ -78,7 +86,13 @@ def gate(server: object, tool: str, args: dict) -> tuple | None:
         from .config import load_config
 
         config = load_config()
-    return (config.db_path.parent, tool, args)
+    from .grants import FULL
+    from .handlers import fence
+
+    grant = fence.request_grant(
+        getattr(server, "transport", "unknown"), getattr(server, "stdio_grant", FULL)
+    )
+    return Gate(config.db_path.parent, tool, args, grant is not None and grant.is_full)
 
 
 def _target(tool: str, args: dict) -> object:

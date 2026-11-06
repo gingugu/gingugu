@@ -121,6 +121,49 @@ async def test_a_credential_delete_needs_approval(full, mode, monkeypatch):
     assert (await call(full, Person(), mode, "credential_delete", args))["ok"] is True
 
 
+# --- over HTTP: only the owner's confirm=true is taken at its word -----------------------
+
+
+@pytest.fixture
+def http_brain(tmp_path, monkeypatch):
+    monkeypatch.setenv("MEMORY_DB_PATH", str(tmp_path / "http.db"))
+    monkeypatch.setenv("MEMORY_NAMESPACE", "doomed")
+    monkeypatch.delenv(confirm.ENV, raising=False)
+    from tests.test_embeddings import FakeEmbedder
+
+    monkeypatch.setattr("gingugu.server.build_provider", lambda **_: FakeEmbedder())
+    from gingugu.server import build_server
+
+    return build_server(transport="http")
+
+
+def _as(monkeypatch, grant) -> None:
+    monkeypatch.setattr("gingugu.handlers.fence.request_grant", lambda *_: grant)
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_a_scoped_tokens_big_consolidation_needs_the_person(http_brain, mode, monkeypatch):
+    # The owner's proxy checks this machine's approval before relaying; a scoped
+    # token (a minion, another client) reaches the brain with nothing checked.
+    # The fence already shuts it out of namespace deletes, imports and the vault;
+    # a consolidation that drops originals is the big delete it can still reach.
+    from gingugu.grants import FULL, WRITE, Grant
+
+    _as(monkeypatch, FULL)
+    many = [await stored(http_brain, f"dup {i}") for i in range(destructive.THRESHOLD + 1)]
+    args = {"memory_ids": ",".join(many), "keep_originals": False, "confirm": True}
+    _as(monkeypatch, Grant("minion", {"doomed": WRITE}))
+    out = await call(http_brain, Person(action=None), mode, "memory_consolidate", args)
+    assert out["ok"] is False and "approval" in out["error"]
+    person = Person(action="decline")
+    out = await call(http_brain, person, mode, "memory_consolidate", args)
+    assert out["ok"] is False and len(person.asked) == 1  # a client that can ask: the person
+    _as(monkeypatch, FULL)
+    assert all([await exists(http_brain, mid) for mid in many])
+    out = await call(http_brain, Person(action=None), mode, "memory_consolidate", args)
+    assert out["ok"] is True  # the owner's word: its proxy took the approval
+
+
 # --- remote mode: the proxy is where this machine's approvals are checked -----------------
 
 

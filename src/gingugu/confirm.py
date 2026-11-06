@@ -134,18 +134,23 @@ def can_ask(ctx: Any, transport: str) -> bool:
     return elicitation.form is not None or elicitation.url is None
 
 
-def _big(ctx: Any, message: str, transport: str, gate: tuple | None) -> Elicit[Confirm] | str:
-    """``confirm=true`` on a big delete (``destructive``): the hook's approval for
-    this call, a dialog, or nothing. Over HTTP this machine's approvals are not
-    the caller's, so the proxy checks them before relaying."""
-    if gate is None or transport != "stdio":
+def _big(ctx: Any, message: str, transport: str, gate: Any) -> Elicit[Confirm] | str:
+    """``confirm=true`` on a big delete (``destructive.Gate``): the hook's approval
+    for this call, a dialog, or nothing. Over HTTP this machine's approvals are
+    not the caller's: the owner's proxy takes them before relaying, so only the
+    owner's word stands there; a scoped token gets the person or nothing."""
+    if gate is None:
         return BY_CALLER
     if opted_out():
         return OPTED_OUT
-    from .destructive import take
+    if transport != "stdio":
+        if gate.owner:
+            return BY_CALLER
+    else:
+        from .destructive import take
 
-    if take(*gate):
-        return BY_CALLER
+        if take(gate.data_dir, gate.tool, gate.args):
+            return BY_CALLER
     return Elicit(message, Confirm) if can_ask(ctx, transport) else UNAPPROVED
 
 
