@@ -22,8 +22,8 @@ def _vault_one(store: MemoryStore) -> None:
 
 
 def test_machine_name_is_the_sanitised_short_hostname(monkeypatch) -> None:
-    monkeypatch.setattr(machine.socket, "gethostname", lambda: "Mr-Boomtastic-2.local")
-    assert machine.name() == "mr-boomtastic-2"
+    monkeypatch.setattr(machine.socket, "gethostname", lambda: "Galleon-2.local")
+    assert machine.name() == "galleon-2"
     monkeypatch.setattr(machine.socket, "gethostname", lambda: "Odd Box!.lan")
     assert machine.name() == "odd-box-"
 
