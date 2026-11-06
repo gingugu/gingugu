@@ -35,7 +35,7 @@ _URI_PREFIX = "gingugu://board/inbox/"
 _SELECT = (
     "SELECT p.id, p.parent_id, n.name AS namespace, p.namespace_id, p.author, p.author_session, "
     "p.author_origin, p.author_agent, p.recipient, p.recipient_agent, p.kind, p.status, "
-    "p.claimed_by, p.body, p.created_at, p.updated_at "
+    "p.claimed_by, p.claimed_origin, p.claimed_agent, p.body, p.created_at, p.updated_at "
     "FROM board_posts p JOIN namespaces n ON n.id = p.namespace_id"
 )
 
@@ -200,12 +200,16 @@ def _inbox_where(
         "(p.author != ? OR (? IS NOT NULL AND p.author_origin IS NOT NULL "
         "AND p.author_origin != ?))",
         "p.status != 'done'",
-        "(p.status = 'open' OR p.claimed_by = ?)",
+        # A claimed task is mail for its claimer only - and not for a twin session
+        # of the claimer's persona, when both sessions are known.
+        "(p.status = 'open' OR (p.claimed_by = ? AND "
+        "(p.claimed_agent IS NULL OR ? IS NULL OR p.claimed_agent = ?)))",
         # A routed reply is for one session until it has sat unread for the grace.
         "(p.recipient_agent IS NULL OR ? IS NULL OR p.recipient_agent = ? OR p.created_at <= ?)",
     ]
     cutoff = (datetime.now(UTC) - timedelta(seconds=ROUTE_GRACE_SECONDS)).isoformat()
-    params: list[object] = [reader, BROADCAST, reader, origin, origin, reader, agent, agent, cutoff]
+    params: list[object] = [reader, BROADCAST, reader, origin, origin, reader, agent, agent]
+    params += [agent, agent, cutoff]
     if not include_read:
         # Receipts are per persona, so one session's read is every twin's. An open
         # task stays unread until a claim or a done acts on it.
@@ -262,35 +266,5 @@ def thread(conn: sqlite3.Connection, post_id: str, reader: str) -> dict:
     return {"post": _row(root), "replies": [_row(r) for r in replies]}
 
 
-def claim(conn: sqlite3.Connection, post_id: str, who: str) -> dict:
-    """Take an open task. Exactly one claimer wins; the rest are told who did."""
-    found = _require(conn, post_id)
-    if found["kind"] != "task":
-        raise BoardError(f"post {post_id!r} is a {found['kind']}, not a task")
-    grants.require_write_id(found["namespace_id"], "this namespace's board")
-    cur = conn.execute(
-        "UPDATE board_posts SET status = 'claimed', claimed_by = ?, updated_at = ? "
-        "WHERE id = ? AND status = 'open'",
-        (who, utcnow_iso(), post_id),
-    )
-    if cur.rowcount != 1:
-        now = _require(conn, post_id)
-        if now["status"] == "claimed":
-            raise BoardError(f"task {post_id!r} is already claimed by {now['claimed_by']}")
-        raise BoardError(f"task {post_id!r} is {now['status']}")
-    return _row(_require(conn, post_id))
-
-
-def done(conn: sqlite3.Connection, post_id: str, who: str) -> dict:
-    """Finish a post. Only its claimer or its author may."""
-    found = _require(conn, post_id)
-    grants.require_write_id(found["namespace_id"], "this namespace's board")
-    if found["status"] == "done":
-        raise BoardError(f"post {post_id!r} is already done")
-    if who not in (found["author"], found["claimed_by"]):
-        raise BoardError(f"only the author or the claimer may finish post {post_id!r}")
-    conn.execute(
-        "UPDATE board_posts SET status = 'done', updated_at = ? WHERE id = ? AND status != 'done'",
-        (utcnow_iso(), post_id),
-    )
-    return _row(_require(conn, post_id))
+# Claiming and finishing live in board_tasks; re-exported so ``board`` stays the store.
+from .board_tasks import claim, claim_nudge, done, holder  # noqa: E402,F401

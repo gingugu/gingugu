@@ -51,6 +51,16 @@ def test_a_persona_is_told_not_to_run_a_watcher(monkeypatch, which):
 
 
 @pytest.mark.parametrize("which", sorted(CONTRACTS))
+def test_a_persona_is_told_to_claim_a_task_before_working_it(monkeypatch, which):
+    # Unclaimed, a task in progress is shown to every twin session as new.
+    monkeypatch.setenv("MEMORY_PERSONA", "beepboop")
+    contract = _load(CONTRACTS[which]).build_startup_contract("/home/me/gingugu")
+    assert 'board(action="claim"' in contract
+    assert 'board(action="done"' in contract
+    assert "in chat" in contract  # a task handed over by the user is still the board's
+
+
+@pytest.mark.parametrize("which", sorted(CONTRACTS))
 def test_no_persona_means_no_board_clause(monkeypatch, which):
     monkeypatch.delenv("MEMORY_PERSONA", raising=False)
     contract = _load(CONTRACTS[which]).build_startup_contract("/home/me/gingugu")
@@ -69,6 +79,7 @@ def test_the_protocol_rules_forbid_the_watcher():
     _never_asks_for_a_watcher(section)
     assert "Do not run `gingugu board watch`" in section
     assert "next prompt" in section
+    assert 'board(action="claim"' in section
 
 
 @pytest.mark.parametrize("name", ["CLAUDE.md", "AGENTS.md"])

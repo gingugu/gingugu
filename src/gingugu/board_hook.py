@@ -23,6 +23,15 @@ INBOX_TIMEOUT_S = 3.0
 BRIEF_CHARS = 3500
 
 
+def _task_line(post: dict) -> str:
+    """An open task says to claim it; a claimed one says who holds it."""
+    from .board_tasks import claim_nudge, holder
+
+    if post.get("status") == "claimed" and post.get("claimed_by"):
+        return f"claimed by {holder(post)}"
+    return claim_nudge(str(post["id"]))
+
+
 def render(posts: list[dict]) -> str:
     """The block a prompt gets: who wrote, which post, a preview, how to read it.
 
@@ -43,6 +52,8 @@ def render(posts: list[dict]) -> str:
             f"(post {p['id']}{reply}): {body}"
         )
         lines.append(f'  read it: board(action="read", post_id="{p["id"]}")')
+        if p.get("kind") == "task":
+            lines.append(f"  {_task_line(p)}")
     if n > MAX_SHOWN:
         lines.append(f'- and {n - MAX_SHOWN} more: board(action="inbox")')
     return "\n".join(lines)
