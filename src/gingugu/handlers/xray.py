@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 
 from .. import grants
-from ..xray import brief, callers_tool, docs_tool, extract, history_tool, local, store
+from ..xray import brief, callers_tool, docs_tool, env_tool, extract, history_tool, local, store
 from ..xray.links import tool as links_tool
 from . import ServerContext
 from .helpers import _err
@@ -35,6 +35,7 @@ _ACTIONS = (
     "callers",
     *history_tool.ACTIONS,
     *docs_tool.ACTIONS,
+    *env_tool.ACTIONS,
     *links_tool.ACTIONS,
 )
 _CAVEAT = brief.CAVEAT
@@ -115,7 +116,9 @@ def register(mcp, ctx: ServerContext) -> None:
         images, packages, tables, CI checkouts, ``repo@sha`` cites, doc prose - each with
         the file and line that shows it, certain or flagged why not; files: who outside
         leans on those files, through their importers, and the ripple across repos;
-        computed locally).
+        computed locally), "env" (files: the env vars each file reads, with where each is
+        set, and the ones it sets, with who reads them; no files: every name, the ones read
+        but never set here or set but never read here first; computed locally).
 
         ``path`` is any directory in the git checkout (default: the working directory).
         The snapshot is rebuilt automatically when the checkout's source content changed,
@@ -142,6 +145,10 @@ def register(mcp, ctx: ServerContext) -> None:
                 if ctx.transport != "stdio":
                     return _err(_NO_DISK)
                 return docs_tool.answer(path, files, limit)
+            if action in env_tool.ACTIONS:
+                if ctx.transport != "stdio":
+                    return _err(_NO_DISK)
+                return env_tool.answer(path, files, limit)
             if action in links_tool.ACTIONS:
                 if ctx.transport != "stdio":
                     return _err(_NO_DISK)

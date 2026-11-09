@@ -1877,6 +1877,17 @@ names them all.` (3 shown); the Bash X-ray adds it for a changed source file and
 session, shared by the edit note and the Bash X-ray. The pure text helpers (`tokens`,
 `github_paths`, `qualified`) live in `xray/docs_text.py`.
 
+**Env vars as edges (X7a).** Nothing imports an environment variable, so the code reading
+`DB_URL` and the compose file, manifest, workflow, Dockerfile or `.env.example` setting it
+are invisible to each other. `xray/env_scan.py` reads literal names in known read and set
+forms (Python, TS/JS, Go, shell, Dockerfile, YAML `env` blocks, example templates) - names
+and line numbers only, never a value, and a real dotenv file (`.env`, `.env.local`,
+`.envrc`) is excluded by name before any open. `xray/env_map.py` caches the result per file
+(`xray-env-<digest>.json`, owner-only, read as untrusted input). `code_xray` `env`
+(`xray/env_tool.py`) answers locally like `docs`: `gingugu serve` refuses it and the proxy
+answers it. A file's first read and the edit note add `Env:` lines (`xray/env_hook.py`).
+Switch `MEMORY_XRAY_ENV` (default on). No migration, no brain change.
+
 **Cross-repo links (X23).** A service ecosystem is wired by names, not imports. The
 `xray/links/` package reads this checkout and its sibling checkouts (the docs map's
 discovery) for two sets of names per file: what the repo *provides* (published package

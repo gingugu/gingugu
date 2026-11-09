@@ -847,6 +847,20 @@ Bash X-ray (PostToolUse Bash): changed source -> "<rel>: Docs cite it: ..."; del
 MEMORY_XRAY_DOCS=off silences every line and writes no summary
 ```
 
+X7a's env map reaches the hooks without a summary (it is this repo only, cached per file):
+
+```
+read hook (PostToolUse Read): a file's first read -> env_hook.file_line -> env_map.read
+    (re-scans only files whose size/mtime changed) -> "Env: reads A (set in f:N), B (set
+    nowhere here); sets C (read by g:M)." (4 names, 2 locations each, "(+N more; code_xray
+    env has them all)")
+edit note (PostToolUse Edit/Write/MultiEdit): env_hook.edit_lines -> names read in the new
+    text (scan_text) minus those in the old text, set nowhere in env_map.read ->
+    "- Env: reads NAME, set nowhere in this repo (...)", claim xray-env-edit per name per
+    session, 3 at most
+MEMORY_XRAY_ENV=off silences every line
+```
+
 **Readers of a removed key (xray/literals, board d5639dd5).** The edit note also
 runs for any file type, on Edit/MultiEdit only (a Write has no old text):
 
