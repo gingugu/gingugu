@@ -996,7 +996,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `Docs still citing a deleted or renamed file:` (`MEMORY_XRAY_DOCS`, default on; a docs
   failure never costs the brief). Docs-map hook surfaces (edit note, Bash X-ray, read hook) are
   not built yet. No migration, no brain change.
-- **Codebase X-ray: cross-repo links (X23, built, unreleased).** A service ecosystem
+- **Codebase X-ray: cross-repo links (X23, released in 0.46.0).** A service ecosystem
   is wired by names, not imports. `xray/links/` reads this checkout and its sibling
   checkouts (the docs map's discovery) for the names each file *provides* (`provides*.py`:
   package names, images built and pushed, hosts served, routes defined, IaC-owned
@@ -1022,7 +1022,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   fact, joined only when it names a checkout read here: a whole-repo link flagged `named`
   (kinds `docs`, `ci`, `mention`), dropped when the same file links stronger.
   `cache.py` (facts cache), `join_index.py` (provider index, matchers) and `inbound.py`
-  split out of `index.py` / `join.py`. Hook surfaces (built, unreleased): **hooks read a
+  split out of `index.py` / `join.py`. Hook surfaces (released in 0.47.0): **hooks read a
   summary, never scan.** Every links read writes each checkout it read an owner-only
   `xray-links-in-<digest>.json` (links into it by target file, 8 per file, plus 20
   whole-repo links); the read hook's map on arrival and a file's first read, and the edit
