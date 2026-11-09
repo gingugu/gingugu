@@ -1,11 +1,57 @@
 # Project Status
 
-_Last updated: 2026-11-09 (X7a env vars as edges built; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
+_Last updated: 2026-11-09 (X7c DB tables as edges built; X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
 
 ## In Flight
 
-**X7a env vars as edges (2026-11-09, branch `feature/xray-env`, stacked on
-`feature/xray-docs-hooks`).** First slice of X7 (edges beyond imports). Nothing imports an
+**X7c DB tables as edges (2026-11-09, branch `feature/xray-tables`).** Third slice of X7 (edges
+beyond imports), taken before X7b. Nothing imports a table, so the code that queries it and
+the migration that creates it never meet in the import graph, and a rename or drop breaks
+callers silently. `xray/table_scan.py` (pure: `(defines, drops, uses)` as (name, line),
+names lowercased, one per name per line). Defines: `CREATE [TEMP|TEMPORARY] [VIRTUAL]
+TABLE|VIEW [IF NOT EXISTS] [schema.]x`, `ALTER TABLE a RENAME TO b` (b defined, a dropped,
+not a use), SQLAlchemy `__tablename__` and `Table("x", ...)`, Alembic `op.create_table`.
+Drops: `DROP TABLE [IF EXISTS] x`, `op.drop_table`. Uses: `FROM`/`JOIN`/`INTO`/`UPDATE`/
+`ALTER TABLE` + name, and `ON x` only on a `CREATE INDEX`/`CREATE TRIGGER` line. In code
+(.py, TS/JS, .go) keywords must be UPPERCASE - Python imports and prose look like lowercase
+SQL; a `.sql` file is read in any case. A name must end where an identifier ends (not run
+into `{ $ / : .` or a single `-`), so `f"FROM t_{n}"` and a Dockerfile `FROM python:3.12` in
+a string are not tables. Skipped: SQL words, one-letter names, engine builtins (`sqlite_*`,
+`pragma_*`, `pg_*`, `information_schema.*`, `pg_catalog.*`). `xray/table_map.py`: the checkout
+map, per-file cache `xray-tables-<digest>.json` by size + mtime (owner-only, read as
+untrusted), 256 KiB per file, 200 names per list; `dropped(m, name)` = drops in files that
+neither define the table again (a drop + recreate in one file is a rebuild) nor are test
+files. `xray/file_facts.py`: the cache plumbing now shared by `env_map` and `table_map` (git
+listing, per-file size + mtime cache, untrusted load, time budget with a `>=` deadline,
+`complete` flag, writes what it reached); `env_map` shrank from 153 to 61 lines, behaviour
+unchanged. `xray/table_tool.py`: `code_xray` `tables` / `gingugu xray tables` (`--files`,
+`--path`, `--limit`, `--json`) - per file, what it defines (with who else uses each), drops (with who
+still uses each) and uses (with where defined, and where dropped); without files, every
+table with counts, one-sided first (`defined nowhere here`, `dropped, still used`, `used
+nowhere here`), a table seen only in test files as `tests only`, last; refused by
+`gingugu serve`, answered locally by the proxy. `xray/table_hook.py`: a file's first read
+adds `Tables: defines x (used by a.py, b.py +N); uses y (defined in schema.sql:12), z
+(dropped in m.sql:3), w (defined nowhere here)` (defines first, 4 names at most, the file's
+own tables not repeated as uses, users code before tests; a file no reader handles never
+triggers a scan); the edit note adds, once per table per session, at most 3: an edit that
+starts using a table defined nowhere here (only when the repo defines at least one -
+otherwise its schema lives elsewhere) or dropped here, an edit to a table definition other
+files use (`defines x, used by K other files`), or a drop of a table other files still use.
+A hook's scan has a 1s budget and the hooks stay silent until every file has been read once.
+`MEMORY_XRAY_TABLES=off` silences all of it and makes the action refuse; no migration, no
+brain change. Measured on gingugu itself (604 files): cold map 0.53s, warm 0.043s, a read-hook
+line about 40ms; 24 real tables, none one-sided. Out of scope for v1: columns, ORM use
+through model classes (the import graph covers that), IaC-defined tables (X23's resource
+names cover cross-repo). Security review (no HIGH/MEDIUM): a file too big to read, or cut
+at the 200-name cap, is named `unread` (`TableMap.unread`), and while any exist neither the
+hooks nor the tool say "defined nowhere" - `not in the files read` instead, and the tool
+lists them; the cache key carries the scanner's version (`table_scan.SCAN_VERSION`; plumbing
+`file_facts.VERSION` 2), a cache too big to read back is never written, cached line numbers
+are capped, and the edit note scans each text once and skips one past the file cap. Spec:
+`tests/test_xray_tables_map.py`, `test_xray_tables_tool.py`, `test_xray_tables_hooks.py`,
+`test_xray_tables_review.py` (121 tests). Full suite 4399 passed. Unreleased.
+
+**X7a env vars as edges (2026-11-09, branch `feature/xray-env`, merged to main in #189, unreleased).** First slice of X7 (edges beyond imports). Nothing imports an
 environment variable, so the code reading `DB_URL` and the compose file, k8s manifest, CI
 workflow, Dockerfile or example env template setting it never meet in the import graph, and
 a rename on either side breaks silently. `xray/env_scan.py` (pure: literal upper-snake names
@@ -1990,12 +2036,12 @@ every row moved up one.
 
 **2026-11-09:** resynced, no reorder. Since 2026-11-01, under row 1: X22 docs map (0.45.0, #174), X23 cross-repo links (0.46.0, #176; hook lines and named-repo recall 0.47.0, #177/#178; worker-process cold reads 0.47.1, #179) and removed-key readers in the edit note (0.48.0, #182). Off the board: the big-delete gate (#181), board claim identity (#180, migration 023), sibling-session board mail (#183), the vault's machine in `memory_stats` (#184), the keygen CLI (#185), all 0.48.0, and init refreshing stock old hooks (#186, 0.48.1). Row 1a still names no X-item.
 
-**2026-11-09 (later):** X7 split into slices - X7a env vars, X7b HTTP routes, X7c DB tables, X7d entry-point-to-sink paths; X7a is in progress on row 1a. X4 drift moved from row 1a's owed list to its own row 7, above the flight recorder. Row 4 waits: `query_acts` held 25 queries with a fetch/update act after a week (about 100 are needed).
+**2026-11-09 (later):** X7 split into slices - X7a env vars, X7b HTTP routes, X7c DB tables, X7d entry-point-to-sink paths; X7a is merged (unreleased) and X7c is built (unreleased); row 1a names what is next. X4 drift moved from row 1a's owed list to its own row 7, above the flight recorder. Row 4 waits: `query_acts` held 25 queries with a fetch/update act after a week (about 100 are needed). X7c was taken before X7b on measured evidence: an intra-repo route join over X23's existing route facts found about 6 true edges across 5 server repos on this machine (all test -> handler) and 0 on gingugu, whose own API is a hand-written dispatch table; X7b waits on a measurement over a larger set of service repos.
 
 | # | Item | Old # | Why this position |
 |---|---|---|---|
 | 1 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival shipped in 0.32.0; X19 X-ray brief shipped in 0.34.0; X20 brief on the board shipped in 0.35.0 (repo on the line in 0.36.0); X15 writes from any tool shipped in 0.37.0; X16 incremental refresh shipped in 0.38.0; X17 symbol graph (Python) shipped in 0.39.0; X-ray tuned for the agent, with the lean X11 test ledger, shipped in 0.40.0; X3 scar tissue shipped in 0.41.0; X4 history + X6 blind spots shipped in 0.42.0 (X4 drift: board row 7); X22 docs map shipped in 0.45.0 (hook surfaces built, unreleased); X23 cross-repo links shipped in 0.46.0, in the hooks in 0.47.0; removed-key readers in the edit note shipped in 0.48.0; X21 symbols on the brain owed | 19 | Every sail since 2026-10-26 has gone here. A 21-part roadmap (X1-X21) in its section below |
-| 1a | **X7a env vars as edges (in progress)** - the file reading an env var and where it is set (compose, k8s, CI, Dockerfile, example env templates, shell, tests): `code_xray env`, the read hook and the edit note. X22 hook surfaces built (#188, unreleased). Then X7b HTTP routes, X7c DB tables, X7d entry-point-to-sink paths, then X8 | 19 | X7 is split into slices, one PR each; env vars first: cheapest, and a rename on either side breaks silently |
+| 1a | **X7 edges beyond imports** - X7a env vars as edges merged (#189, unreleased): the file reading an env var and where it is set (`code_xray env`, the read hook and the edit note). X7c DB tables as edges built (unreleased): the file querying a table and the migration or schema that defines or drops it (`code_xray tables`, the read hook and the edit note). X22 hook surfaces built (#188, unreleased). Then X7b HTTP routes, X7d entry-point-to-sink paths, then X8 | 19 | X7 is split into slices, one PR each; env vars first: cheapest, and a rename on either side breaks silently |
 | 2 | **A calibration ledger** | 14 | New tables, so a migration. Follows X3: the lean X11 ledger (0.40.0) already records predictions, so it scores real data from day one |
 | 3 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
 | 4 | **Paraphrase question set + lexical/semantic arbitration** - labels now recorded at write time (`query_acts`, migration 022, released in 0.43.0); collect, then measure | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
@@ -2714,7 +2760,7 @@ slices alongside them. IDs are stable references, not the order.
 | X4 | **History as a second graph (coupling + hotspots SHIPPED in 0.42.0, #170; drift not built)** - co-change coupling (files that change together without importing each other), churn x centrality x authors as hotspots, per-commit X-ray diffs as architectural drift | git log | `code_xray` `history`, `gingugu xray history`, the read line `Changes with (no import):` (`MEMORY_XRAY_HISTORY`). Code-maat's defaults; last 1,000 non-merge commits, cached by HEAD, client only. Drift needs the import graph of past trees (extraction reads only the working tree), and the nightly dream pass cannot read a checkout (see X16) |
 | X5 | **Module boundaries** - communities that hold up on import graphs | dream clusters | Label propagation fails as-is (see above); needs a decided approach, not a knob |
 | X6 | **Blind-spot map (SHIPPED in 0.42.0, #170)** - centrality x low churn x no tests x single author: where a change would reach furthest with the least review | X1, X4 | The attacker's target list, run first by the defender. `code_xray` `blindspots`, `gingugu xray blindspots`: imported untested source (no direct test importer, no test named for it) by rank over authors, fewest commits on a tie, `single_author` flagged |
-| X7 | **Edges beyond imports** (split 2026-11-09: X7a env vars IN PROGRESS, X7b HTTP routes, X7c DB tables, X7d entry-point-to-sink paths) - env vars, config keys, HTTP routes, DB tables, IaC resources, MCP tool names; entry-point-to-sensitive-sink paths as an attack-surface map | X1 | Where it becomes a security instrument; the largest piece of work |
+| X7 | **Edges beyond imports** (split 2026-11-09: X7a env vars BUILT, X7c DB tables BUILT, X7b HTTP routes, X7d entry-point-to-sink paths) - env vars, config keys, HTTP routes, DB tables, IaC resources, MCP tool names; entry-point-to-sensitive-sink paths as an attack-surface map | X1 | Where it becomes a security instrument; the largest piece of work |
 | X8 | **Dependency X-ray** - third-party packages on the graph: which are load-bearing, how deep, what a compromised package could reach | X1, X7 | Upgrade priority, pinning, incident-day exposure |
 | X9 | **Fleet X-ray** - every repo into one central brain; cross-repo callers and cross-repo blast radius | central brain, scoped tokens | |
 | X10 | **Graph-aware fences** - approval scales with blast radius: leaf edits free, edits reaching top-ranked files need the user's go | X1, hooks, minion grants | |

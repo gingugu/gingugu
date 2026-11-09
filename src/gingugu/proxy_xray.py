@@ -6,8 +6,9 @@ the host's disk, and the tool there refuses one. So the proxy claims every
 ``refresh`` without a ``fingerprint`` or ``payload``) and does that part on
 this machine. It also claims every ``brief`` (changed files and their combined
 blast), every ``callers`` (one symbol's callers, X17) and every ``history`` and
-``blindspots`` (X4, X6), every ``docs`` (X22), every ``env`` (X7a) and every ``links``
-(X23), each answered whole from the local checkout; the brain is never asked. The rest goes through
+``blindspots`` (X4, X6), every ``docs`` (X22), every ``env`` (X7a), every ``tables``
+(X7c) and every ``links`` (X23), each answered whole from the local checkout; the
+brain is never asked. The rest goes through
 ``xray.local``, the same code the local server runs:
 
 1. fingerprint the checkout (cheap: no parsing) and ask the brain by fingerprint;
@@ -38,7 +39,16 @@ from mcp.types import CallToolResult, JSONRPCNotification, JSONRPCRequest, TextC
 from .proxy_auth import SessionTokens, brain_client
 from .proxy_session import CLIENT_GONE
 from .proxy_vault import _refused, _reply
-from .xray import brief, callers_tool, docs_tool, env_tool, extract, history_tool, local
+from .xray import (
+    brief,
+    callers_tool,
+    docs_tool,
+    env_tool,
+    extract,
+    history_tool,
+    local,
+    table_tool,
+)
 from .xray.links import tool as links_tool
 
 NAME = "code_xray"
@@ -48,6 +58,7 @@ CALLERS = "callers"  # likewise
 HISTORY = history_tool.ACTIONS  # likewise: X4 history, X6 blindspots
 DOCS = docs_tool.ACTIONS  # likewise: X22 docs
 ENV = env_tool.ACTIONS  # likewise: X7a env vars
+TABLES = table_tool.ACTIONS  # likewise: X7c DB tables
 LINKS = links_tool.ACTIONS  # likewise: X23 cross-repo links
 
 
@@ -58,7 +69,7 @@ def claims(msg) -> bool:
     params = msg.params or {}
     args = params.get("arguments") or {}
     if params.get("name") == NAME and args.get("action") in (
-        BRIEF, CALLERS, *HISTORY, *DOCS, *ENV, *LINKS,
+        BRIEF, CALLERS, *HISTORY, *DOCS, *ENV, *TABLES, *LINKS,
     ):  # fmt: skip
         return True
     return (
@@ -201,6 +212,10 @@ class XrayRelay:
         data = await _thread(env_tool.answer, args.get("path"), args.get("files"), _limit(args))
         return CallToolResult(content=[TextContent(type="text", text=json.dumps(data, indent=2))])
 
+    async def _tables(self, args: dict) -> CallToolResult:
+        data = await _thread(table_tool.answer, args.get("path"), args.get("files"), _limit(args))
+        return CallToolResult(content=[TextContent(type="text", text=json.dumps(data, indent=2))])
+
     async def _links(self, args: dict) -> CallToolResult:
         data = await _thread(links_tool.answer, args.get("path"), args.get("files"), _limit(args))
         return CallToolResult(content=[TextContent(type="text", text=json.dumps(data, indent=2))])
@@ -216,6 +231,8 @@ class XrayRelay:
             return await self._docs(args)
         if args.get("action") in ENV:
             return await self._env(args)
+        if args.get("action") in TABLES:
+            return await self._tables(args)
         if args.get("action") in LINKS:
             return await self._links(args)
         repo = await _thread(local.root, args.pop("path", None))

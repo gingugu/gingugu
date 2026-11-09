@@ -30,6 +30,7 @@ from . import (
     rank,
     scars,
     symbols,
+    table_hook,
 )
 from .hook_common import Graph, _claim, _show, _sweep
 from .scan import XrayError
@@ -265,6 +266,7 @@ def check(payload: dict, state_dir: Path) -> str | None:
                 + _outside_file(root, rel, state_dir)
                 + _docs_file(root, rel, state_dir)
                 + [ln for ln in [env_hook.file_line(root, rel, state_dir)] if ln]
+                + [ln for ln in [table_hook.file_line(root, rel, state_dir)] if ln]
             )
             if extra:  # a leaf has no neighbourhood, but its history still speaks
                 near = "\n".join([near or f"GINGUGU X-RAY: {_show(rel)}.", *extra])

@@ -29,6 +29,7 @@ from . import (
     literals,
     rank,
     symbols,
+    table_hook,
 )
 from .hook_common import _claim, _show
 from .lang.python import is_test
@@ -194,6 +195,7 @@ def check(payload: dict, state_dir: Path) -> str | None:
             outside = _outside(*target, state_dir, session_id)
             both = [*texts, *outside, *_docs(*target, state_dir, session_id)]
             both += env_hook.edit_lines(payload, *target, state_dir, session_id)
+            both += table_hook.edit_lines(payload, *target, state_dir, session_id)
             return "\n".join(["GINGUGU X-RAY after edit:", *both]) if both else None
         root, rel = target
         # The file is seen now, by whoever wrote it, in any X-ray language: the
@@ -202,6 +204,7 @@ def check(payload: dict, state_dir: Path) -> str | None:
         outside = _outside(root, rel, state_dir, session_id)  # any language: X23
         outside += _docs(root, rel, state_dir, session_id)  # X22
         outside += env_hook.edit_lines(payload, root, rel, state_dir, session_id)  # X7a
+        outside += table_hook.edit_lines(payload, root, rel, state_dir, session_id)  # X7c
         lines: list[str] = []
         news = _news(payload) if rel.endswith(".py") else None
         if news:
