@@ -875,6 +875,36 @@ both: env_map.read(budget_s=1.0); a file not reached keeps its cached entry or w
 MEMORY_XRAY_ENV=off silences every line
 ```
 
+**DB tables as edges (X7c, `xray/table_tool.py`).** `code_xray` `tables` / `gingugu xray
+tables` read `table_map.read` (no budget: every handled file) and answer locally:
+
+```
+files given -> per file: defines [{name, used_by: [...]}], drops [{name, used_by: [...]}],
+               uses [{name, defined_in: [path:line], dropped_in: [path:line]}]
+no files    -> every table {name, defines, uses, files, flag} (counts): 'defined nowhere here', 'dropped,
+               still used', 'used nowhere here' first, then by name, 'tests only' last;
+               limit capped at 200; text <= 8800 chars
+MEMORY_XRAY_TABLES=off -> ValueError; gingugu serve -> refused (the brain never reads a path)
+```
+
+The table map reaches the hooks the same way the env map does (this repo only, cached per file):
+
+```
+read hook (PostToolUse Read): a file's first read -> table_hook.file_line -> table_map.read
+    -> "Tables: defines A (used by x.py, y.py +N); uses B (defined in f:N), C (dropped in
+    g:M), D (defined nowhere here)" (defines first, 4 names at most, the file's own tables
+    not repeated as uses, code users before tests)
+edit note (PostToolUse Edit/Write/MultiEdit): table_hook.edit_lines -> tables in the new
+    text minus those in the old -> a use of a table defined nowhere here (only when the repo
+    defines at least one) or dropped here; an edit to a definition other files use
+    ("defines x, used by K other files"); a drop of a table other files still use;
+    claim xray-tables-edit per table per session, 3 at most
+both: table_map.read(budget_s=1.0); a file not reached keeps its cached entry or waits for
+    the next call; TableMap.complete is False while any file is unread, and both hooks then
+    say nothing; a file no reader handles skips the scan
+MEMORY_XRAY_TABLES=off silences every line
+```
+
 **Readers of a removed key (xray/literals, board d5639dd5).** The edit note also
 runs for any file type, on Edit/MultiEdit only (a Write has no old text):
 
