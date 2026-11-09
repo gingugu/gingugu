@@ -58,7 +58,7 @@ def kind(rel: str) -> str | None:
     """Which reader handles ``rel``, by name alone; None for anything else, and for
     every real dotenv file, so the caller never opens one."""
     base = _base(rel)
-    if base.startswith(".env"):
+    if base.lower().startswith(".env"):
         return "template" if base in TEMPLATES else None
     if base == "Dockerfile" or base.startswith("Dockerfile."):
         return "docker"
@@ -81,8 +81,10 @@ def _hits(patterns: tuple, line: str) -> list[tuple[int, str]]:
 
 
 def _add(out: Pairs, found: list[tuple[int, str]], number: int) -> None:
+    seen: set[str] = set()  # this line only: a whole-list check is quadratic per file
     for _, name in sorted(found):
-        if (name, number) not in out:
+        if name not in seen:
+            seen.add(name)
             out.append((name, number))
 
 

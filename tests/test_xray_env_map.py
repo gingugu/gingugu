@@ -192,3 +192,49 @@ def test_the_switch(monkeypatch):
     assert env_map.enabled() is False
     monkeypatch.setenv("MEMORY_XRAY_ENV", "on")
     assert env_map.enabled() is True
+
+
+# --- review fixes: linear scan, a budget that converges, capped cache, case-blind gate ----
+
+
+def test_a_file_full_of_reads_scans_in_linear_time():
+    import time
+
+    text = 'os.getenv("AB")\n' * 15000
+    t = time.monotonic()
+    reads, _ = env_map.scan_text("big.py", text)
+    assert time.monotonic() - t < 1.0 and len(reads) == 15000
+
+
+def test_past_the_budget_a_cold_read_reaches_nothing_and_a_full_one_everything(repo, state):
+    cold = env_map.read(repo, state, budget_s=0)
+    assert cold.reads == {} and cold.complete is False
+    full = env_map.read(repo, state)
+    assert full.reads["DB_URL"] and full.complete is True
+
+
+def test_past_the_budget_a_file_keeps_its_cached_entry(repo, state):
+    env_map.read(repo, state)
+    warm = env_map.read(repo, state, budget_s=0)
+    assert warm.reads["DB_URL"] == [("app/settings.py", 2)]
+    assert warm.complete is True  # every file answered, if from the cache
+
+
+def test_the_hooks_stay_silent_on_a_partial_map(repo, state, monkeypatch):
+    from gingugu.xray import env_hook
+
+    monkeypatch.setattr(env_hook, "BUDGET_S", 0)
+    assert env_hook.file_line(repo, "cmd/main.go", state) is None  # not "set nowhere"
+
+
+def test_a_cached_list_past_the_cap_is_rescanned(repo, state, monkeypatch):
+    env_map.read(repo, state)
+    monkeypatch.setattr(env_map, "MAX_NAMES", 0)
+    (cache,) = state.glob("xray-env-*.json")
+    old, _ = env_map._load(cache)
+    assert "app/settings.py" not in old  # 3 reads > a cap of 0: dropped, rescanned
+
+
+@pytest.mark.parametrize("rel", [".ENV", ".Env.local", "conf/.ENV.yml", ".ENVRC"])
+def test_the_dotenv_gate_ignores_case(rel):
+    assert env_map.kind(rel) is None

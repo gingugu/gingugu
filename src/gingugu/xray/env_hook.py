@@ -17,6 +17,7 @@ from .hook_common import _claim, _show
 SHOWN = 4  # names in a read-hook line
 LOCS = 2  # locations per name
 MAX_EDIT = 3
+BUDGET_S = 1.0  # a hook's env scan; the cache keeps what it reached
 
 
 def _is_test(path: str) -> bool:
@@ -47,7 +48,9 @@ def file_line(root: Path, rel: str, state_dir: Path) -> str | None:
     try:
         if not env_map.enabled() or env_map.kind(rel) is None:
             return None  # a file no reader handles names nothing: skip the repo scan
-        m = env_map.read(root, state_dir)
+        m = env_map.read(root, state_dir, budget_s=BUDGET_S)
+        if not m.complete:
+            return None  # a partial map would call a set name 'set nowhere'
         reads = [_part(n, m.sets.get(n, []), "set in") for n in env_map.names_in(m.reads, rel)]
         sets = [_part(n, m.reads.get(n, []), "read by") for n in env_map.names_in(m.sets, rel)]
         total = len(reads) + len(sets)
@@ -94,7 +97,9 @@ def edit_lines(payload: dict, root: Path, rel: str, state_dir: Path, session_id:
         fresh = [n for n in dict.fromkeys(added) if n not in known]
         if not fresh:
             return []
-        m = env_map.read(root, state_dir)
+        m = env_map.read(root, state_dir, budget_s=BUDGET_S)
+        if not m.complete:
+            return []  # 'set nowhere' needs every file read
         out: list[str] = []
         for name in fresh:
             if name in m.sets:

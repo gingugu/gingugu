@@ -14,6 +14,7 @@ it is read as untrusted input, and a malformed entry is dropped and re-scanned.
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 from typing import NamedTuple
 
@@ -34,6 +35,7 @@ Refs = dict[str, list[tuple[str, int]]]
 class EnvMap(NamedTuple):
     reads: Refs
     sets: Refs
+    complete: bool = True  # False: the budget ran out before every file was read
 
 
 def enabled() -> bool:
@@ -51,7 +53,7 @@ def names_in(refs: Refs, rel: str) -> list[str]:
 
 
 def _pairs(value: object) -> list[list] | None:
-    if not isinstance(value, list):
+    if not isinstance(value, list) or len(value) > MAX_NAMES:
         return None
     for item in value:
         if not (isinstance(item, list) and len(item) == 2 and valid_name(item[0])):
@@ -111,8 +113,10 @@ def _entry(root: Path, rel: str, old: dict) -> dict | None:
     }
 
 
-def read(root: Path, state_dir: Path) -> EnvMap:
-    """The env map for the checkout at ``root``, from the cache where it holds."""
+def read(root: Path, state_dir: Path, *, budget_s: float | None = None) -> EnvMap:
+    """The env map for the checkout at ``root``, from the cache where it holds.
+    With ``budget_s``, files not reached in time keep their cached entry, or wait
+    for the next call; what was read is written either way, so the cache fills."""
     proc = scan.git(
         root, "ls-files", "-z", "--cached", "--others", "--exclude-standard", timeout=GIT_TIMEOUT_S
     )
@@ -122,7 +126,16 @@ def read(root: Path, state_dir: Path) -> EnvMap:
     cache = state_dir / f"xray-env-{hook_common._digest(root)}.json"
     old, raw = _load(cache)
     files: dict[str, dict] = {}
+    deadline = None if budget_s is None else time.monotonic() + budget_s
+    complete = True
+    root = root.resolve()  # once, not per file
     for rel in names:
+        if deadline is not None and time.monotonic() > deadline:
+            if rel in old:
+                files[rel] = old[rel]  # unchecked this call
+            else:
+                complete = False
+            continue
         entry = _entry(root, rel, old)
         if entry is not None:
             files[rel] = entry
@@ -135,4 +148,4 @@ def read(root: Path, state_dir: Path) -> EnvMap:
         for into, key in ((reads, "reads"), (sets, "sets")):
             for name, line in e[key]:
                 into.setdefault(name, []).append((rel, line))
-    return EnvMap(reads, sets)
+    return EnvMap(reads, sets, complete)
