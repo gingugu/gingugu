@@ -1,127 +1,8 @@
 # Project Status
 
-_Last updated: 2026-11-06 (plain `gingugu init` refreshes a stock old hook; 0.48.0 released; the CLI is a Win95 keygen with a techno loop; memory_stats names the vault's machine; board mail reaches sibling sessions on one machine; X-ray lists who reads a removed key; deletes need no terminal + the big-delete gate; board claims record the claiming session + claim nudges, migration 023; dev tools a dependency group; X23 hook lines, named-repo recall, generated-code skip and links --warm - 0.47.0; X23 cross-repo links - 0.46.0; startup contract stops arming the board watcher; X22 docs map; minions never spawn minions - 0.44.0; open board tasks stay unread - 0.43.1)_
+_Last updated: 2026-11-09 (board resynced after 0.48.1: the shipped 0.47-0.48 entries moved from In Flight to Recently Completed; row 1 lists X22, X23 and removed-key readers; row 1a still open)_
 
 ## In Flight
-
-**Plain `gingugu init` refreshes a stock old hook (2026-11-06, branch
-`fix/init-refresh-stock-hooks`).** Rolling out 0.48.0 showed `init` skipping every
-existing hook ("exists; use --force"), so the new PreToolUse doorway reached no
-existing repo without `--force`, which rewrites every hook. New
-`bootstrap/shipped.py` records the sha256 of every shipped version of the 8 hook
-templates. `write_file` refreshes a file matching an older version (it holds nothing
-of the user's; a .bak is still written) and skips anything else. A pinned-hash test
-fails whenever a template changes until the outgoing hash moves to `previous`. The 7
-wired repos across both Macs got the 0.48.0 doorway by a one-file copy at rollout.
-
-**The CLI is a Win95 keygen (2026-11-06, branch `feature/cli-keygen`, stacked on
-`fix/stats-vault-per-machine`).** The human-facing commands were plain text. New
-`gingugu.tui` package (replaces `bootstrap/theme.py`): `caps` detects truecolor -> 256 ->
-16 -> plain and unicode -> ASCII; `report()` plays the keygen window, progress bar,
-LEVEL-grouped results and the score/achievement finale for `init` / `harness`; `run()`
-wraps `remote`, `credential`, `token`, `promote`, `embed` and `scripts/release.py` with an
-intro and an exit-code outro; `gingugu party` (alias `iddqd`) is the cracktro. `synth` renders an original
-8-bar 140 BPM loop deterministically to the user cache dir (`GINGUGU_CACHE_DIR`
-overrides) and `audio.Music` plays it
-(afplay / paplay / aplay / winsound), killed with the command; on whenever the show
-animates, `GINGUGU_QUIET=1` mutes. Machine paths never import it
-(`test_tui_machine_paths.py`: a static import check plus six hook entry points
-byte-identical under a pty). Demo: `scripts/cli_demo.py`. Checked on macOS
-(pty runs, and the maintainer heard it live); Windows consoles and Linux audio players
-are covered by tests only.
-
-**memory_stats names the vault's machine (2026-11-06, branch
-`fix/stats-vault-per-machine`, stacked on `fix/board-same-machine-sessions`).**
-Sessions on a machine with no vaulted credentials kept reading `credentials.total: 0`
-as data loss. New `machine.py`: `name()` (sanitised short hostname, moved from
-`remote._default_name` so the login token name, the board's machine and stats agree)
-and `describe(health)`, which stamps the block with `machine` and adds a zero-count
-`note`. Both local `stats.py` and the remote-mode `LocalVault.health` / `patch_stats`
-go through it; the `memory_stats` docstring says the count is this machine's vault.
-Tests: `test_stats_vault_machine.py` plus an empty-vault case through the real proxy.
-
-**Board mail reaches sibling sessions on one machine (2026-11-06, branch
-`fix/board-same-machine-sessions`, stacked on `feature/xray-key-readers`, board
-5d5854a0).** Two sessions of one persona on the same machine never received each
-other's posts: `_inbox_where` counted an own-persona post as mail only from another
-machine. It now also counts one whose `author_agent` and the reader's agent session are
-both known and different; `is_me` compares persona, machine and session (each only when
-both sides are known), so `_reply_to` / `_route` send a reply to a sibling's post back to
-that sibling. The writing session never sees its own post, and a reader with no session
-id keeps the old rule (a watcher started by a session reads the same
-`CLAUDE_CODE_SESSION_ID`, so it shares that session's identity and never echoes it).
-Every inbox surface already passed the reader's session. Read receipts stay per persona. Tests: `test_board_sibling_sessions.py` plus a
-real-HTTP `/hook/inbox` case.
-
-**X-ray lists who reads a removed key (2026-11-05, branch `feature/xray-key-readers`,
-stacked on `fix/agent-confirm-deletes`, board d5639dd5).** Nothing imports a data
-contract, so renaming the key of an emitted JSON line left its readers (tests asserting
-`line["status"]`, runbooks, monitor queries on `@status:error`) invisible to the import
-graph. The post-edit note (`xray/edit_note.py`, new `xray/literals.py`) now lists who
-still reads a KEY an `Edit`/`MultiEdit` removed: a quoted literal (`"status"` /
-`'status'`) no new string still quotes, or an unquoted key (Python kwarg `status=`,
-TS/JS object key `status:`). One `git grep -n -I -F --untracked` per key (1s timeout),
-word-boundary checked; delimited forms only (`"x"`, `'x'`, `` `x` ``, `@x` facet, and
-`x:` outside non-test code). Unquoted keys search everything but non-test code, not
-other code (the symbol graph covers that). Excludes the edited file, generated files and
-lockfiles. Labelled `Text matches, not import edges`; 5 named plus `(+N more)`; over
-`TOO_COMMON = 40` files it says `too common to list` with the count (40 measured on
-gingugu: p50 5, p90 28, p95 44 of 150 sampled quoted keys). At most 3 keys per edit, once
-per (session, repo), off with `MEMORY_XRAY_TRIPWIRE`, never raises. Measured 26-111ms per
-key on gingugu. `Edit`/`MultiEdit` only, after the edit (a `Write` has no old text).
-4041 tests passed.
-
-**Deletes need no terminal; the big-delete gate (2026-11-05, branch
-`fix/agent-confirm-deletes`, board task 0b9ea472).** Every destructive tool
-(`memory_forget` hard delete, `memory_consolidate` dropping originals,
-`memory_namespaces` delete, `memory_import` replace, `credential_delete`) takes
-`confirm`: `true` is the confirmation for an ordinary delete, so a client with
-no MCP dialog (the VS Code extension) no longer dead-ends into a terminal
-command. A big delete - any namespace delete, any credential delete, a
-consolidate or replace-import over 10 memories, hard deletes past 10 in one
-session - goes through the big-delete gate (`destructive.py`): gingugu's
-PreToolUse hook answers `ask`, so Claude Code's own permission prompt shows in
-every mode (measured headless: an `ask` beats an allow rule and holds in auto
-and bypass, becoming a deny when nobody can answer; checked interactively in
-bypass mode), and leaves a single-use approval that the local server, or the
-proxy in remote mode (`proxy_gate.py`), requires (hard deletes past 10 are gated
-by the hook alone: it asks, nothing is checked server-side). The PreToolUse doorway now
-passes deletes through to the package. Forks (`agent_type: "fork"`) get the
-main thread's rights in the minion fence, and the harness CLAUDE.md block names
-forks as the parallel path for hard work. New `scripts/live_rig.py` runs a
-checkout's doorway, hook and server live in Claude Code on a scratch brain.
-Daily-use sweep: no other path dead-ends into a terminal (the remaining
-`run gingugu ...` messages are setup or recovery). 3956 tests passed. Existing
-projects pick up the new doorway on `gingugu init`.
-
-**Board claims say which session holds a task, and every surface asks for one
-(2026-11-05, branch `feature/board-claim-identity`, unreleased).** A task one Beepboop
-session was building stayed open, so a second session was shown it as new work: nothing
-asked the working session to claim it, and a claim named only the persona. Migration 023
-adds nullable `board_posts.claimed_origin` / `claimed_agent`; a twin session's claim takes
-the task out of the reader's inbox; a losing claim names the holder; re-claiming from the
-holding session is a no-op; `done` stays by persona. Claim/done moved to `board_tasks.py`
-(`board.py` re-exports). The prompt hook's board mail, `board` `read` (`next`), the startup
-contract and the protocol rules all say to claim before working, including a task handed
-over in chat. 3840 tests passed; four mutants killed.
-
-**X23 hook lines, named-repo recall and read speed (2026-11-03, branch
-`feature/xray-links-recall`; RELEASED in 0.47.0 with #178; cold reads on worker processes - 48 checkouts ~9s, branch `feature/xray-links-pool`).** On top of 0.46.0. Recall: a sibling
-repo named outright (bare hyphenated name, `owner/name`, GitHub URL; a `releases/download/<tag>/`
-asset is a `pin`, an ArgoCD `repoURL` a `deploy`) is a whole-repo link of the file's kind
-(`docs`, `ci`, new kind `mention`) flagged `named`, joined only when it names a checkout read
-here; prose citations read through markdown emphasis; double-backtick spans count as literals.
-Measured against a hand-made map of a real multi-repo ecosystem (26 edges between checkouts on
-that machine): edge-level recall 11/26 -> 21/26. Perf on 48 checkouts: warm read 9.0s -> 2.9s,
-join 3.0s -> 0.7s (#177, merged). Cold read 56s -> 19.5s on branch `feature/xray-links-cold`:
-generated code skipped by name and head marker (97% of one .NET repo's C# was EF migrations),
-cheaper line guards, repo-name candidates pruned to real checkouts before the caps (a big
-repo's hyphen words had crowded its real names out), generic route tails need a host, and
-`gingugu xray links --warm` run by `fleet.py upgrade` after install. Recall held at 21/26. Hooks: every links read writes `xray-links-in-<digest>.json`
-per checkout read; the read hook's map and a file's first read, and the edit note (any file
-type), name the outside repos from it; `MEMORY_XRAY_LINKS=off` silences them. New files:
-`links/mentions_repos.py`, `inbound.py`, `cache.py`, `join_index.py`. The suite's autouse
-fixture points `MEMORY_XRAY_REPOS` at an empty folder. 3812 tests passed.
 
 **Codebase X-ray in every language we can parse - phase 1 MERGED (#150), released in
 0.30.0; phases 2 and 3 not started.** Extraction runs through one adapter per language (`xray/lang/`): Python stays on `ast`;
@@ -144,8 +25,9 @@ the line in 0.36.0 (#161); X15 writes from any tool RELEASED in 0.37.0 (#163); X
 RELEASED in 0.38.0 (#164); X17 symbol graph (Python)
 RELEASED in 0.39.0 (#165); X-ray tuned for the agent
 RELEASED in 0.40.0 (#166); X3 scar tissue RELEASED in 0.41.0 (#168); X4 history + X6
-blind spots RELEASED in 0.42.0 (#170); X22 docs map RELEASED in 0.45.0; X21 symbols on the
-brain owed** (2026-10-30). The
+blind spots RELEASED in 0.42.0 (#170); X22 docs map RELEASED in 0.45.0 (#174); X23 cross-repo links RELEASED in 0.46.0 (#176),
+in the hooks in 0.47.0 (#177/#178); removed-key readers in the edit note RELEASED in
+0.48.0 (#182); X22 hook surfaces not built; X21 symbols on the brain owed** (2026-10-30). The
 end goal was restated: a sophisticated map before any work starts, so the map
 reaches the agent on reads and on any write, not only through the edit tools. New
 items X14-X21 (section 19); build order X14, X19, X20, X15, X16, X17, X3, then X4/X6.
@@ -204,6 +86,121 @@ mid-capture; `overview.top` and the payload's `skipped` are bounded but not
 paged; a git `core.fsmonitor`-style check for other config that runs code.
 
 ## Recently Completed
+
+**Plain `gingugu init` refreshes a stock old hook (2026-11-06, #186; RELEASED in 0.48.1).** Rolling out 0.48.0 showed `init` skipping every
+existing hook ("exists; use --force"), so the new PreToolUse doorway reached no
+existing repo without `--force`, which rewrites every hook. New
+`bootstrap/shipped.py` records the sha256 of every shipped version of the 8 hook
+templates. `write_file` refreshes a file matching an older version (it holds nothing
+of the user's; a .bak is still written) and skips anything else. A pinned-hash test
+fails whenever a template changes until the outgoing hash moves to `previous`. The 7
+wired repos across both Macs got the 0.48.0 doorway by a one-file copy at rollout.
+
+**The CLI is a Win95 keygen (2026-11-06, #185; RELEASED in 0.48.0).** The human-facing commands were plain text. New
+`gingugu.tui` package (replaces `bootstrap/theme.py`): `caps` detects truecolor -> 256 ->
+16 -> plain and unicode -> ASCII; `report()` plays the keygen window, progress bar,
+LEVEL-grouped results and the score/achievement finale for `init` / `harness`; `run()`
+wraps `remote`, `credential`, `token`, `promote`, `embed` and `scripts/release.py` with an
+intro and an exit-code outro; `gingugu party` (alias `iddqd`) is the cracktro. `synth` renders an original
+8-bar 140 BPM loop deterministically to the user cache dir (`GINGUGU_CACHE_DIR`
+overrides) and `audio.Music` plays it
+(afplay / paplay / aplay / winsound), killed with the command; on whenever the show
+animates, `GINGUGU_QUIET=1` mutes. Machine paths never import it
+(`test_tui_machine_paths.py`: a static import check plus six hook entry points
+byte-identical under a pty). Demo: `scripts/cli_demo.py`. Checked on macOS
+(pty runs, and the maintainer heard it live); Windows consoles and Linux audio players
+are covered by tests only.
+
+**memory_stats names the vault's machine (2026-11-06, #184; RELEASED in 0.48.0).**
+Sessions on a machine with no vaulted credentials kept reading `credentials.total: 0`
+as data loss. New `machine.py`: `name()` (sanitised short hostname, moved from
+`remote._default_name` so the login token name, the board's machine and stats agree)
+and `describe(health)`, which stamps the block with `machine` and adds a zero-count
+`note`. Both local `stats.py` and the remote-mode `LocalVault.health` / `patch_stats`
+go through it; the `memory_stats` docstring says the count is this machine's vault.
+Tests: `test_stats_vault_machine.py` plus an empty-vault case through the real proxy.
+
+**Board mail reaches sibling sessions on one machine (2026-11-06, #183, board
+5d5854a0; RELEASED in 0.48.0).** Two sessions of one persona on the same machine never received each
+other's posts: `_inbox_where` counted an own-persona post as mail only from another
+machine. It now also counts one whose `author_agent` and the reader's agent session are
+both known and different; `is_me` compares persona, machine and session (each only when
+both sides are known), so `_reply_to` / `_route` send a reply to a sibling's post back to
+that sibling. The writing session never sees its own post, and a reader with no session
+id keeps the old rule (a watcher started by a session reads the same
+`CLAUDE_CODE_SESSION_ID`, so it shares that session's identity and never echoes it).
+Every inbox surface already passed the reader's session. Read receipts stay per persona. Tests: `test_board_sibling_sessions.py` plus a
+real-HTTP `/hook/inbox` case.
+
+**X-ray lists who reads a removed key (2026-11-05, #182, board d5639dd5;
+RELEASED in 0.48.0).** Nothing imports a data
+contract, so renaming the key of an emitted JSON line left its readers (tests asserting
+`line["status"]`, runbooks, monitor queries on `@status:error`) invisible to the import
+graph. The post-edit note (`xray/edit_note.py`, new `xray/literals.py`) now lists who
+still reads a KEY an `Edit`/`MultiEdit` removed: a quoted literal (`"status"` /
+`'status'`) no new string still quotes, or an unquoted key (Python kwarg `status=`,
+TS/JS object key `status:`). One `git grep -n -I -F --untracked` per key (1s timeout),
+word-boundary checked; delimited forms only (`"x"`, `'x'`, `` `x` ``, `@x` facet, and
+`x:` outside non-test code). Unquoted keys search everything but non-test code, not
+other code (the symbol graph covers that). Excludes the edited file, generated files and
+lockfiles. Labelled `Text matches, not import edges`; 5 named plus `(+N more)`; over
+`TOO_COMMON = 40` files it says `too common to list` with the count (40 measured on
+gingugu: p50 5, p90 28, p95 44 of 150 sampled quoted keys). At most 3 keys per edit, once
+per (session, repo), off with `MEMORY_XRAY_TRIPWIRE`, never raises. Measured 26-111ms per
+key on gingugu. `Edit`/`MultiEdit` only, after the edit (a `Write` has no old text).
+4041 tests passed.
+
+**Deletes need no terminal; the big-delete gate (2026-11-05, #181, board task 0b9ea472;
+RELEASED in 0.48.0; the hook prompt live-checked in the terminal 2026-11-05 and in the
+VS Code extension 2026-11-09).** Every destructive tool
+(`memory_forget` hard delete, `memory_consolidate` dropping originals,
+`memory_namespaces` delete, `memory_import` replace, `credential_delete`) takes
+`confirm`: `true` is the confirmation for an ordinary delete, so a client with
+no MCP dialog (the VS Code extension) no longer dead-ends into a terminal
+command. A big delete - any namespace delete, any credential delete, a
+consolidate or replace-import over 10 memories, hard deletes past 10 in one
+session - goes through the big-delete gate (`destructive.py`): gingugu's
+PreToolUse hook answers `ask`, so Claude Code's own permission prompt shows in
+every mode (measured headless: an `ask` beats an allow rule and holds in auto
+and bypass, becoming a deny when nobody can answer; checked interactively in
+bypass mode), and leaves a single-use approval that the local server, or the
+proxy in remote mode (`proxy_gate.py`), requires (hard deletes past 10 are gated
+by the hook alone: it asks, nothing is checked server-side). The PreToolUse doorway now
+passes deletes through to the package. Forks (`agent_type: "fork"`) get the
+main thread's rights in the minion fence, and the harness CLAUDE.md block names
+forks as the parallel path for hard work. New `scripts/live_rig.py` runs a
+checkout's doorway, hook and server live in Claude Code on a scratch brain.
+Daily-use sweep: no other path dead-ends into a terminal (the remaining
+`run gingugu ...` messages are setup or recovery). 3956 tests passed. Existing
+projects pick up the new doorway on `gingugu init`.
+
+**Board claims say which session holds a task, and every surface asks for one
+(2026-11-05, #180; RELEASED in 0.48.0).** A task one Beepboop
+session was building stayed open, so a second session was shown it as new work: nothing
+asked the working session to claim it, and a claim named only the persona. Migration 023
+adds nullable `board_posts.claimed_origin` / `claimed_agent`; a twin session's claim takes
+the task out of the reader's inbox; a losing claim names the holder; re-claiming from the
+holding session is a no-op; `done` stays by persona. Claim/done moved to `board_tasks.py`
+(`board.py` re-exports). The prompt hook's board mail, `board` `read` (`next`), the startup
+contract and the protocol rules all say to claim before working, including a task handed
+over in chat. 3840 tests passed; four mutants killed.
+
+**X23 hook lines, named-repo recall and read speed (2026-11-03, #177 + #178; RELEASED in 0.47.0; cold reads on worker processes - 48 checkouts ~9s - #179, RELEASED in 0.47.1).** On top of 0.46.0. Recall: a sibling
+repo named outright (bare hyphenated name, `owner/name`, GitHub URL; a `releases/download/<tag>/`
+asset is a `pin`, an ArgoCD `repoURL` a `deploy`) is a whole-repo link of the file's kind
+(`docs`, `ci`, new kind `mention`) flagged `named`, joined only when it names a checkout read
+here; prose citations read through markdown emphasis; double-backtick spans count as literals.
+Measured against a hand-made map of a real multi-repo ecosystem (26 edges between checkouts on
+that machine): edge-level recall 11/26 -> 21/26. Perf on 48 checkouts: warm read 9.0s -> 2.9s,
+join 3.0s -> 0.7s (#177, merged). Cold read 56s -> 19.5s (#178, released in 0.47.0):
+generated code skipped by name and head marker (97% of one .NET repo's C# was EF migrations),
+cheaper line guards, repo-name candidates pruned to real checkouts before the caps (a big
+repo's hyphen words had crowded its real names out), generic route tails need a host, and
+`gingugu xray links --warm` run by `fleet.py upgrade` after install. Recall held at 21/26. Hooks: every links read writes `xray-links-in-<digest>.json`
+per checkout read; the read hook's map and a file's first read, and the edit note (any file
+type), name the outside repos from it; `MEMORY_XRAY_LINKS=off` silences them. New files:
+`links/mentions_repos.py`, `inbound.py`, `cache.py`, `join_index.py`. The suite's autouse
+fixture points `MEMORY_XRAY_REPOS` at an empty folder. 3812 tests passed.
 
 **Startup contract stops arming the board watcher (2026-11-03,
 fix/no-idle-board-watch).** Measured from local transcripts: four Claude Code
@@ -1882,7 +1879,7 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-## The Board (current: 2026-11-01)
+## The Board (current: 2026-11-09)
 
 **Resequenced 2026-09-29 into build order.** The table below is the order the
 work gets done in, top first; `#` is that position. Item numbers used to be
@@ -1946,10 +1943,12 @@ every row moved up one.
 
 **2026-11-01:** reordered to match where the work actually goes. X-ray moves to row 1, with row 1a naming the X-item in progress (X3; then X4 + X6 once X3 shipped in 0.41.0). The calibration ledger moves to 2, because the lean X11 ledger already feeds it. Governance bands, the paraphrase set, the referee, the secrets broker and the flight recorder keep their relative order below it. The Pi bootstrap (was row 7) comes off the board: gingugu is built for its owner, so it stays a local script under the gitignored `deploy/pi/`. What is still manual there: SSH hardening, the per-machine mint key (`gingugu token ssh-mint --name`), `keyrings.alt`, credentials off in `/etc/gingugu.env`, and a stage 4 that predates `gingugu remote` + the proxy.
 
+**2026-11-09:** resynced, no reorder. Since 2026-11-01, under row 1: X22 docs map (0.45.0, #174), X23 cross-repo links (0.46.0, #176; hook lines and named-repo recall 0.47.0, #177/#178; worker-process cold reads 0.47.1, #179) and removed-key readers in the edit note (0.48.0, #182). Off the board: the big-delete gate (#181), board claim identity (#180, migration 023), sibling-session board mail (#183), the vault's machine in `memory_stats` (#184), the keygen CLI (#185), all 0.48.0, and init refreshing stock old hooks (#186, 0.48.1). Row 1a still names no X-item.
+
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival shipped in 0.32.0; X19 X-ray brief shipped in 0.34.0; X20 brief on the board shipped in 0.35.0 (repo on the line in 0.36.0); X15 writes from any tool shipped in 0.37.0; X16 incremental refresh shipped in 0.38.0; X17 symbol graph (Python) shipped in 0.39.0; X-ray tuned for the agent, with the lean X11 test ledger, shipped in 0.40.0; X3 scar tissue shipped in 0.41.0; X4 history + X6 blind spots shipped in 0.42.0 (X4 drift owed); X21 symbols on the brain owed | 19 | Every sail since 2026-10-26 has gone here. A 21-part roadmap (X1-X21) in its section below |
-| 1a | **Next X-item not yet chosen** - X7 edges beyond imports and X8 dependency X-ray lead the build order; X4 drift is owed | 19 | X4 + X6 shipped in 0.42.0. This row names whichever X-item is in progress and moves on when it ships |
+| 1 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival shipped in 0.32.0; X19 X-ray brief shipped in 0.34.0; X20 brief on the board shipped in 0.35.0 (repo on the line in 0.36.0); X15 writes from any tool shipped in 0.37.0; X16 incremental refresh shipped in 0.38.0; X17 symbol graph (Python) shipped in 0.39.0; X-ray tuned for the agent, with the lean X11 test ledger, shipped in 0.40.0; X3 scar tissue shipped in 0.41.0; X4 history + X6 blind spots shipped in 0.42.0 (X4 drift owed); X22 docs map shipped in 0.45.0 (hook surfaces not built); X23 cross-repo links shipped in 0.46.0, in the hooks in 0.47.0; removed-key readers in the edit note shipped in 0.48.0; X21 symbols on the brain owed | 19 | Every sail since 2026-10-26 has gone here. A 21-part roadmap (X1-X21) in its section below |
+| 1a | **Next X-item not yet chosen** - X22 hook surfaces (edit note, Bash X-ray, read hook) lead the build order, then X7 edges beyond imports and X8 dependency X-ray; X4 drift is owed | 19 | X22 shipped in 0.45.0 and X23 in 0.46.0-0.47.1. This row names whichever X-item is in progress and moves on when it ships |
 | 2 | **A calibration ledger** | 14 | New tables, so a migration. Follows X3: the lean X11 ledger (0.40.0) already records predictions, so it scores real data from day one |
 | 3 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
 | 4 | **Paraphrase question set + lexical/semantic arbitration** - labels now recorded at write time (`query_acts`, migration 022, released in 0.43.0); collect, then measure | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
@@ -2653,7 +2652,7 @@ read never fires, and a write through the shell bypasses X-ray entirely. X1-X13
 describe what is stored; X14-X18 add how the map reaches the agent, how it
 stays current, and how it is seen.
 
-**Build order:** X14, X19, X20, X15, X16, X17 (all shipped by 0.40.0), X3 (0.41.0), X4/X6 (0.42.0; X4 drift owed), X22 docs map (0.45.0; hook surfaces next), then X7/X8, with X21 no later
+**Build order:** X14, X19, X20, X15, X16, X17 (all shipped by 0.40.0), X3 (0.41.0), X4/X6 (0.42.0; X4 drift owed), X22 docs map (0.45.0; hook surfaces next), X23 cross-repo links (0.46.0; hook surfaces 0.47.0), then X7/X8, with X21 no later
 than the first of X7/X9 that needs symbols on the brain. X18 ships in
 slices alongside them. IDs are stable references, not the order.
 
@@ -2662,7 +2661,7 @@ slices alongside them. IDs are stable references, not the order.
 | # | Sub-item | Reuses | Notes |
 |---|---|---|---|
 | X1 | **Blast radius** (SHIPPED in 0.29.0, #139) - persisted import graph keyed by repo + commit; the agent builds or refreshes it when missing or stale; spreading activation over reverse imports, ranked by directed PageRank | dream graph math, spreading activation | The foundation. Persist outside `memories` so the store's own graph is not flooded |
-| X2 | **Tripwire on edit (SHIPPED in 0.29.0, #142)** - a hook that names a file's dependents, top ranked first, before the edit lands | tripwires, hooks | Since the X-ray tuning only a blind edit (an imported file this session never read or wrote) is denied, once, with direct importers, reach and nearest tests; an informed edit gets the post-edit callers note instead. Own switch `MEMORY_XRAY_TRIPWIRE` |
+| X2 | **Tripwire on edit (SHIPPED in 0.29.0, #142)** - a hook that names a file's dependents, top ranked first, before the edit lands | tripwires, hooks | Since the X-ray tuning only a blind edit (an imported file this session never read or wrote) is denied, once, with direct importers, reach and nearest tests; an informed edit gets the post-edit callers note instead; since 0.48.0 (#182) that note also lists who still reads a key the edit removed (text matches, not import edges). Own switch `MEMORY_XRAY_TRIPWIRE` |
 | X3 | **Scar tissue (SHIPPED in 0.41.0, #168)** - link memories (bugs, decisions, gotchas) to the files they are about; a first Read and a blind-edit deny surface both what depends on the file and what it has cost before | memory store, FTS5, X14 read hook, X2 tripwire | The part no code-analysis tool can have, because none holds the history. Derived at read time, never stored: the brain FTS-matches the file's basename in the project namespace and the client resolves the hits against the checkout's source files, so there is no migration. Own switch `MEMORY_XRAY_SCARS` |
 | X4 | **History as a second graph (coupling + hotspots SHIPPED in 0.42.0, #170; drift not built)** - co-change coupling (files that change together without importing each other), churn x centrality x authors as hotspots, per-commit X-ray diffs as architectural drift | git log | `code_xray` `history`, `gingugu xray history`, the read line `Changes with (no import):` (`MEMORY_XRAY_HISTORY`). Code-maat's defaults; last 1,000 non-merge commits, cached by HEAD, client only. Drift needs the import graph of past trees (extraction reads only the working tree), and the nightly dream pass cannot read a checkout (see X16) |
 | X5 | **Module boundaries** - communities that hold up on import graphs | dream clusters | Label propagation fails as-is (see above); needs a decided approach, not a knob |
@@ -2682,7 +2681,7 @@ slices alongside them. IDs are stable references, not the order.
 | X19 | **X-ray brief (SHIPPED in 0.34.0, #157)** - the changed files by rank with importer counts, plus their combined blast (code and candidate tests), for an agent that fires no hooks | X1, X14 graph cache | `code_xray` `brief` (`range`, `files`, `path`) and `gingugu xray brief [--range R \| --files a,b] [--path P] [--json]`. Computed on the caller's machine from the hook graph cache; nothing stored, the brain never asked; `gingugu serve` refuses it, the proxy answers it locally. Compact `text` <= 8800 chars, for reviews, handoffs and `board watch --exec`. `xray/brief.py`, `xray_cli.py` |
 | X20 | **Brief on the board (RELEASED in 0.35.0)** - a handoff carries its X-ray brief without anyone asking. Why next: the agents X19 is for fire no hooks, so a brief they must request is a brief they rarely see | X19, agent board | When a board post names a range (`xray: <range>`), the RECEIVING side renders `xray brief` for it and attaches the text: the prompt hook's board mail (Claude Code) and `board watch --exec` (Codex). Rendered on the receiver's machine from its own checkout; the post itself carries only the ref, never paths or the brief. BUILT as a line of its own `xray: <range>` in the body: board mail appends at most one per prompt (<= 3500 chars, the prompt's cwd); `board watch` adds an `xray` field, appends to `text` and sets `GINGUGU_POST_XRAY` (<= 3 per batch, the watcher's cwd). Same range gate as `brief`, ref <= 200 chars. Sender nudge: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line (`xray/board_nudge.py`). A receiver with no cwd or outside a repo gets one line naming `gingugu xray brief --range <ref>` (0.35.2). Part 2: `xray: <repo> <range>` names the repo, found locally via `xray/repo_id` (0.36.0). Switch `MEMORY_XRAY_BOARD`. `xray/board_brief.py` |
 | X22 | **Docs map (SHIPPED in 0.45.0)** - which docs cite a changed file, here and in sibling checkouts: where the runbooks live and which ones a change touches | X3 matcher, X19 brief | `code_xray` `docs`, `gingugu xray docs`, and two brief sections (`Docs citing the changed files:`, `Docs still citing a deleted or renamed file:`). A citation is a path mention that resolves to exactly one repo file; a sibling doc counts only repo-qualified paths (`name/path`, `owner/name/path`), GitHub links to this repo and prose placing a path in it. Client only, no migration, `MEMORY_XRAY_DOCS`. Hook surfaces (edit note, Bash X-ray, read hook) not built yet |
-| X23 | **Cross-repo links (SHIPPED in 0.46.0)** - which other checkouts lean on this one, by names the code already uses (hosts, routes, images, packages, IaC resources, CI checkouts, `repo@sha` cites), and the ripple of a change across repos | X22 sibling discovery, X19 brief | `code_xray` `links`, `gingugu xray links`, and two brief sections (`Other repos leaning on these files`, `Ripple across repos`). Zero config: no map file in any repo. Each link has file:line evidence, certain or flagged. Client only, no migration, `MEMORY_XRAY_LINKS`. Hook surfaces (read hook map and first-read lines, edit note) and named-repo recall (edge-level 11/26 -> 21/26 on a real ecosystem) built, unreleased |
+| X23 | **Cross-repo links (SHIPPED in 0.46.0)** - which other checkouts lean on this one, by names the code already uses (hosts, routes, images, packages, IaC resources, CI checkouts, `repo@sha` cites), and the ripple of a change across repos | X22 sibling discovery, X19 brief | `code_xray` `links`, `gingugu xray links`, and two brief sections (`Other repos leaning on these files`, `Ripple across repos`). Zero config: no map file in any repo. Each link has file:line evidence, certain or flagged. Client only, no migration, `MEMORY_XRAY_LINKS`. Hook surfaces (read hook map and first-read lines, edit note) and named-repo recall (edge-level 11/26 -> 21/26 on a real ecosystem) released in 0.47.0; cold reads on worker processes in 0.47.1 |
 | X18 | **X-ray Explorer** - a view in the Memory Explorer: repo as a 3D city (height = rank, colour = churn or tests, districts = X5 boundaries), animated blast radius, X7 attack paths, X6 blind-spot heat, X3 scar markers linking into the memory drawer, X4 drift slider over snapshots | `ui/`, `ui_api/` read-only observer | Ships in slices; city + blast radius first |
 
 ### Standing rules
