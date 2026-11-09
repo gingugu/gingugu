@@ -130,7 +130,9 @@ def read(root: Path, state_dir: Path, *, budget_s: float | None = None) -> EnvMa
     complete = True
     root = root.resolve()  # once, not per file
     for rel in names:
-        if deadline is not None and time.monotonic() > deadline:
+        if (
+            deadline is not None and time.monotonic() >= deadline
+        ):  # >=: a coarse clock (Windows) must not let budget 0 read
             if rel in old:
                 files[rel] = old[rel]  # unchecked this call
             else:
