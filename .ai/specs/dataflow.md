@@ -872,6 +872,10 @@ both: env_map.read(budget_s=1.0); a file not reached keeps its cached entry or w
     the next call (the cache is written either way, so it converges); EnvMap.complete is
     False while any file is unread, and both hooks then say nothing ("set nowhere" needs
     every file); a file no reader handles (env_scan.kind is None) skips the scan
+unread (EnvMap.unread: a file too big to read or cut at the name cap): the read hook says
+    "X (not set in any file read; <file> is too big)" instead of "set nowhere here" (and
+    "not read" for "read nowhere"), the edit note stays silent, and code_xray env flags
+    'not set / not read in any file read' and lists the unread files
 MEMORY_XRAY_ENV=off silences every line
 ```
 
