@@ -33,14 +33,22 @@ def _str_at(rec: list, *idx: int) -> bool:
 
 
 def is_qual(name: object, module_ok: bool = False) -> bool:
-    """A dotted Python identifier, as ``walk`` writes a qualified name (or the
-    module caller). Names are rendered into the agent's context, and a cache that
-    could hold a newline could hold an instruction."""
+    """A dotted identifier, as a walk writes a qualified name (or the module
+    caller), in any language X-ray parses: Python and Go identifiers, plus the
+    ``$`` TS/JS allows. Names are rendered into the agent's context, and a cache
+    that could hold a newline could hold an instruction."""
     if not isinstance(name, str):
         return False
     if module_ok and name == MODULE:
         return True
-    return all(part.isidentifier() for part in name.split("."))
+    return all(_is_ident(part) for part in name.split("."))
+
+
+def _is_ident(part: str) -> bool:
+    if part.isidentifier():
+        return True
+    # "$" is a letter in a JS name; "_" stands in so isidentifier judges the rest.
+    return "$" in part and part.replace("$", "_").isidentifier()
 
 
 def _is_def(rec: object) -> bool:

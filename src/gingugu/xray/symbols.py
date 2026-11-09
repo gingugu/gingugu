@@ -171,6 +171,18 @@ def link(raws: dict[str, dict], idx: ModuleIndex) -> Symbols:
     return _Linker(raws, idx).link()
 
 
+def merge(a: Symbols, b: Symbols) -> Symbols:
+    """Two languages' graphs as one. Their files are disjoint (one adapter per
+    extension), so defs and edges never collide; counts add."""
+    return Symbols(
+        defs={**a.defs, **b.defs},
+        edges={**a.edges, **b.edges},
+        resolved=a.resolved + b.resolved,
+        external=a.external + b.external,
+        unresolved=a.unresolved + b.unresolved,
+    )
+
+
 def callers(sym: Symbols, path: str, qual: str, *, limit: int | None = None, offset: int = 0):
     """Who calls ``qual`` in ``path``, directly and transitively; None if unknown.
 

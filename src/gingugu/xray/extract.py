@@ -25,13 +25,14 @@ from . import parse_cache as _pc
 from .model import Edge, FileInfo, LangResult
 from .scan import XrayError as XrayError
 from .scan import commit, is_manifest, read_sources, toplevel
-from .symbols import Symbols
+from .symbols import Symbols, merge
 
 __all__ = ["EXTRACTOR_VERSION", "Edge", "Extraction", "FileInfo", "XrayError", "extract"]
 
 # 2: every language in ``lang/``, nodes carry lang + kind, package nodes.
 # 3: the Python parse also carries symbol records (X17).
-EXTRACTOR_VERSION: int = 3
+# 4: the TS/JS and Go parses carry symbol records too; every language's merge.
+EXTRACTOR_VERSION: int = 4
 MAX_FILE_BYTES: int = 2_000_000  # real source is far smaller; read at call time
 MAX_TOTAL_BYTES: int = 256_000_000  # vite's sources are ~10MB; read at call time
 
@@ -165,8 +166,7 @@ def extract(path: str | Path, parse_cache: str | Path | None = None) -> Extracti
         out.dynamic += res.dynamic
         out.external += res.external
         out.parse_errors.extend(res.parse_errors)
-        if res.symbols.defs:  # only Python produces one
-            out.symbols = res.symbols
+        out.symbols = merge(out.symbols, res.symbols)  # every language's, one graph
         skipped.extend(res.skipped)
 
     # The brain refuses a payload whole over one dangling or repeated edge, so an

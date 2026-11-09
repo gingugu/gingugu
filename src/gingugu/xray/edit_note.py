@@ -32,7 +32,7 @@ from . import (
     table_hook,
 )
 from .hook_common import _claim, _show
-from .lang.python import is_test
+from .lang import is_test
 from .scan import XrayError
 
 HEADER = "GINGUGU X-RAY after edit (calls, a lower bound):"
@@ -206,7 +206,7 @@ def check(payload: dict, state_dir: Path) -> str | None:
         outside += env_hook.edit_lines(payload, root, rel, state_dir, session_id)  # X7a
         outside += table_hook.edit_lines(payload, root, rel, state_dir, session_id)  # X7c
         lines: list[str] = []
-        news = _news(payload) if rel.endswith(".py") else None
+        news = _news(payload)
         if news:
             lines = _lines(root, rel, state_dir, session_id, news)
         texts = literals.lines(payload, root, rel, state_dir, session_id)

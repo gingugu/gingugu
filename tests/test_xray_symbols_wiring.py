@@ -55,7 +55,7 @@ def state(tmp_path):
 
 
 def test_the_extractor_version_moves_so_every_cache_rebuilds():
-    assert extract.EXTRACTOR_VERSION == 3
+    assert extract.EXTRACTOR_VERSION == 4  # 4: TS/JS and Go carry symbol records too
 
 
 def test_an_extraction_carries_the_symbol_graph(repo):
@@ -79,7 +79,7 @@ def test_the_brain_payload_never_carries_symbols(repo):
         "parse_errors",
         "skipped",
     }
-    assert sent["extractor_version"] == 3
+    assert sent["extractor_version"] == 4
 
 
 def test_a_cached_parse_gives_the_same_symbols(repo, tmp_path):

@@ -67,6 +67,17 @@ def for_path(path: str) -> Adapter | None:
     return None
 
 
+def is_test(path: str) -> bool:
+    """Whether ``path`` is a test file, by the rule of the language that parses it."""
+    from . import python, typescript
+
+    if path.endswith(".go"):
+        return path.endswith("_test.go")
+    if path.endswith(typescript.ADAPTER.extensions):
+        return typescript.is_test(path)
+    return python.is_test(path)
+
+
 def extensions() -> tuple[str, ...]:
     return tuple(ext for a in ADAPTERS for ext in a.extensions)
 

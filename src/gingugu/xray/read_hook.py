@@ -158,9 +158,7 @@ def _most_called(rel: str, sym: symbols.Symbols) -> str | None:
 def _with_symbols(
     near: str, rel: str, root: Path, state_dir: Path, session_id: str, fp: str
 ) -> str:
-    """``near`` plus the most-called line for a Python file; unchanged on any failure."""
-    if not rel.endswith(".py"):
-        return near
+    """``near`` plus the most-called line, any language; unchanged on any failure."""
     try:
         line = _most_called(rel, hook_common.symbols(root, state_dir, session_id, fp))
     except (XrayError, ValueError, OSError):
