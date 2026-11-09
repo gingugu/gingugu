@@ -57,5 +57,5 @@ def read(root: Path, state_dir: Path, *, budget_s: float | None = None) -> EnvMa
     """The env map for the checkout at ``root``, from the cache where it holds.
     With ``budget_s``, files not reached in time keep their cached entry, or wait
     for the next call; what was read is written either way, so the cache fills."""
-    (reads, sets), complete = file_facts.read(root, state_dir, _spec(), budget_s=budget_s)
+    (reads, sets), complete, _unread = file_facts.read(root, state_dir, _spec(), budget_s=budget_s)
     return EnvMap(reads, sets, complete)

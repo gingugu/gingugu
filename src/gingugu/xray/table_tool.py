@@ -42,11 +42,20 @@ def _where(locs: list[dict], none: str) -> str:
     return shown + more
 
 
-def _use_line(u: dict) -> str:
+def _unread(data: dict) -> list[str]:
+    files = data.get("unread") or []
+    if not files:
+        return []
+    shown = ", ".join(_show(p) for p in files)
+    return [f"Not read (too big, or past the name cap), so 'nowhere' is not claimed: {shown}"]
+
+
+def _use_line(u: dict, unread: bool = False) -> str:
     if u["dropped_in"]:
         return f"  uses {u['name']}: dropped in {_where(u['dropped_in'], '')}"
     if not u["defined_in"]:
-        return f"  uses {u['name']}: defined nowhere here"
+        where = "not in the files read" if unread else "defined nowhere here"
+        return f"  uses {u['name']}: {where}"
     return f"  uses {u['name']}: defined in {_where(u['defined_in'], '')}"
 
 
@@ -67,13 +76,14 @@ def render(data: dict, name: str) -> str:
                 lines.append(
                     f"  drops {d['name']}: still used by {_where(d['used_by'], 'nothing')}"
                 )
-            lines.extend(_use_line(u) for u in f["uses"])
-        return _fit(lines)
+            lines.extend(_use_line(u, bool(data.get("unread"))) for u in f["uses"])
+        return _fit(lines + _unread(data))
     t = data["totals"]
     lines = [
         f"GINGUGU X-RAY TABLES: {_show(name)} - {t['tables']} tables, {t['defined_nowhere']} "
         f"used but defined nowhere here, {t['dropped_still_used']} dropped but still used, "
-        f"{t['used_nowhere']} defined but used nowhere here. One-sided first:"
+        f"{t['used_nowhere']} defined but used nowhere here. One-sided first:",
+        *_unread(data),
     ]
     for r in data["tables"]:
         flag = f" - {r['flag']}" if r["flag"] else ""
@@ -116,8 +126,8 @@ def _flag(m: table_map.TableMap, name: str) -> str | None:
     defines, uses = m.defines.get(name, []), m.uses.get(name, [])
     if all(_is_test(f) for f, _ in defines + uses):
         return "tests only"  # a fixture's table, not the schema's
-    if uses and not defines:
-        return "defined nowhere here"
+    if uses and not defines:  # a file too big to read may define it: never say 'nowhere'
+        return "not in the files read" if m.unread else "defined nowhere here"
     if uses and table_map.dropped(m, name):
         return "dropped, still used"
     defining = {f for f, _ in defines}
@@ -139,6 +149,7 @@ def _tables(m: table_map.TableMap, limit: int) -> dict:
     ]
     order = {
         "defined nowhere here": 0,
+        "not in the files read": 0,
         "dropped, still used": 1,
         "used nowhere here": 2,
         None: 3,
@@ -174,4 +185,5 @@ def answer(
     rel = [p for p in local.seeds(named, repo) if p] if named else None
     m = table_map.read(repo, load_config().db_path.parent / "hook-sessions")
     data = {"files": [_file(m, p) for p in rel]} if rel else _tables(m, limit)
+    data["unread"] = [_safe(p) for p in m.unread[:MAX_LOCS]]
     return {"ok": True, **data, "text": render(data, repo.name), "caveat": CAVEAT}

@@ -66,6 +66,9 @@ def file_line(root: Path, rel: str, state_dir: Path) -> str | None:
                 uses.append(f"{n} (dropped in {_locs(gone)})")
             elif m.defines.get(n):
                 uses.append(f"{n} (defined in {_locs(m.defines[n])})")
+            elif m.unread:  # a file too big to read may define it: never say 'nowhere'
+                verb = "is" if len(m.unread) == 1 else "are"
+                uses.append(f"{n} (not in the files read; {_files(list(m.unread))} {verb} too big)")
             else:
                 uses.append(f"{n} (defined nowhere here)")
         total = len(defines) + len(uses)
@@ -85,18 +88,23 @@ def file_line(root: Path, rel: str, state_dir: Path) -> str | None:
         return None
 
 
-def _names(texts: list[str], rel: str, which: int) -> list[str]:
-    """Distinct names, in order, from scanning ``texts`` (0 defines, 1 drops, 2 uses)."""
-    found = [n for text in texts for n, _ in table_map.scan_text(rel, text)[which]]
-    return list(dict.fromkeys(found))
+def _scans(texts: list[str], rel: str) -> list[tuple]:
+    """Each text scanned once; one past the map's file cap is not scanned at all."""
+    return [table_map.scan_text(rel, t) for t in texts if len(t) <= table_map.MAX_FILE_BYTES]
+
+
+def _names(scans: list[tuple], which: int) -> list[str]:
+    """Distinct names, in order, from ``scans`` (0 defines, 1 drops, 2 uses)."""
+    return list(dict.fromkeys(n for s in scans for n, _ in s[which]))
 
 
 def _candidates(new: list[str], old: list[str], rel: str) -> list[tuple[str, str]]:
     """(kind, name) the edit may need to speak of, in the order they are said."""
-    known = set(_names(old, rel, 2))
-    out = [("uses", n) for n in _names(new, rel, 2) if n not in known]
-    out += [("defines", n) for n in _names(new + old, rel, 0)]
-    out += [("drops", n) for n in _names(new, rel, 1)]
+    new_s, old_s = _scans(new, rel), _scans(old, rel)
+    known = set(_names(old_s, 2))
+    out = [("uses", n) for n in _names(new_s, 2) if n not in known]
+    out += [("defines", n) for n in _names(new_s + old_s, 0)]
+    out += [("drops", n) for n in _names(new_s, 1)]
     return out
 
 
@@ -107,7 +115,7 @@ def _say(m: table_map.TableMap, kind: str, name: str, rel: str) -> str | None:
         gone = table_map.dropped(m, name)
         if gone:
             return f"- Tables: uses {name}, dropped in {_locs(gone[:1])}."
-        if name not in m.defines:
+        if name not in m.defines and not m.unread:  # an unread file may define it
             return (
                 f"- Tables: uses {name}, defined nowhere in this repo "
                 "(a typo, or another service's table?)."

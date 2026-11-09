@@ -15,6 +15,9 @@ from typing import NamedTuple
 
 Pairs = list[tuple[str, int]]
 
+# Bump on any change to what a file yields: it retires every cached entry.
+SCAN_VERSION = 2
+
 # An identifier: optional quote, optional ``schema.`` prefix, the name, optional quote.
 # The name must end where an identifier ends: one running into ``{``/``$`` is a
 # template built at run time, into ``/`` or ``:`` an image or a host, into one

@@ -11,6 +11,7 @@ The caller passes a ``Spec`` built at call time, so a module's own ``scan_text``
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -21,8 +22,9 @@ from .docs_map import _inside, _names, _read_text
 
 MAX_FILES = 20000
 MAX_CACHE_BYTES = 16 * 1024 * 1024
+MAX_LINE = 10_000_000  # a cached line number past any real file is a crafted one
 GIT_TIMEOUT_S = 10
-VERSION = 1
+VERSION = 2  # the plumbing; each map adds its scanner's version (Spec.version)
 
 Refs = dict[str, list[tuple[str, int]]]
 
@@ -35,6 +37,11 @@ class Spec(NamedTuple):
     valid: Callable[[object], bool]  # a stored name
     max_bytes: int  # a file past this is skipped entirely
     max_names: int  # per file, per key
+    version: int = 0  # the scanner's rules: a change retires every cached entry
+
+
+def _version(spec: Spec) -> str:
+    return f"{VERSION}.{spec.version}"
 
 
 def names_in(refs: Refs, rel: str) -> list[str]:
@@ -53,7 +60,7 @@ def _pairs(value: object, spec: Spec) -> list[list] | None:
     for item in value:
         if not (isinstance(item, list) and len(item) == 2 and spec.valid(item[0])):
             return None
-        if type(item[1]) is not int or item[1] < 1:
+        if type(item[1]) is not int or not 1 <= item[1] <= MAX_LINE:
             return None
     return value
 
@@ -67,7 +74,7 @@ def load(path: Path, spec: Spec) -> tuple[dict[str, dict], object]:
     raw = None if too_big else hook_common._read_json(path)
     if (
         not isinstance(raw, dict)
-        or raw.get("v") != VERSION
+        or raw.get("v") != _version(spec)
         or not isinstance(raw.get("files"), dict)
     ):
         return {}, raw
@@ -76,13 +83,18 @@ def load(path: Path, spec: Spec) -> tuple[dict[str, dict], object]:
         if not isinstance(e, dict) or not all(type(e.get(k)) is int for k in ("size", "mtime")):
             continue
         lists = {k: _pairs(e.get(k), spec) for k in spec.keys}
-        if any(v is None for v in lists.values()):
+        if any(v is None for v in lists.values()) or type(e.get("cut", False)) is not bool:
             continue
         out[rel] = {"size": e["size"], "mtime": e["mtime"], **lists}
+        if e.get("cut"):
+            out[rel]["cut"] = True
     return out, raw
 
 
-def _entry(root: Path, rel: str, old: dict, spec: Spec) -> dict | None:
+TOO_BIG = "too-big"  # _entry: a file past the byte cap, never read
+
+
+def _entry(root: Path, rel: str, old: dict, spec: Spec) -> dict | str | None:
     full = _inside(root, rel)
     if full is None:
         return None
@@ -91,7 +103,7 @@ def _entry(root: Path, rel: str, old: dict, spec: Spec) -> dict | None:
     except OSError:
         return None
     if st.st_size > spec.max_bytes:
-        return None
+        return TOO_BIG
     prev = old.get(rel)
     if prev and prev["size"] == st.st_size and prev["mtime"] == st.st_mtime_ns:
         return prev
@@ -100,7 +112,7 @@ def _entry(root: Path, rel: str, old: dict, spec: Spec) -> dict | None:
     except OSError:
         return None
     found = spec.scan(rel, text)
-    return {
+    entry: dict = {
         "size": st.st_size,
         "mtime": st.st_mtime_ns,
         **{
@@ -108,15 +120,20 @@ def _entry(root: Path, rel: str, old: dict, spec: Spec) -> dict | None:
             for k, f in zip(spec.keys, found, strict=True)
         },
     }
+    if any(len(f) > spec.max_names for f in found):
+        entry["cut"] = True  # names past the cap were dropped: the file is not fully read
+    return entry
 
 
 def read(
     root: Path, state_dir: Path, spec: Spec, *, budget_s: float | None = None
-) -> tuple[tuple[Refs, ...], bool]:
-    """(one ``Refs`` per key, complete) for the checkout at ``root``, from the cache
-    where it holds. With ``budget_s``, files not reached in time keep their cached
-    entry, or wait for the next call; what was read is written either way, so the
-    cache fills."""
+) -> tuple[tuple[Refs, ...], bool, tuple[str, ...]]:
+    """(one ``Refs`` per key, complete, unread) for the checkout at ``root``, from
+    the cache where it holds. ``unread`` names the files too big to read or cut at
+    the name cap: a name they hold may be missing, so 'nowhere here' is not a claim
+    to make while any exist. With ``budget_s``, files not reached in time keep their
+    cached entry, or wait for the next call; what was read is written either way,
+    so the cache fills - unless it would be too big to read back."""
     proc = scan.git(
         root, "ls-files", "-z", "--cached", "--others", "--exclude-standard", timeout=GIT_TIMEOUT_S
     )
@@ -126,6 +143,7 @@ def read(
     cache = state_dir / f"{spec.cache_prefix}-{hook_common._digest(root)}.json"
     old, raw = load(cache, spec)
     files: dict[str, dict] = {}
+    too_big: list[str] = []
     deadline = None if budget_s is None else time.monotonic() + budget_s
     complete = True
     root = root.resolve()  # once, not per file
@@ -139,14 +157,17 @@ def read(
                 complete = False
             continue
         entry = _entry(root, rel, old, spec)
-        if entry is not None:
+        if entry == TOO_BIG:
+            too_big.append(rel)
+        elif isinstance(entry, dict):
             files[rel] = entry
-    fresh = {"v": VERSION, "files": files}
-    if fresh != raw:
-        hook_common._write_json(cache, fresh)
+    fresh = {"v": _version(spec), "files": files}
+    if fresh != raw and len(json.dumps(fresh)) <= MAX_CACHE_BYTES:
+        hook_common._write_json(cache, fresh)  # never one too big to read back
     out: tuple[Refs, ...] = tuple({} for _ in spec.keys)
     for rel, e in files.items():
         for into, key in zip(out, spec.keys, strict=True):
             for name, line in e[key]:
                 into.setdefault(name, []).append((rel, line))
-    return out, complete
+    unread = sorted(too_big + [rel for rel, e in files.items() if e.get("cut")])
+    return out, complete, tuple(unread)

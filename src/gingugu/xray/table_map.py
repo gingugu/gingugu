@@ -16,7 +16,7 @@ import os
 from pathlib import Path
 from typing import NamedTuple
 
-from . import file_facts
+from . import file_facts, table_scan
 from .file_facts import Refs, names_in  # noqa: F401
 from .table_scan import kind, scan_text, valid_name  # noqa: F401
 
@@ -29,6 +29,7 @@ class TableMap(NamedTuple):
     drops: Refs
     uses: Refs
     complete: bool = True  # False: the budget ran out before every file was read
+    unread: tuple[str, ...] = ()  # too big, or cut at the name cap: 'nowhere' is unsafe
 
 
 def enabled() -> bool:
@@ -45,6 +46,7 @@ def _spec() -> file_facts.Spec:
         valid_name,
         MAX_FILE_BYTES,
         MAX_NAMES,
+        table_scan.SCAN_VERSION,
     )
 
 
@@ -67,5 +69,7 @@ def read(root: Path, state_dir: Path, *, budget_s: float | None = None) -> Table
     """The table map for the checkout at ``root``, from the cache where it holds.
     With ``budget_s``, files not reached in time keep their cached entry, or wait
     for the next call; what was read is written either way, so the cache fills."""
-    (defines, drops, uses), complete = file_facts.read(root, state_dir, _spec(), budget_s=budget_s)
-    return TableMap(defines, drops, uses, complete)
+    (defines, drops, uses), complete, unread = file_facts.read(
+        root, state_dir, _spec(), budget_s=budget_s
+    )
+    return TableMap(defines, drops, uses, complete, unread)
