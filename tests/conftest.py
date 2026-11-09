@@ -258,3 +258,14 @@ def _reset_sse_exit_flag():
 
     AppStatus.should_exit = False
     yield
+
+
+@pytest.fixture(autouse=True)
+def _patient_literal_grep(monkeypatch: pytest.MonkeyPatch):
+    """The literal-consumer sweep gives each ``git grep`` 1 s, then drops the line.
+    A loaded CI runner (windows-latest) can exceed that, so a wiring test would
+    see no note and fail on timing, not on behaviour. The suites test what is
+    found; the hook budget has its own wall-clock test."""
+    from gingugu.xray import literals
+
+    monkeypatch.setattr(literals, "GIT_TIMEOUT_S", 30.0)
