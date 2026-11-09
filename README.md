@@ -1025,8 +1025,10 @@ It installs:
   nothing imports `orders`, so it lists the files that query a table and the migration,
   schema file or model that defines it, with the ones defined nowhere here, dropped but
   still used, or used nowhere first. A first read adds `Tables: defines orders (used by
-  a.py, b.py), uses users (defined in schema.sql:12)`, and an edit that starts using a
-  table defined nowhere here, or drops one other files use, says so. SQL keywords must be
+  a.py, b.py); uses users (defined in schema.sql:12).`, and an edit that starts using a
+  table defined nowhere here, or drops one other files use, says so. A file too big to
+  read is named as unread, and while one exists no table is called defined nowhere
+  ("not in the files read" instead). SQL keywords must be
   UPPERCASE in code files; a `.sql` file is read in any case. Columns are not covered.
   `MEMORY_XRAY_TABLES=off` disables all of it.
 - **`.claude/skills/sink-the-ship/SKILL.md`** — a `/sink-the-ship` skill to flush

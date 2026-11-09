@@ -1006,9 +1006,10 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   (`[A-Z][A-Z0-9_]{1,63}`) in known read forms (Python, TS/JS, Go, shell `${X:-}`) and set
   forms (Python `os.environ[..] =`/`setdefault`/`monkeypatch.setenv`, shell `export`,
   Dockerfile `ENV`/`ARG`, YAML `env`/`environment` blocks, example templates). Real dotenv
-  files are excluded by name before any open. `xray/env_map.read` lists `git ls-files`,
-  scans handled files (256 KiB cap, 20000 files, 200 names per file) and caches per file
-  (size + mtime; `xray-env-<digest>.json`, owner-only, untrusted on read). Names and lines
+  files are excluded by name before any open. `xray/env_map.read` delegates to
+  `xray/file_facts.read` (the plumbing it shares with X7c's table map: `git ls-files`,
+  20000 files, per-file cache by size + mtime, owner-only, untrusted on read), with its own
+  caps (256 KiB per file, 200 names per file) and cache `xray-env-<digest>.json`. Names and lines
   only. `env_tool` is `code_xray` `env` (local only, like `docs`); `env_hook` adds the read
   hook's `Env:` line and the edit note's unset-read line, on a 1s scan budget that writes
   what it reached (so the cache converges) and stays silent while `EnvMap.complete` is

@@ -25,7 +25,7 @@ files. `xray/file_facts.py`: the cache plumbing now shared by `env_map` and `tab
 listing, per-file size + mtime cache, untrusted load, time budget with a `>=` deadline,
 `complete` flag, writes what it reached); `env_map` shrank from 153 to 61 lines, behaviour
 unchanged. `xray/table_tool.py`: `code_xray` `tables` / `gingugu xray tables` (`--files`,
-`--path`, `--json`) - per file, what it defines (with who else uses each), drops (with who
+`--path`, `--limit`, `--json`) - per file, what it defines (with who else uses each), drops (with who
 still uses each) and uses (with where defined, and where dropped); without files, every
 table with counts, one-sided first (`defined nowhere here`, `dropped, still used`, `used
 nowhere here`), a table seen only in test files as `tests only`, last; refused by
