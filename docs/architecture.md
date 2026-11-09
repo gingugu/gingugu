@@ -1887,7 +1887,9 @@ and line numbers only, never a value, and a real dotenv file (`.env`, `.env.loca
 (`xray/env_tool.py`) answers locally like `docs`: `gingugu serve` refuses it and the proxy
 answers it. A file's first read and the edit note add `Env:` lines (`xray/env_hook.py`);
 a hook's scan has a 1s budget, keeps what it read for the next call, and stays silent until
-every file has been read once, so `set nowhere` is never said of a file not yet read.
+every file has been read once, so `set nowhere` is never said of a file not yet read. A
+file too big to read or cut at the name cap is `unread` (`EnvMap.unread`); while any is,
+no name is called set or read nowhere (`not set in any file read` instead).
 Switch `MEMORY_XRAY_ENV` (default on). No migration, no brain change.
 
 **DB tables as edges (X7c).** Nothing imports a table, so the code that queries it and the

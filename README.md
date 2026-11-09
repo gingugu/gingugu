@@ -1018,7 +1018,9 @@ It installs:
   nothing imports `DB_URL`, so it lists the files that read a name and the compose
   file, manifest, workflow, Dockerfile or `.env.example` that sets it. A first read adds
   `Env: reads DB_URL (set in docker-compose.yml:5), ...`, and an edit that starts reading
-  a name set nowhere in the repo says so. Literal names in known forms only, names and
+  a name set nowhere in the repo says so. A file too big to read is named as unread, and
+  while one exists no name is called set nowhere ("not set in any file read" instead).
+  Literal names in known forms only, names and
   lines never values, and real dotenv files are never read. `MEMORY_XRAY_ENV=off`
   disables all of it.
   `code_xray tables` (and `gingugu xray tables`) does the same for database tables:

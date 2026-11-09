@@ -1,10 +1,20 @@
 # Project Status
 
-_Last updated: 2026-11-09 (X7c DB tables as edges built; X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
+_Last updated: 2026-11-09 (X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
 
 ## In Flight
 
-**X7c DB tables as edges (2026-11-09, branch `feature/xray-tables`).** Third slice of X7 (edges
+**X7a: never 'set nowhere' past an unread file (2026-11-09, branch `fix/xray-env-unread`).**
+Carried from X7c's security review. A file too big to read (256 KiB) or cut at the 200-name
+cap may set or read any name, so `EnvMap.unread` (from `file_facts.read`) now names those
+files, and while any exist: the read hook's `Env:` line says `X (not set in any file read;
+<file> is too big)` (and `not read` for a set nobody reads) instead of `set/read nowhere
+here`; the edit note's `set nowhere in this repo` line stays silent; `code_xray env` flags
+`not set in any file read` / `not read in any file read` (sorted with the one-sided names,
+not counted in `never_set`/`never_read`) and returns `unread`. A complete read keeps the old
+wording. Spec: `tests/test_xray_env_unread.py` (8 tests). Full suite 4407 passed. Unreleased.
+
+**X7c DB tables as edges (2026-11-09, merged in #190 as 3da7fd6, unreleased).** Third slice of X7 (edges
 beyond imports), taken before X7b. Nothing imports a table, so the code that queries it and
 the migration that creates it never meet in the import graph, and a rename or drop breaks
 callers silently. `xray/table_scan.py` (pure: `(defines, drops, uses)` as (name, line),

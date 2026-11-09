@@ -854,6 +854,10 @@ read `env_map.read` (no budget: every handled file) and answer locally:
 files given -> per file: reads [{name, set_in: [path:line]}], sets [{name, read_by: [...]}]
 no files    -> every name {reads, sets, flag}: 'never set here' first, then 'never read
                here', then by name; limit capped at 200; text <= 8800 chars
+both        -> unread: up to 10 files too big to read or cut at the name cap; while any
+               exist the files mode says 'set in no file read' / 'read by no file read', the
+               no-files flags become 'not set / not read in any file read', and
+               totals.never_set / never_read count 0
 MEMORY_XRAY_ENV=off -> ValueError; gingugu serve -> refused (the brain never reads a path)
 ```
 
@@ -870,8 +874,12 @@ edit note (PostToolUse Edit/Write/MultiEdit): env_hook.edit_lines -> names read 
     session, 3 at most
 both: env_map.read(budget_s=1.0); a file not reached keeps its cached entry or waits for
     the next call (the cache is written either way, so it converges); EnvMap.complete is
-    False while any file is unread, and both hooks then say nothing ("set nowhere" needs
+    False while any file is not yet reached, and both hooks then say nothing ("set nowhere" needs
     every file); a file no reader handles (env_scan.kind is None) skips the scan
+unread (EnvMap.unread: a file too big to read or cut at the name cap): the read hook says
+    "X (not set in any file read; <file> is too big)" instead of "set nowhere here" (and
+    "not read" for "read nowhere"), the edit note stays silent, and code_xray env flags
+    'not set / not read in any file read' and lists the unread files
 MEMORY_XRAY_ENV=off silences every line
 ```
 

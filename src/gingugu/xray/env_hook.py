@@ -38,9 +38,20 @@ def _locs(found: list[tuple[str, int]]) -> str:
     return shown + (f" +{len(found) - LOCS}" if len(found) > LOCS else "")
 
 
-def _part(name: str, other: list[tuple[str, int]], verb: str) -> str:
-    where = _locs(other) if other else None
-    return f"{name} ({verb} {where})" if where else f"{name} ({verb.split()[0]} nowhere here)"
+def _unread(unread: tuple[str, ...]) -> str:
+    """``a.yml is too big`` / ``a.yml, b.yml +N are too big`` for the unread files."""
+    shown = ", ".join(_show(f) for f in unread[:LOCS])
+    more = f" +{len(unread) - LOCS}" if len(unread) > LOCS else ""
+    return f"{shown}{more} {'is' if len(unread) == 1 else 'are'} too big"
+
+
+def _part(name: str, other: list[tuple[str, int]], verb: str, unread: tuple[str, ...] = ()) -> str:
+    if other:
+        return f"{name} ({verb} {_locs(other)})"
+    bare = verb.split()[0]  # "set" / "read"
+    if unread:  # a file too big to read may hold the other side: never say 'nowhere'
+        return f"{name} (not {bare} in any file read; {_unread(unread)})"
+    return f"{name} ({bare} nowhere here)"
 
 
 def file_line(root: Path, rel: str, state_dir: Path) -> str | None:
@@ -51,8 +62,12 @@ def file_line(root: Path, rel: str, state_dir: Path) -> str | None:
         m = env_map.read(root, state_dir, budget_s=BUDGET_S)
         if not m.complete:
             return None  # a partial map would call a set name 'set nowhere'
-        reads = [_part(n, m.sets.get(n, []), "set in") for n in env_map.names_in(m.reads, rel)]
-        sets = [_part(n, m.reads.get(n, []), "read by") for n in env_map.names_in(m.sets, rel)]
+        reads = [
+            _part(n, m.sets.get(n, []), "set in", m.unread) for n in env_map.names_in(m.reads, rel)
+        ]
+        sets = [
+            _part(n, m.reads.get(n, []), "read by", m.unread) for n in env_map.names_in(m.sets, rel)
+        ]
         total = len(reads) + len(sets)
         if not total:
             return None
@@ -98,8 +113,8 @@ def edit_lines(payload: dict, root: Path, rel: str, state_dir: Path, session_id:
         if not fresh:
             return []
         m = env_map.read(root, state_dir, budget_s=BUDGET_S)
-        if not m.complete:
-            return []  # 'set nowhere' needs every file read
+        if not m.complete or m.unread:
+            return []  # 'set nowhere' needs every file read, and read whole
         out: list[str] = []
         for name in fresh:
             if name in m.sets:

@@ -41,21 +41,31 @@ def _where(locs: list[dict], none: str) -> str:
     return shown + more
 
 
+def _unread(data: dict) -> list[str]:
+    files = data.get("unread") or []
+    if not files:
+        return []
+    shown = ", ".join(_show(p) for p in files)
+    return [f"Not read (too big, or past the name cap), so 'nowhere' is not claimed: {shown}"]
+
+
 def render(data: dict, name: str) -> str:
     """Compact text for an agent; every path is quoted by ``_show``."""
     if "files" in data:
+        none = "no file read" if data.get("unread") else "nowhere here"
         lines = [f"GINGUGU X-RAY ENV: {_show(name)} - env vars of {len(data['files'])} named files"]
         for f in data["files"]:
             lines.append(f"- {_show(f['path'])}" + ("" if f["reads"] or f["sets"] else ": none"))
             for r in f["reads"]:
-                lines.append(f"  reads {r['name']}: set in {_where(r['set_in'], 'nowhere here')}")
+                lines.append(f"  reads {r['name']}: set in {_where(r['set_in'], none)}")
             for s in f["sets"]:
-                lines.append(f"  sets {s['name']}: read by {_where(s['read_by'], 'nowhere here')}")
-        return _fit(lines)
+                lines.append(f"  sets {s['name']}: read by {_where(s['read_by'], none)}")
+        return _fit(lines + _unread(data))
     t = data["totals"]
     lines = [
         f"GINGUGU X-RAY ENV: {_show(name)} - {t['names']} names, {t['never_set']} read but "
-        f"never set here, {t['never_read']} set but never read here. One-sided first:"
+        f"never set here, {t['never_read']} set but never read here. One-sided first:",
+        *_unread(data),
     ]
     for r in data["names"]:
         flag = f" - {r['flag']}" if r["flag"] else ""
@@ -79,10 +89,13 @@ def _file(m: env_map.EnvMap, rel: str) -> dict:
     }
 
 
-def _flag(reads: int, sets: int) -> str | None:
+def _flag(reads: int, sets: int, unread: bool = False) -> str | None:
+    # A file too big to read may hold the other side: never say 'never ... here' then.
     if not sets:
-        return "never set here"
-    return None if reads else "never read here"
+        return "not set in any file read" if unread else "never set here"
+    if reads:
+        return None
+    return "not read in any file read" if unread else "never read here"
 
 
 def _names(m: env_map.EnvMap, limit: int) -> dict:
@@ -91,11 +104,17 @@ def _names(m: env_map.EnvMap, limit: int) -> dict:
             "name": n,
             "reads": len(m.reads.get(n, [])),
             "sets": len(m.sets.get(n, [])),
-            "flag": _flag(len(m.reads.get(n, [])), len(m.sets.get(n, []))),
+            "flag": _flag(len(m.reads.get(n, [])), len(m.sets.get(n, [])), bool(m.unread)),
         }
         for n in sorted(set(m.reads) | set(m.sets))
     ]
-    order = {"never set here": 0, "never read here": 1, None: 2}
+    order = {
+        "never set here": 0,
+        "not set in any file read": 0,
+        "never read here": 1,
+        "not read in any file read": 1,
+        None: 2,
+    }
     rows.sort(key=lambda r: (order[r["flag"]], r["name"]))
     return {
         "names": rows[: min(max(0, limit), MAX_LIMIT)],
@@ -124,4 +143,5 @@ def answer(
     rel = [p for p in local.seeds(named, repo) if p] if named else None
     m = env_map.read(repo, load_config().db_path.parent / "hook-sessions")
     data = {"files": [_file(m, p) for p in rel]} if rel else _names(m, limit)
+    data["unread"] = [_safe(p) for p in m.unread[:MAX_LOCS]]
     return {"ok": True, **data, "text": render(data, repo.name), "caveat": CAVEAT}

@@ -1013,7 +1013,9 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   only. `env_tool` is `code_xray` `env` (local only, like `docs`); `env_hook` adds the read
   hook's `Env:` line and the edit note's unset-read line, on a 1s scan budget that writes
   what it reached (so the cache converges) and stays silent while `EnvMap.complete` is
-  False. Switch `MEMORY_XRAY_ENV`. No migration.
+  False. A file past either cap is `unread` (`EnvMap.unread`); while any is, nothing is
+  called set or read nowhere (`not set in any file read`, and the edit note is silent).
+  Switch `MEMORY_XRAY_ENV`. No migration.
 - **Codebase X-ray: DB tables as edges (X7c, unreleased).** Nothing imports a table, so
   the code that queries it and the migration that creates it never meet in the graph.
   `xray/table_scan.scan_text(rel, text)` is pure: `(defines, drops, uses)` as (name, line),

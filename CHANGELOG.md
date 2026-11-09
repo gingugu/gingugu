@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   repo says so once per name per session. A hook's scan has a 1s budget; files it did
   not reach wait for the next call (the cache keeps what it read) and the hooks stay
   silent until the map is whole, so `set nowhere` is never said of a file not yet read.
+  A file too big to read, or past the 200-name cap, is named as unread, and while one
+  exists no name is called set or read nowhere - `not set in any file read` instead.
   `MEMORY_XRAY_ENV=off` silences all of it. No migration.
 - **X7c: DB tables as edges.** Nothing imports a table, so the code that queries
   `orders` and the migration that creates it never meet in the import graph, and a
