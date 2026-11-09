@@ -19,7 +19,20 @@ LOCS = 2  # locations per name
 MAX_EDIT = 3
 
 
+def _is_test(path: str) -> bool:
+    base = path.rsplit("/", 1)[-1]
+    return (
+        path.startswith(("tests/", "test/"))
+        or "/tests/" in path
+        or base.startswith("test_")
+        or base.endswith(("_test.go", "_test.py"))
+        or ".test." in base
+        or ".spec." in base
+    )
+
+
 def _locs(found: list[tuple[str, int]]) -> str:
+    found = sorted(found, key=lambda fl: (_is_test(fl[0]), fl[0], fl[1]))  # config before tests
     shown = ", ".join(f"{_show(f)}:{n}" for f, n in found[:LOCS])
     return shown + (f" +{len(found) - LOCS}" if len(found) > LOCS else "")
 
@@ -32,8 +45,8 @@ def _part(name: str, other: list[tuple[str, int]], verb: str) -> str:
 def file_line(root: Path, rel: str, state_dir: Path) -> str | None:
     """``Env: reads ...; sets ...`` for ``rel``, else None."""
     try:
-        if not env_map.enabled():
-            return None
+        if not env_map.enabled() or env_map.kind(rel) is None:
+            return None  # a file no reader handles names nothing: skip the repo scan
         m = env_map.read(root, state_dir)
         reads = [_part(n, m.sets.get(n, []), "set in") for n in env_map.names_in(m.reads, rel)]
         sets = [_part(n, m.reads.get(n, []), "read by") for n in env_map.names_in(m.sets, rel)]

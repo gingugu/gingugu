@@ -58,7 +58,9 @@ def test_no_files_lists_every_name_and_flags_the_one_sided(repo, env):
 
 def test_one_sided_names_come_first(repo, env):
     names = [r["name"] for r in env_tool.answer(str(repo))["names"]]
-    flagged = [n for n in names if n in ("GO_HOST", "SCRIPT_READ", "UNUSED_SET", "BUILD_REV")]
+    one_sided = ("GO_HOST", "SCRIPT_READ", "UNUSED_SET", "BUILD_REV", "SCRIPT_SET")
+    flagged = [n for n in names if n in one_sided]
+    assert len(flagged) == 5
     assert names[: len(flagged)] == flagged
 
 

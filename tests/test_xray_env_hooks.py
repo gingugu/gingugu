@@ -119,3 +119,19 @@ def test_the_switch_off_silences_both(repo, state, monkeypatch):
     assert "Env: " not in (read_hook.check(_read(repo, "app/settings.py"), state) or "")
     out = _edited(repo, "app/settings.py", "import os\n", 'import os\nos.getenv("BRAND_NEW")\n')
     assert "BRAND_NEW" not in (edit_note.check(out, state) or "")
+
+
+def test_where_a_name_is_set_lists_config_before_tests():
+    from gingugu.xray import env_hook
+
+    assert env_hook._locs([("tests/a.py", 1), ("z/deploy.yml", 2)]).startswith("z/deploy.yml:2")
+
+
+def test_a_file_no_reader_handles_never_scans_the_repo(repo, state, monkeypatch):
+    from gingugu.xray import env_hook, env_map
+
+    def boom(*a, **k):
+        raise AssertionError("a README needs no env scan")
+
+    monkeypatch.setattr(env_map, "read", boom)
+    assert env_hook.file_line(repo, "README.md", state) is None

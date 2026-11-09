@@ -4,6 +4,28 @@ _Last updated: 2026-11-09 (X22 hook surfaces built: the docs citing a file on re
 
 ## In Flight
 
+**X7a env vars as edges (2026-11-09, branch `feature/xray-env`, stacked on
+`feature/xray-docs-hooks`).** First slice of X7 (edges beyond imports). Nothing imports an
+environment variable, so the code reading `DB_URL` and the compose file, k8s manifest, CI
+workflow, Dockerfile or example env template setting it never meet in the import graph, and
+a rename on either side breaks silently. `xray/env_scan.py` (pure: literal upper-snake names
+in known read forms - Python `os.environ[...]`/`.get`/`os.getenv`, JS/TS `process.env`,
+`import.meta.env`, Go `os.Getenv`/`LookupEnv`, shell `${X:-}`/`${X:?}` - and set forms -
+`export X=`, Dockerfile `ENV`/`ARG`, YAML `env:`/`environment:` blocks in list, map and k8s
+`- name:` form, example env templates, `os.environ[...] =`, `monkeypatch.setenv`). A real
+dotenv file is decided by name and never opened; names and lines only, never a value.
+`xray/env_map.py` runs it over the checkout with a per-file cache by size + mtime
+(`xray-env-<digest>.json`, owner-only, untrusted on load; 0.33s cold, 0.04s warm on this
+repo). `xray/env_tool.py`: `code_xray` `env` / `gingugu xray env` - per file, what it reads
+with where each is set and what it sets with who reads it; without files, every name with
+the one-sided ones first (`never set here`, `never read here`); refused by `gingugu serve`,
+answered locally by the proxy. `xray/env_hook.py`: a file's first read adds `Env: reads X
+(set in ...), Y (set nowhere here); sets Z (read by ...)` (4 names, config locations before
+tests; a file no reader handles skips the scan); the edit note adds `- Env: reads X, set
+nowhere in this repo` for a name an edit starts reading, once per name per session.
+`MEMORY_XRAY_ENV=off` silences all of it; no migration. Spec: `tests/test_xray_env_map.py`,
+`test_xray_env_tool.py`, `test_xray_env_hooks.py`. 4269 passed.
+
 **X22 in the hooks: the docs citing a file (2026-11-09, branch `feature/xray-docs-hooks`,
 stacked on `docs/board-resync`).** The docs map (0.45.0) answered only when asked: the
 `docs` action and the brief. A full read costs 0.18s warm here (a git call per sibling
