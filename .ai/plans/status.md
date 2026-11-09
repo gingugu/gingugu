@@ -19,7 +19,7 @@ file and `<rel> was deleted. Docs still cite it: ...` for a deleted one (3 named
 counted and left unclaimed). The edit note and the Bash X-ray share one claim per file per
 session; Bash never refreshes. `MEMORY_XRAY_DOCS=off` silences all of it; no migration.
 The text helpers moved from `docs_map.py` (was 315 lines) to `docs_text.py`. Spec:
-`tests/test_xray_docs_hooks.py` (34 tests). Security review: the sibling budget now holds
+`tests/test_xray_docs_hooks.py` + `tests/test_xray_docs_budget.py` (34 tests). Security review: the sibling budget now holds
 inside a sibling (checked per doc; `scan.commit` takes a timeout; a sibling past it keeps
 its last reading), and a summary `at` no clock gives reads as bad (it overflowed the float
 maths past the hooks' handlers; X23's `inbound` had the same and is fixed too).
