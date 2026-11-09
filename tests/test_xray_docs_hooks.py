@@ -15,11 +15,12 @@ from __future__ import annotations
 import json
 import os
 import stat
+import sys
 import time
 
 import pytest
 
-from gingugu.xray import docs_hook, docs_map, edit_note, read_hook
+from gingugu.xray import bash_hook, docs_hook, docs_map, edit_note, read_hook
 from tests.test_xray_bash_hook import _run
 from tests.test_xray_edit_hook import BASIC, _git, _payload, _repo
 
@@ -77,6 +78,7 @@ def test_a_refresh_leaves_a_summary_naming_local_and_sibling_docs(repo, state):
     assert docs_hook.file_line(repo, "pkg/a.py", state) is None  # no doc names it
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
 def test_the_summary_is_owner_only(repo, state):
     docs_hook.refresh(repo, state)
     mode = stat.S_IMODE(os.stat(docs_hook._path(repo, state)).st_mode)
@@ -261,3 +263,19 @@ def test_the_switch_off_writes_no_summary(repo, state, monkeypatch):
     monkeypatch.setenv("MEMORY_XRAY_DOCS", "off")
     docs_hook.refresh(repo, state)
     assert not docs_hook._path(repo, state).exists()
+
+
+def test_bash_names_a_few_docs_and_leaves_the_rest_unclaimed(repo, state, monkeypatch):
+    monkeypatch.setattr(bash_hook, "_NAMED", 1)
+    docs_hook.refresh(repo, state)
+
+    def both():
+        (repo / "pkg/leaf.py").write_text("Y = 3\n")
+        (repo / "pkg/core.py").write_text("X = 3\n")
+
+    text = _run(state, repo, both)
+    assert "+1 more changed files cited by docs." in text
+    # the file past the cut was not claimed: its edit note still names its docs
+    named = "pkg/core.py" if "pkg/core.py: Docs cite it" in text else "pkg/leaf.py"
+    other = "pkg/leaf.py" if named == "pkg/core.py" else "pkg/core.py"
+    assert "Docs cite it" in edit_note.check(_edited(repo, other), state)

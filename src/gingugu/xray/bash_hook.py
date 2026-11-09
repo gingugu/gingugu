@@ -208,6 +208,7 @@ def _docs_lines(
 ) -> list[str]:
     """X22: docs citing a changed or deleted file, from the summary only."""
     out: list[str] = []
+    more = 0
     for rels, make, said in (
         (deleted, docs_hook.gone_line, "{} was deleted. {}"),
         (changed, docs_hook.file_line, "{}: {}"),
@@ -215,10 +216,14 @@ def _docs_lines(
         for rel in rels:
             line = make(root, rel, state_dir)
             claim = hook_common.claim_path(state_dir, "xray-docs-edit", session_id, root, rel)
-            if line and not claim.exists() and _claim(claim):
+            if not line or claim.exists():
+                continue
+            if len(out) >= _NAMED:
+                more += 1  # unclaimed: an edit note later may still name its docs
+            elif _claim(claim):
                 out.append(said.format(_show(rel), line))
-    if len(out) > _NAMED:
-        out = [*out[:_NAMED], f"+{len(out) - _NAMED} more changed files cited by docs."]
+    if more:
+        out.append(f"+{more} more changed files cited by docs.")
     return out
 
 
