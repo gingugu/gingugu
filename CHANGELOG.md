@@ -29,6 +29,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not reach wait for the next call (the cache keeps what it read) and the hooks stay
   silent until the map is whole, so `set nowhere` is never said of a file not yet read.
   `MEMORY_XRAY_ENV=off` silences all of it. No migration.
+- **X7c: DB tables as edges.** Nothing imports a table, so the code that queries
+  `orders` and the migration that creates it never meet in the import graph, and a
+  rename or drop breaks callers silently. `xray/table_scan.py` reads what a file
+  defines, drops and uses: `CREATE [TEMP] [VIRTUAL] TABLE|VIEW`, `ALTER TABLE ... RENAME
+  TO` (the new name defined, the old one dropped), SQLAlchemy `__tablename__` and
+  `Table("x", ...)`, Alembic `op.create_table`; `DROP TABLE` and `op.drop_table`; and
+  `FROM`/`JOIN`/`INTO`/`UPDATE`/`ALTER TABLE` plus a name (`ON x` only on a `CREATE
+  INDEX` or `CREATE TRIGGER` line). In code (Python, TS/JS, Go) the keywords must be
+  UPPERCASE, because Python imports and prose look like lowercase SQL; a `.sql` file is
+  read in any case. A name must end where an identifier ends, so `f"FROM t_{n}"` and a
+  Dockerfile `FROM python:3.12` in a string are not tables. SQL words, one-letter
+  aliases and engine builtins (`sqlite_*`, `pragma_*`, `pg_*`, `information_schema.*`)
+  are skipped. `xray/table_map.py` runs it over the checkout with an owner-only per-file
+  cache by size + mtime (`xray-tables-<digest>.json`, read as untrusted). A drop counts
+  only in a file that does not define the table again (a rebuild) and is not a test file
+  (a test dropping a table to simulate a failure). `code_xray tables` / `gingugu xray
+  tables` (files: per file, what it defines with who else uses each, drops with who still
+  uses each, and uses with where defined or dropped; no files: every table with counts,
+  the one-sided ones first - `defined nowhere here`, `dropped, still used`, `used
+  nowhere here` - and a table seen only in test files last as `tests only`). A file's
+  first read adds `Tables: defines orders (used by a.py, b.py +2); uses users (defined in
+  schema.sql:12), tmp (dropped in m.sql:3)`, and the edit note says once per table per
+  session when an edit starts using a table defined nowhere here or dropped here, edits a
+  definition other files use, or drops a table other files still use. A hook's scan has a
+  1s budget and the hooks stay silent until every file has been read once. Not covered:
+  columns, ORM use through model classes (the import graph covers that) and tables
+  defined in IaC. The cache plumbing the env map and the table map share moved to
+  `xray/file_facts.py`; the env map's behaviour is unchanged. `MEMORY_XRAY_TABLES=off`
+  silences all of it. No migration.
 - **X22 in the hooks: the read hook, the edit note and the Bash X-ray name the docs
   citing a file.** The docs map costs a git call per sibling checkout, so the hooks read
   a small owner-only summary, `xray-docs-in-<digest>.json` (up to 8 docs per file, 2000
