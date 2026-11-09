@@ -2,10 +2,11 @@
 
 The post-edit note records two predictions per edited file - the tests nearest
 the edited definitions by call (``calls``) and the tests nearest the file by
-import (``imports``). A ``pytest`` run in the same session records which test
-files failed. ``score`` then says, per predictor, how many failed test files
-were in its first five, further down its list, or missing - whether X-ray helps
-is measured, and the two predictors can be compared on real work.
+import (``imports``). A test run in the same session (pytest, vitest, jest,
+``go test``) records which test files failed. ``score`` then says, per predictor,
+how many failed test files were in its first five, further down its list, or
+missing - whether X-ray helps is measured, and the two predictors can be compared
+on real work.
 
 Local only: ``xray-ledger.jsonl`` sits beside the hook state, owner-only, with
 repo-relative paths and hashed session and repo ids. It never reaches the brain.
@@ -17,27 +18,20 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
 import time
 from pathlib import Path
 
 from . import local
 from .hook_common import _show
+from .ledger_runs import failed_tests, is_test_run, same_file
+
+__all__ = ["failed_tests", "is_test_run"]
 
 MAX_BYTES = 5_000_000
 KINDS = ("calls", "imports")
 TOP = 5
 MAX_TESTS = 200
 MAX_MISSES = 10
-# pytest as a command: at the start, after a separator, after `run` (uv run) or
-# `-m` (python -m), past env assignments. `grep pytest` and `cat pytest.ini` are
-# arguments, not commands.
-_RUN = re.compile(
-    r"(?:^|&&|\|\||[;|]|\brun|\s-m)\s*(?:\w+=\S*\s+)*(?:\S*/)?(?:pytest|py\.test)(?=\s|$)"
-)
-# Only a test file's path is kept from output: a log line that happens to start
-# with ERROR must not put its next word (a host, a token) on disk for good.
-_FAILED = re.compile(r"^(?:FAILED|ERROR) ([\w./\\-]+?\.py)(?:::|\s|$)", re.MULTILINE)
 
 
 def path(state_dir: Path) -> Path:
@@ -84,17 +78,8 @@ def predict(
     )
 
 
-def is_test_run(command: str) -> bool:
-    return bool(_RUN.search(command))
-
-
-def failed_tests(text: str) -> list[str]:
-    """Test files named by pytest's ``FAILED``/``ERROR`` summary lines."""
-    return sorted({m.group(1).replace("\\", "/") for m in _FAILED.finditer(text)})
-
-
 def observe(payload: dict, state_dir: Path) -> None:
-    """Record the outcome of a finished ``pytest`` run (Bash PostToolUse)."""
+    """Record the outcome of a finished test run (Bash PostToolUse)."""
     try:
         from .edit_hook import enabled
 
@@ -154,9 +139,9 @@ def _records(state_dir: Path) -> list[dict]:
 
 def _bucket(test: str, preds: list[list[str]]) -> str:
     """top5 / listed / missed for one failed test against one predictor's lists."""
-    if any(test in tests[:TOP] for tests in preds):
+    if any(same_file(test, t) for tests in preds for t in tests[:TOP]):
         return "top5"
-    return "listed" if any(test in tests for tests in preds) else "missed"
+    return "listed" if any(same_file(test, t) for tests in preds for t in tests) else "missed"
 
 
 def score(state_dir: Path) -> dict:
