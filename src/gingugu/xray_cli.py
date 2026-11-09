@@ -1,6 +1,7 @@
-"""``gingugu xray``: the X-ray brief, history, blind spots, docs, env, links and prediction score.
+"""``gingugu xray``: the X-ray brief, history, blind spots, docs, env, tables, links and score.
 
-``brief``, ``history``, ``blindspots``, ``docs``, ``env`` and ``links`` are the same answers as the
+``brief``, ``history``, ``blindspots``, ``docs``, ``env``, ``tables`` and ``links`` are the
+same answers as the
 ``code_xray`` actions of those names, computed on this machine from the cached
 hook graph and git log; ``score`` reads the local prediction ledger.
 Exit 0 ok, 1 on a git/X-ray failure, 2 on bad usage.
@@ -12,7 +13,7 @@ import argparse
 import json
 import sys
 
-from .xray import brief, docs_tool, env_tool, history_tool
+from .xray import brief, docs_tool, env_tool, history_tool, table_tool
 from .xray.links import tool as links_tool
 from .xray.scan import XrayError
 
@@ -36,12 +37,14 @@ def _parser() -> argparse.ArgumentParser:
     c.add_argument("--files", help="comma-separated files to look up (default: the most cited)")
     e = sub.add_parser("env", help="env vars a file reads or sets, and where the other side is")
     e.add_argument("--files", help="comma-separated files (default: every name, one-sided first)")
+    t = sub.add_parser("tables", help="DB tables a file uses, defines or drops, and the other side")
+    t.add_argument("--files", help="comma-separated files (default: every table, one-sided first)")
     k = sub.add_parser("links", help="which other checkouts lean on this one, and on what")
     k.add_argument("--files", help="comma-separated files: who leans on them, and the ripple")
     k.add_argument(
         "--warm", action="store_true", help="read every checkout now, filling the caches"
     )
-    for p in (c, e, k):
+    for p in (c, e, t, k):
         p.add_argument("--path", help="any directory in the checkout (default: cwd)")
         p.add_argument("--limit", type=int, default=20, help="rows (default 20)")
         p.add_argument("--json", action="store_true", help="the full answer as JSON")
@@ -62,7 +65,9 @@ def _history(args: argparse.Namespace) -> int:
 
 
 def _docs(args: argparse.Namespace) -> int:
-    answer = {"docs": docs_tool, "env": env_tool}.get(args.cmd, links_tool).answer
+    answer = (
+        {"docs": docs_tool, "env": env_tool, "tables": table_tool}.get(args.cmd, links_tool).answer
+    )
     try:
         if getattr(args, "warm", False):
             data = links_tool.warm(args.path)
@@ -94,7 +99,7 @@ def main(argv: list[str]) -> int:
         return _score(args.json)
     if args.cmd in history_tool.ACTIONS:
         return _history(args)
-    if args.cmd in ("docs", "env", "links"):
+    if args.cmd in ("docs", "env", "tables", "links"):
         return _docs(args)
     if args.cmd != "brief":
         parser.print_usage(sys.stderr)
