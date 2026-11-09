@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **X7a: env vars as edges.** Nothing imports an environment variable, so the code
+  reading `DB_URL` and the compose file, manifest, workflow, Dockerfile or
+  `.env.example` setting it were invisible to each other. `xray/env_scan.py` reads
+  literal names in known forms - Python `os.environ[...]`, `.get`, `os.getenv`,
+  `setdefault`, `monkeypatch.setenv`; TS/JS `process.env.X` and `import.meta.env.X`; Go
+  `os.Getenv`/`LookupEnv`; shell `export X=` and `${X:-...}`; Dockerfile `ENV`/`ARG`;
+  `env`/`environment` blocks in YAML (compose, k8s, GitHub Actions); and the example
+  templates (`.env.example`, `.sample`, `.template`, `.dist`, `.defaults`). Real dotenv
+  files (`.env`, `.env.local`, `.envrc`, ...) are never opened, and no value is ever
+  kept: names and line numbers only, in an owner-only per-file cache. `code_xray env` /
+  `gingugu xray env` (files: the vars each file reads, with where each is set, and the
+  ones it sets, with who reads them; no files: every name, the read-but-never-set and
+  set-but-never-read ones first). A file's first read adds `Env: reads DB_URL (set in
+  docker-compose.yml:5), ...`, and an edit that starts reading a name set nowhere in the
+  repo says so once per name per session. A hook's scan has a 1s budget; files it did
+  not reach wait for the next call (the cache keeps what it read) and the hooks stay
+  silent until the map is whole, so `set nowhere` is never said of a file not yet read.
+  `MEMORY_XRAY_ENV=off` silences all of it. No migration.
 - **X22 in the hooks: the read hook, the edit note and the Bash X-ray name the docs
   citing a file.** The docs map costs a git call per sibling checkout, so the hooks read
   a small owner-only summary, `xray-docs-in-<digest>.json` (up to 8 docs per file, 2000
