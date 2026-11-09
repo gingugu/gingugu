@@ -38,11 +38,16 @@ def _load(root: Path, state_dir: Path) -> dict | None:
     except OSError:
         return None
     raw = hook_common._read_json(path)
-    if not isinstance(raw, dict) or raw.get("v") != VERSION or type(raw.get("at")) is not int:
+    if not isinstance(raw, dict) or raw.get("v") != VERSION or not _epoch(raw.get("at")):
         return None
     if not 0 <= time.time() - raw["at"] < 10 * FRESH_S + 86_400 * 30:
         return None  # from the future, or ancient: a summary that would never refresh
     return raw if isinstance(raw.get("files"), dict) else None
+
+
+def _epoch(value: object) -> bool:
+    """An int a clock could give: a huge one would overflow the float maths below."""
+    return type(value) is int and 0 <= value < 2**40
 
 
 def refresh(root: Path, state_dir: Path) -> None:
@@ -101,7 +106,7 @@ def _rows(root: Path, rel: str, state_dir: Path) -> list | None:
     rows = raw["files"].get(rel) if raw else None
     if not isinstance(rows, list):
         return None
-    return [r for r in rows if _good(r)] or None
+    return [r for r in rows[:MAX_PER_FILE] if _good(r)] or None
 
 
 def file_line(root: Path, rel: str, state_dir: Path) -> str | None:

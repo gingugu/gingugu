@@ -15,11 +15,14 @@ on arrival when older than 10 minutes with `docs_map.read(budget_s=1.0)` (new kw
 names made inert like X23's (path characters only, 120 chars). A file's first `Read` adds
 `Docs cite it: a, repo:b (+N more) - code_xray docs names them all.`; the edit note adds
 it for any file type; the Bash X-ray adds `<rel>: Docs cite it: ...` for a changed source
-file and `<rel> was deleted. Docs still cite it: ...` for a deleted one (5 named, the rest
+file and `<rel> was deleted. Docs still cite it: ...` for a deleted one (3 named, the rest
 counted and left unclaimed). The edit note and the Bash X-ray share one claim per file per
 session; Bash never refreshes. `MEMORY_XRAY_DOCS=off` silences all of it; no migration.
 The text helpers moved from `docs_map.py` (was 315 lines) to `docs_text.py`. Spec:
-`tests/test_xray_docs_hooks.py` (29 tests). 4207 passed.
+`tests/test_xray_docs_hooks.py` (34 tests). Security review: the sibling budget now holds
+inside a sibling (checked per doc; `scan.commit` takes a timeout; a sibling past it keeps
+its last reading), and a summary `at` no clock gives reads as bad (it overflowed the float
+maths past the hooks' handlers; X23's `inbound` had the same and is fixed too).
 
 **Codebase X-ray in every language we can parse - phase 1 MERGED (#150), released in
 0.30.0; phases 2 and 3 not started.** Extraction runs through one adapter per language (`xray/lang/`): Python stays on `ast`;
@@ -2669,7 +2672,7 @@ read never fires, and a write through the shell bypasses X-ray entirely. X1-X13
 describe what is stored; X14-X18 add how the map reaches the agent, how it
 stays current, and how it is seen.
 
-**Build order:** X14, X19, X20, X15, X16, X17 (all shipped by 0.40.0), X3 (0.41.0), X4/X6 (0.42.0; X4 drift owed), X22 docs map (0.45.0; hook surfaces next), X23 cross-repo links (0.46.0; hook surfaces 0.47.0), then X7/X8, with X21 no later
+**Build order:** X14, X19, X20, X15, X16, X17 (all shipped by 0.40.0), X3 (0.41.0), X4/X6 (0.42.0; X4 drift owed), X22 docs map (0.45.0; hook surfaces built, unreleased), X23 cross-repo links (0.46.0; hook surfaces 0.47.0), then X7/X8, with X21 no later
 than the first of X7/X9 that needs symbols on the brain. X18 ships in
 slices alongside them. IDs are stable references, not the order.
 

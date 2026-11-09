@@ -74,6 +74,8 @@ def _load(root: Path, state_dir: Path) -> dict | None:
         return None
     if not all(type(raw.get(k)) is int for k in ("at", "total", "repos")):
         return None
+    if not 0 <= raw["at"] < 2**40:
+        return None  # a huge int would overflow the float maths below
     if not 0 <= time.time() - raw["at"] < 10 * FRESH_S + 86_400 * 30:
         return None  # from the future, or ancient: a summary that would never refresh
     if not isinstance(raw.get("files"), dict) or not isinstance(raw.get("whole"), list):

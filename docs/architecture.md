@@ -1869,7 +1869,13 @@ without `files` the totals and the most cited files; it answers locally like `hi
 `gingugu serve` refuses it and the proxy answers it on the caller's machine. Switch
 `MEMORY_XRAY_DOCS` (default on). No migration, no brain change. The docs-map hook surfaces (the
 read hook, the edit note, the Bash X-ray) read a per-repo summary,
-`xray-docs-in-<digest>.json` (`xray/docs_hook.py`), refreshed on the map on arrival.
+`xray-docs-in-<digest>.json` (`xray/docs_hook.py`), refreshed on the map on arrival when
+older than 10 minutes, on a 1s sibling budget checked per doc. A file's first read and the
+edit note (any file type) add `Docs cite it: <doc>, <repo>:<doc> (+N more) - code_xray docs
+names them all.` (3 shown); the Bash X-ray adds it for a changed source file and
+`Docs still cite it: ...` for a deleted one (3 named, the rest counted). Once per file per
+session, shared by the edit note and the Bash X-ray. The pure text helpers (`tokens`,
+`github_paths`, `qualified`) live in `xray/docs_text.py`.
 
 **Cross-repo links (X23).** A service ecosystem is wired by names, not imports. The
 `xray/links/` package reads this checkout and its sibling checkouts (the docs map's

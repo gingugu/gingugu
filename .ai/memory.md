@@ -275,7 +275,7 @@ Generated sets hold real memory content and stay in `bench/local/`.
   here and in sibling checkouts (`xray/docs_map.py`, `MEMORY_XRAY_DOCS`); `links` (X23) is the same
   kind of local answer for cross-repo wiring: which sibling checkouts lean on this repo by names it
   provides (hosts, routes, images, packages, IaC resources, CI checkouts, cites; `xray/links/`,
-  `MEMORY_XRAY_LINKS`; the read hook and edit note name outside dependents from a per-repo summary, 0.47.0); the brief gains `Other repos leaning on these files`, `Ripple across
+  `MEMORY_XRAY_LINKS`; the read hook and edit note name outside dependents from a per-repo summary, 0.47.0); the read hook, edit note and Bash X-ray also name the docs citing a file from X22's own per-repo summary (`xray/docs_hook.py`, unreleased); the brief gains `Other repos leaning on these files`, `Ripple across
   repos`, `Docs citing
   the changed files:` and `Docs still citing a deleted or renamed file:`. Client only, no migration. Drift not built.
   Multi-language + migration 021 (shipped 0.30.0).

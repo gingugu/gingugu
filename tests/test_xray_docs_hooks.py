@@ -279,3 +279,41 @@ def test_bash_names_a_few_docs_and_leaves_the_rest_unclaimed(repo, state, monkey
     named = "pkg/core.py" if "pkg/core.py: Docs cite it" in text else "pkg/leaf.py"
     other = "pkg/leaf.py" if named == "pkg/core.py" else "pkg/core.py"
     assert "Docs cite it" in edit_note.check(_edited(repo, other), state)
+
+
+# --- review fixes: the budget holds inside a sibling, a huge clock reads as bad ----------
+
+
+def test_one_huge_sibling_cannot_outlast_the_budget(repo, state, monkeypatch):
+    ops = repo.parent / "ops"
+    for i in range(20):
+        (ops / f"docs/m{i}.md").write_text("repo/pkg/a.py\n")
+    _git(ops, "add", "-A")
+    _git(ops, "commit", "-q", "-m", "more")
+    real = docs_map._read_text
+
+    def slow(path):
+        time.sleep(0.1)
+        return real(path)
+
+    monkeypatch.setattr(docs_map, "_read_text", slow)
+    t = time.monotonic()
+    m = docs_map.read(repo, state, budget_s=0.5)
+    assert time.monotonic() - t < 1.9  # 21 docs x 0.1s = 2.1s unbudgeted; cut at 0.5s
+    assert "ops" not in m.siblings  # unread and never cached: skipped, not half-read
+
+
+def test_a_sibling_past_the_budget_keeps_its_last_reading(repo, state, monkeypatch):
+    assert docs_map.read(repo, state).siblings  # cached
+    _git(repo.parent / "ops", "commit", "-q", "--allow-empty", "-m", "moved")  # HEAD moves
+
+    def boom(*a, **k):
+        raise docs_map.scan.XrayError("past the sibling budget")
+
+    monkeypatch.setattr(docs_map, "_sibling", boom)
+    assert "ops" in docs_map.read(repo, state).siblings
+
+
+@pytest.mark.parametrize("at", [10**400, -1, 2**40])
+def test_a_clock_no_machine_gives_says_nothing(repo, state, at):
+    assert _summary(repo, state, [["docs/a.md", None]], at=at) is None

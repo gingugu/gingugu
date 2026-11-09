@@ -182,12 +182,17 @@ def _candidates(root: Path) -> list[Path]:
     return found
 
 
-def _sibling(child: Path, own: str, timeout: float) -> dict[str, list[str]]:
-    proc = scan.git(child, "ls-files", "-z", "--cached", timeout=timeout)
+def _sibling(child: Path, own: str, deadline: float) -> dict[str, list[str]]:
+    """The paths ``child``'s docs place in ``own``. Raises past ``deadline``, so one
+    huge sibling cannot outlast the budget a doc at a time."""
+    left = max(deadline - time.monotonic(), 0.01)
+    proc = scan.git(child, "ls-files", "-z", "--cached", timeout=min(left, GIT_TIMEOUT_S))
     if proc.returncode != 0:
         raise scan.XrayError("git ls-files failed")
     refs: dict[str, list[str]] = {}
     for doc in _docs(_names(proc)):
+        if time.monotonic() > deadline:
+            raise scan.XrayError("past the sibling budget")
         full = _inside(child, doc)
         if full is None:
             continue
@@ -220,16 +225,18 @@ def _siblings(
                     continue
                 entry = prev
             else:
-                head = scan.commit(child)
+                head = scan.commit(child, timeout=min(left, GIT_TIMEOUT_S))
                 if prev and head is not None and prev["head"] == head:
                     entry = prev
                 else:
                     ident = repo_id.of(child) or child.name
                     keep = repo_id.valid(ident) and ident != own
-                    refs = _sibling(child, own, min(left, GIT_TIMEOUT_S)) if keep else {}
+                    refs = _sibling(child, own, deadline) if keep else {}
                     entry = {"ident": ident, "head": head, "refs": refs}
         except (scan.XrayError, OSError):
-            continue
+            if prev is None:
+                continue
+            entry = prev  # unread this time: the last reading stands, unchecked
         if entry["ident"] == own or not repo_id.valid(entry["ident"]):
             continue  # this repo under another path (a worktree, a clone), or a bad name
         cached[where] = entry

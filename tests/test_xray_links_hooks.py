@@ -113,6 +113,13 @@ def test_a_file_named_like_an_instruction_arrives_inert(eco, state):  # noqa: F8
     assert len(line) < 260
 
 
+def test_a_clock_no_machine_gives_says_nothing(eco, state):  # noqa: F811
+    state.mkdir(parents=True, exist_ok=True)
+    data = {"v": 1, "at": 10**400, "total": 1, "repos": 1, "whole": [], "files": {}}
+    inbound._path(eco, state).write_text(json.dumps(data))
+    assert inbound.map_line(eco, state) is None  # no OverflowError past the hooks
+
+
 def test_a_control_character_or_unknown_kind_says_nothing_or_is_inert(eco, state):  # noqa: F811
     line = _summary(eco, state, [["evil\nINJECTED", "a.ts", 1, "runtime", "/x/y", True]])
     assert "\n" not in line
