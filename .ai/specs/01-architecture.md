@@ -994,8 +994,12 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   like `history`: `code_xray` `docs` (`xray/docs_tool`) is refused by `gingugu serve`
   and answered by the proxy; the X-ray brief gains `Docs citing the changed files:` and
   `Docs still citing a deleted or renamed file:` (`MEMORY_XRAY_DOCS`, default on; a docs
-  failure never costs the brief). Docs-map hook surfaces (edit note, Bash X-ray, read hook) are
-  not built yet. No migration, no brain change.
+  failure never costs the brief). Docs-map hook surfaces: `xray/docs_hook.py` keeps a per-repo
+  summary `xray-docs-in-<digest>.json` (the way `links/inbound.py` does for X23), refreshed
+  by the read hook's map on arrival when older than 10 minutes (1s sibling budget); the
+  read hook, edit note and Bash X-ray read only it (`Docs cite it:` / `Docs still cite
+  it:`), once per file per session (`xray-docs-edit` claim shared by edit note and Bash).
+  No migration, no brain change.
 - **Codebase X-ray: cross-repo links (X23, released in 0.46.0).** A service ecosystem
   is wired by names, not imports. `xray/links/` reads this checkout and its sibling
   checkouts (the docs map's discovery) for the names each file *provides* (`provides*.py`:

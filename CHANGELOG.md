@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **X22 in the hooks: the read hook, the edit note and the Bash X-ray name the docs
+  citing a file.** The docs map costs a git call per sibling checkout, so the hooks read
+  a small owner-only summary, `xray-docs-in-<digest>.json` (up to 8 docs per file, 2000
+  files). The map on arrival refreshes it when it is older than 10 minutes, on a 1s
+  sibling budget (past it, siblings come from their cache). A file's first read adds
+  `Docs cite it: <doc>, <repo>:<doc>, ... - code_xray docs names them all.` (3 shown);
+  the edit note names them after an edit of any file type, and the Bash X-ray after a
+  command changed a source file (`<path>: Docs cite it: ...`) or deleted one
+  (`<path> was deleted. Docs still cite it: ...`), even a leaf nothing imports. Once per
+  file per session, the edit note and the Bash X-ray sharing the claim. Bash never
+  refreshes: with no summary it says nothing about docs. `MEMORY_XRAY_DOCS=off`
+  silences every line. No migration.
+
 ---
 
 ## [0.48.1] - 2026-11-06

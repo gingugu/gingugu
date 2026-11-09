@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from . import edit_hook, edit_symbols, hook_common, ledger, literals, rank, symbols
+from . import docs_hook, edit_hook, edit_symbols, hook_common, ledger, literals, rank, symbols
 from .hook_common import _claim, _show
 from .lang.python import is_test
 from .scan import XrayError
@@ -156,6 +156,15 @@ def _outside(root: Path, rel: str, state_dir: Path, session_id: str) -> list[str
     return [f"- {line}"] if _claim(claim) else []
 
 
+def _docs(root: Path, rel: str, state_dir: Path, session_id: str) -> list[str]:
+    """X22: the docs citing the edited file, once per file per session."""
+    line = docs_hook.file_line(root, rel, state_dir)
+    if not line:
+        return []
+    claim = hook_common.claim_path(state_dir, "xray-docs-edit", session_id, root, rel)
+    return [f"- {line}"] if _claim(claim) else []
+
+
 def check(payload: dict, state_dir: Path) -> str | None:
     """The note for the definitions this edit landed in, else None."""
     try:
@@ -173,13 +182,14 @@ def check(payload: dict, state_dir: Path) -> str | None:
                 return None
             texts = literals.lines(payload, *target, state_dir, session_id)
             outside = _outside(*target, state_dir, session_id)
-            both = [*texts, *outside]
+            both = [*texts, *outside, *_docs(*target, state_dir, session_id)]
             return "\n".join(["GINGUGU X-RAY after edit:", *both]) if both else None
         root, rel = target
         # The file is seen now, by whoever wrote it, in any X-ray language: the
         # blind-edit deny stands down. Only Python has a symbol graph to say more.
         _claim(hook_common.claim_path(state_dir, "xray-read", session_id, root, rel))
         outside = _outside(root, rel, state_dir, session_id)  # any language: X23
+        outside += _docs(root, rel, state_dir, session_id)  # X22
         lines: list[str] = []
         news = _news(payload) if rel.endswith(".py") else None
         if news:

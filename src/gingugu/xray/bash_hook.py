@@ -20,7 +20,7 @@ import shlex
 import time
 from pathlib import Path
 
-from . import bash_state, edit_hook, hook_common, lang, local, rank
+from . import bash_state, docs_hook, edit_hook, hook_common, lang, local, rank
 from .bash_state import remember, touched
 from .hook_common import _claim, _show, _sweep
 from .scan import XrayError
@@ -203,6 +203,25 @@ def _file_lines(root: Path, state_dir: Path, session_id: str, changed: list[str]
     return out
 
 
+def _docs_lines(
+    root: Path, state_dir: Path, session_id: str, changed: list[str], deleted: list[str]
+) -> list[str]:
+    """X22: docs citing a changed or deleted file, from the summary only."""
+    out: list[str] = []
+    for rels, make, said in (
+        (deleted, docs_hook.gone_line, "{} was deleted. {}"),
+        (changed, docs_hook.file_line, "{}: {}"),
+    ):
+        for rel in rels:
+            line = make(root, rel, state_dir)
+            claim = hook_common.claim_path(state_dir, "xray-docs-edit", session_id, root, rel)
+            if line and not claim.exists() and _claim(claim):
+                out.append(said.format(_show(rel), line))
+    if len(out) > _NAMED:
+        out = [*out[:_NAMED], f"+{len(out) - _NAMED} more changed files cited by docs."]
+    return out
+
+
 def after(payload: dict, state_dir: Path) -> str | None:
     """What the files the command changed reach, else None."""
     try:
@@ -229,6 +248,7 @@ def after(payload: dict, state_dir: Path) -> str | None:
             changed, deleted = diff
             lines = _deleted_lines(root, state_dir, session_id, deleted)
             lines += _file_lines(root, state_dir, session_id, changed)
+            lines += _docs_lines(root, state_dir, session_id, changed, deleted)
             if lines:
                 head = f"that command changed source in {_show(root.name)}:"
                 sections.append("\n".join([head, *lines]))

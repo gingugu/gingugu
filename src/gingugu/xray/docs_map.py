@@ -258,14 +258,16 @@ def _sibling(child: Path, own: str, timeout: float) -> dict[str, list[str]]:
     return refs
 
 
-def _siblings(root: Path, own: str, old: dict) -> tuple[dict[str, dict], dict[str, dict]]:
+def _siblings(
+    root: Path, own: str, old: dict, budget_s: float | None = None
+) -> tuple[dict[str, dict], dict[str, dict]]:
     """(by sibling path, for the cache; by ident, for the map). Past the time
     budget a sibling keeps its cached entry unchecked, or is skipped."""
     cached: dict[str, dict] = {}
     by_ident: dict[str, dict] = {}
     if not own:
         return cached, by_ident
-    deadline = time.monotonic() + SIBLING_BUDGET_S
+    deadline = time.monotonic() + (SIBLING_BUDGET_S if budget_s is None else budget_s)
     for child in _candidates(root):
         where = str(child)
         prev = old.get(where)
@@ -293,7 +295,7 @@ def _siblings(root: Path, own: str, old: dict) -> tuple[dict[str, dict], dict[st
     return cached, by_ident
 
 
-def read(root: Path, state_dir: Path) -> DocsMap:
+def read(root: Path, state_dir: Path, *, budget_s: float | None = None) -> DocsMap:
     """The docs map for the checkout at ``root``, from the cache where it holds."""
     proc = scan.git(
         root, "ls-files", "-z", "--cached", "--others", "--exclude-standard", timeout=GIT_TIMEOUT_S
@@ -306,7 +308,7 @@ def read(root: Path, state_dir: Path) -> DocsMap:
     if ident != own:
         old_local, old_sibs = {}, {}  # another identity reads every doc differently
     local = _local(root, _docs(names), own, old_local)
-    cached, by_ident = _siblings(root, own, old_sibs)
+    cached, by_ident = _siblings(root, own, old_sibs, budget_s)
     fresh = {"v": MATCH_VERSION, "ident": own, "local": local, "siblings": cached}
     if fresh != raw:
         hook_common._write_json(state_dir / f"xray-docs-{hook_common._digest(root)}.json", fresh)
