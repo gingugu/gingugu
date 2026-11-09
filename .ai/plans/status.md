@@ -1,8 +1,28 @@
 # Project Status
 
-_Last updated: 2026-11-09 (board resynced after 0.48.1: the shipped 0.47-0.48 entries moved from In Flight to Recently Completed; row 1 lists X22, X23 and removed-key readers; row 1a still open)_
+_Last updated: 2026-11-09 (X22 hook surfaces built: the docs citing a file on read, after edit, after Bash; board resynced after 0.48.1)_
 
 ## In Flight
+
+**X22 in the hooks: the docs citing a file (2026-11-09, branch `feature/xray-docs-hooks`,
+stacked on `docs/board-resync`).** The docs map (0.45.0) answered only when asked: the
+`docs` action and the brief. A full read costs 0.18s warm here (a git call per sibling
+checkout; 0.58s cold, 27 docs, 17 siblings), too much for every hook call, so the hooks
+read a per-repo summary instead, as X23 reads `links.inbound`. New `xray/docs_hook.py`:
+`xray-docs-in-<digest>.json` (`{"v", "at", "files": {rel: [[doc, repo]]}}`, 8 rows per
+file, 2000 files, 4 MB, owner-only, untrusted on load), refreshed by the read hook's map
+on arrival when older than 10 minutes with `docs_map.read(budget_s=1.0)` (new kwarg);
+names made inert like X23's (path characters only, 120 chars). A file's first `Read` adds
+`Docs cite it: a, repo:b (+N more) - code_xray docs names them all.`; the edit note adds
+it for any file type; the Bash X-ray adds `<rel>: Docs cite it: ...` for a changed source
+file and `<rel> was deleted. Docs still cite it: ...` for a deleted one (3 named, the rest
+counted and left unclaimed). The edit note and the Bash X-ray share one claim per file per
+session; Bash never refreshes. `MEMORY_XRAY_DOCS=off` silences all of it; no migration.
+The text helpers moved from `docs_map.py` (was 315 lines) to `docs_text.py`. Spec:
+`tests/test_xray_docs_hooks.py` + `tests/test_xray_docs_budget.py` (34 tests). Security review: the sibling budget now holds
+inside a sibling (checked per doc; `scan.commit` takes a timeout; a sibling past it keeps
+its last reading), and a summary `at` no clock gives reads as bad (it overflowed the float
+maths past the hooks' handlers; X23's `inbound` had the same and is fixed too).
 
 **Codebase X-ray in every language we can parse - phase 1 MERGED (#150), released in
 0.30.0; phases 2 and 3 not started.** Extraction runs through one adapter per language (`xray/lang/`): Python stays on `ast`;
@@ -27,7 +47,7 @@ RELEASED in 0.39.0 (#165); X-ray tuned for the agent
 RELEASED in 0.40.0 (#166); X3 scar tissue RELEASED in 0.41.0 (#168); X4 history + X6
 blind spots RELEASED in 0.42.0 (#170); X22 docs map RELEASED in 0.45.0 (#174); X23 cross-repo links RELEASED in 0.46.0 (#176),
 in the hooks in 0.47.0 (#177/#178); removed-key readers in the edit note RELEASED in
-0.48.0 (#182); X22 hook surfaces not built; X21 symbols on the brain owed** (2026-10-30). The
+0.48.0 (#182); X22 hook surfaces built on `feature/xray-docs-hooks`, unreleased; X21 symbols on the brain owed** (2026-10-30). The
 end goal was restated: a sophisticated map before any work starts, so the map
 reaches the agent on reads and on any write, not only through the edit tools. New
 items X14-X21 (section 19); build order X14, X19, X20, X15, X16, X17, X3, then X4/X6.
@@ -1947,8 +1967,8 @@ every row moved up one.
 
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival shipped in 0.32.0; X19 X-ray brief shipped in 0.34.0; X20 brief on the board shipped in 0.35.0 (repo on the line in 0.36.0); X15 writes from any tool shipped in 0.37.0; X16 incremental refresh shipped in 0.38.0; X17 symbol graph (Python) shipped in 0.39.0; X-ray tuned for the agent, with the lean X11 test ledger, shipped in 0.40.0; X3 scar tissue shipped in 0.41.0; X4 history + X6 blind spots shipped in 0.42.0 (X4 drift owed); X22 docs map shipped in 0.45.0 (hook surfaces not built); X23 cross-repo links shipped in 0.46.0, in the hooks in 0.47.0; removed-key readers in the edit note shipped in 0.48.0; X21 symbols on the brain owed | 19 | Every sail since 2026-10-26 has gone here. A 21-part roadmap (X1-X21) in its section below |
-| 1a | **Next X-item not yet chosen** - X22 hook surfaces (edit note, Bash X-ray, read hook) lead the build order, then X7 edges beyond imports and X8 dependency X-ray; X4 drift is owed | 19 | X22 shipped in 0.45.0 and X23 in 0.46.0-0.47.1. This row names whichever X-item is in progress and moves on when it ships |
+| 1 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival shipped in 0.32.0; X19 X-ray brief shipped in 0.34.0; X20 brief on the board shipped in 0.35.0 (repo on the line in 0.36.0); X15 writes from any tool shipped in 0.37.0; X16 incremental refresh shipped in 0.38.0; X17 symbol graph (Python) shipped in 0.39.0; X-ray tuned for the agent, with the lean X11 test ledger, shipped in 0.40.0; X3 scar tissue shipped in 0.41.0; X4 history + X6 blind spots shipped in 0.42.0 (X4 drift owed); X22 docs map shipped in 0.45.0 (hook surfaces built, unreleased); X23 cross-repo links shipped in 0.46.0, in the hooks in 0.47.0; removed-key readers in the edit note shipped in 0.48.0; X21 symbols on the brain owed | 19 | Every sail since 2026-10-26 has gone here. A 21-part roadmap (X1-X21) in its section below |
+| 1a | **X22 hook surfaces (built, unreleased)** - the docs citing a file on its first read, after an edit and after a Bash write; next X7 edges beyond imports, then X8 dependency X-ray; X4 drift is owed | 19 | X22 shipped in 0.45.0 and X23 in 0.46.0-0.47.1; the hook surfaces close X22. This row names whichever X-item is in progress and moves on when it ships |
 | 2 | **A calibration ledger** | 14 | New tables, so a migration. Follows X3: the lean X11 ledger (0.40.0) already records predictions, so it scores real data from day one |
 | 3 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
 | 4 | **Paraphrase question set + lexical/semantic arbitration** - labels now recorded at write time (`query_acts`, migration 022, released in 0.43.0); collect, then measure | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
@@ -2652,7 +2672,7 @@ read never fires, and a write through the shell bypasses X-ray entirely. X1-X13
 describe what is stored; X14-X18 add how the map reaches the agent, how it
 stays current, and how it is seen.
 
-**Build order:** X14, X19, X20, X15, X16, X17 (all shipped by 0.40.0), X3 (0.41.0), X4/X6 (0.42.0; X4 drift owed), X22 docs map (0.45.0; hook surfaces next), X23 cross-repo links (0.46.0; hook surfaces 0.47.0), then X7/X8, with X21 no later
+**Build order:** X14, X19, X20, X15, X16, X17 (all shipped by 0.40.0), X3 (0.41.0), X4/X6 (0.42.0; X4 drift owed), X22 docs map (0.45.0; hook surfaces built, unreleased), X23 cross-repo links (0.46.0; hook surfaces 0.47.0), then X7/X8, with X21 no later
 than the first of X7/X9 that needs symbols on the brain. X18 ships in
 slices alongside them. IDs are stable references, not the order.
 
@@ -2680,7 +2700,7 @@ slices alongside them. IDs are stable references, not the order.
 | X21 | **Symbols on the brain (OWED)** - brain tables for definitions and call edges (a migration), ingested with the snapshot, so `code_xray` `callers` works through `gingugu serve` and across repos | X17, X1 store, X9 | Owed by the X17 approval (2026-10-30), which was given on the condition that brain tables follow. Lands when X7 or X9 first needs symbols on the brain; until then the symbol graph stays on the client |
 | X19 | **X-ray brief (SHIPPED in 0.34.0, #157)** - the changed files by rank with importer counts, plus their combined blast (code and candidate tests), for an agent that fires no hooks | X1, X14 graph cache | `code_xray` `brief` (`range`, `files`, `path`) and `gingugu xray brief [--range R \| --files a,b] [--path P] [--json]`. Computed on the caller's machine from the hook graph cache; nothing stored, the brain never asked; `gingugu serve` refuses it, the proxy answers it locally. Compact `text` <= 8800 chars, for reviews, handoffs and `board watch --exec`. `xray/brief.py`, `xray_cli.py` |
 | X20 | **Brief on the board (RELEASED in 0.35.0)** - a handoff carries its X-ray brief without anyone asking. Why next: the agents X19 is for fire no hooks, so a brief they must request is a brief they rarely see | X19, agent board | When a board post names a range (`xray: <range>`), the RECEIVING side renders `xray brief` for it and attaches the text: the prompt hook's board mail (Claude Code) and `board watch --exec` (Codex). Rendered on the receiver's machine from its own checkout; the post itself carries only the ref, never paths or the brief. BUILT as a line of its own `xray: <range>` in the body: board mail appends at most one per prompt (<= 3500 chars, the prompt's cwd); `board watch` adds an `xray` field, appends to `text` and sets `GINGUGU_POST_XRAY` (<= 3 per batch, the watcher's cwd). Same range gate as `brief`, ref <= 200 chars. Sender nudge: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line (`xray/board_nudge.py`). A receiver with no cwd or outside a repo gets one line naming `gingugu xray brief --range <ref>` (0.35.2). Part 2: `xray: <repo> <range>` names the repo, found locally via `xray/repo_id` (0.36.0). Switch `MEMORY_XRAY_BOARD`. `xray/board_brief.py` |
-| X22 | **Docs map (SHIPPED in 0.45.0)** - which docs cite a changed file, here and in sibling checkouts: where the runbooks live and which ones a change touches | X3 matcher, X19 brief | `code_xray` `docs`, `gingugu xray docs`, and two brief sections (`Docs citing the changed files:`, `Docs still citing a deleted or renamed file:`). A citation is a path mention that resolves to exactly one repo file; a sibling doc counts only repo-qualified paths (`name/path`, `owner/name/path`), GitHub links to this repo and prose placing a path in it. Client only, no migration, `MEMORY_XRAY_DOCS`. Hook surfaces (edit note, Bash X-ray, read hook) not built yet |
+| X22 | **Docs map (SHIPPED in 0.45.0)** - which docs cite a changed file, here and in sibling checkouts: where the runbooks live and which ones a change touches | X3 matcher, X19 brief | `code_xray` `docs`, `gingugu xray docs`, and two brief sections (`Docs citing the changed files:`, `Docs still citing a deleted or renamed file:`). A citation is a path mention that resolves to exactly one repo file; a sibling doc counts only repo-qualified paths (`name/path`, `owner/name/path`), GitHub links to this repo and prose placing a path in it. Client only, no migration, `MEMORY_XRAY_DOCS`. Hook surfaces built (unreleased): `xray/docs_hook.py` keeps a per-repo summary `xray-docs-in-<digest>.json`, refreshed by the map on arrival when older than 10 minutes on a 1s sibling budget; a file's first read, the edit note and the Bash X-ray name the docs citing it (`Docs cite it:` / `Docs still cite it:`), once per file per session |
 | X23 | **Cross-repo links (SHIPPED in 0.46.0)** - which other checkouts lean on this one, by names the code already uses (hosts, routes, images, packages, IaC resources, CI checkouts, `repo@sha` cites), and the ripple of a change across repos | X22 sibling discovery, X19 brief | `code_xray` `links`, `gingugu xray links`, and two brief sections (`Other repos leaning on these files`, `Ripple across repos`). Zero config: no map file in any repo. Each link has file:line evidence, certain or flagged. Client only, no migration, `MEMORY_XRAY_LINKS`. Hook surfaces (read hook map and first-read lines, edit note) and named-repo recall (edge-level 11/26 -> 21/26 on a real ecosystem) released in 0.47.0; cold reads on worker processes in 0.47.1 |
 | X18 | **X-ray Explorer** - a view in the Memory Explorer: repo as a 3D city (height = rank, colour = churn or tests, districts = X5 boundaries), animated blast radius, X7 attack paths, X6 blind-spot heat, X3 scar markers linking into the memory drawer, X4 drift slider over snapshots | `ui/`, `ui_api/` read-only observer | Ships in slices; city + blast radius first |
 

@@ -830,6 +830,23 @@ edit note (PostToolUse Edit/Write/MultiEdit): any file type -> inbound.file_line
 MEMORY_XRAY_LINKS=off silences every line
 ```
 
+X22's docs map reaches the hooks the same way (`xray/docs_hook.py`): a per-repo summary
+`xray-docs-in-<digest>.json` (`{v, at, files: {rel: [[doc, repo|null]]}}`, <= 8 per file,
+<= 2000 files) from `docs_map.cited`, never a docs scan per call:
+
+```
+read hook (PostToolUse Read): map on arrival -> docs_hook.refresh (summary older than 600s:
+    docs_map.read(budget_s=1.0), the budget checked per sibling doc) -> no map line;
+    a file's first read -> docs_hook.file_line -> "Docs cite it: a, repo:b (+N more) -
+    code_xray docs names them all." (3 shown)
+edit note (PostToolUse Edit/Write/MultiEdit): any file type -> docs_hook.file_line,
+    claim xray-docs-edit (once per file per session)
+Bash X-ray (PostToolUse Bash): changed source -> "<rel>: Docs cite it: ..."; deleted ->
+    "<rel> was deleted. Docs still cite it: ..."; same claim, 3 named, the rest counted
+    and left unclaimed; never refreshes (no summary = no line)
+MEMORY_XRAY_DOCS=off silences every line and writes no summary
+```
+
 **Readers of a removed key (xray/literals, board d5639dd5).** The edit note also
 runs for any file type, on Edit/MultiEdit only (a Write has no old text):
 

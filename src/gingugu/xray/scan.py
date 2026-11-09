@@ -48,8 +48,8 @@ def toplevel(path: str | Path) -> Path:
     return Path(proc.stdout.decode().strip()).resolve()
 
 
-def commit(root: Path) -> str | None:
-    proc = git(root, "rev-parse", "--verify", "-q", "HEAD")
+def commit(root: Path, timeout: float | None = None) -> str | None:
+    proc = git(root, "rev-parse", "--verify", "-q", "HEAD", timeout=timeout)
     if proc.returncode != 0:
         return None  # unborn branch
     return proc.stdout.decode().strip() or None

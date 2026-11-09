@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from gingugu.xray import docs_map
+from gingugu.xray import docs_map, docs_text
 from tests.test_xray_edit_hook import BASIC, _git, _repo
 
 # --- pure: what a doc names -------------------------------------------------
@@ -310,7 +310,7 @@ def test_an_oversized_cache_is_ignored(repo, state, roots, monkeypatch):
 
 
 def test_github_links_are_capped(monkeypatch):
-    monkeypatch.setattr(docs_map, "MAX_TOKENS", 3)
+    monkeypatch.setattr(docs_text, "MAX_TOKENS", 3)
     text = " ".join(f"https://github.com/a/w/blob/main/f{i}.py" for i in range(50))
     assert len(docs_map.github_paths(text, "a/w")) == 3
 

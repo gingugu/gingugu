@@ -14,20 +14,18 @@ it is read as untrusted input, and a malformed entry is dropped and re-read.
 from __future__ import annotations
 
 import os
-import re
 import stat
 import time
 from pathlib import Path, PurePosixPath
 
 from . import hook_common, repo_id, scan
 from .docs_cites import Cite, DocsMap, cited, citing, citing_gone  # noqa: F401
-from .scar_query import _TOKEN, MAX_TOKEN_CHARS
+from .docs_text import MAX_TOKENS, github_paths, qualified, tokens  # noqa: F401
 
 DOC_EXTS = (".md", ".mdx", ".markdown", ".rst", ".txt", ".adoc")
 MAX_DOCS = 5000  # per repo
 MAX_DOC_BYTES = 262_144  # read at most this much of one doc
 MAX_SIBLINGS = 64
-MAX_TOKENS = 1000  # per doc, path tokens and GitHub links each
 GIT_TIMEOUT_S = 10
 # Siblings are other people's checkouts and the brief can run inside a hook: past
 # this, a sibling with no cached entry is skipped for this read, not waited on.
@@ -37,65 +35,9 @@ MAX_CACHE_BYTES = 16 * 1024 * 1024
 # so without this a sibling that never moves would keep the old reading forever.
 MATCH_VERSION = 2
 
-_GITHUB = re.compile(
-    r"github\.com/([\w.-]+)/([\w.-]+)/(?:blob|tree|raw)/[^/\s]+/(\S+)", re.IGNORECASE
-)
-_TRAIL = ")]}>.,;:!\"'`"
-
 
 def enabled() -> bool:
     return os.environ.get("MEMORY_XRAY_DOCS", "on").lower() not in ("0", "off", "false")
-
-
-def tokens(text: str) -> list[str]:
-    """Unique path tokens, first seen first."""
-    out: list[str] = []
-    for match in _TOKEN.finditer(text):
-        token = match.group(1)
-        if len(token) <= MAX_TOKEN_CHARS and token not in out:
-            out.append(token)
-            if len(out) == MAX_TOKENS:
-                break
-    return out
-
-
-def github_paths(text: str, ident: str | None) -> list[str]:
-    """Paths of GitHub links into the repo ``owner/name`` that ``ident`` names."""
-    if not ident or "/" not in ident:
-        return []
-    out: dict[str, None] = {}  # ordered and O(1) to test: a doc can hold thousands
-    for match in _GITHUB.finditer(text):
-        if f"{match.group(1)}/{match.group(2)}".lower() != ident.lower():
-            continue
-        path = re.split(r"[#?]", match.group(3), maxsplit=1)[0].rstrip(_TRAIL)
-        if path and len(path) <= MAX_TOKEN_CHARS:
-            out[path] = None
-            if len(out) == MAX_TOKENS:
-                break
-    return list(out)
-
-
-def qualified(text: str, ident: str | None) -> list[str]:
-    """What ``text`` says about the repo ``ident``: paths prefixed with its name
-    (``widget/lib/x.py``) or its ``owner/name``, GitHub links to it, and prose that
-    places a path in it ("lives in acme/widget, as lib/x.py" - X23's reader).
-    Unique, first seen first."""
-    if not ident:
-        return []
-    from .links.prose import doc_refs
-
-    name = ident.rpartition("/")[2].lower()
-    out: list[str] = []
-    for token in tokens(text):
-        head, _, rest = token.partition("/")
-        if rest and head.lower() == name and rest not in out:
-            out.append(rest)
-    out += [p for p in github_paths(text, ident) if p not in out]
-    whole = ident.lower()
-    for key, path in doc_refs(text):
-        if (key == whole or ("/" not in key and key == name)) and path not in out:
-            out.append(path)
-    return out
 
 
 _OPEN_FLAGS = (
@@ -240,12 +182,17 @@ def _candidates(root: Path) -> list[Path]:
     return found
 
 
-def _sibling(child: Path, own: str, timeout: float) -> dict[str, list[str]]:
-    proc = scan.git(child, "ls-files", "-z", "--cached", timeout=timeout)
+def _sibling(child: Path, own: str, deadline: float) -> dict[str, list[str]]:
+    """The paths ``child``'s docs place in ``own``. Raises past ``deadline``, so one
+    huge sibling cannot outlast the budget a doc at a time."""
+    left = max(deadline - time.monotonic(), 0.01)
+    proc = scan.git(child, "ls-files", "-z", "--cached", timeout=min(left, GIT_TIMEOUT_S))
     if proc.returncode != 0:
         raise scan.XrayError("git ls-files failed")
     refs: dict[str, list[str]] = {}
     for doc in _docs(_names(proc)):
+        if time.monotonic() > deadline:
+            raise scan.XrayError("past the sibling budget")
         full = _inside(child, doc)
         if full is None:
             continue
@@ -258,14 +205,16 @@ def _sibling(child: Path, own: str, timeout: float) -> dict[str, list[str]]:
     return refs
 
 
-def _siblings(root: Path, own: str, old: dict) -> tuple[dict[str, dict], dict[str, dict]]:
+def _siblings(
+    root: Path, own: str, old: dict, budget_s: float | None = None
+) -> tuple[dict[str, dict], dict[str, dict]]:
     """(by sibling path, for the cache; by ident, for the map). Past the time
     budget a sibling keeps its cached entry unchecked, or is skipped."""
     cached: dict[str, dict] = {}
     by_ident: dict[str, dict] = {}
     if not own:
         return cached, by_ident
-    deadline = time.monotonic() + SIBLING_BUDGET_S
+    deadline = time.monotonic() + (SIBLING_BUDGET_S if budget_s is None else budget_s)
     for child in _candidates(root):
         where = str(child)
         prev = old.get(where)
@@ -276,16 +225,18 @@ def _siblings(root: Path, own: str, old: dict) -> tuple[dict[str, dict], dict[st
                     continue
                 entry = prev
             else:
-                head = scan.commit(child)
+                head = scan.commit(child, timeout=min(left, GIT_TIMEOUT_S))
                 if prev and head is not None and prev["head"] == head:
                     entry = prev
                 else:
                     ident = repo_id.of(child) or child.name
                     keep = repo_id.valid(ident) and ident != own
-                    refs = _sibling(child, own, min(left, GIT_TIMEOUT_S)) if keep else {}
+                    refs = _sibling(child, own, deadline) if keep else {}
                     entry = {"ident": ident, "head": head, "refs": refs}
         except (scan.XrayError, OSError):
-            continue
+            if prev is None:
+                continue
+            entry = prev  # unread this time: the last reading stands, unchecked
         if entry["ident"] == own or not repo_id.valid(entry["ident"]):
             continue  # this repo under another path (a worktree, a clone), or a bad name
         cached[where] = entry
@@ -293,7 +244,7 @@ def _siblings(root: Path, own: str, old: dict) -> tuple[dict[str, dict], dict[st
     return cached, by_ident
 
 
-def read(root: Path, state_dir: Path) -> DocsMap:
+def read(root: Path, state_dir: Path, *, budget_s: float | None = None) -> DocsMap:
     """The docs map for the checkout at ``root``, from the cache where it holds."""
     proc = scan.git(
         root, "ls-files", "-z", "--cached", "--others", "--exclude-standard", timeout=GIT_TIMEOUT_S
@@ -306,7 +257,7 @@ def read(root: Path, state_dir: Path) -> DocsMap:
     if ident != own:
         old_local, old_sibs = {}, {}  # another identity reads every doc differently
     local = _local(root, _docs(names), own, old_local)
-    cached, by_ident = _siblings(root, own, old_sibs)
+    cached, by_ident = _siblings(root, own, old_sibs, budget_s)
     fresh = {"v": MATCH_VERSION, "ident": own, "local": local, "siblings": cached}
     if fresh != raw:
         hook_common._write_json(state_dir / f"xray-docs-{hook_common._digest(root)}.json", fresh)

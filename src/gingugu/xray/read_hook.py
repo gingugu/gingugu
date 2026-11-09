@@ -18,7 +18,18 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from . import bash_state, extract, history, hook_common, hotspots, local, rank, scars, symbols
+from . import (
+    bash_state,
+    docs_hook,
+    extract,
+    history,
+    hook_common,
+    hotspots,
+    local,
+    rank,
+    scars,
+    symbols,
+)
 from .hook_common import Graph, _claim, _show, _sweep
 from .scan import XrayError
 
@@ -196,6 +207,12 @@ def _outside_file(root: Path, rel: str, state_dir: Path) -> list[str]:
     return [line] if line else []
 
 
+def _docs_file(root: Path, rel: str, state_dir: Path) -> list[str]:
+    """X22: the docs citing ``rel``, from the last map refresh."""
+    line = docs_hook.file_line(root, rel, state_dir)
+    return [line] if line else []
+
+
 def check(payload: dict, state_dir: Path) -> str | None:
     """The map and/or neighbourhood to add to a read, else None."""
     try:
@@ -234,6 +251,7 @@ def check(payload: dict, state_dir: Path) -> str | None:
         if want_map and _claim(map_claim):
             repo_map = _render_map(root, g)
             outside = _outside_map(root, state_dir)
+            docs_hook.refresh(root, state_dir)  # X22: summary only, no map line
             if repo_map or outside:
                 parts.append("\n".join(p for p in (repo_map, outside) if p))
         if want_read and rel is not None and _claim(read_claim):
@@ -244,6 +262,7 @@ def check(payload: dict, state_dir: Path) -> str | None:
                 _changes_with(root, rel, g, state_dir)
                 + _scars(root, rel, g)
                 + _outside_file(root, rel, state_dir)
+                + _docs_file(root, rel, state_dir)
             )
             if extra:  # a leaf has no neighbourhood, but its history still speaks
                 near = "\n".join([near or f"GINGUGU X-RAY: {_show(rel)}.", *extra])
