@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-11-09 (X22 hook surfaces built: the docs citing a file on read, after edit, after Bash; board resynced after 0.48.1)_
+_Last updated: 2026-11-09 (X7a env vars as edges built; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
 
 ## In Flight
 
@@ -24,7 +24,10 @@ answered locally by the proxy. `xray/env_hook.py`: a file's first read adds `Env
 tests; a file no reader handles skips the scan); the edit note adds `- Env: reads X, set
 nowhere in this repo` for a name an edit starts reading, once per name per session.
 `MEMORY_XRAY_ENV=off` silences all of it; no migration. Spec: `tests/test_xray_env_map.py`,
-`test_xray_env_tool.py`, `test_xray_env_hooks.py`. 4269 passed.
+`test_xray_env_tool.py`, `test_xray_env_hooks.py`. Security review: the scanner's dedupe was
+quadratic per file (now per line); a hook's scan has a 1s budget, writes what it reached so a
+big cold repo converges, and `EnvMap.complete` keeps the hooks silent on a partial map; cached
+lists are capped; the dotenv gate ignores case. 4278 passed.
 
 **X22 in the hooks: the docs citing a file (2026-11-09, branch `feature/xray-docs-hooks`,
 stacked on `docs/board-resync`).** The docs map (0.45.0) answered only when asked: the
