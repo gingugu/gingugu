@@ -2804,6 +2804,11 @@ slices alongside them. IDs are stable references, not the order.
   `.ai/standards/01-code-and-testing.md`.
 - This repo is **public and personal**: no commit, PR body, CHANGELOG entry or
   code comment may reference a work repo.
+- **The X-ray law (2026-11-09):** an X-ray surface covers every language X-ray
+  parses, as far as static reading can take it. No piece ships Python-only (or
+  pytest-only) while other pieces cover more. A gap a language truly cannot
+  close is counted and said, never silently skipped. See
+  `.ai/standards/03-xray.md`.
 
 ---
 

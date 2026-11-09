@@ -1,8 +1,9 @@
 """The note after an edit: who calls what the edit touched, and the tests nearest it.
 
 Called from ``gingugu hook edit`` (PostToolUse) after an ``Edit``, ``Write`` or
-``MultiEdit`` of a Python file. The edit tripwire denies only a *blind* edit, so
-this is where an informed one learns what it reached: for each definition the
+``MultiEdit`` of a file in any language X-ray parses. The edit tripwire denies
+only a *blind* edit, so this is where an informed one learns what it reached:
+for each definition the
 new text landed in, the callers in other files and the test files nearest them.
 A definition with no cross-file caller says nothing, and each is named once per
 session.
@@ -199,7 +200,7 @@ def check(payload: dict, state_dir: Path) -> str | None:
             return "\n".join(["GINGUGU X-RAY after edit:", *both]) if both else None
         root, rel = target
         # The file is seen now, by whoever wrote it, in any X-ray language: the
-        # blind-edit deny stands down. Only Python has a symbol graph to say more.
+        # blind-edit deny stands down. The symbol graph says more in every language.
         _claim(hook_common.claim_path(state_dir, "xray-read", session_id, root, rel))
         outside = _outside(root, rel, state_dir, session_id)  # any language: X23
         outside += _docs(root, rel, state_dir, session_id)  # X22

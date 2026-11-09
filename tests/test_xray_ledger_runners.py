@@ -133,6 +133,21 @@ def test_a_stack_trace_never_puts_a_directory_on_disk(calls, state):
     assert "/Users/someone" not in text and "run.go" not in text.replace("run_test.go", "")
 
 
+@pytest.mark.parametrize(
+    "out",
+    [
+        " FAIL  /Users/someone/app/src/a.test.ts\n",  # vitest/jest, a file outside the root
+        " FAIL  ../../other/src/a.test.ts > t\n",
+        "FAILED /home/someone/app/tests/test_a.py::t - x\n",  # pytest, another rootdir
+        "FAILED ../app/tests/test_a.py::t - x\n",
+        "    a_test.go:3: x\nFAIL\t_/Users/someone/proj/pkg\t0.1s\n",  # go, outside a module
+        f" FAIL  src/{'a' * 600}.test.ts\n",
+    ],
+)
+def test_a_path_that_is_absolute_climbs_out_or_runs_long_is_never_kept(out):
+    assert ledger.failed_tests(out) == []
+
+
 def test_passing_runs_have_no_failures():
     assert ledger.failed_tests(" PASS  src/ok.test.js\n ✓ src/b.test.ts (1 test)\n") == []
     assert ledger.failed_tests("ok  \texample.com/app/api\t0.002s\n") == []

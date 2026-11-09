@@ -84,13 +84,29 @@ def _go_json(text: str) -> set[str]:
     return {f"{pkg}/{name}" for pkg in failed for name in files.get(pkg, ())}
 
 
+MAX_PATH = 512
+
+
+def _kept(path: str) -> bool:
+    """Only a path relative to where the runner ran goes on disk: never an absolute
+    one, one that climbs out (``..``), Go's ``_/<absolute dir>`` package form for
+    code outside a module, or one longer than any real test path."""
+    parts = path.split("/")
+    return (
+        0 < len(path) <= MAX_PATH
+        and not path.startswith(("/", "~"))
+        and ".." not in parts
+        and parts[0] != "_"
+    )
+
+
 def failed_tests(text: str) -> list[str]:
     """Failed test files named by pytest, vitest, jest or ``go test`` output, sorted."""
     text = _ANSI.sub("", text)
     found = {m.group(1).replace("\\", "/") for m in _PYTEST_FAILED.finditer(text)}
     found.update(m.group(1).replace("\\", "/") for m in _JS_FAILED.finditer(text))
     found |= _go_text(text) | _go_json(text)
-    return sorted(found)
+    return sorted(p for p in found if _kept(p))
 
 
 def same_file(failed: str, predicted: str) -> bool:

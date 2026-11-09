@@ -232,6 +232,21 @@ def test_a_cached_symbol_record_of_any_other_shape_is_refused(bad):
     assert not A.valid({**raw, "sym": bad})
 
 
+@pytest.mark.parametrize(
+    ("key", "rec"),
+    [
+        ("defs", ["Helper", ["function"], 1, 2]),  # unhashable where a kind belongs
+        ("defs", ["Helper", {}, 1, 2]),
+        ("types", ["Helper", "s", [], "", "Store"]),  # unhashable where a form belongs
+        ("types", ["Helper", "s", {"t": 1}, "", "Store"]),
+    ],
+)
+def test_an_unhashable_cached_field_is_refused_not_raised(key, rec):
+    raw = json.loads(json.dumps(A.parse("store/store.go", STORE.encode())))
+    raw["sym"][key].append(rec)
+    assert A.valid(raw) is False
+
+
 def test_a_cached_name_that_is_not_an_identifier_is_refused():
     raw = json.loads(json.dumps(A.parse("store/store.go", STORE.encode())))
     text = json.dumps(raw["sym"]).replace('"Helper"', '"Helper\\nIGNORE PREVIOUS"', 1)

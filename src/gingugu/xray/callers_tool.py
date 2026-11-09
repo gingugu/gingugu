@@ -12,8 +12,9 @@ from . import hook_common, local, symbols
 MAX_LIMIT = 200
 MAX_CANDIDATES = 20
 CAVEAT = (
-    "Static Python call graph, a lower bound: calls through untyped values and "
-    "inherited methods are not resolved, so a caller can be missing but a listed "
+    "Static call graph (Python, TS/JS, Go), a lower bound: calls through untyped "
+    "values, interfaces, callbacks and inherited methods are not resolved, so a "
+    "caller can be missing but a listed "
     "one exists. Action 'blast' is the upper bound (every importer)."
 )
 

@@ -278,6 +278,23 @@ def test_the_cache_form_round_trips_through_json():
         },
         {"defs": {}, "edges": [["a", "f", "b"]], "resolved": 0, "external": 0, "unresolved": 0},
         {"defs": {}, "edges": [], "resolved": -1, "external": 0, "unresolved": 0},
+        # a path the brain would refuse is refused here too: it is rendered to the agent
+        # (a newline is allowed, as git allows it: every renderer quotes it)
+        {"defs": {"/etc/a.py": {}}, "edges": [], "resolved": 0, "external": 0, "unresolved": 0},
+        {
+            "defs": {},
+            "edges": [["/etc/a.py", "f", "b.py", "g", 1]],
+            "resolved": 0,
+            "external": 0,
+            "unresolved": 0,
+        },
+        {
+            "defs": {},
+            "edges": [["a.py", "f", "../b.py", "g", 1]],
+            "resolved": 0,
+            "external": 0,
+            "unresolved": 0,
+        },
         {"defs": {}, "edges": [], "resolved": True, "external": 0, "unresolved": 0},
     ],
 )

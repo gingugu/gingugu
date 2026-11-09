@@ -39,6 +39,7 @@ def is_def(r: object) -> bool:
         isinstance(r, list)
         and len(r) == 4
         and is_qual(r[0])
+        and isinstance(r[1], str)  # before ``in``: a list there is unhashable
         and r[1] in _KINDS
         and _int(r[2])
         and _int(r[3])
@@ -52,7 +53,7 @@ def is_call(r: object) -> bool:
 
 
 def is_type(r: object) -> bool:
-    if not (isinstance(r, list) and len(r) == 5) or r[2] not in _FORMS:
+    if not (isinstance(r, list) and len(r) == 5 and isinstance(r[2], str)) or r[2] not in _FORMS:
         return False
     if r[2] == "?":
         return is_qual(r[0], module_ok=True) and ident(r[1]) and r[3] == "" and r[4] == ""

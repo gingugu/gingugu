@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 
 from .resolve import ModuleIndex, _from_base
 from .symbols_walk import is_qual
+from .validate import is_valid_path
 
 MODULE = "<module>"
 _BUILTINS = frozenset(dir(builtins))
@@ -173,10 +174,15 @@ def link(raws: dict[str, dict], idx: ModuleIndex) -> Symbols:
 
 def merge(a: Symbols, b: Symbols) -> Symbols:
     """Two languages' graphs as one. Their files are disjoint (one adapter per
-    extension), so defs and edges never collide; counts add."""
+    extension), so defs and edges never collide; counts add. A file whose name the
+    brain would refuse leaves ``b``'s graph here, as it leaves the import graph:
+    its name is rendered to the agent, and the cache form refuses it."""
     return Symbols(
-        defs={**a.defs, **b.defs},
-        edges={**a.edges, **b.edges},
+        defs={**a.defs, **{p: d for p, d in b.defs.items() if is_valid_path(p)}},
+        edges={
+            **a.edges,
+            **{k: n for k, n in b.edges.items() if is_valid_path(k[0]) and is_valid_path(k[2])},
+        },
         resolved=a.resolved + b.resolved,
         external=a.external + b.external,
         unresolved=a.unresolved + b.unresolved,
@@ -264,15 +270,17 @@ def from_json(data: object) -> Symbols | None:
         return None
     if not all(_count(data[k]) for k in ("resolved", "external", "unresolved")):
         return None
-    for qs in defs.values():
+    for path, qs in defs.items():
+        if not is_valid_path(path):  # rendered to the agent: the brain's own path rule
+            return None
         if not isinstance(qs, dict) or not all(is_qual(q) and _is_def(d) for q, d in qs.items()):
             return None
     for e in edges:
         if not (
             isinstance(e, list)
             and len(e) == 5
-            and isinstance(e[0], str)
-            and isinstance(e[2], str)
+            and is_valid_path(e[0])
+            and is_valid_path(e[2])
             and is_qual(e[1], module_ok=True)
             and is_qual(e[3])
             and _count(e[4], 1)

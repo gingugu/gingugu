@@ -48,7 +48,7 @@ def _parser() -> argparse.ArgumentParser:
         p.add_argument("--path", help="any directory in the checkout (default: cwd)")
         p.add_argument("--limit", type=int, default=20, help="rows (default 20)")
         p.add_argument("--json", action="store_true", help="the full answer as JSON")
-    s = sub.add_parser("score", help="how the post-edit test predictions fared against pytest")
+    s = sub.add_parser("score", help="how the post-edit test predictions fared against test runs")
     s.add_argument("--json", action="store_true", help="the score as JSON")
     return parser
 

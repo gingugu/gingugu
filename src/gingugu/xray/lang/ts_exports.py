@@ -20,6 +20,7 @@ class Modules:
         self.defs = {rel: {d[0] for d in raw["defs"]} for rel, raw in raws.items()}
         self.exports = {rel: raw["exports"] for rel, raw in raws.items()}
         self._target: dict[tuple[str, str], str | None] = {}
+        self._export: dict[tuple[str, str], tuple[str, str] | None] = {}
 
     def target(self, rel: str, spec: str) -> str | None:
         """The repo file ``spec`` names from ``rel``; ``EXT`` for a package, None when
@@ -42,7 +43,15 @@ class Modules:
 
     def export_of(self, path: str, name: str) -> tuple[str, str] | None:
         """``(file, qual)`` of the top-level definition ``name`` that ``path`` exports,
-        following re-exports. Each (file, name) is visited once, so cycles end."""
+        following re-exports. Remembered: every ``ns.f()`` asks, and a miss on a wide
+        ``export *`` mesh walks all of it, so a repo pays for each question once."""
+        key = (path, name)
+        if key not in self._export:
+            self._export[key] = self._follow(path, name)
+        return self._export[key]
+
+    def _follow(self, path: str, name: str) -> tuple[str, str] | None:
+        """Each (file, name) is visited once, so cycles end."""
         seen: set[tuple[str, str]] = set()
         stack = [(path, name, 0)]
         while stack:
