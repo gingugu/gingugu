@@ -1,7 +1,7 @@
 """X7c: the table map - which files define a database table, drop it, and use it.
 
-Nothing imports a table: the code running ``SELECT ... FROM orders`` and the
-migration creating ``orders`` are invisible to each other in the import graph.
+Nothing imports a table: the code that queries a table and the migration that
+creates it are invisible to each other in the import graph.
 ``scan_text`` (``table_scan``) finds table names in known forms; this module runs
 it over the checkout and caches the result per file (the plumbing is
 ``file_facts``). Names and line numbers only.
@@ -55,9 +55,12 @@ def _load(path: Path) -> tuple[dict[str, dict], object]:
 
 def dropped(m: TableMap, name: str) -> list[tuple[str, int]]:
     """Where ``name`` is dropped, in files that do not also define it: a drop and
-    a recreate in one file is a rebuild, not a drop."""
+    a recreate in one file is a rebuild, not a drop. A test dropping a table to
+    simulate a failure says nothing about the schema."""
+    from .env_hook import _is_test
+
     defining = {f for f, _ in m.defines.get(name, [])}
-    return [(f, n) for f, n in m.drops.get(name, []) if f not in defining]
+    return [(f, n) for f, n in m.drops.get(name, []) if f not in defining and not _is_test(f)]
 
 
 def read(root: Path, state_dir: Path, *, budget_s: float | None = None) -> TableMap:

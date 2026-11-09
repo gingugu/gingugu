@@ -117,9 +117,7 @@ def test_an_edit_using_a_table_defined_nowhere_says_so_once(repo, state):
 
 def test_an_edit_using_a_dropped_table_says_where_it_was_dropped(repo, state):
     out = _written(repo, "app/late.py", 'q = "SELECT 1 FROM legacy_log"\n')
-    assert "Tables: uses legacy_log, dropped in db/migrate_002.sql:1" in edit_note.check(
-        out, state
-    )
+    assert "Tables: uses legacy_log, dropped in db/migrate_002.sql:1" in edit_note.check(out, state)
 
 
 def test_an_edit_using_a_defined_table_says_nothing_of_it(repo, state):

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from . import local, table_map
 from .brief import _safe
+from .env_hook import _is_test
 from .hook_common import _show
 
 ACTIONS = ("tables",)
@@ -113,6 +114,8 @@ def _file(m: table_map.TableMap, rel: str) -> dict:
 
 def _flag(m: table_map.TableMap, name: str) -> str | None:
     defines, uses = m.defines.get(name, []), m.uses.get(name, [])
+    if all(_is_test(f) for f, _ in defines + uses):
+        return "tests only"  # a fixture's table, not the schema's
     if uses and not defines:
         return "defined nowhere here"
     if uses and table_map.dropped(m, name):
@@ -134,7 +137,13 @@ def _tables(m: table_map.TableMap, limit: int) -> dict:
         }
         for n in sorted(set(m.defines) | set(m.uses))
     ]
-    order = {"defined nowhere here": 0, "dropped, still used": 1, "used nowhere here": 2, None: 3}
+    order = {
+        "defined nowhere here": 0,
+        "dropped, still used": 1,
+        "used nowhere here": 2,
+        None: 3,
+        "tests only": 4,
+    }
     rows.sort(key=lambda r: (order[r["flag"]], r["name"]))
     return {
         "tables": rows[: min(max(0, limit), MAX_LIMIT)],
@@ -143,6 +152,7 @@ def _tables(m: table_map.TableMap, limit: int) -> dict:
             "defined_nowhere": sum(r["flag"] == "defined nowhere here" for r in rows),
             "dropped_still_used": sum(r["flag"] == "dropped, still used" for r in rows),
             "used_nowhere": sum(r["flag"] == "used nowhere here" for r in rows),
+            "tests_only": sum(r["flag"] == "tests only" for r in rows),
         },
     }
 

@@ -89,6 +89,26 @@ def test_one_sided_tables_come_first_worst_first(repo, env):
     assert names[7:] == ["audit_log", "orders", "users"]
 
 
+def test_a_table_seen_only_in_tests_is_flagged_and_sorted_last(tmp_path, env):
+    fixture = _repo(
+        tmp_path,
+        {
+            "db/schema.sql": "CREATE TABLE t_one (id INT);\n",
+            "app/a.py": 'q = "SELECT 1 FROM t_one JOIN t_gone"\n',
+            "tests/test_a.py": (
+                'db.execute("CREATE TABLE t_fix (id INT)")\n' 'db.execute("SELECT 1 FROM t_nope")\n'
+            ),
+        },
+    )
+    out = table_tool.answer(str(fixture))
+    rows = {r["name"]: r for r in out["tables"]}
+    assert rows["t_fix"]["flag"] == "tests only" and rows["t_nope"]["flag"] == "tests only"
+    assert rows["t_gone"]["flag"] == "defined nowhere here"
+    assert [r["name"] for r in out["tables"]] == ["t_gone", "t_one", "t_fix", "t_nope"]
+    t = out["totals"]
+    assert (t["defined_nowhere"], t["used_nowhere"], t["tests_only"]) == (1, 0, 2)
+
+
 def test_limit_caps_the_rows(repo, env):
     assert len(table_tool.answer(str(repo), limit=2)["tables"]) == 2
 

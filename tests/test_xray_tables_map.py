@@ -138,7 +138,7 @@ def test_scan_text_finds_defines_drops_and_uses(rel, text, defines, drops, uses)
         '"""One UPDATE on the existing row, then FROM the start."""\n',  # SQL words
         'q = "SELECT a FROM (SELECT 1)"\n',  # a subquery names no table
         'q = "SELECT name FROM sqlite_master"\n',
-        'q = "SELECT * FROM pragma_table_info(\'t\')"\n',
+        "q = \"SELECT * FROM pragma_table_info('t')\"\n",
         'q = "SELECT * FROM information_schema.tables"\n',
         'q = "SELECT * FROM pg_catalog.pg_class"\n',
         'q = "SELECT * FROM pg_tables"\n',
@@ -167,6 +167,59 @@ def test_kinds_that_are_read(rel):
 
 def test_a_rename_is_not_also_a_use():
     assert table_map.scan_text("a.sql", "ALTER TABLE t_old RENAME TO t_new;\n")[2] == []
+
+
+def test_a_sql_file_is_read_in_any_case():
+    # Uppercase-only keeps Python imports and prose out; a .sql file has neither.
+    sql = (
+        "create table if not exists t_one (id int);\n"
+        "Create View v_one as select * from t_one join t_two on 1;\n"
+        "alter table t_old rename to t_new;\n"
+        "drop table t_gone;\n"
+        "create index i on t_one(id);\n"
+        "insert into t_one values (1);\n"
+    )
+    assert table_map.scan_text("db/schema.sql", sql) == (
+        [("t_one", 1), ("v_one", 2), ("t_new", 3)],
+        [("t_old", 3), ("t_gone", 4)],
+        [("t_one", 2), ("t_two", 2), ("t_one", 5), ("t_one", 6)],
+    )
+
+
+def test_code_still_needs_uppercase_keywords():
+    assert table_map.scan_text("a.py", 'q = "create table t_one (id int)"\n')[0] == []
+
+
+@pytest.mark.parametrize(
+    "rel, text",
+    [
+        ("a.py", 'q = f"SELECT 1 FROM t_{n}"\n'),  # a template: the name is built at run time
+        ("a.ts", "const q = `SELECT 1 FROM t_${n}`;\n"),
+        ("a.py", 'img = "FROM ghcr.io/acme/base:1"\n'),  # a Dockerfile line in a string
+        ("a.py", 'img = "FROM python:3.12"\n'),
+        ("a.py", 'img = "FROM base-py AS build"\n'),
+    ],
+)
+def test_a_name_that_does_not_end_where_an_identifier_ends_is_not_a_table(rel, text):
+    assert table_map.scan_text(rel, text)[2] == []
+
+
+def test_a_sql_comment_still_ends_a_name():
+    assert table_map.scan_text("a.sql", "SELECT 1 FROM t_one-- note\n")[2] == [("t_one", 1)]
+
+
+def test_a_drop_in_a_test_file_is_not_a_drop(tmp_path, state):
+    repo = _repo(
+        tmp_path,
+        {
+            "db/schema.sql": "CREATE TABLE t_one (id INT);\n",
+            "app/a.py": 'q = "SELECT 1 FROM t_one"\n',
+            "tests/test_a.py": 'db.execute("DROP TABLE t_one")\n',  # simulating a failure
+        },
+    )
+    m = table_map.read(repo, state)
+    assert m.drops["t_one"] == [("tests/test_a.py", 1)]
+    assert table_map.dropped(m, "t_one") == []
 
 
 # --- the repo map -----------------------------------------------------------------

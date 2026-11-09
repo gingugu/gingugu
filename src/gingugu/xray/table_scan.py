@@ -11,30 +11,57 @@ SQL is not read: prose and Python imports look the same. No value is kept.
 from __future__ import annotations
 
 import re
+from typing import NamedTuple
 
 Pairs = list[tuple[str, int]]
 
 # An identifier: optional quote, optional ``schema.`` prefix, the name, optional quote.
-_ID = r"""["`\[]?(?:([A-Za-z0-9_]+)["`\]]?\.["`\[]?)?([A-Za-z_][A-Za-z0-9_]*)["`\]]?"""
+# The name must end where an identifier ends: one running into ``{``/``$`` is a
+# template built at run time, into ``/`` or ``:`` an image or a host, into one
+# ``-`` a word like ``base-py``. A ``--`` comment still ends it. A name before a
+# ``.`` is a schema, never a table: ``ghcr.io/x`` must not backtrack into ``ghcr``.
+_END = r"(?![\w{$/:.]|-(?!-))"
+_ID = rf"""["`\[]?(?:([A-Za-z0-9_]+)["`\]]?\.["`\[]?)?([A-Za-z_][A-Za-z0-9_]*){_END}["`\]]?"""
 _LIT = r"""["']([A-Za-z_][A-Za-z0-9_]*)["']"""
 _IF_NOT = r"(?:IF\s+NOT\s+EXISTS\s+)?"
 _IF = r"(?:IF\s+EXISTS\s+)?"
 
-_CREATE = re.compile(
-    rf"\bCREATE\s+(?:TEMP(?:ORARY)?\s+)?(?:VIRTUAL\s+)?(?:TABLE|VIEW)\s+{_IF_NOT}{_ID}"
-)
-_RENAME = re.compile(rf"\bALTER\s+TABLE\s+{_IF}{_ID}\s+RENAME\s+TO\s+{_ID}")
-_DROP = re.compile(rf"\bDROP\s+TABLE\s+{_IF}{_ID}")
+
+class _Keywords(NamedTuple):
+    create: re.Pattern
+    rename: re.Pattern
+    drop: re.Pattern
+    alter: re.Pattern
+    use: re.Pattern
+    on: re.Pattern
+    on_line: re.Pattern
+
+
+def _keywords(flags: int) -> _Keywords:
+    return _Keywords(
+        re.compile(
+            rf"\bCREATE\s+(?:TEMP(?:ORARY)?\s+)?(?:VIRTUAL\s+)?(?:TABLE|VIEW)\s+{_IF_NOT}{_ID}",
+            flags,
+        ),
+        re.compile(rf"\bALTER\s+TABLE\s+{_IF}{_ID}\s+RENAME\s+TO\s+{_ID}", flags),
+        re.compile(rf"\bDROP\s+TABLE\s+{_IF}{_ID}", flags),
+        re.compile(rf"\bALTER\s+TABLE\s+{_IF}{_ID}", flags),
+        re.compile(rf"\b(?:FROM|JOIN|INTO|UPDATE)\s+{_ID}", flags),
+        re.compile(rf"\bON\s+{_ID}", flags),
+        re.compile(r"\bCREATE\s+(?:UNIQUE\s+INDEX|INDEX|TRIGGER)\b", flags),
+    )
+
+
+# Code needs UPPERCASE keywords: Python imports and prose look like lowercase SQL.
+# A .sql file holds neither, so there any case is SQL.
+_UPPER = _keywords(0)
+_ANY_CASE = _keywords(re.IGNORECASE)
 _LITERAL_DEFINES = (
     re.compile(rf"\b__tablename__\s*=\s*{_LIT}"),
     re.compile(rf"\bTable\(\s*{_LIT}\s*,"),
     re.compile(rf"\bop\.create_table\(\s*{_LIT}"),
 )
 _LITERAL_DROP = re.compile(rf"\bop\.drop_table\(\s*{_LIT}")
-_ALTER = re.compile(rf"\bALTER\s+TABLE\s+{_IF}{_ID}")
-_USE = re.compile(rf"\b(?:FROM|JOIN|INTO|UPDATE)\s+{_ID}")
-_ON = re.compile(rf"\bON\s+{_ID}")
-_ON_LINE = re.compile(r"\bCREATE\s+(?:UNIQUE\s+INDEX|INDEX|TRIGGER)\b")
 
 _VALID = re.compile(r"[a-z_][a-z0-9_]{1,63}")  # two letters at least: one is an alias
 _SQL_WORDS = frozenset(
@@ -78,7 +105,9 @@ def _table(schema: str | None, name: str) -> str | None:
     return low
 
 
-def _line(line: str) -> tuple[list[tuple[int, str]], list[tuple[int, str]], list[tuple[int, str]]]:
+def _line(
+    line: str, kw: _Keywords
+) -> tuple[list[tuple[int, str]], list[tuple[int, str]], list[tuple[int, str]]]:
     """(defines, drops, uses) of one line as ``(position, name)``."""
     defines: list[tuple[int, str]] = []
     drops: list[tuple[int, str]] = []
@@ -89,27 +118,27 @@ def _line(line: str) -> tuple[list[tuple[int, str]], list[tuple[int, str]], list
         if found is not None:
             into.append((pos, found))
 
-    for m in _CREATE.finditer(line):
+    for m in kw.create.finditer(line):
         add(defines, m.start(), m.group(1), m.group(2))
     renamed: set[int] = set()
-    for m in _RENAME.finditer(line):
+    for m in kw.rename.finditer(line):
         renamed.add(m.start())
         add(drops, m.start(), m.group(1), m.group(2))
         add(defines, m.start(), m.group(3), m.group(4))
-    for m in _DROP.finditer(line):
+    for m in kw.drop.finditer(line):
         add(drops, m.start(), m.group(1), m.group(2))
     for pat in _LITERAL_DEFINES:
         for m in pat.finditer(line):
             add(defines, m.start(), None, m.group(1))
     for m in _LITERAL_DROP.finditer(line):
         add(drops, m.start(), None, m.group(1))
-    for m in _ALTER.finditer(line):
+    for m in kw.alter.finditer(line):
         if m.start() not in renamed:
             add(uses, m.start(), m.group(1), m.group(2))
-    for m in _USE.finditer(line):
+    for m in kw.use.finditer(line):
         add(uses, m.start(), m.group(1), m.group(2))
-    if _ON_LINE.search(line):
-        for m in _ON.finditer(line):
+    if kw.on_line.search(line):
+        for m in kw.on.finditer(line):
             add(uses, m.start(), m.group(1), m.group(2))
     return defines, drops, uses
 
@@ -127,10 +156,12 @@ def scan_text(rel: str, text: str) -> tuple[Pairs, Pairs, Pairs]:
     defines: Pairs = []
     drops: Pairs = []
     uses: Pairs = []
-    if kind(rel) is None:
+    which = kind(rel)
+    if which is None:
         return defines, drops, uses
+    kw = _ANY_CASE if which == "sql" else _UPPER
     for number, line in enumerate(text.splitlines(), 1):
-        d, x, u = _line(line)
+        d, x, u = _line(line, kw)
         _add(defines, d, number)
         _add(drops, x, number)
         _add(uses, u, number)
