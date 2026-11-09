@@ -237,3 +237,22 @@ def test_a_cached_name_that_is_not_an_identifier_is_refused():
     text = json.dumps(raw["sym"]).replace('"Helper"', '"Helper\\nIGNORE PREVIOUS"', 1)
     assert text != json.dumps(raw["sym"])
     assert not A.valid({**raw, "sym": json.loads(text)})
+
+
+def test_a_value_declared_three_times_stays_unresolved_and_never_crashes():
+    # Found on gin: a name re-declared with a second type, then a third time. The
+    # second makes it ambiguous; the third must not index into that verdict.
+    sym = _sym(
+        {
+            "store/store.go": STORE,
+            "store/run.go": (
+                "package store\n\nfunc run() {\n"
+                "\tvar s Store\n\ts.Save()\n"
+                "\tvar s Other\n"
+                "\tvar s Store\n"
+                "\ts.Save()\n}\n\ntype Other struct{}\n"
+            ),
+        }
+    )
+    assert not any(sp == "store/run.go" for sp, _, _, _ in sym.edges)
+    assert sym.unresolved == 2

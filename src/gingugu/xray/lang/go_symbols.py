@@ -84,8 +84,12 @@ class _Linker:
                 if t[0] == MODULE:
                     self.pvars.setdefault(k, {}).setdefault(t[1], []).append((rel, t))
                     continue
-                prev = local.get((t[0], t[1]), t)
-                local[(t[0], t[1])] = t if prev is t or prev[2:] == t[2:] else None
+                key = (t[0], t[1])
+                prev = local.get(key, t)
+                # None is the ambiguous verdict, and it is final: a third declaration
+                # agreeing with the first does not make the value one type again.
+                same = key not in local or (prev is not None and prev[2:] == t[2:])
+                local[key] = t if same else None
             self.local[rel] = local
             if not k[1] and rel not in self.modless:
                 self.by_path[k[0]] = k
