@@ -42,8 +42,14 @@ A hook's scan has a 1s budget and the hooks stay silent until every file has bee
 brain change. Measured on gingugu itself (604 files): cold map 0.53s, warm 0.043s, a read-hook
 line about 40ms; 24 real tables, none one-sided. Out of scope for v1: columns, ORM use
 through model classes (the import graph covers that), IaC-defined tables (X23's resource
-names cover cross-repo). Spec: `tests/test_xray_tables_map.py`, `test_xray_tables_tool.py`,
-`test_xray_tables_hooks.py` (110 tests). Full suite 4388 passed. Unreleased.
+names cover cross-repo). Security review (no HIGH/MEDIUM): a file too big to read, or cut
+at the 200-name cap, is named `unread` (`TableMap.unread`), and while any exist neither the
+hooks nor the tool say "defined nowhere" - `not in the files read` instead, and the tool
+lists them; the cache key carries the scanner's version (`table_scan.SCAN_VERSION`; plumbing
+`file_facts.VERSION` 2), a cache too big to read back is never written, cached line numbers
+are capped, and the edit note scans each text once and skips one past the file cap. Spec:
+`tests/test_xray_tables_map.py`, `test_xray_tables_tool.py`, `test_xray_tables_hooks.py`,
+`test_xray_tables_review.py` (121 tests). Full suite 4399 passed. Unreleased.
 
 **X7a env vars as edges (2026-11-09, branch `feature/xray-env`, merged to main in #189, unreleased).** First slice of X7 (edges beyond imports). Nothing imports an
 environment variable, so the code reading `DB_URL` and the compose file, k8s manifest, CI

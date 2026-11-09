@@ -1025,7 +1025,9 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   engine builtins are skipped. `xray/table_map.read` scans via `xray/file_facts` (git
   listing, size + mtime cache `xray-tables-<digest>.json`, owner-only, untrusted on load,
   `>=` deadline, `complete`, writes what it reached; `env_map` runs on the same plumbing);
-  256 KiB per file, 200 names per list. `dropped(m, name)` ignores drops in a file that
+  256 KiB per file, 200 names per list; a file past either cap is `unread`
+  (`TableMap.unread`) and, while any is, nothing is called "defined nowhere"; the cache
+  key carries `table_scan.SCAN_VERSION`. `dropped(m, name)` ignores drops in a file that
   defines the table again and in test files. `table_tool` is `code_xray` `tables` (local
   only, like `env`); `table_hook` adds the read hook's `Tables:` line and the edit note's
   lines (a table defined nowhere here, only when the repo defines at least one; a

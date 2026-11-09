@@ -1906,7 +1906,9 @@ that neither defines the table again (a rebuild) nor is a test file. `code_xray`
 (`xray/table_tool.py`) answers locally like `docs`: `gingugu serve` refuses it and the proxy
 answers it. A file's first read and the edit note add `Tables:` lines
 (`xray/table_hook.py`); a hook's scan has a 1s budget, keeps what it read for the next
-call, and stays silent until every file has been read once. Not covered: columns, ORM use
+call, and stays silent until every file has been read once. A file too big to read or cut
+at the name cap is `unread`; while any is, no table is called "defined nowhere" (`not in the
+files read`), and the cache key carries the scanner's version. Not covered: columns, ORM use
 through model classes (the import graph covers that) and IaC-defined tables. Switch
 `MEMORY_XRAY_TABLES` (default on). No migration, no brain change.
 

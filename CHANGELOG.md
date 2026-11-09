@@ -53,7 +53,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   schema.sql:12), tmp (dropped in m.sql:3)`, and the edit note says once per table per
   session when an edit starts using a table defined nowhere here or dropped here, edits a
   definition other files use, or drops a table other files still use. A hook's scan has a
-  1s budget and the hooks stay silent until every file has been read once. Not covered:
+  1s budget and the hooks stay silent until every file has been read once. A file too
+  big to read, or past the 200-name cap, is named as unread, and while one exists no
+  table is called "defined nowhere" - `not in the files read` instead. Not covered:
   columns, ORM use through model classes (the import graph covers that) and tables
   defined in IaC. The cache plumbing the env map and the table map share moved to
   `xray/file_facts.py`; the env map's behaviour is unchanged. `MEMORY_XRAY_TABLES=off`
