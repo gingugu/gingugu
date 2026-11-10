@@ -114,8 +114,9 @@ def register(mcp, ctx: ServerContext) -> None:
         a client-extracted graph; ``replace`` as refresh does), "brief" (a handoff: the changed
         files by rank plus their combined blast, for ``range`` such as main..HEAD, the named
         files, or the working tree; computed locally, nothing stored), "callers" (files: one
-        Python file; symbol: a function, class or ``Class.method`` in it; returns its direct
-        callers and everything that reaches it by call, a lower bound; computed locally),
+        Python, TS/JS or Go file; symbol: a function, class or ``Class.method`` in it;
+        returns its direct callers and everything that reaches it by call, a lower bound;
+        computed locally),
         "history" (from git log: hotspots by churn x rank x authors, and files that change
         together, flagged ``hidden`` when neither imports the other; files: focus the pairs
         on those files; computed locally), "blindspots" (imported source no test imports

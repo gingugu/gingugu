@@ -1,8 +1,34 @@
 # Project Status
 
-_Last updated: 2026-11-09 (literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
+_Last updated: 2026-11-09 (X17 symbol graph for TS/JS and Go + multi-runner X11 ledger on `feature/x17-ts-go`; literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
 
 ## In Flight
+
+**X17 for TS/JS and Go + multi-runner ledger (2026-11-09, branch `feature/x17-ts-go`, stacked on `fix/literals-timeout-flake`).**
+The symbol/call graph now covers Python, TypeScript/JavaScript and Go. New: `xray/lang/ts_symbols_walk.py`
+(walker), `ts_symbols_types.py` (type/value refs), `ts_symbols_valid.py` (cache shape check), `ts_exports.py`
+(specifier resolution + barrel following, memoised), `ts_symbols.py` (linker); `go_symbols_walk.py`,
+`go_symbols_valid.py`, `go_symbols.py` (linker). `extract.py` merges every adapter's Symbols via
+`symbols.merge`; extractor version 4 (caches rebuild once). Qualified names may contain `$`; Go methods are
+`Type.Method` and a Go package (directory) is one name scope across files; TS `this.m()` and `new X()` are
+calls, barrels (`export {x} from`, `export *`) are followed up to 8 hops. Calls stay a lower bound in every
+language: TS interface-typed params, callbacks, Go interface values and function values stay unresolved
+(counted, never guessed); a TS value returned by an external call (`const app = express()`) counts external.
+Share of non-external calls resolved: Python 64.4% (gingugu), TS/JS 52.9% (vite, 1,650 files, parse 1.0s, link
+0.06s), 78.4% (express example app), 62.5% (gingugu `ui/`), Go 75.4% (gin), 76.6% (bubbletea). A
+linker that raises costs only its own language's call graph (`lang/symbols_guard.py`: logged with its
+traceback, empty graph returned; the import graph and the other languages still land). Any other
+adapter exception (parse, import linking; was `RecursionError` only) is caught per adapter in `extract.py`:
+logged, that language's files stay nodes reported in `parse_errors`, its parse cache is dropped. The read note's
+`Most called` line and the after-edit cross-file callers line work in any language (the `.py` gates are gone);
+`Most called` also shows for a file with no import neighbourhood (a lone Go file - Go imports point at package
+nodes). `lang.is_test(path)` dispatches per language and `hook_common.nearest_tests` ranks a test named for the
+edited file first in every language (`test_x.py`, `x_test.py`, `x_test.go`, `x.test.ts`, `x.spec.tsx`). X11
+ledger (`ledger.py` + new `ledger_runs.py`) recognises pytest, vitest, jest, npm/pnpm/yarn/bun `test`,
+`go test` and `gotestsum`; failed test files come from each runner's summary lines (ANSI stripped; go plain and
+`-json`: failing package import path + test-file basename only). A failed path matches a predicted one when equal
+or one ends with the other on a `/` boundary; absolute paths, `..` paths, Go `_/<dir>` packages and paths over
+512 chars are never kept.
 
 **Test flake: literal-grep timeout on loaded CI runners (2026-11-09, branch `fix/literals-timeout-flake`).**
 `tests/test_xray_literals_wiring.py::test_a_multiedit_is_swept_too` failed once on windows-latest
@@ -132,7 +158,7 @@ X-ray brief RELEASED in 0.34.0 (#157); X20 brief on the board RELEASED in 0.35.0
 (#158), live-test fixes in 0.35.1 (#159), not-available note in 0.35.2 (#160), repo on
 the line in 0.36.0 (#161); X15 writes from any tool RELEASED in 0.37.0 (#163); X16 incremental refresh
 RELEASED in 0.38.0 (#164); X17 symbol graph (Python)
-RELEASED in 0.39.0 (#165); X-ray tuned for the agent
+RELEASED in 0.39.0 (TS/JS + Go built on `feature/x17-ts-go`, unreleased) (#165); X-ray tuned for the agent
 RELEASED in 0.40.0 (#166); X3 scar tissue RELEASED in 0.41.0 (#168); X4 history + X6
 blind spots RELEASED in 0.42.0 (#170); X22 docs map RELEASED in 0.45.0 (#174); X23 cross-repo links RELEASED in 0.46.0 (#176),
 in the hooks in 0.47.0 (#177/#178); removed-key readers in the edit note RELEASED in
@@ -151,16 +177,16 @@ was dropped, blindness was the signal; (2) a PostToolUse note after an Edit/Mult
 cross-file callers of the definitions touched and their nearest tests, from the cached
 symbol graph (~30 ms); (3) direct importers and nearest tests lead everywhere, no
 transitive line in the neighbourhood, dot-dirs out of the map's entry points, and a test
-named for the changed file ranks first (`hook_common.nearest_tests`); (4) X11 lean: a
+named for the changed file ranks first in every language (`hook_common.nearest_tests`); (4) X11 lean: a
 local ledger (`xray/ledger.py`) records each note's predictions by call and by import and
-each pytest run's failures; `gingugu xray score` compares them. Reverses the 2026-10-27
+each test run's failures (pytest, vitest, jest, npm/pnpm/yarn/bun test, go test, gotestsum - see X17 for TS/JS and Go above); `gingugu xray score` compares them. Reverses the 2026-10-27
 X2 call (deny every first edit) for every non-blind edit, on his instruction. `harness.py`
 now derives its hook list from `settings._HOOKS` (was 302 lines, now 296).
 
-X17 (design approved 2026-10-30): the Python parse also records definitions (qualified
+X17 (design approved 2026-10-30; Python first, TS/JS and Go since - see In Flight): the Python parse also records definitions (qualified
 name, kind, line span from the first decorator), import bindings, call sites and
 instance types per scope (`xray/symbols_walk.py`, content-only, parse-cached; extractor
-version 3); `xray/symbols.py` resolves calls through scoped definitions, import bindings,
+version 3, now 4); `xray/symbols.py` resolves calls through scoped definitions, import bindings,
 classes named in scope (constructor, annotation, `with`) and `self`/`cls`, counting every
 call resolved / external / unresolved and never guessing. Client-side only, cached as
 `xray-symbols-<sha16(root)>.json` beside the graph cache; not in the brain payload. Edit
@@ -169,7 +195,7 @@ tripwire names the definitions an `Edit`/`MultiEdit` lands in and their callers
 definitions; `code_xray` `callers` (`xray/callers_tool.py`) answers for one symbol,
 locally (serve refuses, proxy answers). Measured on gingugu: 9,660 calls resolve (64.7%
 of non-external), 7,767 edges, walk 0.57s cold / link 0.03s, cache 1.2 MB; edit deny
-0.125s warm. Follow-ups: TS/JS + Go symbols; inherited methods (base classes are not
+0.125s warm. Follow-ups: TS/JS + Go symbols (built, see In Flight); inherited methods (base classes are not
 recorded); `pkg.mod.f()` (attribute chains) and re-exports through `__init__` are not
 resolved; a module-level call is not propagated to the module's importers; the
 symbol edge count has no cap of its own (the import graph's is 500k), and `callers`
@@ -2782,13 +2808,13 @@ slices alongside them. IDs are stable references, not the order.
 | X8 | **Dependency X-ray** - third-party packages on the graph: which are load-bearing, how deep, what a compromised package could reach | X1, X7 | Upgrade priority, pinning, incident-day exposure |
 | X9 | **Fleet X-ray** - every repo into one central brain; cross-repo callers and cross-repo blast radius | central brain, scoped tokens | |
 | X10 | **Graph-aware fences** - approval scales with blast radius: leaf edits free, edits reaching top-ranked files need the user's go | X1, hooks, minion grants | |
-| X11 | **Predict, then score** - the agent predicts failing tests and broken files before a change; the calibration ledger scores it after | X1, calibration ledger (#2) | Lean version SHIPPED in 0.40.0 (#166): X-ray's own test predictions (by call, by import) vs pytest failures in a local ledger, `gingugu xray score`. The agent's own predictions and the brain-side calibration ledger are still to do |
+| X11 | **Predict, then score** - the agent predicts failing tests and broken files before a change; the calibration ledger scores it after | X1, calibration ledger (#2) | Lean version SHIPPED in 0.40.0 (#166): X-ray's own test predictions (by call, by import) vs test-runner failures (pytest first; vitest, jest, npm/pnpm/yarn/bun test, go test and gotestsum since `feature/x17-ts-go`) in a local ledger, `gingugu xray score`. The agent's own predictions and the brain-side calibration ledger are still to do |
 | X12 | **Board-driven upkeep** - the nightly X-ray posts findings (dead files, new cycles, drift) to the agent board for agents to claim | X4, agent board | |
 | X13 | **Code fingerprints** - embed code units; near-duplicate logic across repos, and provenance of copied code | embeddings, hybrid search | |
-| X14 | **Map on arrival (SHIPPED in 0.32.0, #153)** - a short repo overview (size, languages, top-ranked files, entry points) on the session's first touch of a repo, then an up-to-4-line neighbourhood (rank, importers, nearest tests since the X-ray tuning, imports; X17 adds a fifth, `Most called`, for Python) on a file's first `Read` | X1 graph cache, hooks | PostToolUse context, non-blocking. Leaf files stay silent. First touch, not session start, so a session that never touches code pays nothing |
+| X14 | **Map on arrival (SHIPPED in 0.32.0, #153)** - a short repo overview (size, languages, top-ranked files, entry points) on the session's first touch of a repo, then an up-to-4-line neighbourhood (rank, importers, nearest tests since the X-ray tuning, imports; X17 adds a fifth, `Most called`, in any language) on a file's first `Read` | X1 graph cache, hooks | PostToolUse context, non-blocking. Leaf files stay silent. First touch, not session start, so a session that never touches code pays nothing |
 | X15 | **Writes from any tool (RELEASED in 0.37.0)** - before a Bash call `gingugu hook tool` snapshots the dirty set of up to 8 candidate checkouts (cwd repo, repos the session touched, repos of paths in the command); after it `gingugu hook bash` (new doorway `post_bash_xray.py`, matcher `Bash`) diffs it and X-rays the changed source files, and a deleted file's old importers from the cached graph | X2, hooks | Command parsing can never be complete; watching the checkout catches every write path, and any harness that edits through a shell. Informs, cannot deny; shares the edit tripwire's once-per-file claim; a repo reached only by a `cd` inside a script is not watched |
 | X16 | **Incremental refresh (RELEASED in 0.38.0, #164)** - the hooks' graph build caches each file's parse by content (`xray/parse_cache.py`, `xray-parse-<sha16(root)>.json`; adapters split into `parse`/`valid`/`link`) and re-parses only files whose bytes changed; linking always reruns. Refresh after writes stays lazy (the next hook call pays only for what changed); the nightly dream pass was dropped - the brain cannot read a client's checkout. Measured: django (3,050 files) one edit 0.82s instead of 4.3s, unchanged 0.37s; vite (1,639 TS/JS files) one edit 0.48s, cold 1.0s | X1, hooks | A full re-extract grows with the repo: 4.3s on django |
-| X17 | **Symbol graph (Python, RELEASED in 0.39.0, #165)** - definitions, call sites and resolved call edges; the edit tripwire names the definitions an edit lands in and their callers, the read neighbourhood the most-called definitions, `code_xray` `callers` one symbol's callers and reach. Client-side (`xray/symbols_walk.py`, `xray/symbols.py`, cache `xray-symbols-<sha16(root)>.json`), a lower bound (unresolved calls counted, never guessed). Measured on gingugu: 64.7% of non-external calls resolve; `require_write_id` 8 direct callers, 72 files by call vs 262 by import | `xray/lang/` adapters, X16 parse cache | The resolution X7 needs to name the function an entry point reaches, not just the file. Phase 2: TS/JS + Go via tree-sitter |
+| X17 | **Symbol graph (Python RELEASED in 0.39.0, #165; TS/JS + Go built on `feature/x17-ts-go`, unreleased)** - definitions, call sites and resolved call edges; the edit tripwire names the definitions an edit lands in and their callers, the read neighbourhood the most-called definitions, `code_xray` `callers` one symbol's callers and reach. Client-side (`xray/symbols_walk.py`, `xray/symbols.py`, cache `xray-symbols-<sha16(root)>.json`), a lower bound (unresolved calls counted, never guessed). Measured, share of non-external calls resolved: Python 64.4% (gingugu), TS/JS 52.9% (vite) / 78.4% (express example app) / 62.5% (gingugu `ui/`), Go 75.4% (gin) / 76.6% (bubbletea); `require_write_id` 8 direct callers, 72 files by call vs 262 by import | `xray/lang/` adapters, X16 parse cache | The resolution X7 needs to name the function an entry point reaches, not just the file. Phase 2 (TS/JS + Go, tree-sitter) BUILT: `xray/lang/ts_symbols*.py`, `ts_exports.py`, `go_symbols*.py`, merged by `symbols.merge` |
 | X21 | **Symbols on the brain (OWED)** - brain tables for definitions and call edges (a migration), ingested with the snapshot, so `code_xray` `callers` works through `gingugu serve` and across repos | X17, X1 store, X9 | Owed by the X17 approval (2026-10-30), which was given on the condition that brain tables follow. Lands when X7 or X9 first needs symbols on the brain; until then the symbol graph stays on the client |
 | X19 | **X-ray brief (SHIPPED in 0.34.0, #157)** - the changed files by rank with importer counts, plus their combined blast (code and candidate tests), for an agent that fires no hooks | X1, X14 graph cache | `code_xray` `brief` (`range`, `files`, `path`) and `gingugu xray brief [--range R \| --files a,b] [--path P] [--json]`. Computed on the caller's machine from the hook graph cache; nothing stored, the brain never asked; `gingugu serve` refuses it, the proxy answers it locally. Compact `text` <= 8800 chars, for reviews, handoffs and `board watch --exec`. `xray/brief.py`, `xray_cli.py` |
 | X20 | **Brief on the board (RELEASED in 0.35.0)** - a handoff carries its X-ray brief without anyone asking. Why next: the agents X19 is for fire no hooks, so a brief they must request is a brief they rarely see | X19, agent board | When a board post names a range (`xray: <range>`), the RECEIVING side renders `xray brief` for it and attaches the text: the prompt hook's board mail (Claude Code) and `board watch --exec` (Codex). Rendered on the receiver's machine from its own checkout; the post itself carries only the ref, never paths or the brief. BUILT as a line of its own `xray: <range>` in the body: board mail appends at most one per prompt (<= 3500 chars, the prompt's cwd); `board watch` adds an `xray` field, appends to `text` and sets `GINGUGU_POST_XRAY` (<= 3 per batch, the watcher's cwd). Same range gate as `brief`, ref <= 200 chars. Sender nudge: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line (`xray/board_nudge.py`). A receiver with no cwd or outside a repo gets one line naming `gingugu xray brief --range <ref>` (0.35.2). Part 2: `xray: <repo> <range>` names the repo, found locally via `xray/repo_id` (0.36.0). Switch `MEMORY_XRAY_BOARD`. `xray/board_brief.py` |
@@ -2804,6 +2830,11 @@ slices alongside them. IDs are stable references, not the order.
   `.ai/standards/01-code-and-testing.md`.
 - This repo is **public and personal**: no commit, PR body, CHANGELOG entry or
   code comment may reference a work repo.
+- **The X-ray law (2026-11-09):** an X-ray surface covers every language X-ray
+  parses, as far as static reading can take it. No piece ships Python-only (or
+  pytest-only) while other pieces cover more. A gap a language truly cannot
+  close is counted and said, never silently skipped. See
+  `.ai/standards/03-xray.md`.
 
 ---
 

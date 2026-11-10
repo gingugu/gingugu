@@ -75,6 +75,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   file per session, the edit note and the Bash X-ray sharing the claim. Bash never
   refreshes: with no summary it says nothing about docs. `MEMORY_XRAY_DOCS=off`
   silences every line. No migration.
+- **X17: the symbol and call graph covers TypeScript/JavaScript and Go.** It was
+  Python-only. `xray/lang/ts_symbols_walk.py` (walker), `ts_symbols_types.py` (type and
+  value refs), `ts_symbols_valid.py` (cache shape check), `ts_exports.py` (specifier
+  resolution and barrel following, memoised) and `ts_symbols.py` (linker) cover
+  TS/JS; `go_symbols_walk.py`, `go_symbols_valid.py` and `go_symbols.py` cover Go;
+  `extract.py` merges every adapter's symbols with `symbols.merge`. TS `this.m()` and
+  `new X()` are calls, qualified names may contain `$`, and barrels (`export {x} from`,
+  `export *`) are followed up to 8 hops. Go methods are `Type.Method` and a package (a
+  directory) is one name scope across its files. Calls stay a lower bound in every
+  language: TS interface-typed parameters and callbacks, Go interface values and
+  function values stay unresolved (counted, never guessed), and a TS value returned by
+  an external call (`const app = express()`) counts external. Share of non-external
+  calls resolved: Python 64.4% (gingugu), TS/JS 52.9% (vite, 1,650 files, parse 1.0s,
+  link 0.06s), 78.4% (an express example app), 62.5% (gingugu `ui/`), Go 75.4% (gin),
+  76.6% (bubbletea). A linker that raises costs only its own language's call
+  graph: `lang/symbols_guard.py` logs the traceback and returns an empty graph, so
+  the import graph and every other language still land. An adapter that raises
+  anywhere else (parse or import linking; it was `RecursionError` only) costs only its
+  own language: `extract.py` logs it and keeps that language's files as nodes reported
+  unparsed. No migration, no tool change.
+- **`Most called` and the after-edit callers line work in any language.** The read
+  note's `Most called` line and the note after an edit no longer require a `.py` file;
+  `Most called` also shows for a file with no import neighbourhood (a lone Go file - Go
+  imports point at package nodes).
+- **Nearest tests per language.** `lang.is_test(path)` dispatches per language and
+  `hook_common.nearest_tests` ranks a test named for the edited file first in every
+  language (`test_x.py`, `x_test.py`, `x_test.go`, `x.test.ts`, `x.spec.tsx`).
+- **X11 ledger records more than pytest.** `ledger.py` and the new `ledger_runs.py`
+  recognise pytest, vitest, jest, `npm`/`pnpm`/`yarn`/`bun test`, `go test` and
+  `gotestsum`, reading the failed test files from each runner's summary lines (ANSI
+  stripped; for Go, plain and `-json` output, the failing package import path and the
+  test-file basename only). A failed path matches a predicted one when equal or when
+  one ends with the other on a `/` boundary. Absolute paths, `..` paths, Go `_/<dir>`
+  packages and paths over 512 characters are never kept.
+
+### Changed
+
+- **Extractor version 4.** The symbol records of TS/JS and Go ride the parse cache, so
+  the cached parses and graph caches rebuild once after upgrading.
 
 ### Fixed
 

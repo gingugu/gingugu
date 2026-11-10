@@ -43,7 +43,7 @@ def _parser(path: str):
     return _PARSERS[key]
 
 
-def _string_value(node) -> str:
+def string_value(node) -> str:
     return b"".join(c.text for c in node.children if c.type == "string_fragment").decode(
         "utf-8", "replace"
     )
@@ -65,15 +65,24 @@ def _call(node, out: Imports) -> None:
     if first is None:
         return
     if first.type == "string":
-        out.specs.append((_string_value(first), LAZY if is_import else MODULE))
+        out.specs.append((string_value(first), LAZY if is_import else MODULE))
     else:
         out.dynamic += 1
 
 
+def parse_tree(path: str, data: bytes):
+    """The tree-sitter tree of ``data``, so one parse can feed every walk of the file."""
+    return _parser(path).parse(data)
+
+
 def parse(path: str, data: bytes) -> Imports:
     """Every import-like specifier in ``data``, plus a count of computed ones."""
+    return scan(parse_tree(path, data))
+
+
+def scan(tree) -> Imports:
+    """The import-like specifiers of an already parsed ``tree``."""
     out = Imports()
-    tree = _parser(path).parse(data)
     out.has_error = tree.root_node.has_error
     stack = [tree.root_node]
     while stack:
@@ -83,11 +92,11 @@ def parse(path: str, data: bytes) -> Imports:
             src = node.child_by_field_name("source")
             if src is not None and src.type == "string":
                 kind = TYPE if _has_type_token(node) else MODULE
-                out.specs.append((_string_value(src), kind))
+                out.specs.append((string_value(src), kind))
         elif t == "import_require_clause":
             src = next((c for c in node.children if c.type == "string"), None)
             if src is not None:
-                out.specs.append((_string_value(src), MODULE))
+                out.specs.append((string_value(src), MODULE))
         elif t == "call_expression":
             _call(node, out)
         stack.extend(node.children)

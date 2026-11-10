@@ -104,6 +104,32 @@ def test_an_adapter_recursing_out_costs_only_its_own_language(tmp_path, monkeypa
     validate.payload(x.payload())
 
 
+@pytest.mark.parametrize("cache", [False, True])
+@pytest.mark.parametrize("step", ["parse", "link"])
+def test_an_adapter_bug_costs_only_its_own_language(tmp_path, monkeypatch, caplog, cache, step):
+    def boom(self, *args):
+        raise TypeError("adapter bug")
+
+    monkeypatch.setattr(type(TS), step, boom)
+    repo = _repo(tmp_path / "r", {"a.py": "import b\n", "b.py": "", "c.ts": "", "d.ts": ""})
+    pc = tmp_path / "pc" if cache else None
+    with caplog.at_level("WARNING", logger=extract.__name__):
+        x = extract.extract(repo, pc)
+    assert ("a.py", "b.py") in {(e.src, e.dst) for e in x.edges}
+    assert x.parse_errors == ["c.ts", "d.ts"]  # still nodes, said to be unparsed
+    assert {f.path for f in x.files} == {"a.py", "b.py", "c.ts", "d.ts"}
+    assert "adapter bug" in caplog.text  # contained, not hidden
+    validate.payload(x.payload())
+
+    monkeypatch.undo()  # the bug is fixed: nothing the failed run cached may linger
+    assert extract.extract(repo, pc).parse_errors == []
+
+
+def test_not_being_a_git_repo_is_still_an_error(tmp_path):
+    with pytest.raises(extract.XrayError):
+        extract.extract(tmp_path)
+
+
 def test_a_node_name_the_brain_would_refuse_is_never_shipped(tmp_path, fake, monkeypatch):
     from gingugu.xray.model import FileInfo
     from tests.xray_lang_fixtures import FakeAdapter

@@ -35,8 +35,9 @@ Usage:
                                main..HEAD, --files a,b, or the working tree;
                                --json. Local only.
   gingugu xray score [--json]  How X-ray's test predictions fared: the tests
-                               each post-edit note named vs the pytest runs
-                               that then failed. Local only.
+                               each post-edit note named vs the test runs
+                               (pytest, vitest, jest, npm-style test, go
+                               test, gotestsum) that then failed. Local only.
   gingugu embed                Finish embedding the whole store in one run (the
                                server does one small batch per startup).
   gingugu hook prompt          Involuntary recall: reads a UserPromptSubmit
@@ -55,12 +56,12 @@ Usage:
                                Wired by `gingugu init`; not run by hand.
   gingugu hook bash            X-ray after a shell command: reads a PostToolUse
                                event (Bash) and names what the source files the
-                               command changed reach; records pytest failures
+                               command changed reach; records test-run failures
                                for `xray score`. Wired by `gingugu init`; not
                                run by hand.
   gingugu hook edit            X-ray after an edit: reads a PostToolUse event
                                (Edit/Write/MultiEdit) and names the callers of
-                               the Python definitions the edit touched and their
+                               the definitions the edit touched and their
                                nearest tests. Wired by `gingugu init`.
 
   gingugu party [SECONDS]      The cracktro, on demand: plasma, copper bars, a sine

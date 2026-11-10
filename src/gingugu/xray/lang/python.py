@@ -14,6 +14,7 @@ from .. import symbols, symbols_walk
 from ..model import Edge, FileInfo, LangResult
 from ..resolve import KIND_RANK, ModuleIndex, resolve_records
 from ..resolve_walk import is_main_guard, walk
+from .symbols_guard import contained
 
 
 def _entry_targets(data: dict) -> set[str]:
@@ -136,7 +137,8 @@ class PythonAdapter:
             out.edges.extend(Edge(rel, dst, k, c, i) for dst, (k, c, i) in res.edges.items())
             entry = is_entry or raw["main"]
             out.files.append(FileInfo(rel, is_test(rel), entry, self.name))
-        out.symbols = symbols.link({rel: raw["sym"] for rel, raw in raws.items()}, idx)
+        syms = {rel: raw["sym"] for rel, raw in raws.items()}
+        out.symbols = contained(self.name, symbols.link, syms, idx)
         return out
 
 

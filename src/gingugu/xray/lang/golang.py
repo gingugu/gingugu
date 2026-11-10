@@ -12,6 +12,8 @@ from __future__ import annotations
 from pathlib import PurePosixPath
 
 from ..model import PACKAGE, Edge, FileInfo, LangResult
+from . import go_symbols, go_symbols_walk
+from .symbols_guard import contained
 
 _LANG = None
 _IMPORTS = None
@@ -86,7 +88,8 @@ def _under(path: str, mods: set[str]) -> bool:
 
 
 def _parse(data: bytes) -> dict:
-    """The package clause name, import paths and parse-error flag of one file."""
+    """The package clause name, import paths, parse-error flag and symbol records of one
+    file - from one parse."""
     import tree_sitter as ts
 
     parser, imports_q, package_q = _parsers()
@@ -97,7 +100,7 @@ def _parse(data: bytes) -> dict:
         n.text.decode("utf-8", errors="replace")[1:-1]
         for n in ts.QueryCursor(imports_q).captures(root).get("p", [])
     ]
-    return {"pkg": pkg, "imports": paths, "err": root.has_error}
+    return {"pkg": pkg, "imports": paths, "err": root.has_error, "sym": go_symbols_walk.walk(root)}
 
 
 class GoAdapter:
@@ -114,11 +117,12 @@ class GoAdapter:
         """Whether ``raw`` has exactly the shape ``parse`` returns (a cache is untrusted)."""
         return (
             isinstance(raw, dict)
-            and set(raw) == {"pkg", "imports", "err"}
+            and set(raw) == {"pkg", "imports", "err", "sym"}
             and isinstance(raw["pkg"], str)
             and isinstance(raw["err"], bool)
             and isinstance(raw["imports"], list)
             and all(isinstance(i, str) for i in raw["imports"])
+            and go_symbols_walk.valid(raw["sym"])
         )
 
     def extract(self, sources: dict[str, bytes], manifests: dict[str, bytes]) -> LangResult:
@@ -174,6 +178,13 @@ class GoAdapter:
         for pkg_path, files in members.items():
             out.files.append(FileInfo(pkg_path, False, False, self.name, PACKAGE))
             out.edges.extend(Edge(pkg_path, f, "member", True) for f in files)
+        out.symbols = contained(
+            self.name,
+            go_symbols.link,
+            {rel: raw["sym"] for rel, raw in raws.items()},
+            {rel: pkg for rel, (pkg, _) in placed.items()},
+            lambda path: _under(path, mod_paths),
+        )
         return out
 
 

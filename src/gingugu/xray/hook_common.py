@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import threading
 import time
 from pathlib import Path
@@ -66,9 +67,21 @@ def _show(path: str) -> str:
     return path if path.isprintable() else json.dumps(path)
 
 
+_TEST_NAME = re.compile(r"^test_.+\.py$|_test\.(?:py|go)$|\.(?:test|spec)\.[cm]?[jt]sx?$")
+_EXT = re.compile(r"\.(?:py|go|[cm]?[jt]sx?)$")
+_AFFIX = re.compile(r"^test_|_test$|\.(?:test|spec)$")
+
+
+def _is_test_name(path: str) -> bool:
+    """A test file by its own name, in every language X-ray parses: ``test_x.py``,
+    ``x_test.py``, ``x_test.go``, ``x.test.ts``, ``x.spec.tsx``..."""
+    return bool(_TEST_NAME.search(path.rsplit("/", 1)[-1]))
+
+
 def _words(path: str) -> list[str]:
-    name = path.rsplit("/", 1)[-1].removesuffix(".py")
-    return [w for w in name.removeprefix("test_").split("_") if w]
+    """The words of a file's stem, its extension and any test affix dropped."""
+    name = _AFFIX.sub("", _EXT.sub("", path.rsplit("/", 1)[-1]))
+    return [w for w in re.split(r"[_.\-]", name) if w]
 
 
 def _named_for(test: str, stem: list[str]) -> int:
@@ -89,11 +102,12 @@ def nearest_tests(tests: list[dict], seed: str | None = None) -> list[str]:
     fewer hops, then path. A package ``__init__`` is named for its directory."""
     stem: list[str] = []
     if seed:
-        parts = seed.removesuffix(".py").split("/")
-        stem = _words(parts[-2] if parts[-1] == "__init__" and len(parts) > 1 else parts[-1])
+        parts = seed.split("/")
+        init = parts[-1] == "__init__.py" and len(parts) > 1
+        stem = _words(parts[-2] if init else parts[-1])
 
     def key(r: dict) -> tuple:
-        is_test = r["path"].rsplit("/", 1)[-1].startswith("test_")
+        is_test = _is_test_name(r["path"])
         return (not is_test, _named_for(r["path"], stem) if is_test else 2, r["hops"], r["path"])
 
     return [r["path"] for r in sorted(tests, key=key)]

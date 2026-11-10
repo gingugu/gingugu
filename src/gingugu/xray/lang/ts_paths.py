@@ -5,6 +5,7 @@ from __future__ import annotations
 import posixpath
 from collections.abc import Container
 
+MAX_SPEC = 1024  # no real module name is this long; it is never resolved
 CODE_EXTS = (".ts", ".tsx", ".d.ts", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs")
 # ESM imports name the emitted file (./x.js); the source is its TS twin.
 _ESM = {

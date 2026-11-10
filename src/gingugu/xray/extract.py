@@ -17,6 +17,7 @@ version, so it changes exactly when the answer could, and bumping
 from __future__ import annotations
 
 import hashlib
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -25,13 +26,16 @@ from . import parse_cache as _pc
 from .model import Edge, FileInfo, LangResult
 from .scan import XrayError as XrayError
 from .scan import commit, is_manifest, read_sources, toplevel
-from .symbols import Symbols
+from .symbols import Symbols, merge
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["EXTRACTOR_VERSION", "Edge", "Extraction", "FileInfo", "XrayError", "extract"]
 
 # 2: every language in ``lang/``, nodes carry lang + kind, package nodes.
 # 3: the Python parse also carries symbol records (X17).
-EXTRACTOR_VERSION: int = 3
+# 4: the TS/JS and Go parses carry symbol records too; every language's merge.
+EXTRACTOR_VERSION: int = 4
 MAX_FILE_BYTES: int = 2_000_000  # real source is far smaller; read at call time
 MAX_TOTAL_BYTES: int = 256_000_000  # vite's sources are ~10MB; read at call time
 
@@ -146,10 +150,14 @@ def extract(path: str | Path, parse_cache: str | Path | None = None) -> Extracti
                 res = adapter.link(raws, wanted)
             else:
                 res = adapter.extract(mine, wanted)
-        except RecursionError:
+        except Exception:  # noqa: BLE001 - one language's failure is never the repo's
             after.pop(adapter.name, None)
-            # Hostile input past a bound an adapter missed: that language's files
-            # stay nodes, reported unparsed, and every other language still lands.
+            # Hostile input past a bound an adapter missed, or an adapter bug: that
+            # language's files stay nodes, reported unparsed, and every other
+            # language still lands. Logged, so it is contained rather than hidden.
+            logger.warning(
+                "x-ray: %s adapter failed; its files are unparsed", adapter.name, exc_info=True
+            )
             res = LangResult(
                 files=[FileInfo(p, False, False, adapter.name) for p in mine],
                 parse_errors=sorted(mine),
@@ -165,8 +173,7 @@ def extract(path: str | Path, parse_cache: str | Path | None = None) -> Extracti
         out.dynamic += res.dynamic
         out.external += res.external
         out.parse_errors.extend(res.parse_errors)
-        if res.symbols.defs:  # only Python produces one
-            out.symbols = res.symbols
+        out.symbols = merge(out.symbols, res.symbols)  # every language's, one graph
         skipped.extend(res.skipped)
 
     # The brain refuses a payload whole over one dangling or repeated edge, so an

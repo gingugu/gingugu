@@ -6,6 +6,9 @@ relative to the file, through the nearest tsconfig/jsconfig (``paths``,
 ``baseUrl``, ``extends``) and through in-repo workspace packages named by a
 ``package.json``. Entries are package.json ``main``/``module``/``bin``/``exports``
 and ``index.html`` script tags. Configs are data: nothing is run, nothing is read.
+
+The same parse also walks each file into symbol records (``ts_symbols_walk``), linked
+into a call graph by ``ts_symbols``.
 """
 
 from __future__ import annotations
@@ -14,16 +17,17 @@ import re
 from pathlib import PurePosixPath
 
 from ..model import Edge, FileInfo, LangResult
+from . import ts_symbols, ts_symbols_walk
+from .symbols_guard import contained
 from .ts_config import Manifests
-from .ts_parse import LAZY, MODULE, TYPE, parse
-from .ts_paths import ASSET_EXTS, asset_ext, is_relative, strip_query
+from .ts_parse import LAZY, MODULE, TYPE, parse_tree, scan
+from .ts_paths import ASSET_EXTS, MAX_SPEC, asset_ext, is_relative, strip_query
 from .ts_resolve import Resolver
 
 TS_EXTENSIONS = (".ts", ".tsx", ".mts", ".cts")
 JS_EXTENSIONS = (".js", ".jsx", ".mjs", ".cjs")
 
 _STRENGTH = {TYPE: 1, LAZY: 2, MODULE: 3}
-MAX_SPEC = 1024
 _TEST_FILE = re.compile(r"\.(test|spec)\.[cm]?[jt]sx?$")
 _TEST_DIRS = ("__tests__", "tests", "test")
 
@@ -40,11 +44,13 @@ class TypeScriptAdapter:
 
     def parse(self, rel: str, data: bytes) -> dict:
         """Specifiers and counts from the bytes; ``rel`` only picks the grammar by extension."""
-        imports = parse(rel, data)
+        tree = parse_tree(rel, data)
+        imports = scan(tree)
         return {
             "specs": [[spec, kind] for spec, kind in imports.specs],
             "dyn": imports.dynamic,
             "err": imports.has_error,
+            "sym": ts_symbols_walk.walk(tree),
         }
 
     @staticmethod
@@ -52,7 +58,8 @@ class TypeScriptAdapter:
         """Whether ``raw`` has exactly the shape ``parse`` returns (a cache is untrusted)."""
         return (
             isinstance(raw, dict)
-            and set(raw) == {"specs", "dyn", "err"}
+            and set(raw) == {"specs", "dyn", "err", "sym"}
+            and ts_symbols_walk.valid(raw["sym"])
             and isinstance(raw["err"], bool)
             and isinstance(raw["dyn"], int)
             and not isinstance(raw["dyn"], bool)
@@ -86,6 +93,8 @@ class TypeScriptAdapter:
             for spec, kind in raw["specs"]:
                 self._resolve(rel, spec, kind, resolver, out, found)
             out.edges.extend(Edge(rel, dst, k, c) for dst, (k, c) in found.items())
+        syms = {rel: raw["sym"] for rel, raw in raws.items()}
+        out.symbols = contained(self.name, ts_symbols.link, syms, resolver)
         return out
 
     @staticmethod

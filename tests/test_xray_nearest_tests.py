@@ -68,3 +68,35 @@ def test_without_a_seed_it_is_test_files_then_hops_then_path():
 def test_a_helper_is_never_lifted_above_a_test_by_its_name():
     rows = _rows(("tests/grants_fixtures.py", 1), ("tests/test_other.py", 2))
     assert nearest_tests(rows, seed="src/grants.py")[0] == "tests/test_other.py"
+
+
+# --- every language X-ray parses (the X-ray law) ---------------------------------
+
+
+def test_a_typescript_test_named_for_the_file_goes_first():
+    rows = _rows(
+        ("src/app.test.ts", 1),
+        ("src/__tests__/helpers.ts", 1),
+        ("src/user_store.spec.tsx", 3),
+        ("src/store.test.ts", 4),
+    )
+    assert nearest_tests(rows, seed="src/store.ts") == [
+        "src/store.test.ts",
+        "src/user_store.spec.tsx",
+        "src/app.test.ts",
+        "src/__tests__/helpers.ts",
+    ]
+
+
+def test_a_go_test_named_for_the_file_goes_first():
+    rows = _rows(("store/other_test.go", 1), ("store/testutil.go", 1), ("store/store_test.go", 2))
+    assert nearest_tests(rows, seed="store/store.go") == [
+        "store/store_test.go",
+        "store/other_test.go",
+        "store/testutil.go",
+    ]
+
+
+def test_a_python_style_suffix_test_counts_as_a_test_file():
+    rows = _rows(("pkg/helpers.py", 1), ("pkg/grants_test.py", 2))
+    assert nearest_tests(rows, seed="pkg/grants.py") == ["pkg/grants_test.py", "pkg/helpers.py"]

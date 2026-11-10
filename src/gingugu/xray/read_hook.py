@@ -158,14 +158,17 @@ def _most_called(rel: str, sym: symbols.Symbols) -> str | None:
 def _with_symbols(
     near: str, rel: str, root: Path, state_dir: Path, session_id: str, fp: str
 ) -> str:
-    """``near`` plus the most-called line for a Python file; unchanged on any failure."""
-    if not rel.endswith(".py"):
-        return near
-    try:
-        line = _most_called(rel, hook_common.symbols(root, state_dir, session_id, fp))
-    except (XrayError, ValueError, OSError):
-        return near
+    """``near`` plus the most-called line, any language; unchanged on any failure."""
+    line = _called_line(rel, root, state_dir, session_id, fp)
     return f"{near}\n{line}" if line else near
+
+
+def _called_line(rel: str, root: Path, state_dir: Path, session_id: str, fp: str) -> str | None:
+    """The most-called line, or None - also for any failure: it never costs the read."""
+    try:
+        return _most_called(rel, hook_common.symbols(root, state_dir, session_id, fp))
+    except (XrayError, ValueError, OSError):
+        return None
 
 
 def _changes_with(root: Path, rel: str, g: Graph, state_dir: Path) -> list[str]:
@@ -258,10 +261,14 @@ def check(payload: dict, state_dir: Path) -> str | None:
                 parts.append("\n".join(p for p in (repo_map, outside) if p))
         if want_read and rel is not None and _claim(read_claim):
             near = _render_neighbourhood(rel, g)
+            leaf = []  # no import neighbourhood (a lone Go file), but its callers still speak
             if near:
                 near = _with_symbols(near, rel, root, state_dir, session_id, fp)
+            elif rel in g.files and rel not in g.packages:
+                leaf = [ln for ln in [_called_line(rel, root, state_dir, session_id, fp)] if ln]
             extra = (
-                _changes_with(root, rel, g, state_dir)
+                leaf
+                + _changes_with(root, rel, g, state_dir)
                 + _scars(root, rel, g)
                 + _outside_file(root, rel, state_dir)
                 + _docs_file(root, rel, state_dir)
