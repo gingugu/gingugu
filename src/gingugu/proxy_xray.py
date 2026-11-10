@@ -7,8 +7,8 @@ the host's disk, and the tool there refuses one. So the proxy claims every
 this machine. It also claims every ``brief`` (changed files and their combined
 blast), every ``callers`` (one symbol's callers, X17) and every ``history`` and
 ``blindspots`` (X4, X6), every ``docs`` (X22), every ``env`` (X7a), every ``tables``
-(X7c), every ``surface`` (X7d) and every ``links`` (X23), each answered whole from the local checkout; the
-brain is never asked. The rest goes through
+(X7c), every ``surface`` (X7d) and every ``links`` (X23), each answered whole from
+the local checkout; the brain is never asked. The rest goes through
 ``xray.local``, the same code the local server runs:
 
 1. fingerprint the checkout (cheap: no parsing) and ask the brain by fingerprint;
