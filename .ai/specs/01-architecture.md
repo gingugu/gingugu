@@ -59,7 +59,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `xray/` (Codebase X-ray: `scan` + `extract` + `lang/` (one adapter per language: `python`
    on `ast` with `resolve`; `typescript` + `ts_*` + `jsonc` and `golang` on tree-sitter) +
    `model` + `local` + `parse_cache` + `resolve_walk` on the client, `validate` +
-   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check), `tool_xray` (the PreToolUse X-ray decision, apart from `tool_hook`), `bash_hook` + `bash_state` (X15: a shell command's writes get their X-ray; the repos a session touched) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), `symbols_walk` + `symbols` (X17: the Python symbol graph - per-file definition/binding/call/type records, resolved to call edges; client only, cached beside the graph), `edit_symbols` (X17: the tripwire's `Edit lands in` lines), `callers_tool` (X17: `code_xray` `callers`, local only), `edit_note` (the PostToolUse note after an edit: cross-file callers of the definitions touched, nearest tests), `literals` (who still reads a key an Edit/MultiEdit removed: a `git grep` text match, labelled as such, never an import edge), `ledger` (X11 lean: X-ray's test predictions vs pytest failures, local; `gingugu xray score`), `board_nudge` (X20 sender: asks a board post from a branch ahead of the default branch for its range, once per session, from `gingugu hook tool`), `board_brief` (X20: the brief a board post's `xray:` line asks for, rendered on the receiver), `repo_id` (X20: a checkout's identity and where the repo a post names is checked out here), `scar_query` (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace, bug/decision/architecture/fact/pattern only; never sees a checkout) + `scars` (X3, client side: resolves a hit's path tokens against the checkout's source files, ranks by type weight over files named, reads only the repo's own namespace, never `crow`; derived at read time, no table, no migration; appended to the read neighbourhood and the blind-edit deny), `history` (X4: git log summarized as churn, author counts and co-changed pairs, cached by HEAD), `hotspots` (X4 hotspots + coupling, X6 blind spots; pure), `history_tool` (`code_xray` `history`/`blindspots`, local only), `docs_map` + `docs_text` + `docs_cites` + `docs_tool` + `docs_hook` (X22: the reverse index from a file to the docs that cite it, here and in sibling checkouts; `code_xray` `docs`, local only; the hooks read a per-repo summary), `env_scan` + `env_map` + `env_tool` + `env_hook` (X7a: env vars as edges, client only; `code_xray` `env`), `file_facts` (the per-file cache plumbing `env_map` and `table_map` share) + `table_scan` + `table_map` + `table_tool` + `table_hook` (X7c: DB tables as edges, client only; `code_xray` `tables`) and the `links/` package (X23: zero-config cross-repo links - what each checkout provides and mentions, joined into links, `shared` hosts and a cross-repo ripple; `code_xray` `links`, local only), the hook side that builds the graph itself and never
+   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check), `tool_xray` (the PreToolUse X-ray decision, apart from `tool_hook`), `bash_hook` + `bash_state` (X15: a shell command's writes get their X-ray; the repos a session touched) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), `symbols_walk` + `symbols` (X17: the symbol graph - per-file definition/binding/call/type records, resolved to call edges; client only, cached beside the graph; the Python walker and the shared model, `symbols.merge` joins every adapter's share), the TS/JS and Go symbol modules under `lang/` (`ts_symbols_walk`, `ts_symbols_types`, `ts_symbols_valid`, `ts_exports` - specifier resolution and barrel following, `ts_symbols`; `go_symbols_walk`, `go_symbols_valid`, `go_symbols`), `edit_symbols` (X17: the tripwire's `Edit lands in` lines), `callers_tool` (X17: `code_xray` `callers`, local only), `edit_note` (the PostToolUse note after an edit: cross-file callers of the definitions touched, nearest tests), `literals` (who still reads a key an Edit/MultiEdit removed: a `git grep` text match, labelled as such, never an import edge), `ledger` + `ledger_runs` (X11 lean: X-ray's test predictions vs test-runner failures - pytest, vitest, jest, npm/pnpm/yarn/bun test, go test, gotestsum - local; `gingugu xray score`), `board_nudge` (X20 sender: asks a board post from a branch ahead of the default branch for its range, once per session, from `gingugu hook tool`), `board_brief` (X20: the brief a board post's `xray:` line asks for, rendered on the receiver), `repo_id` (X20: a checkout's identity and where the repo a post names is checked out here), `scar_query` (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace, bug/decision/architecture/fact/pattern only; never sees a checkout) + `scars` (X3, client side: resolves a hit's path tokens against the checkout's source files, ranks by type weight over files named, reads only the repo's own namespace, never `crow`; derived at read time, no table, no migration; appended to the read neighbourhood and the blind-edit deny), `history` (X4: git log summarized as churn, author counts and co-changed pairs, cached by HEAD), `hotspots` (X4 hotspots + coupling, X6 blind spots; pure), `history_tool` (`code_xray` `history`/`blindspots`, local only), `docs_map` + `docs_text` + `docs_cites` + `docs_tool` + `docs_hook` (X22: the reverse index from a file to the docs that cite it, here and in sibling checkouts; `code_xray` `docs`, local only; the hooks read a per-repo summary), `env_scan` + `env_map` + `env_tool` + `env_hook` (X7a: env vars as edges, client only; `code_xray` `env`), `file_facts` (the per-file cache plumbing `env_map` and `table_map` share) + `table_scan` + `table_map` + `table_tool` + `table_hook` (X7c: DB tables as edges, client only; `code_xray` `tables`) and the `links/` package (X23: zero-config cross-repo links - what each checkout provides and mentions, joined into links, `shared` hosts and a cross-repo ripple; `code_xray` `links`, local only), the hook side that builds the graph itself and never
    touches the brain; see Key Decisions), `proxy_xray` (the proxy's local half of `code_xray`),
    `board_watch` +
    `board_watch_remote`, `board_watch_emit` (the `gingugu board watch` wake-up command; see Key
@@ -775,7 +775,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   it re-issued every deny of a file it had just read without reading the reason; the
   import blast was already in front of it from the read neighbourhood. An informed edit
   gets the post-edit note (`xray/edit_note`, PostToolUse `gingugu hook edit`) instead:
-  cross-file callers of the definitions touched and their nearest tests, plus, after an
+  cross-file callers of the definitions touched (any language X-ray parses) and their nearest tests, plus, after an
   Edit/MultiEdit of any file, who still reads a key it removed (`xray/literals`: `git grep`
   text matches, not import edges; board d5639dd5). The deny text
   below was later changed to lead with direct importers (`is imported directly by D;
@@ -938,20 +938,26 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `gingugu serve` refuses it (it cannot read the caller's checkout) and the proxy
   claims it and answers it locally. A range is checked before git sees it (no
   option, whitespace or control characters).
-- **Codebase X-ray: the symbol graph (X17, Python, released in 0.39.0).** Files and
+- **Codebase X-ray: the symbol graph (X17, Python released in 0.39.0; TS/JS and Go unreleased).** Files and
   imports say what a change *could* reach; definitions and calls say what it does.
-  The Python parse also yields per-file records (`xray/symbols_walk`, content-only,
-  so they ride the X16 parse cache; extractor version 3), and `xray/symbols` links
-  them through the same `ModuleIndex` as the imports. *A lower bound by
+  Each adapter's parse also yields per-file records (Python `xray/symbols_walk`, TS/JS
+  `lang/ts_symbols_walk`, Go `lang/go_symbols_walk`; content-only, so they ride the
+  X16 parse cache as `"sym"`; extractor version 4), and each adapter's linker
+  (`xray/symbols`, `lang/ts_symbols`, `lang/go_symbols`) resolves them through its own
+  module index, `symbols.merge` joining the shares in `extract.py`. *A lower bound by
   construction*: a call resolves only through a definition in scope, an import
   binding, a class named in scope (constructor, annotation, `with`) or `self`/`cls`;
-  everything else is counted unresolved, never guessed, so file blast stays the
-  upper bound. *Client-side only*: one build writes the graph cache and
+  everything else is counted unresolved, never guessed (TS interface-typed params and
+  callbacks, Go interface and function values), so file blast stays the
+  upper bound. TS/JS also follows barrels (`export {x} from`, `export *`) up to 8 hops
+  (`lang/ts_exports`, memoised); a Go package (directory) is one name scope across its
+  files and methods are `Type.Method`. *Client-side only*: one build writes the graph cache and
   `xray-symbols-<sha16(root)>.json`; `Extraction.payload` is unchanged and the brain
   never sees symbols - brain tables are owed as X21 (a migration, decided when X7/X9
   needs them; deferred so no schema ships before a consumer). Surfaces: the edit
   tripwire's `Edit lands in` lines (`xray/edit_symbols`, gating unchanged), the read
-  neighbourhood's `Most called` line, and `code_xray` `callers` (`xray/callers_tool`,
+  neighbourhood's `Most called` line (any language, also for a file with no import
+  neighbourhood), the after-edit callers line, and `code_xray` `callers` (`xray/callers_tool`,
   refused by `gingugu serve`, answered locally by the proxy). The hooks hash the
   checkout once and pass the fingerprint to both caches.
 - **Codebase X-ray: history and blind spots (X4 + X6, released in 0.42.0,

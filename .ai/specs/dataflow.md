@@ -651,8 +651,9 @@ PostToolUse event (Read | Grep | Glob)  →  .claude/hooks/post_tool_xray.py (pu
       Read of a source file an adapter parses, once per file per session
         (claim hook-sessions/xray-read-<session>/) →
         up to 4 lines: rank k of N, direct importers, nearest tests, direct
-        imports; a Python file adds `Most called: ...`
-        (X17 symbol cache); silent for a file with no edges
+        imports; any file X-ray parses adds `Most called: ...`
+        (X17 symbol cache, any language; also shown for a file with no import
+        neighbourhood, e.g. a lone Go file); otherwise silent for a file with no edges
       scar tissue (X3, MEMORY_XRAY_SCARS; xray/scars.py): the same first Read also
         looks up the memories that name the file: the repo's own project namespace
         only (the main checkout's folder name in a worktree; never crow), FTS5
@@ -725,15 +726,19 @@ answers it in process, the proxy claims it and answers it locally, and `gingugu 
 refuses it. The board brief (X20) uses no tool call at all: it runs in the prompt hook
 or the watch process on the receiver's machine.
 
-**The symbol graph (X17) rides the same build.** The Python parse carries
-`symbols_walk` records (`"sym"` in each cached raw); linking resolves them into call
-edges, and the build writes `xray-symbols-<sha16(root)>.json` beside the graph cache,
+**The symbol graph (X17) rides the same build.** Every adapter's parse (Python, TS/JS,
+Go) carries its walker's records (`"sym"` in each cached raw); each adapter's linker
+resolves them into call edges, `extract.py` joins the shares with `symbols.merge`, and the build writes `xray-symbols-<sha16(root)>.json` beside the graph cache,
 same fingerprint:
 
 ```
-python raw "sym" (defs, binds, calls, types; cached by content, X16)
-  → symbols.link over the ModuleIndex: scoped defs → import bindings → typed
-    variables in scope → self/cls; each call resolved | external | unresolved
+raw "sym" per adapter (python symbols_walk, ts_symbols_walk, go_symbols_walk:
+  defs, binds, calls, types; cached by content, X16)
+  → each adapter's link (symbols.link, ts_symbols.link, go_symbols.link; TS follows
+    barrels via ts_exports, Go scopes names by package): scoped defs → import
+    bindings → typed variables in scope → self/cls/this; each call resolved |
+    external | unresolved
+  → symbols.merge of every adapter's Symbols (extract.py)
   → hook-sessions/xray-symbols-<sha16(root)>.json (never in the brain payload)
   → edit tripwire: old_string → line span → symbols.enclosing → symbols.callers
   → read neighbourhood: distinct direct callers per definition, top 3
@@ -947,19 +952,25 @@ scores it:
 
 ```
 PostToolUse Edit|Write|MultiEdit → post_edit_xray.py → gingugu hook edit
-  → xray/edit_note.check: Python file in a repo, MEMORY_XRAY_TRIPWIRE on
+  → xray/edit_note.check: source file in a repo (any language X-ray parses), MEMORY_XRAY_TRIPWIRE on
       claim hook-sessions/xray-read-<session>/ for the file (seen: no blind deny later)
       Write → stop; Edit/MultiEdit → each new_string's start line in the file now
       symbols: cached xray-symbols-<sha16(root)>.json, fingerprint NOT checked (no
         rebuild; callers of a definition do not change with its body)
       → symbols.enclosing → symbols.callers → cross-file direct callers, tests in
-        reach (hook_common.nearest_tests, seeded with the file)
+        reach (hook_common.nearest_tests, seeded with the file; lang.is_test per
+        language, a test named for the file first: test_x.py, x_test.py, x_test.go,
+        x.test.ts, x.spec.tsx)
       → once per (session, file, definition): hook-sessions/xray-edit-<session>/
       → ledger.predict: kind calls (those tests) and kind imports (import-blast
         nearest tests from the cached graph)
 PostToolUse Bash → gingugu hook bash → xray/ledger.observe (independent of the X15
-  snapshot): a pytest command, not interrupted → FAILED/ERROR test files from
-  tool_response stdout + stderr → outcome row
+  snapshot): a test command (ledger_runs: pytest, vitest, jest, npm/pnpm/yarn/bun
+  test, go test, gotestsum), not interrupted → failed test files from each
+  runner's summary lines in tool_response stdout + stderr (ANSI stripped; go: the
+  failing package import path + test-file basename; absolute, `..`, `_/<dir>` and
+  >512-char paths dropped) → outcome row; a failed path matches a predicted one
+  when equal or one ends with the other on a `/` boundary
 gingugu xray score → predictions before each outcome in the same (session, repo)
   → per predictor: top5 | listed | missed; no prediction in that session: unpredicted
 ```
@@ -1098,7 +1109,7 @@ PreToolUse → `gingugu hook tool`
 
 PostToolUse → `gingugu hook read` / `gingugu hook bash` / `gingugu hook edit`
   → X-ray map on arrival, the X-ray of a shell command's writes (X15) plus the test
-    ledger's pytest outcomes, and the note after an edit: local (checkout,
+    ledger's test-runner outcomes, and the note after an edit: local (checkout,
     caches, claim dirs, ledger); the only request to the brain is the X3 scar
     lookup on a Read, POST /hook/scars, so the rest is identical in remote mode
 
