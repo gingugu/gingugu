@@ -17,7 +17,9 @@ language: TS interface-typed params, callbacks, Go interface values and function
 Share of non-external calls resolved: Python 64.4% (gingugu), TS/JS 52.9% (vite, 1,650 files, parse 1.0s, link
 0.06s), 78.4% (express example app), 62.5% (gingugu `ui/`), Go 75.4% (gin), 76.6% (bubbletea). A
 linker that raises costs only its own language's call graph (`lang/symbols_guard.py`: logged with its
-traceback, empty graph returned; the import graph and the other languages still land). The read note's
+traceback, empty graph returned; the import graph and the other languages still land). Any other
+adapter exception (parse, import linking; was `RecursionError` only) is caught per adapter in `extract.py`:
+logged, that language's files stay nodes reported in `parse_errors`, its parse cache is dropped. The read note's
 `Most called` line and the after-edit cross-file callers line work in any language (the `.py` gates are gone);
 `Most called` also shows for a file with no import neighbourhood (a lone Go file - Go imports point at package
 nodes). `lang.is_test(path)` dispatches per language and `hook_common.nearest_tests` ranks a test named for the

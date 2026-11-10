@@ -91,7 +91,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   link 0.06s), 78.4% (an express example app), 62.5% (gingugu `ui/`), Go 75.4% (gin),
   76.6% (bubbletea). A linker that raises costs only its own language's call
   graph: `lang/symbols_guard.py` logs the traceback and returns an empty graph, so
-  the import graph and every other language still land. No migration, no tool change.
+  the import graph and every other language still land. An adapter that raises
+  anywhere else (parse or import linking; it was `RecursionError` only) costs only its
+  own language: `extract.py` logs it and keeps that language's files as nodes reported
+  unparsed. No migration, no tool change.
 - **`Most called` and the after-edit callers line work in any language.** The read
   note's `Most called` line and the note after an edit no longer require a `.py` file;
   `Most called` also shows for a file with no import neighbourhood (a lone Go file - Go

@@ -17,6 +17,7 @@ version, so it changes exactly when the answer could, and bumping
 from __future__ import annotations
 
 import hashlib
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -26,6 +27,8 @@ from .model import Edge, FileInfo, LangResult
 from .scan import XrayError as XrayError
 from .scan import commit, is_manifest, read_sources, toplevel
 from .symbols import Symbols, merge
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["EXTRACTOR_VERSION", "Edge", "Extraction", "FileInfo", "XrayError", "extract"]
 
@@ -147,10 +150,14 @@ def extract(path: str | Path, parse_cache: str | Path | None = None) -> Extracti
                 res = adapter.link(raws, wanted)
             else:
                 res = adapter.extract(mine, wanted)
-        except RecursionError:
+        except Exception:  # noqa: BLE001 - one language's failure is never the repo's
             after.pop(adapter.name, None)
-            # Hostile input past a bound an adapter missed: that language's files
-            # stay nodes, reported unparsed, and every other language still lands.
+            # Hostile input past a bound an adapter missed, or an adapter bug: that
+            # language's files stay nodes, reported unparsed, and every other
+            # language still lands. Logged, so it is contained rather than hidden.
+            logger.warning(
+                "x-ray: %s adapter failed; its files are unparsed", adapter.name, exc_info=True
+            )
             res = LangResult(
                 files=[FileInfo(p, False, False, adapter.name) for p in mine],
                 parse_errors=sorted(mine),
