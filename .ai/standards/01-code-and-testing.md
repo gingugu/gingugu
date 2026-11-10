@@ -72,6 +72,10 @@
   from `free_port()`, no shared files. Keep tests cheap - a subprocess, git
   call or network round trip per test adds up fastest on Windows. A CI cell
   nearing its timeout means the tests got slow; fix them, don't raise the cap.
+  A production per-call timeout that silently drops output (the literal-consumer
+  `git grep`, `literals.GIT_TIMEOUT_S` = 1 s) is lifted for the suite by the autouse
+  `_patient_literal_grep` in `tests/conftest.py`, so a loaded runner cannot turn a
+  behaviour test into a timing test; the budget itself keeps its own wall-clock test.
 - **The suite never sees the developer's own machine state.** Autouse fixtures
   sandbox `~/.claude/settings.json`, the global `CLAUDE.md`, `MEMORY_PERSONA`
   and the remote-brain setting (`remote.settings_path` plus

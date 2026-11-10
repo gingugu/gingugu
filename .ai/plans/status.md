@@ -1,10 +1,18 @@
 # Project Status
 
-_Last updated: 2026-11-09 (X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
+_Last updated: 2026-11-09 (literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
 
 ## In Flight
 
-**X7a: never 'set nowhere' past an unread file (2026-11-09, branch `fix/xray-env-unread`).**
+**Test flake: literal-grep timeout on loaded CI runners (2026-11-09, branch `fix/literals-timeout-flake`).**
+`tests/test_xray_literals_wiring.py::test_a_multiedit_is_swept_too` failed once on windows-latest
+3.11 (#191) with no note: each literal's `git grep` gets `literals.GIT_TIMEOUT_S` (1 s) and then
+drops the line, and a loaded runner can exceed it (rerun on unchanged code passed). An autouse
+fixture in `tests/conftest.py` raises it to 30 s for the suite, since those tests check what is
+found, not how fast; `test_the_sweep_stays_inside_the_hook_budget` still holds the 1.5 s wall
+clock. Production timeout unchanged. Full suite 4408 passed.
+
+**X7a: never 'set nowhere' past an unread file (2026-11-09, merged in #191 as 8499179, unreleased).**
 Carried from X7c's security review. A file too big to read (256 KiB) or cut at the 200-name
 cap may set or read any name, so `EnvMap.unread` (from `file_facts.read`) now names those
 files, and while any exist: the read hook's `Env:` line says `X (not set in any file read;
