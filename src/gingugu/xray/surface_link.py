@@ -19,12 +19,21 @@ Per file: ``file`` before the file's calls, ``call`` for each, ``close`` after.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 
 from . import surface_catalog as cat
+from . import surface_mounts as sm
 from .symbols_model import Entry, Node, Sink
 from .validate import is_valid_path
 
 Resolve = Callable[[list], Node | None]  # a call-shaped record -> (path, qual) or None
+# (rel, scope, form, x, y) -> the router value that expression is, or None. Forms:
+# "n" a name, "a" x.y, "m" a dotted module (Django include), "r" a module specifier.
+Value = Callable[[str, str, str, str, str], "sm.Ref | None"]
+
+
+def _is_nest(e: Entry) -> bool:
+    return e.kind == "http" and "." not in e.label and e.label in cat.TS_DECOS
 
 
 def placeable(e: Entry) -> bool:
@@ -39,9 +48,14 @@ class Collector:
         self.entries: list[Entry] = []
         self._recs: list[list] = []
         self._spans: dict[str, list[tuple[int, int, set, list]]] = {}  # scope -> inline spans
+        self._mount_recs: list[list] = []
+        self._refs: list[sm.Ref | None] = []  # per entry: the router it is registered on
+        self._mounts: list[sm.Mount] = []
+        self._globals: list[tuple[str, str]] = []  # (path, prefix): Nest setGlobalPrefix
 
     def file(self, rel: str, raw: dict) -> None:
         self._recs = [r for r in raw.get("entries", []) if cat.entry_kind(self.lang, r[1])]
+        self._mount_recs = list(raw.get("mounts", []))
         self._spans = {}
         for r in self._recs:
             if r[2] == "i":
@@ -66,26 +80,70 @@ class Collector:
         elif ext is not None and cat.sink(self.lang, ext) is not None:
             self._sink(rel, rec[0], ext, rec[4])
 
-    def close(self, rel: str, resolve: Resolve) -> None:
+    def close(self, rel: str, resolve: Resolve, value: Value | None = None) -> None:
         """The file's entries, now its calls are in. ``resolve`` answers a handler
-        passed by name as the linker answers a call record of that shape."""
+        passed by name as the linker answers a call record of that shape; ``value``
+        names the router a receiver or a mounted expression is (``surface_mounts``)."""
         spans = {scope: list(found) for scope, found in self._spans.items()}
-        for scope, label, form, x, y, line, start, end, method, route in self._recs:
+        for scope, label, form, x, y, line, start, end, method, route, recv in self._recs:
             kind = cat.entry_kind(self.lang, label)
             if form == "i":
                 span = next(s for s in spans[scope] if (s[0], s[1]) == (start, end))
                 nodes, direct = tuple(sorted(span[2])), tuple(sorted(set(span[3])))
-                self.entries.append(
-                    Entry(rel, label, kind, line, scope, nodes, direct, True, method, route)
-                )
-                continue
-            if form == "d":
-                node = (rel, x) if x in self.defs.get(rel, {}) else None
+                e = Entry(rel, label, kind, line, scope, nodes, direct, True, method, route)
             else:
-                node = resolve([scope, form, x, y, line])
-            handler = node[1] if node else (x if form in ("d", "n") else f"{x}.{y}")
-            nodes = (node,) if node else ()
-            self.entries.append(
-                Entry(rel, label, kind, line, handler, nodes, (), False, method, route)
-            )
-        self._recs, self._spans = [], {}
+                if form == "d":
+                    node = (rel, x) if x in self.defs.get(rel, {}) else None
+                else:
+                    node = resolve([scope, form, x, y, line])
+                handler = node[1] if node else (x if form in ("d", "n") else f"{x}.{y}")
+                nodes = (node,) if node else ()
+                e = Entry(rel, label, kind, line, handler, nodes, (), False, method, route)
+            self.entries.append(e)
+            self._refs.append(self._recv_ref(rel, scope, recv, value))
+        if value is not None:
+            for rec in self._mount_recs:
+                self._mount(rel, rec, resolve, value)
+        self._recs, self._spans, self._mount_recs = [], {}, []
+
+    @staticmethod
+    def _recv_ref(rel: str, scope: str, recv: str, value: Value | None) -> sm.Ref | None:
+        """The router an entry is registered on: a parameter of its scope, a named
+        value the linker resolves, or - no receiver - the scope's routers at large."""
+        if recv.startswith("#"):
+            return (rel, scope, recv)
+        if not recv:
+            return (rel, scope, "")
+        return value(rel, scope, "n", recv, "") if value is not None else None
+
+    def _mount(self, rel: str, rec: list, resolve: Resolve, value: Value) -> None:
+        scope, line, parent, prefix, form, x, y, arg = rec
+        if form == "g":
+            self._globals.append((rel, prefix))
+            return
+        if form in ("cn", "ca", "pn", "pa"):  # a call: the function that builds or takes it
+            node = resolve([scope, form[1], x, y, line])
+            child = None
+            if node is not None:
+                child = (node[0], node[1], sm.ANY if form[0] == "c" else f"#{arg}")
+        else:
+            child = value(rel, scope, form, x, y)
+        if child is None:
+            return
+        up = self._recv_ref(rel, scope, parent, value) if parent else None
+        self._mounts.append(sm.Mount(up, prefix, child, rel, line))
+
+    def finish(self) -> None:
+        """Every file is linked: put each entry's route under the mounts above it."""
+        out = []
+        for e, ref in zip(self.entries, self._refs, strict=True):
+            route = e.route
+            if ref is not None and route:
+                route = sm.route(sm.full(ref, self._mounts)[0], route)
+            if route and self.lang == "typescript" and _is_nest(e):
+                for where, prefix in sorted(self._globals):
+                    if sm.under(e.path, sm.project_dir(where)):
+                        route = sm.route(prefix, route)
+                        break
+            out.append(replace(e, route=route) if route != e.route else e)
+        self.entries = out
