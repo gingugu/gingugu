@@ -117,6 +117,34 @@ def test_chi_route_and_group_scope_the_closure_parameter() -> None:
     ]
 
 
+def test_method_first_registrations() -> None:
+    body = (
+        '\tr.MethodFunc("LINK", "/link", link)\n'  # chi: a custom method is not in METHODS
+        '\tr.Method("POST", "/m", h)\n'
+        '\tg.Handle("GET", "/g", h)\n'  # gin
+        '\tr.HandleFunc("/two", h)\n'  # two args: the path comes first, as before
+    )
+    assert _routes(body) == [
+        ("r.MethodFunc", "", "/link"),
+        ("r.Method", "POST", "/m"),
+        ("g.Handle", "GET", "/g"),
+        ("r.HandleFunc", "", "/two"),
+    ]
+
+
+def test_ordinary_declarations_never_cost_the_file() -> None:
+    body = (
+        "\tvar x int\n"
+        "\tvar a, b = 1, 2\n"
+        "\tvar g *Group\n"
+        '\tg = r.Group("/v1")\n'
+        '\tg.GET("/x", h)\n'
+        "\ty := r.Group(func(r chi.Router) {})\n"
+        "\t_ = y\n"
+    )
+    assert [r[2] for r in _routes(body)] == ["/v1/x"]
+
+
 def test_an_unsafe_literal_is_dropped() -> None:
-    body = '\tr.GET("/x y", a)\n\tr.GET("/q\\"x", b)\n'
+    body = '\tr.GET("/x  y", a)\n\tr.GET("/q\\"x", b)\n'
     assert [r[2] for r in _routes(body)] == ["", ""]

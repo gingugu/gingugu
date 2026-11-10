@@ -85,7 +85,9 @@ def read_lines(root: Path, rel: str, state_dir: Path, session_id: str, fp: str) 
         if hit:
             order = sorted(hit, key=lambda k: (surface.cat.CATEGORIES.index(k[0]), k[2], k[1]))
             said = "; ".join(_reached(k, hit[k]) for k in order[:SHOWN])
-            out.append(f"Surface: sinks here reached from entry points: {said}{_more(len(order) - SHOWN)}.")
+            out.append(
+                f"Surface: sinks here reached from entry points: {said}{_more(len(order) - SHOWN)}."
+            )
         return out
     except Exception:  # noqa: BLE001 - a hook never raises
         return []
@@ -145,7 +147,13 @@ def on_path(sym: Symbols, rows: list, node: tuple) -> tuple[list, list] | None:
         return None
     below = _reach_of(adj, [node])
     sinks = sorted(
-        {(p, q, n, ln) for e, found in rows for r in found for p, q, n, ln in [(r.path, r.symbol, r.sink, r.line)] if (p, q) in below},
+        {
+            (p, q, n, ln)
+            for e, found in rows
+            for r in found
+            for p, q, n, ln in [(r.path, r.symbol, r.sink, r.line)]
+            if (p, q) in below
+        },
         key=lambda s: (surface.cat.CATEGORIES.index(surface.category(s[2])), s[0], s[3]),
     )
     return (entries, sinks) if sinks else None
@@ -166,7 +174,9 @@ def edit_lines(
             claim = hook_common.claim_path(state_dir, "xray-surface-skip", session_id, root, rel)
             if not _claim(claim):
                 return []
-            return ["- Surface: the after-edit reach check was skipped (the graph rebuild did not finish); code_xray surface rebuilds it."]
+            return [
+                "- Surface: the after-edit reach check was skipped (the graph rebuild did not finish); code_xray surface rebuilds it."
+            ]
         uses = table_map.read(root, state_dir, budget_s=1.0).uses if table_map.enabled() else {}
         old_rows, new_rows = _map(snap.sym, snap.uses)["entries"], _map(after, uses)["entries"]
         out = _new_entries(old_rows, new_rows, rel, state_dir, session_id, root)
@@ -184,13 +194,19 @@ def _claimed(state_dir: Path, session_id: str, root: Path, what: str) -> bool:
 def _new_entries(old_rows, new_rows, rel, state_dir, session_id, root) -> list[str]:
     known = {_ekey(e) for e, _ in old_rows}
     fresh = [(e, f) for e, f in new_rows if _ekey(e) not in known and e.path == rel]
-    fresh = [(e, f) for e, f in fresh if _claimed(state_dir, session_id, root, "entry\0" + "\0".join(_ekey(e)))]
+    fresh = [
+        (e, f)
+        for e, f in fresh
+        if _claimed(state_dir, session_id, root, "entry\0" + "\0".join(_ekey(e)))
+    ]
     if not fresh:
         return []
     said = "; ".join(
         _worst(e, f) if f else f"{name(e)} (L{e.line}), reaching no sink" for e, f in fresh[:SHOWN]
     )
-    return [f"- Surface: this edit adds entry point{'s' if len(fresh) > 1 else ''} {said}{_more(len(fresh) - SHOWN)}."]
+    return [
+        f"- Surface: this edit adds entry point{'s' if len(fresh) > 1 else ''} {said}{_more(len(fresh) - SHOWN)}."
+    ]
 
 
 def _new_reach(old_rows, new_rows, state_dir, session_id, root) -> list[str]:
@@ -204,11 +220,20 @@ def _new_reach(old_rows, new_rows, state_dir, session_id, root) -> list[str]:
     fresh = [
         (e, r)
         for e, r in fresh
-        if _claimed(state_dir, session_id, root, "reach\0" + "\0".join(_ekey(e)) + f"\0{r.sink}\0{r.path}\0{r.symbol}")
+        if _claimed(
+            state_dir,
+            session_id,
+            root,
+            "reach\0" + "\0".join(_ekey(e)) + f"\0{r.sink}\0{r.path}\0{r.symbol}",
+        )
     ]
     out = []
     for e, r in fresh[:SHOWN]:
-        via = "" if r.hops == 0 else ": " + " > ".join(label(q) for q in r.via) + (" > ..." if r.cut else "")
+        via = (
+            ""
+            if r.hops == 0
+            else ": " + " > ".join(label(q) for q in r.via) + (" > ..." if r.cut else "")
+        )
         out.append(
             f"- Surface: this edit makes {r.category} {r.sink} ({_show(r.path)}:{r.line}, "
             f"`{label(r.symbol)}`) reachable from {name(e)} ({_hops(r)}{via})."

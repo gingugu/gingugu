@@ -117,7 +117,8 @@ _JS_MCP = frozenset({"tool", "resource", "prompt"})
 _JS_REGISTER = frozenset({"registerTool", "registerResource", "registerPrompt"})
 _TS_DECOS = frozenset("Get Post Put Patch Delete All Head Options".split())  # NestJS
 _GO_LAST = frozenset(
-    "HandleFunc Handle GET POST PUT PATCH DELETE Get Post Put Patch Delete Any".split()
+    "HandleFunc Handle Method MethodFunc GET POST PUT PATCH DELETE Get Post Put Patch Delete "
+    "Any".split()
 )
 # Method names that run a query: a built string handed to one is flagged.
 SQL_METHODS: dict[str, frozenset[str]] = {

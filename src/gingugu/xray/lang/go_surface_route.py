@@ -69,7 +69,11 @@ def entry_route(label: str, call_args: list, env: Env) -> tuple[str, str]:
     """(method, route) of the registration ``label(args...)``."""
     path = literal(call_args[0]) if call_args else None
     last = label.rsplit(".", 1)[-1]
-    if last in ("HandleFunc", "Handle"):
+    second = literal(call_args[1]) if len(call_args) > 2 else None
+    if last in ("HandleFunc", "Handle", "Method", "MethodFunc") and path and second is not None:
+        # method first: chi Method/MethodFunc, gin Handle("GET", "/x", h)
+        method, route = (sr.methods([path]) if path.upper() == path else ""), second
+    elif last in ("HandleFunc", "Handle"):
         method, route = sr.go_pattern(path) if path else ("", "")
     else:
         method, route = ("" if last == "Any" else sr.method_of(label)), path or ""
@@ -97,7 +101,8 @@ def bind(node, env: Env) -> None:
     """Record (or forget) the names an assignment or ``var`` spec sets."""
     if node.type == "var_spec":
         names = list(node.children_by_field_name("name"))
-        vals = list(node.child_by_field_name("value").named_children) if names else []
+        value = node.child_by_field_name("value")  # None for `var x int`
+        vals = list(value.named_children) if value is not None else []
     else:
         left, right = node.child_by_field_name("left"), node.child_by_field_name("right")
         names = list(left.named_children) if left is not None else []

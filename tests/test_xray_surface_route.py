@@ -9,7 +9,15 @@ from gingugu.xray import surface_route as sr
 
 @pytest.mark.parametrize(
     "raw",
-    ["/users/{user_id}", ":id", "file://documents/{name}", "get_weather", "/a?b=c&d", "/v1/*"],
+    [
+        "/users/{user_id}",
+        ":id",
+        "file://documents/{name}",
+        "get_weather",
+        "/a?b=c&d",
+        "/v1/*",
+        "/<any(xhr, jquery, fetch):js>",  # a Flask converter: single inner spaces
+    ],
 )
 def test_a_route_literal_is_kept_whole(raw: str) -> None:
     assert sr.clean(raw) == raw and sr.is_route(raw)
@@ -19,7 +27,9 @@ def test_a_route_literal_is_kept_whole(raw: str) -> None:
     "raw",
     [
         "",
-        "a b",
+        " /x",
+        "/x ",
+        "/a  b",
         "/x\n",
         "/x\t",
         '/"x',

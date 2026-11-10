@@ -14,7 +14,8 @@ Every walk record for an entry carries two strings beside the handler:
 
 Both are read from untrusted source and rendered into the agent's context, so
 ``clean`` keeps a literal only when it is short, printable ASCII and free of
-quotes, backticks, backslashes and whitespace; anything else is ``""``.
+quotes, backticks, backslashes and any whitespace but single inner spaces (a
+Flask ``any(a, b)`` converter); anything else is ``""``.
 """
 
 from __future__ import annotations
@@ -35,7 +36,9 @@ def clean(raw: object) -> str:
     """``raw`` when it is a route-safe literal, else ``""``."""
     if not isinstance(raw, str) or not 0 < len(raw) <= MAX_ROUTE:
         return ""
-    if any(not ("!" <= c <= "~") or c in _BAD for c in raw):
+    if raw != raw.strip(" ") or "  " in raw:  # single inner spaces only: any(a, b)
+        return ""
+    if any(not (" " <= c <= "~") or c in _BAD for c in raw):
         return ""
     return raw
 

@@ -275,7 +275,7 @@ def test_each_script_name_is_its_own_cli_entry() -> None:
     manifests = {
         "pyproject.toml": (
             b'[project.scripts]\ntool = "pkg.cli:main"\nt = "pkg.cli:main"\n'
-            b'"bad name" = "pkg.cli:main"\n'
+            b'"bad`name" = "pkg.cli:main"\n'
         )
     }
     sym = python.ADAPTER.extract(files, manifests).symbols

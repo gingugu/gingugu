@@ -119,5 +119,5 @@ def test_mcp_names() -> None:
 
 
 def test_an_unsafe_literal_is_dropped() -> None:
-    src = "app.get('/x y', a);\nserver.tool('a\"b', s, h);\n"
+    src = "app.get('/x  y', a);\nserver.tool('a\"b', s, h);\n"
     assert [(r[2], r[3]) for r in _routes(src)] == [("GET", ""), ("", "")]
