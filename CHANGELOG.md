@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.49.0] - 2026-11-10
+
 ### Added
 
 - **X7a: env vars as edges.** Nothing imports an environment variable, so the code
