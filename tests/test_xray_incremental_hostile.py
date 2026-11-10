@@ -28,13 +28,17 @@ def _warm(repo, cache):
 def parses(monkeypatch) -> list[str]:
     seen: list[str] = []
     for adapter in lang.ADAPTERS:
-        orig = adapter.parse
+        # On the class, never the instance: undoing an instance patch leaves the
+        # original bound method behind as an instance attribute, which then shadows
+        # every later class-level patch of ``parse`` on this worker.
+        cls = type(adapter)
+        orig = cls.parse
 
-        def spy(rel, data, _orig=orig):
+        def spy(self, rel, data, _orig=orig):
             seen.append(rel)
-            return _orig(rel, data)
+            return _orig(self, rel, data)
 
-        monkeypatch.setattr(adapter, "parse", spy)
+        monkeypatch.setattr(cls, "parse", spy)
     return seen
 
 
