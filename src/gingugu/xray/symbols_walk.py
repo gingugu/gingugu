@@ -13,11 +13,15 @@ Records (lists, so a JSON round trip is the identity):
   class. Calls on anything else are only counted in ``other``.
 - type: ``[scope, var, form, x, y]``; ``var`` holds an instance of class ``x``
   (form "n") or ``x.y`` (form "a").
+- entries, sql: the X7d attack-surface records, see ``surface_records``; built by
+  ``surface_walk_py``.
 """
 
 from __future__ import annotations
 
 import ast
+
+from .surface_walk_py import Surface
 
 MODULE = "<module>"
 _KINDS = {"function", "method", "class"}
@@ -97,11 +101,16 @@ _CHECKS = {"defs": _is_def, "binds": _is_bind, "calls": _is_call, "types": _is_t
 
 def valid(raw: object) -> bool:
     """Whether ``raw`` is exactly the shape ``walk`` returns (the cache is untrusted)."""
-    if not isinstance(raw, dict) or set(raw) != {*_CHECKS, "other"}:
+    from .surface_records import KEYS  # surface_records imports us
+    from .surface_records import valid as surface_valid
+
+    if not isinstance(raw, dict) or set(raw) != {*_CHECKS, *KEYS, "other"}:
         return False
     if not _is_int(raw["other"]):
         return False
-    return all(isinstance(raw[k], list) and all(f(r) for r in raw[k]) for k, f in _CHECKS.items())
+    if not all(isinstance(raw[k], list) and all(f(r) for r in raw[k]) for k, f in _CHECKS.items()):
+        return False
+    return surface_valid(raw, "python")
 
 
 def _type_ref(expr: ast.expr | None) -> tuple[str, str, str] | None:
@@ -132,6 +141,7 @@ def walk(tree: ast.Module) -> dict:
     calls: list[list] = []
     types: list[list] = []
     other = 0
+    surface = Surface(tree)
 
     def add_type(scope: str, var: str, ref: tuple[str, str, str] | None) -> None:
         if ref is not None:
@@ -151,6 +161,7 @@ def walk(tree: ast.Module) -> dict:
             kind = "class" if is_class else ("method" if in_class else "function")
             first = min([d.lineno for d in node.decorator_list] + [node.lineno])
             defs.append([name, kind, first, node.end_lineno or node.lineno])
+            surface.definition(node, scope, name)
             if is_class:
                 outer = [*node.decorator_list, *node.bases, *node.keywords]
                 inner = [(c, name, True, None) for c in node.body]
@@ -175,6 +186,7 @@ def walk(tree: ast.Module) -> dict:
                     binds.append(["f", a.asname or a.name, node.level, node.module or "", a.name])
         elif isinstance(node, ast.Call):
             fn = node.func
+            surface.call(node, scope, cls)
             if isinstance(fn, ast.Name):
                 calls.append([scope, "n", fn.id, "", node.lineno])
             elif isinstance(fn, ast.Attribute) and isinstance(fn.value, ast.Name):
@@ -197,4 +209,12 @@ def walk(tree: ast.Module) -> dict:
                     add_type(scope, item.optional_vars.id, _type_ref(_ctor(item.context_expr)))
         children = list(ast.iter_child_nodes(node))
         stack.extend((c, qual, in_class, cls) for c in reversed(children))
-    return {"defs": defs, "binds": binds, "calls": calls, "types": types, "other": other}
+    return {
+        "defs": defs,
+        "binds": binds,
+        "calls": calls,
+        "types": types,
+        "other": other,
+        "entries": surface.entries,
+        "sql": surface.sql,
+    }
