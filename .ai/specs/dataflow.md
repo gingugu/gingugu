@@ -924,6 +924,33 @@ both: table_map.read(budget_s=1.0); a file not reached keeps its cached entry or
 MEMORY_XRAY_TABLES=off silences every line
 ```
 
+**Attack-surface map (X7d, `xray/surface_tool.py`).** Built from the hook symbol cache
+(`hook_common.symbols`) and the X7c table map; the brain is never asked:
+
+```
+parse (per file, content only): symbol records + entries [scope, label, form, x, y, line,
+    start, end] + sql [scope, line]   -> X16 parse cache, `valid` re-checks the shape
+link (per language): every call verdict -> surface_link.Collector
+    external call in the catalogue -> Sink (path, caller, name, line); other external -> dropped
+    sql record -> Sink 'sql.built' where it sits
+    entry: 'd' own definition | 'n'/'a'/'s' handler resolved like a call of that form
+           | 'i' inline callback: start nodes = calls inside its span, direct sinks kept
+    -> Symbols.sinks / Symbols.entries -> xray-symbols-<digest>.json (symbols_model.from_json:
+       catalogue names, identifier labels and the brain's path rule only)
+answer: surface.build(sym, db_sinks(sym, table_map.uses), skip=is_test)
+    db sink = X7c use joined to the innermost definition enclosing its line
+    per entry: BFS forward over call edges -> shortest path to each sink node; hops =
+        calls from the handler (inline callback's callees = 1); sorted by category order
+        exec, eval, deserialize, sql, fs, secret, net, db, then hops
+    entries sorted by worst reach then path; then sinks no entry reaches
+files given -> entries in them or whose reach lands in them; unreached sinks in them
+output      -> entries [{path, line, label, kind, handler, inline, resolved, reach: [{sink,
+               category, path, symbol, line, hops, via}] (20 at most), reach_total}],
+               unreached, totals {entries, reaching, unresolved, sinks, unreached}; limit
+               capped at 200; text <= 8800 chars, 3 sinks shown per entry; caveat
+MEMORY_XRAY_TABLES=off -> no db sinks; gingugu serve -> refused (the brain never reads a path)
+```
+
 **Readers of a removed key (xray/literals, board d5639dd5).** The edit note also
 runs for any file type, on Edit/MultiEdit only (a Write has no old text):
 
