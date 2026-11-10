@@ -1084,7 +1084,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   (`xray/surface_route.py`: clean/method_of/methods/go_pattern/join/label; `surface_route_py.py`,
   `lang/ts_surface_route.py`, `lang/go_surface_route.py` per language; `{prefix}` = a prefix set
   at runtime). A literal is kept only as short printable ASCII, no quotes, backticks or
-  backslashes, single inner spaces; else `(route not literal)`. Same-file prefixes are applied in
+  backslashes, `;` or `|`, a space only after a comma; else `(route not literal)`. Same-file prefixes are applied in
   the walk; cross-file mounts are a `mounts` record `[scope,line,parent,prefix,form,x,y,arg]`
   (forms n,a,m,r,cn,ca,pn,pa,g) that `surface_mounts.py` resolves through `surface_link.Collector`
   (`surface_mount_py.py`, `symbols_value.py`, `lang/ts_surface_mounts.py`, `lang/ts_mount_values.py`,

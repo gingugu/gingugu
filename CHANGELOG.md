@@ -24,7 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its own cli entry. Same-file prefixes are applied: FastAPI `APIRouter(prefix=)`, Flask
   `Blueprint(url_prefix=)`, NestJS `@Controller`, gin and echo `Group`, chi `Route`/`Group`
   closures. A literal is kept only when it is short printable ASCII with no quotes,
-  backticks or backslashes and only single inner spaces (Flask `any(a, b)` converters);
+  backticks, backslashes, `;` or `|`, and a space only right after a comma (Flask
+  `any(a, b)` converters), so a literal can name a route but never spell a sentence;
   anything else reads `(route not literal)`. TS route calls also count on router-shaped
   receivers (`usersRouter`, `adminApp`). `code_xray surface` JSON entries gain `method`,
   `route` and `name`; the text names entries `http POST /users`.
