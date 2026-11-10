@@ -547,7 +547,8 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.49.0** (PyPI, 2026-11-10). Minor: X7a env vars and X7c DB tables as edges (#189, #190, #191), X22 docs map in the hooks (#188), X17 symbol graph for TS/JS and Go plus the X11 ledger for every test runner (#193), X7d attack-surface map (#194), literal-grep test timeout fix (#192). Extractor version 5.
+- Current version: **0.50.0** (PyPI, 2026-11-10). Minor: X7d entry routes (method + URL, MCP/CLI names) in Python, TS/JS and Go, routes across files through mount prefixes (one entry per URL), and the surface in the read hook and edit note (#195). Extractor version 6.
+- 0.49.0 (PyPI, 2026-11-10). Minor: X7a env vars and X7c DB tables as edges (#189, #190, #191), X22 docs map in the hooks (#188), X17 symbol graph for TS/JS and Go plus the X11 ledger for every test runner (#193), X7d attack-surface map (#194), literal-grep test timeout fix (#192). Extractor version 5.
 - 0.48.1 (PyPI, 2026-11-06). Patch: plain `gingugu init` refreshes a hook that is a stock copy of an older version (`bootstrap/shipped.py`, #186).
 - 0.48.0 (PyPI, 2026-11-06). Minor: deletes take `confirm` + the big-delete gate (#181), X-ray key readers (#182), same-machine board mail + claimer identity (migration 023, #180/#183), per-machine vault stats (#184), the Win95 keygen CLI (#185).
 - 0.47.1 (PyPI, 2026-11-03). Patch: X23 cold reads on worker processes (48 checkouts ~9s, #179); first release cut from the rewritten, work-name-free history.
