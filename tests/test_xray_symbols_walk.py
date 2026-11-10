@@ -186,4 +186,6 @@ def test_an_empty_module_has_empty_records():
         "other": 0,
         "entries": [],
         "sql": [],
+        "mounts": [],
+        "vars": [],
     }

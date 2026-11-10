@@ -13,8 +13,11 @@ Records (lists, so a JSON round trip is the identity):
   class. Calls on anything else are only counted in ``other``.
 - type: ``[scope, var, form, x, y]``; ``var`` holds an instance of class ``x``
   (form "n") or ``x.y`` (form "a").
-- entries, sql: the X7d attack-surface records, see ``surface_records``; built by
-  ``surface_walk_py``.
+- entries, sql, mounts: the X7d attack-surface records, see ``surface_records``;
+  built by ``surface_walk_py``.
+- var: ``[scope, name, home]``; ``name`` is a router receiver or mounted child used
+  in ``scope`` and assigned in ``home`` (``scope`` or one enclosing it); see
+  ``surface_mount_py``.
 """
 
 from __future__ import annotations
@@ -96,7 +99,25 @@ def _is_type(rec: object) -> bool:
     )
 
 
-_CHECKS = {"defs": _is_def, "binds": _is_bind, "calls": _is_call, "types": _is_type}
+def _is_var(rec: object) -> bool:
+    return (
+        isinstance(rec, list)
+        and len(rec) == 3
+        and _str_at(rec, 0, 1, 2)
+        and is_qual(rec[0], module_ok=True)
+        and is_qual(rec[1])
+        and "." not in rec[1]
+        and is_qual(rec[2], module_ok=True)
+    )
+
+
+_CHECKS = {
+    "defs": _is_def,
+    "binds": _is_bind,
+    "calls": _is_call,
+    "types": _is_type,
+    "vars": _is_var,
+}
 
 
 def valid(raw: object) -> bool:
@@ -217,4 +238,6 @@ def walk(tree: ast.Module) -> dict:
         "other": other,
         "entries": surface.entries,
         "sql": surface.sql,
+        "mounts": surface.mounts,
+        "vars": surface.vars,
     }
