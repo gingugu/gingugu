@@ -21,6 +21,7 @@ from __future__ import annotations
 import ast
 
 from . import surface_catalog as cat
+from . import surface_route_py as route
 
 MODULE = "<module>"
 _DEFS = (ast.FunctionDef, ast.AsyncFunctionDef)
@@ -176,7 +177,7 @@ class Surface:
             if isinstance(node, ast.If) and _is_main_test(node.test):
                 end = node.end_lineno or node.lineno
                 self.entries.append(
-                    [MODULE, "__main__", "i", "", "", node.lineno, node.lineno, end]
+                    [MODULE, "__main__", "i", "", "", node.lineno, node.lineno, end, "", ""]
                 )
 
     def definition(self, node: ast.AST, scope: str, name: str) -> None:
@@ -185,8 +186,12 @@ class Surface:
             if isinstance(deco, ast.Call):
                 self._decorators.add(id(deco))
             label = dotted(deco.func if isinstance(deco, ast.Call) else deco)
-            if isinstance(node, _DEFS) and label and cat.entry_kind("python", label):
-                self.entries.append([scope, label, "d", name, "", deco.lineno, 0, 0])
+            kind = cat.entry_kind("python", label) if label else None
+            if isinstance(node, _DEFS) and label and kind:
+                m, r = route.resolve(
+                    kind, label, deco, name.rsplit(".", 1)[-1], self._lookup(scope)
+                )
+                self.entries.append([scope, label, "d", name, "", deco.lineno, 0, 0, m, r])
 
     def call(self, node: ast.Call, scope: str, cls: str | None) -> None:
         """A call: a registrar makes an entry, a query method may make a ``sql`` record."""
@@ -215,8 +220,22 @@ class Surface:
                     form, x, y = "a", base, arg.attr
             else:
                 continue
-            self.entries.append([scope, label, form, x, y, node.lineno, 0, 0])
+            kind = cat.entry_kind("python", label) or ""
+            m, r = route.resolve(kind, label, node, y or x, self._lookup(scope))
+            self.entries.append([scope, label, form, x, y, node.lineno, 0, 0, m, r])
             return
+
+    def _lookup(self, scope: str) -> route.Lookup:
+        """Receiver name -> its assigned value in ``scope``, else at module level."""
+
+        def find(name: str) -> ast.expr | None:
+            for key in (scope, MODULE):
+                values = self._assigns.get(key, {}).get(name)
+                if values:
+                    return values[-1]
+            return None
+
+        return find
 
     @staticmethod
     def _flagged(first: ast.expr, assigns: dict[str, list[ast.expr | None]]) -> bool:
