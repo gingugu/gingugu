@@ -32,10 +32,13 @@ CAVEAT = (
     "an entry registered in a form the catalogue does not know is not listed. A listed "
     "path exists in the code; whether outside input flows along it is not checked. "
     "'sql.built' is a query assembled at runtime from a part not known safe, not a "
-    "proven injection. Routes are as the file spells them, with a prefix the same file "
-    "gives its router joined in front; '{prefix}' stands for one set at runtime, and a "
-    "route the source does not spell as a literal is shown as not literal. Test files "
-    "are left out."
+    "proven injection. Routes carry the prefixes their router is mounted under, in the "
+    "same file or another (include_router, register_blueprint, Django include, app.use, "
+    "setGlobalPrefix, chi Mount, a router passed into a function); a router mounted in "
+    "several places is listed once per URL (at most 8). '{prefix}' stands for a prefix "
+    "set at runtime; a mount through a value the call graph does not track (a struct "
+    "field) is not followed; a route the source does not spell as a literal is shown as "
+    "not literal. Test files are left out."
 )
 
 
