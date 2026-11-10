@@ -74,6 +74,19 @@ def test_prefixes_of_an_unmounted_router_is_one_empty_prefix() -> None:
     assert sm.prefixes(USERS, []) == [""]
 
 
+def test_a_hostile_mount_count_stays_fast() -> None:
+    import time
+
+    mounts = [
+        _m(("a.py", "<module>", f"p{i}"), "/x", ("b.py", "<module>", f"c{i}")) for i in range(3000)
+    ]
+    idx = sm.Index(mounts)
+    start = time.monotonic()
+    for i in range(20_000):
+        sm.prefixes(("b.py", "<module>", f"c{i % 3000}"), idx)
+    assert time.monotonic() - start < 2.0
+
+
 def test_prefixes_survive_a_cycle() -> None:
     a, b = ("a.py", "<module>", "a"), ("b.py", "<module>", "b")
     mounts = [_m(a, "/x", b, "a.py"), _m(b, "/y", a, "b.py")]

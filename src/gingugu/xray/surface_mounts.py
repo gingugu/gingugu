@@ -27,6 +27,7 @@ from . import surface_route as sr
 
 MAX_DEPTH = 16
 MAX_URLS = 8  # URLs one entry may expand to
+MAX_POPS = 256  # chain steps walked per entry, whatever the fan-out above it
 ANY = "*"
 
 Ref = tuple[str, str, str]  # (path, scope, name)
@@ -40,21 +41,35 @@ class Mount(NamedTuple):
     line: int
 
 
-def _matches(child: Ref, ref: Ref) -> bool:
-    if child == ref:
-        return True
-    if child[2] != ANY or child[0] != ref[0]:
-        return False
-    return child[1] == ref[1] or (child[1] == "<module>" and ref[1] == "<module>")
+class Index:
+    """The mounts by child, built once: a lookup per hop instead of a scan of every
+    mount (a hostile repo can hold thousands, and every entry asks)."""
+
+    def __init__(self, mounts: list[Mount]) -> None:
+        exact: dict[Ref, list[Mount]] = {}
+        anywhere: dict[tuple[str, str], list[Mount]] = {}
+        for m in mounts:
+            if m.child[2] == ANY:
+                anywhere.setdefault((m.child[0], m.child[1]), []).append(m)
+            else:
+                exact.setdefault(m.child, []).append(m)
+        self._exact, self._any = exact, anywhere
+
+    def parents(self, ref: Ref) -> list[Mount]:
+        """The mounts of ``ref`` - by name, or as any router of its scope - in
+        source order."""
+        found = self._exact.get(ref, []) + self._any.get((ref[0], ref[1]), [])
+        return sorted(found, key=lambda m: (m.path, m.line))
 
 
-def _parents(ref: Ref, mounts: list[Mount]) -> list[Mount]:
-    return sorted((m for m in mounts if _matches(m.child, ref)), key=lambda m: (m.path, m.line))
+def _index(mounts: list[Mount] | Index) -> Index:
+    return mounts if isinstance(mounts, Index) else Index(mounts)
 
 
-def full(ref: Ref, mounts: list[Mount]) -> tuple[str, int]:
+def full(ref: Ref, mounts: list[Mount] | Index) -> tuple[str, int]:
     """(prefix, how many places mount ``ref``): the whole chain above it."""
-    found = _parents(ref, mounts)
+    idx = _index(mounts)
+    found = idx.parents(ref)
     if not found:
         return "", 0
     parts: list[str] = []
@@ -65,7 +80,7 @@ def full(ref: Ref, mounts: list[Mount]) -> tuple[str, int]:
         if m.parent is None or m.parent in seen or len(parts) >= MAX_DEPTH:
             break
         seen.add(m.parent)
-        above = _parents(m.parent, mounts)
+        above = idx.parents(m.parent)
         if not above:
             break
         m = above[0]
@@ -75,15 +90,18 @@ def full(ref: Ref, mounts: list[Mount]) -> tuple[str, int]:
     return prefix, len(found)
 
 
-def prefixes(ref: Ref, mounts: list[Mount]) -> list[str]:
+def prefixes(ref: Ref, mounts: list[Mount] | Index) -> list[str]:
     """Every prefix ``ref`` is served under - one per mount chain, first mounts
     first, at most ``MAX_URLS``; ``[""]`` when nothing mounts it. A router mounted
     at ``/v1``, ``/v2`` and ``/v3`` answers at all three: each is surface."""
+    idx = _index(mounts)
     out: list[str] = []
     stack: list[tuple[Ref, str, frozenset, int]] = [(ref, "", frozenset({ref}), 0)]
-    while stack and len(out) < MAX_URLS:
+    pops = 0
+    while stack and len(out) < MAX_URLS and pops < MAX_POPS:
         cur, tail, seen, depth = stack.pop()
-        above = _parents(cur, mounts)
+        pops += 1
+        above = idx.parents(cur)
         if not above:
             out.append(tail)
             continue

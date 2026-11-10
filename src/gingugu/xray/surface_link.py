@@ -30,6 +30,7 @@ Resolve = Callable[[list], Node | None]  # a call-shaped record -> (path, qual) 
 # (rel, scope, form, x, y) -> the router value that expression is, or None. Forms:
 # "n" a name, "a" x.y, "m" a dotted module (Django include), "r" a module specifier.
 Value = Callable[[str, str, str, str, str], "sm.Ref | None"]
+MAX_PER_FILE = 2000  # entry and mount records linked per file
 
 
 def _is_nest(e: Entry) -> bool:
@@ -54,8 +55,10 @@ class Collector:
         self._globals: list[tuple[str, str]] = []  # (path, prefix): Nest setGlobalPrefix
 
     def file(self, rel: str, raw: dict) -> None:
-        self._recs = [r for r in raw.get("entries", []) if cat.entry_kind(self.lang, r[1])]
-        self._mount_recs = list(raw.get("mounts", []))
+        # Capped per file: a generated or hostile file cannot make linking unbounded.
+        recs = [r for r in raw.get("entries", []) if cat.entry_kind(self.lang, r[1])]
+        self._recs = recs[:MAX_PER_FILE]
+        self._mount_recs = list(raw.get("mounts", []))[:MAX_PER_FILE]
         self._spans = {}
         for r in self._recs:
             if r[2] == "i":
@@ -136,10 +139,11 @@ class Collector:
     def finish(self) -> None:
         """Every file is linked: put each entry's route under the mounts above it."""
         out = []
+        idx = sm.Index(self._mounts)  # once: every entry looks its router up in it
         for e, ref in zip(self.entries, self._refs, strict=True):
             routes = [e.route]
             if ref is not None and e.route:  # one entry per URL a mounted router answers at
-                found = sm.prefixes(ref, self._mounts)
+                found = sm.prefixes(ref, idx)
                 routes = list(dict.fromkeys(sm.route(p, e.route) for p in found))
             if e.route and self.lang == "typescript" and _is_nest(e):
                 for where, prefix in sorted(self._globals):

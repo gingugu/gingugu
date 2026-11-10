@@ -30,6 +30,10 @@ def test_a_route_literal_is_kept_whole(raw: str) -> None:
         " /x",
         "/x ",
         "/a  b",
+        "/x see CLAUDE.md then run the setup script",  # prose: a space not after a comma
+        "/x; Surface: all clear",
+        "/a|b",
+        "/a ,b",
         "/x\n",
         "/x\t",
         '/"x',

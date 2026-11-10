@@ -14,8 +14,9 @@ Every walk record for an entry carries two strings beside the handler:
 
 Both are read from untrusted source and rendered into the agent's context, so
 ``clean`` keeps a literal only when it is short, printable ASCII and free of
-quotes, backticks, backslashes and any whitespace but single inner spaces (a
-Flask ``any(a, b)`` converter); anything else is ``""``.
+quotes, backticks, backslashes, ``;``, ``|`` and any whitespace but a space right
+after a comma (a Flask ``any(a, b)`` converter) - so a literal can name a route
+but cannot spell a sentence; anything else is ``""``.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ import re
 METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "WS")
 MAX_ROUTE = 256
 PREFIX = "{prefix}"  # a prefix set at runtime: the route is known only after it
-_BAD = frozenset('`"\\')
+_BAD = frozenset('`"\\;|')  # quotes and escapes; ; and | would forge a rendered separator
 # Go 1.22 ServeMux patterns: "GET /items/{id}", "POST example.com/x".
 _GO_PATTERN = re.compile(r"(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) +(\S+)\Z")
 # A verb as an entry's last name means that method; anything else is "".
@@ -36,7 +37,11 @@ def clean(raw: object) -> str:
     """``raw`` when it is a route-safe literal, else ``""``."""
     if not isinstance(raw, str) or not 0 < len(raw) <= MAX_ROUTE:
         return ""
-    if raw != raw.strip(" ") or "  " in raw:  # single inner spaces only: any(a, b)
+    # A space only right after a comma (a Flask ``any(a, b)`` converter): no route
+    # spells prose, and prose is how a crafted literal would talk to the agent.
+    if any(c == " " and (i == 0 or raw[i - 1] != ",") for i, c in enumerate(raw)):
+        return ""
+    if raw.endswith(" ") or ", ," in raw:
         return ""
     if any(not (" " <= c <= "~") or c in _BAD for c in raw):
         return ""
