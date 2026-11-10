@@ -21,7 +21,9 @@ from __future__ import annotations
 import re
 
 from .. import surface_catalog as cat
+from .. import surface_route as sr
 from ..symbols_walk import is_qual
+from . import ts_surface_route as tr
 from .ts_symbols_types import text
 
 _FUNCS = ("arrow_function", "function_expression", "function")
@@ -112,6 +114,7 @@ class Surface:
     def class_body(self, node, cls: str) -> None:
         """NestJS-style decorators precede the method they decorate."""
         pending: list = []
+        prefix = tr.controller_prefix(node)
         for c in node.children:
             if c.type == "decorator":
                 pending.append(c)
@@ -122,7 +125,8 @@ class Surface:
                     if label and name is not None and _ident(text(name)):
                         line = d.start_point[0] + 1
                         qual = f"{cls}.{text(name)}"
-                        self.entries.append([cls, label, "d", qual, "", line, 0, 0])
+                        meth, route = sr.method_of(label), tr.nest_route(d, prefix)
+                        self.entries.append([cls, label, "d", qual, "", line, 0, 0, meth, route])
                 pending = []
             elif c.is_named and c.type != "comment":
                 pending = []
@@ -147,18 +151,40 @@ class Surface:
         label = _chain(fn)
         if label and cat.entry_kind("typescript", label):
             self._entry(label, args.named_children, scope, cls, line)
+        elif fn.type == "member_expression":
+            chain = tr.chained(node)
+            for verb, call in chain[2] if chain else []:
+                ve = tr.verb_entry(chain[0], verb)
+                cargs = call.child_by_field_name("arguments")
+                if ve and cargs is not None:
+                    pos = call.child_by_field_name("function").child_by_field_name("property")
+                    self._handlers(
+                        ve[0],
+                        cargs.named_children,
+                        scope,
+                        cls,
+                        pos.start_point[0] + 1,
+                        ve[1],
+                        chain[1],
+                    )
 
     def _entry(self, label: str, args: list, scope: str, cls: str | None, line: int) -> None:
         args = [a for a in args if a.type != "comment"]
         if len(args) < 2 or args[0].type not in ("string", "template_string"):
             return
-        for a in args[1:]:
+        route = tr.literal(args[0]) or ""
+        self._handlers(label, args[1:], scope, cls, line, sr.method_of(label), route)
+
+    def _handlers(self, label, args, scope, cls, line, method, route) -> None:
+        """One entry per inline handler, plus the last name-shaped one."""
+        args = [a for a in args if a.type != "comment"]
+        for a in args:
             if a.type in _FUNCS:
                 span = (a.start_point[0] + 1, a.end_point[0] + 1)
-                self.entries.append([scope, label, "i", "", "", line, *span])
-        ref = self._handler_ref(args[-1], cls)
+                self.entries.append([scope, label, "i", "", "", line, *span, method, route])
+        ref = self._handler_ref(args[-1], cls) if args else None
         if ref is not None:
-            self.entries.append([scope, label, *ref, line, 0, 0])
+            self.entries.append([scope, label, *ref, line, 0, 0, method, route])
 
     @staticmethod
     def _handler_ref(node, cls: str | None) -> tuple[str, str, str] | None:
