@@ -89,8 +89,10 @@ def test_the_cache_bounds_lines_and_names() -> None:
     for bad in (
         {**good, "sinks": [["a.py", "f", "os.system", 10**12]]},
         {**good, "sinks": [["a.py", long, "os.system", 1]]},
-        {**good, "entries": [["a.py", "app.get", "http", 10**12, "f", [], [], False]]},
-        {**good, "entries": [["a.py", "app.get", "http", 1, long, [], [], False]]},
+        {**good, "entries": [["a.py", "app.get", "http", 10**12, "f", [], [], False, "", ""]]},
+        {**good, "entries": [["a.py", "app.get", "http", 1, long, [], [], False, "", ""]]},
+        {**good, "entries": [["a.py", "app.get", "http", 1, "f", [], [], False, "", "/" * 257]]},
+        {**good, "entries": [["a.py", "app.get", "http", 1, "f", [], [], False, "GET" * 99, ""]]},
         {**good, "defs": {"a.py": {long: ["function", 1, 2]}}},
     ):
         assert symbols.from_json(bad) is None
