@@ -942,7 +942,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   imports say what a change *could* reach; definitions and calls say what it does.
   Each adapter's parse also yields per-file records (Python `xray/symbols_walk`, TS/JS
   `lang/ts_symbols_walk`, Go `lang/go_symbols_walk`; content-only, so they ride the
-  X16 parse cache as `"sym"`; extractor version 5), and each adapter's linker
+  X16 parse cache as `"sym"`; extractor version 6), and each adapter's linker
   (`xray/symbols`, `lang/ts_symbols`, `lang/go_symbols`) resolves them through its own
   module index, `symbols.merge` joining the shares in `extract.py`. *A lower bound by
   construction*: a call resolves only through a definition in scope, an import
@@ -1056,7 +1056,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   named `app`, `router`, `server`, `fastify` or `hono`, MCP `server.tool` and
   `registerTool`/`registerResource`/`registerPrompt`, NestJS `@Get` and kin. Go: `main`, and
   `HandleFunc`, `Handle` and the router verbs on any receiver. Each language's content-only
-  walk adds two records beside its symbols (`xray/surface_records.py`, shape-checked on load):
+  walk adds three records beside its symbols (`xray/surface_records.py`, shape-checked on load):
   `entries` (`surface_walk_py`, `lang/ts_surface_walk`, `lang/go_surface_walk`) and `sql`, a
   query method handed a string built at runtime from a part not known safe. Each linker passes
   every call verdict to `xray/surface_link.Collector`: an external call the catalogue lists
@@ -1066,7 +1066,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   untrusted cache form moved to `xray/symbols_model.py` (`symbols.py` stays under the line
   limit); `from_json` refuses any sink name the catalogue never wrote, any non-identifier label
   and any path the brain's rule rejects, any line past 10,000,000 and any name past 512
-  characters. `EXTRACTOR_VERSION` is 5. An http registrar's handler is taken after its path,
+  characters. `EXTRACTOR_VERSION` is 6 (5 before the routes slice). An http registrar's handler is taken after its path,
   and a bare `path(x)` counts only with a literal route; a Python `__main__` block is an
   inline `main` entry. The TS and Go safe-part checks judge each local once per function. `xray/surface.py` is pure:
   breadth-first forward from each entry's start nodes, so the path to each sink is a shortest

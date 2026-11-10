@@ -34,19 +34,19 @@ Express-style `app`/`router` verbs, MCP `server.tool`/`registerTool`. Sinks, in 
 counts). Shortest path per sink by breadth-first reach, hops = calls from the handler (an inline callback's
 callees are hop 1), then the sinks no entry reaches; test files left out; with files, entries in them or
 reaching into them. New modules: `xray/surface_catalog.py` (closed per-language catalogues),
-`surface_records.py` (the `entries` and `sql` walk records and their shape check), `surface_link.py` (the
+`surface_records.py` (the `entries`, `sql` and - since the routes slice - `mounts` walk records and their shape check), `surface_link.py` (the
 Collector each linker feeds), `surface.py` (pure reach), `surface_tool.py` (the action),
 `symbols_model.py` (the symbol model and its cache form, moved out of `symbols.py` to keep it under the
 line limit), `surface_walk_py.py`, `lang/ts_surface_walk.py`, `lang/go_surface_walk.py` (the per-language
 walks). Sinks are a closed catalogue per language: nothing external outside it is stored, and
 `symbols_model.from_json` refuses any name the catalogue never wrote. The symbol cache
-(`xray-symbols-<digest>.json`) now also carries sinks and entries; `EXTRACTOR_VERSION` is 5, so caches
+(`xray-symbols-<digest>.json`) now also carries sinks and entries; `EXTRACTOR_VERSION` was 5 here (6 since the routes slice), so caches
 rebuild once. Python, TS/JS and Go (the X-ray law in `.ai/standards/03-xray.md`). A lower bound, like the
 call graph under it. Measured on gingugu itself: 47 entries (24 mcp, 21 main, 1 cli, 1 http), 39 reach a
 sink, 2.6s cold; 20 of the 24 MCP tools reach one, mostly through database tables. Path and name bounds: each `via` keeps at most `MAX_VIA` (6) names, built during the walk, with a cut flag (`via_cut`, rendered ` > ...`); cached lines are at most 10,000,000 and names 512 characters, in the walk records and `symbols_model` alike; the TS and Go safe-part checks judge each local once per function (a cycle reads unsafe, a crafted alias chain flags the call), Python's follows locals two deep. Spec:
 `tests/test_xray_surface.py`, `test_xray_surface_tool.py`, `test_xray_surface_walk_py.py`,
-`test_xray_surface_walk_ts.py`, `test_xray_surface_walk_go.py`, `test_xray_surface_hostile.py`. The hook line is the slice above, so
-the read hook and the edit note say nothing about reach to a sink. No migration, no brain change.
+`test_xray_surface_walk_ts.py`, `test_xray_surface_walk_go.py`, `test_xray_surface_hostile.py`. The hook line came in the slice above
+(`surface_hook.py`, read hook and edit note). No migration, no brain change.
 Remaining under X7: X7b HTTP routes (waits on a measurement over a larger set of service repos), then X8.
 
 **X17 for TS/JS and Go + multi-runner ledger (2026-11-09, branch `feature/x17-ts-go`, stacked on `fix/literals-timeout-flake`).**
@@ -54,7 +54,7 @@ The symbol/call graph now covers Python, TypeScript/JavaScript and Go. New: `xra
 (walker), `ts_symbols_types.py` (type/value refs), `ts_symbols_valid.py` (cache shape check), `ts_exports.py`
 (specifier resolution + barrel following, memoised), `ts_symbols.py` (linker); `go_symbols_walk.py`,
 `go_symbols_valid.py`, `go_symbols.py` (linker). `extract.py` merges every adapter's Symbols via
-`symbols.merge`; extractor version 5 with X7d (caches rebuild once). Qualified names may contain `$`; Go methods are
+`symbols.merge`; extractor version 5 with X7d, 6 with the routes slice (caches rebuild once). Qualified names may contain `$`; Go methods are
 `Type.Method` and a Go package (directory) is one name scope across files; TS `this.m()` and `new X()` are
 calls, barrels (`export {x} from`, `export *`) are followed up to 8 hops. Calls stay a lower bound in every
 language: TS interface-typed params, callbacks, Go interface values and function values stay unresolved

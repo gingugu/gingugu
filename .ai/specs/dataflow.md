@@ -949,12 +949,34 @@ answer: surface.build(sym, db_sinks(sym, table_map.uses), skip=is_test)
         exec, eval, deserialize, sql, fs, secret, net, db, then hops
     entries sorted by worst reach then path; then sinks no entry reaches
 files given -> entries in them or whose reach lands in them; unreached sinks in them
-output      -> entries [{path, line, label, kind, handler, inline, resolved, reach: [{sink,
+output      -> entries [{path, line, label, method, route, name, kind, handler, inline, resolved, reach: [{sink,
                category, path, symbol, line, hops, via (<= 6 names), via_cut}] (20 at most),
                reach_total}],
                unreached, totals {entries, reaching, unresolved, sinks, unreached}; limit
                capped at 200; text <= 8800 chars, 3 sinks shown per entry; caveat
 MEMORY_XRAY_TABLES=off -> no db sinks; gingugu serve -> refused (the brain never reads a path)
+```
+
+**X7d in the hooks (xray/surface_hook).** The same map, on arrival and after an edit:
+
+```
+read hook (first Read of a file, inside the xray-read claim)
+    -> hook_common.symbols(fp) + table_map.read(budget 1s) -> surface.build
+    -> "Surface: entry points here: <kind name> (L) -> <category sink>, <hops>[, +N more sinks]"
+       for entries in the file that reach a sink, most dangerous first, 3 shown
+    -> "Surface: sinks here reached from entry points: <category sink> (L, `symbol`) from
+       N entries: <names>" for sinks in the file reached from entries elsewhere
+    -> "(+N more; code_xray surface has them all)"; db included; dot-directories included
+edit note (Edit / MultiEdit / Write of a file in an X-ray language)
+    before = surface_hook.before: hook_common.cached_symbols + table_map.cached_uses,
+             taken before any other line refreshes a cache
+    after  = hook_common.symbols (fingerprint-checked; parse cache re-parses the edited file)
+    diff   -> "this edit adds entry point ..."                (a new entry in the file)
+              "this edit makes <sink> (path:line, `symbol`) reachable from <entry> (hops: via)"
+              "`f` is on a path from <entry> to <sink>"        (a definition the edit landed in)
+    claims xray-surface-edit (each fact once per session)
+    rebuild raises -> "the after-edit reach check was skipped ..." (claim xray-surface-skip)
+MEMORY_XRAY_SURFACE=off -> no surface lines; any failure -> no line, never an error
 ```
 
 **Readers of a removed key (xray/literals, board d5639dd5).** The edit note also
