@@ -36,9 +36,9 @@ def _routes(src: str) -> list[tuple[str, str, str, str]]:
     return [(r[1], r[2], r[8], r[9]) for r in raw["sym"]["entries"]]
 
 
-def test_every_record_has_ten_fields() -> None:
+def test_every_record_has_eleven_fields() -> None:
     raw = A.parse("a.ts", b'app.get("/x", h);\n')["sym"]
-    assert raw["entries"] == [["<module>", "app.get", "n", "h", "", 1, 0, 0, "GET", "/x"]]
+    assert raw["entries"] == [["<module>", "app.get", "n", "h", "", 1, 0, 0, "GET", "/x", "app"]]
 
 
 def test_express_verbs() -> None:

@@ -47,6 +47,39 @@ def test_several_mounts_take_the_first_and_count_them() -> None:
     assert sm.full(USERS, mounts) == ("/a", 2)
 
 
+def test_every_mount_is_a_url() -> None:
+    v = {n: ("main.go", "main", n) for n in ("v1", "v2", "v3")}
+    art = ("main.go", "articleRouter", sm.ANY)
+    mounts = [
+        _m(v["v3"], "/v3/articles", art, line=32),
+        _m(v["v2"], "/v2/articles", art, line=38),
+        _m(v["v1"], "/v1/articles", art, line=45),
+    ]
+    ref = ("main.go", "articleRouter", "r")
+    assert sm.prefixes(ref, mounts) == ["/v3/articles", "/v2/articles", "/v1/articles"]
+
+
+def test_prefixes_branch_up_the_chain_and_stay_capped() -> None:
+    mounts = [
+        _m(APP, "/a", API, line=1),
+        _m(APP, "/b", API, line=2),
+        _m(API, "/u", USERS, "api/main.py", 1),
+    ]
+    assert sm.prefixes(USERS, mounts) == ["/a/u", "/b/u"]
+    many = [_m(APP, f"/p{i}", USERS, line=i) for i in range(20)]
+    assert len(sm.prefixes(USERS, many)) == sm.MAX_URLS
+
+
+def test_prefixes_of_an_unmounted_router_is_one_empty_prefix() -> None:
+    assert sm.prefixes(USERS, []) == [""]
+
+
+def test_prefixes_survive_a_cycle() -> None:
+    a, b = ("a.py", "<module>", "a"), ("b.py", "<module>", "b")
+    mounts = [_m(a, "/x", b, "a.py"), _m(b, "/y", a, "b.py")]
+    assert sm.prefixes(b, mounts) == ["/y/x"]
+
+
 def test_any_matches_every_router_of_its_scope() -> None:
     built = ("admin.go", "adminRouter", sm.ANY)
     mounts = [_m(("main.go", "main", "r"), "/admin", built, "main.go")]

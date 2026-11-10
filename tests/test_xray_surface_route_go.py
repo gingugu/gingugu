@@ -35,9 +35,9 @@ def _routes(body: str, pkg: str = "x") -> list[tuple[str, str, str]]:
     return [(r[1], r[8], r[9]) for r in raw["sym"]["entries"]]
 
 
-def test_every_record_has_ten_fields() -> None:
+def test_every_record_has_eleven_fields() -> None:
     raw = A.parse("a.go", b'package x\n\nfunc s() {\n\thttp.HandleFunc("/x", h)\n}\n')["sym"]
-    assert raw["entries"] == [["s", "http.HandleFunc", "n", "h", "", 4, 0, 0, "", "/x"]]
+    assert raw["entries"] == [["s", "http.HandleFunc", "n", "h", "", 4, 0, 0, "", "/x", "http"]]
 
 
 def test_main_answers_to_nothing() -> None:

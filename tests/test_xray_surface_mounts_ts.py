@@ -96,7 +96,8 @@ def test_commonjs_require_and_module_exports() -> None:
             "module.exports = router;\n"
         ),
     }
-    assert _routes(files) == {("users.js", "GET"): "/v1/me"}  # first mount by line
+    sym = A.extract({k: v.encode() for k, v in files.items()}, {}).symbols
+    assert [e.route for e in sym.entries] == ["/v1/me", "/v2/me"]  # every mount is a URL
 
 
 def test_a_router_passed_to_a_function_takes_the_callers_prefix() -> None:

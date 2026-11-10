@@ -121,6 +121,31 @@ def test_a_package_level_router_mounted_by_name() -> None:
     assert _routes(files) == {"status": "/api/status"}
 
 
+def test_a_router_mounted_three_times_answers_at_three_urls() -> None:
+    files = {
+        "main.go": (
+            "package main\n\n"
+            "func main() {\n"
+            "\tr := chi.NewRouter()\n"
+            '\tr.Route("/v2", func(r chi.Router) {\n'
+            '\t\tr.Mount("/articles", articleRouter())\n'
+            "\t})\n"
+            '\tr.Route("/v1", func(r chi.Router) {\n'
+            '\t\tr.Mount("/articles", articleRouter())\n'
+            "\t})\n"
+            "}\n"
+            "func articleRouter() http.Handler {\n"
+            "\tr := chi.NewRouter()\n"
+            '\tr.Get("/", listArticles)\n'
+            "\treturn r\n"
+            "}\n"
+            "func listArticles() {}\n"
+        )
+    }
+    sym = A.extract({k: v.encode() for k, v in files.items()}, GOMOD).symbols
+    assert [e.route for e in sym.entries if e.kind == "http"] == ["/v2/articles/", "/v1/articles/"]
+
+
 def test_an_unresolvable_mount_changes_nothing() -> None:
     files = {
         "main.go": (

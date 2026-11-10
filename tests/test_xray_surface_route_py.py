@@ -39,7 +39,7 @@ def _routes(src: str) -> list[tuple[str, str, str]]:
     return [(r[1], r[8], r[9]) for r in raw["entries"]]
 
 
-def test_every_record_has_ten_fields() -> None:
+def test_every_record_has_eleven_fields() -> None:
     raw = symbols_walk.walk(ast.parse("@app.get('/x')\ndef a(): pass\n"))
     assert raw["entries"] == [["<module>", "app.get", "d", "a", "", 1, 0, 0, "GET", "/x", "app"]]
 

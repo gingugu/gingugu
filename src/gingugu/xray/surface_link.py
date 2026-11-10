@@ -137,13 +137,14 @@ class Collector:
         """Every file is linked: put each entry's route under the mounts above it."""
         out = []
         for e, ref in zip(self.entries, self._refs, strict=True):
-            route = e.route
-            if ref is not None and route:
-                route = sm.route(sm.full(ref, self._mounts)[0], route)
-            if route and self.lang == "typescript" and _is_nest(e):
+            routes = [e.route]
+            if ref is not None and e.route:  # one entry per URL a mounted router answers at
+                found = sm.prefixes(ref, self._mounts)
+                routes = list(dict.fromkeys(sm.route(p, e.route) for p in found))
+            if e.route and self.lang == "typescript" and _is_nest(e):
                 for where, prefix in sorted(self._globals):
                     if sm.under(e.path, sm.project_dir(where)):
-                        route = sm.route(prefix, route)
+                        routes = [sm.route(prefix, r) for r in routes]
                         break
-            out.append(replace(e, route=route) if route != e.route else e)
+            out.extend(replace(e, route=r) if r != e.route else e for r in routes)
         self.entries = out

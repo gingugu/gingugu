@@ -26,6 +26,7 @@ from typing import NamedTuple
 from . import surface_route as sr
 
 MAX_DEPTH = 16
+MAX_URLS = 8  # URLs one entry may expand to
 ANY = "*"
 
 Ref = tuple[str, str, str]  # (path, scope, name)
@@ -72,6 +73,29 @@ def full(ref: Ref, mounts: list[Mount]) -> tuple[str, int]:
     for p in reversed(parts):
         prefix = sr.join(prefix, p) if p else prefix
     return prefix, len(found)
+
+
+def prefixes(ref: Ref, mounts: list[Mount]) -> list[str]:
+    """Every prefix ``ref`` is served under - one per mount chain, first mounts
+    first, at most ``MAX_URLS``; ``[""]`` when nothing mounts it. A router mounted
+    at ``/v1``, ``/v2`` and ``/v3`` answers at all three: each is surface."""
+    out: list[str] = []
+    stack: list[tuple[Ref, str, frozenset, int]] = [(ref, "", frozenset({ref}), 0)]
+    while stack and len(out) < MAX_URLS:
+        cur, tail, seen, depth = stack.pop()
+        above = _parents(cur, mounts)
+        if not above:
+            out.append(tail)
+            continue
+        up = []
+        for m in above:
+            t = sr.join(m.prefix, tail) if m.prefix else tail
+            if m.parent is None or m.parent in seen or depth + 1 >= MAX_DEPTH:
+                out.append(t)  # the chain ends here
+            else:
+                up.append((m.parent, t, seen | {m.parent}, depth + 1))
+        stack.extend(reversed(up))  # first mounts are popped first
+    return out[:MAX_URLS]
 
 
 def project_dir(path: str) -> str:
