@@ -18,6 +18,7 @@ from pathlib import PurePosixPath
 
 from ..model import Edge, FileInfo, LangResult
 from . import ts_symbols, ts_symbols_walk
+from .symbols_guard import contained
 from .ts_config import Manifests
 from .ts_parse import LAZY, MODULE, TYPE, parse_tree, scan
 from .ts_paths import ASSET_EXTS, MAX_SPEC, asset_ext, is_relative, strip_query
@@ -92,7 +93,8 @@ class TypeScriptAdapter:
             for spec, kind in raw["specs"]:
                 self._resolve(rel, spec, kind, resolver, out, found)
             out.edges.extend(Edge(rel, dst, k, c) for dst, (k, c) in found.items())
-        out.symbols = ts_symbols.link({rel: raw["sym"] for rel, raw in raws.items()}, resolver)
+        syms = {rel: raw["sym"] for rel, raw in raws.items()}
+        out.symbols = contained(self.name, ts_symbols.link, syms, resolver)
         return out
 
     @staticmethod

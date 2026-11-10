@@ -89,7 +89,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an external call (`const app = express()`) counts external. Share of non-external
   calls resolved: Python 64.4% (gingugu), TS/JS 52.9% (vite, 1,650 files, parse 1.0s,
   link 0.06s), 78.4% (an express example app), 62.5% (gingugu `ui/`), Go 75.4% (gin),
-  76.6% (bubbletea). No migration, no tool change.
+  76.6% (bubbletea). A linker that raises costs only its own language's call
+  graph: `lang/symbols_guard.py` logs the traceback and returns an empty graph, so
+  the import graph and every other language still land. No migration, no tool change.
 - **`Most called` and the after-edit callers line work in any language.** The read
   note's `Most called` line and the note after an edit no longer require a `.py` file;
   `Most called` also shows for a file with no import neighbourhood (a lone Go file - Go

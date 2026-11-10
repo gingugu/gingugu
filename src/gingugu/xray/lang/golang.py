@@ -13,6 +13,7 @@ from pathlib import PurePosixPath
 
 from ..model import PACKAGE, Edge, FileInfo, LangResult
 from . import go_symbols, go_symbols_walk
+from .symbols_guard import contained
 
 _LANG = None
 _IMPORTS = None
@@ -177,7 +178,9 @@ class GoAdapter:
         for pkg_path, files in members.items():
             out.files.append(FileInfo(pkg_path, False, False, self.name, PACKAGE))
             out.edges.extend(Edge(pkg_path, f, "member", True) for f in files)
-        out.symbols = go_symbols.link(
+        out.symbols = contained(
+            self.name,
+            go_symbols.link,
             {rel: raw["sym"] for rel, raw in raws.items()},
             {rel: pkg for rel, (pkg, _) in placed.items()},
             lambda path: _under(path, mod_paths),
