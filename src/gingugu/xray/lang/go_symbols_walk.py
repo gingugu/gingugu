@@ -20,11 +20,13 @@ Records (lists, so a JSON round trip is the identity; lines are 1-based):
   form "?": it is declared but its type is not modelled - it shadows, and stays
   unresolved. ``scope`` is the enclosing function's qual or ``<module>``.
 - results: ``[qual, x, y]``, the declared first result type of a function.
+- entries, sql: the X7d records (``go_surface_walk``; shape in ``surface_records``).
 """
 
 from __future__ import annotations
 
 from ..symbols_walk import MODULE, is_qual
+from .go_surface_walk import surface
 from .go_symbols_valid import ident, is_bind, is_call, is_def, is_result, is_type, valid
 
 __all__ = ["base_type", "valid", "walk"]
@@ -88,6 +90,7 @@ class _Walk:
         self.pkg = ""
         self.out: dict[str, list] = {k: [] for k in ("binds", "defs", "calls", "types", "results")}
         self.other = 0
+        self.scopes: dict[tuple[int, int], str | None] = {}  # function span -> qual (X7d)
         self.lit = (
             False  # inside a function literal at package level: its locals are not package vars
         )
@@ -132,6 +135,7 @@ class _Walk:
                 qual = ""  # a receiver that names no local type: no def, its calls are "other"
             else:
                 qual, recv = f"{bt[1]}.{name}", pd.child_by_field_name("name")
+        self.scopes[(node.start_byte, node.end_byte)] = qual if is_qual(qual) else None
         if not is_qual(qual):
             if body is not None:
                 stack.append((body, None, False))
@@ -231,4 +235,4 @@ def walk(root) -> dict:
         w.visit(node, scope)
         lit = lit or (node.type == "func_literal" and scope == MODULE)
         stack.extend((c, scope, lit) for c in reversed(node.children))
-    return {"pkg": w.pkg, **w.out, "other": w.other}
+    return {"pkg": w.pkg, **w.out, "other": w.other, **surface(root, w.pkg, w.scopes)}

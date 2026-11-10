@@ -7,6 +7,8 @@ instruction. The record layouts are documented in ``go_symbols_walk``.
 
 from __future__ import annotations
 
+from ..surface_records import KEYS
+from ..surface_records import valid as surface_valid
 from ..symbols_walk import is_qual
 
 _KINDS = {"function", "method", "class"}
@@ -77,8 +79,10 @@ _CHECKS = {
 
 def valid(raw: object) -> bool:
     """Whether ``raw`` is exactly the shape ``walk`` returns (the cache is untrusted)."""
-    if not isinstance(raw, dict) or set(raw) != {*_CHECKS, "pkg", "other"}:
+    if not isinstance(raw, dict) or set(raw) != {*_CHECKS, *KEYS, "pkg", "other"}:
         return False
     if not _int(raw["other"]) or not (raw["pkg"] == "" or ident(raw["pkg"])):
+        return False
+    if not surface_valid(raw, "go"):
         return False
     return all(isinstance(raw[k], list) and all(f(r) for r in raw[k]) for k, f in _CHECKS.items())
