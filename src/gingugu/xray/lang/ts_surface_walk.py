@@ -24,6 +24,7 @@ from .. import surface_catalog as cat
 from .. import surface_route as sr
 from ..symbols_walk import is_qual
 from . import ts_surface_route as tr
+from .ts_surface_mounts import MountScan
 from .ts_symbols_types import text
 
 _FUNCS = ("arrow_function", "function_expression", "function")
@@ -100,13 +101,16 @@ class Surface:
         self._sql: list[tuple[int, str, int, object]] = []
         self._decls: dict[tuple[str, str], list] = {}
         self._memo: dict[tuple[str, str], bool] = {}  # filled only in ``result``, post-walk
+        self.mounts = MountScan()
 
-    def result(self) -> tuple[list[list], list[list]]:
-        """The ``entries`` and ``sql`` records, once the whole file is walked."""
+    def result(self) -> tuple[list[list], list[list], list[list]]:
+        """The ``entries``, ``sql`` and ``mounts`` records, once the whole file is walked."""
         flagged = [(pos, s, line) for pos, s, line, arg in self._sql if self._unsafe(arg, s)]
-        return self.entries, [[s, line] for _, s, line in sorted(flagged)]
+        mounts = self.mounts.finish(self.entries)
+        return self.entries, [[s, line] for _, s, line in sorted(flagged)], mounts
 
     def declarator(self, node, scope: str) -> None:
+        self.mounts.declarator(node, scope)
         name, value = node.child_by_field_name("name"), node.child_by_field_name("value")
         if name is not None and name.type == "identifier":
             self._decls.setdefault((scope, text(name)), []).append(value)
@@ -126,7 +130,9 @@ class Surface:
                         line = d.start_point[0] + 1
                         qual = f"{cls}.{text(name)}"
                         meth, route = sr.method_of(label), tr.nest_route(d, prefix)
-                        self.entries.append([cls, label, "d", qual, "", line, 0, 0, meth, route])
+                        self.entries.append(
+                            [cls, label, "d", qual, "", line, 0, 0, meth, route, ""]
+                        )
                 pending = []
             elif c.is_named and c.type != "comment":
                 pending = []
@@ -149,8 +155,13 @@ class Surface:
             if m is not None and text(m) in cat.SQL_METHODS["typescript"] and args.named_children:
                 self._sql.append((node.start_byte, scope, line, args.named_children[0]))
         label = _chain(fn)
+        self.mounts.site(label, args.named_children, scope, line)
         if label and cat.entry_kind("typescript", label):
             self._entry(label, args.named_children, scope, cls, line)
+        elif label and self.mounts.maybe(label):  # a router only if the file declares it so
+            start = len(self.entries)
+            self._entry(label, args.named_children, scope, cls, line)
+            self.mounts.pending(self.entries[start:], label.split(".")[0])
         elif fn.type == "member_expression":
             chain = tr.chained(node)
             for verb, call in chain[2] if chain else []:
@@ -166,6 +177,7 @@ class Surface:
                         pos.start_point[0] + 1,
                         ve[1],
                         chain[1],
+                        self.mounts.recv([chain[0]], scope),
                     )
 
     def _entry(self, label: str, args: list, scope: str, cls: str | None, line: int) -> None:
@@ -173,18 +185,19 @@ class Surface:
         if len(args) < 2 or args[0].type not in ("string", "template_string"):
             return
         route = tr.literal(args[0]) or ""
-        self._handlers(label, args[1:], scope, cls, line, sr.method_of(label), route)
+        recv = self.mounts.entry(label, scope)
+        self._handlers(label, args[1:], scope, cls, line, sr.method_of(label), route, recv)
 
-    def _handlers(self, label, args, scope, cls, line, method, route) -> None:
+    def _handlers(self, label, args, scope, cls, line, method, route, recv="") -> None:
         """One entry per inline handler, plus the last name-shaped one."""
         args = [a for a in args if a.type != "comment"]
         for a in args:
             if a.type in _FUNCS:
                 span = (a.start_point[0] + 1, a.end_point[0] + 1)
-                self.entries.append([scope, label, "i", "", "", line, *span, method, route])
+                self.entries.append([scope, label, "i", "", "", line, *span, method, route, recv])
         ref = self._handler_ref(args[-1], cls) if args else None
         if ref is not None:
-            self.entries.append([scope, label, *ref, line, 0, 0, method, route])
+            self.entries.append([scope, label, *ref, line, 0, 0, method, route, recv])
 
     @staticmethod
     def _handler_ref(node, cls: str | None) -> tuple[str, str, str] | None:

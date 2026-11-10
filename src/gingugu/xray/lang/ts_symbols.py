@@ -15,6 +15,7 @@ from __future__ import annotations
 from .. import surface_link
 from ..symbols import MODULE, Symbols
 from .ts_exports import EXT, Modules
+from .ts_mount_values import Values
 from .ts_resolve import Resolver
 
 MAX_DEPTH = 6  # how many calls deep a value's type is chased (`a = b.f()`, `b = c.g()`, ...)
@@ -188,6 +189,7 @@ class _Linker:
     def link(self) -> Symbols:
         out = self.out
         col = surface_link.Collector("typescript", out.defs)
+        values = Values(self.raws, self.mods)
         for rel, raw in self.raws.items():
             col.file(rel, raw)
             for rec in raw["calls"]:
@@ -208,7 +210,8 @@ class _Linker:
                 t = self._call(rel, r)
                 return t[1:] if isinstance(t, tuple) else None
 
-            col.close(rel, resolve)
+            col.close(rel, resolve, values)
+        col.finish()
         out.sinks, out.entries = col.sinks, col.entries
         return out
 

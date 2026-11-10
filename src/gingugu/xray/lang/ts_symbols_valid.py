@@ -57,6 +57,10 @@ def _export(r: list) -> bool:
     return len(r) == 3 and _strs(r, 0, 1, 2)
 
 
+def _decl(r: list) -> bool:
+    return len(r) == 2 and _strs(r, 0, 1) and is_qual(r[0], module_ok=True) and is_qual(r[1])
+
+
 _CHECKS = {
     "defs": _def,
     "binds": _bind,
@@ -64,6 +68,7 @@ _CHECKS = {
     "types": _type,
     "rets": _ret,
     "exports": _export,
+    "decls": _decl,
 }
 
 

@@ -37,9 +37,9 @@ def test_a_named_handler_and_a_member_handler() -> None:
         "app.get(`/z`, list);\n"  # 3: a template literal path
     )
     assert _walk(src)["entries"] == [
-        ["<module>", "app.get", "n", "handler", "", 1, 0, 0, "GET", "/x"],
-        ["<module>", "router.post", "a", "ctrl", "create", 2, 0, 0, "POST", "/y"],
-        ["<module>", "app.get", "n", "list", "", 3, 0, 0, "GET", "/z"],
+        ["<module>", "app.get", "n", "handler", "", 1, 0, 0, "GET", "/x", "app"],
+        ["<module>", "router.post", "a", "ctrl", "create", 2, 0, 0, "POST", "/y", "router"],
+        ["<module>", "app.get", "n", "list", "", 3, 0, 0, "GET", "/z", "app"],
     ]
 
 
@@ -53,8 +53,8 @@ def test_an_inline_handler_carries_its_span() -> None:
         "}\n"  # 6
     )
     assert _walk(src, "a.js")["entries"] == [
-        ["setup", "app.get", "i", "", "", 2, 2, 4, "GET", "/x"],
-        ["setup", "app.post", "i", "", "", 5, 5, 5, "POST", "/y"],
+        ["setup", "app.get", "i", "", "", 2, 2, 4, "GET", "/x", "#0"],
+        ["setup", "app.post", "i", "", "", 5, 5, 5, "POST", "/y", "#0"],
     ]
 
 
@@ -69,9 +69,9 @@ def test_mcp_tools_and_this_handlers() -> None:
         "}\n"  # 7
     )
     assert _walk(src)["entries"] == [
-        ["Api.wire", "this.app.get", "s", "Api", "list", 3, 0, 0, "GET", "/x"],
-        ["Api.wire", "server.tool", "i", "", "", 4, 4, 4, "", "echo"],
-        ["Api.wire", "srv.registerTool", "n", "ping", "", 5, 0, 0, "", "ping"],
+        ["Api.wire", "this.app.get", "s", "Api", "list", 3, 0, 0, "GET", "/x", "app"],
+        ["Api.wire", "server.tool", "i", "", "", 4, 4, 4, "", "echo", ""],
+        ["Api.wire", "srv.registerTool", "n", "ping", "", 5, 0, 0, "", "ping", ""],
     ]
 
 
@@ -96,7 +96,7 @@ def test_a_nest_decorator_is_an_entry() -> None:
         "}\n"  # 6
     )
     found = [e[1:] for e in _walk(src)["entries"]]  # the scope is the grammar's to place
-    assert found == [["Get", "d", "C.list", "", 2, 0, 0, "GET", "/"]]
+    assert found == [["Get", "d", "C.list", "", 2, 0, 0, "GET", "/", ""]]
 
 
 def _sql(src: str) -> list:
