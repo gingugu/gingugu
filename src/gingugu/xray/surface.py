@@ -35,7 +35,8 @@ class Reach:
     symbol: str  # the definition that makes it
     line: int
     hops: int  # calls from the entry's handler; 0 is the handler itself
-    via: tuple[str, ...]  # the quals walked, handler first
+    via: tuple[str, ...]  # the quals walked, handler first; at most MAX_VIA
+    cut: bool = False  # the path is longer than ``via`` shows
 
 
 def category(name: str) -> str | None:
@@ -69,28 +70,26 @@ def reach(entry: Entry, adj: dict, at: dict[Node, list[tuple[str, int]]]) -> lis
         Reach(name, category(name), entry.path, entry.handler, line, 0, ())
         for name, line in entry.direct
     ]
-    parent: dict[Node, Node | None] = {n: None for n in entry.nodes}
     # A hop is one call from the handler: an inline callback's start nodes are what
-    # it calls, a named handler's is the handler itself.
+    # it calls, a named handler's is the handler itself. The path is kept only as
+    # its first MAX_VIA names, built as the walk goes: never a whole chain per node.
     hops = {n: int(entry.inline) for n in entry.nodes}
+    via: dict[Node, tuple[str, ...]] = {n: (n[1],) for n in entry.nodes}
     queue = deque(entry.nodes)
     while queue:
         node = queue.popleft()
         for nxt in adj.get(node, ()):
             if nxt not in hops:
-                hops[nxt], parent[nxt] = hops[node] + 1, node
+                hops[nxt] = hops[node] + 1
+                prefix = via[node]
+                via[nxt] = prefix if len(prefix) >= MAX_VIA else prefix + (nxt[1],)
                 queue.append(nxt)
     for node, n in hops.items():
-        if node not in at:
-            continue
-        via, step = [], node
-        while step is not None:
-            via.append(step[1])
-            step = parent[step]
-        for name, line in at[node]:
+        for name, line in at.get(node, ()):
             kind = category(name)
             if kind is not None:
-                out.append(Reach(name, kind, node[0], node[1], line, n, tuple(reversed(via))))
+                cut = n + 1 - int(entry.inline) > len(via[node])
+                out.append(Reach(name, kind, node[0], node[1], line, n, via[node], cut))
     return sorted(set(out), key=_rank)
 
 

@@ -97,6 +97,7 @@ class Surface:
         self.entries: list[list] = []
         self._sql: list[tuple[int, str, int, object]] = []
         self._decls: dict[tuple[str, str], list] = {}
+        self._memo: dict[tuple[str, str], bool] = {}  # filled only in ``result``, post-walk
 
     def result(self) -> tuple[list[list], list[list]]:
         """The ``entries`` and ``sql`` records, once the whole file is walked."""
@@ -178,6 +179,12 @@ class Surface:
         return None
 
     def _unsafe(self, arg, scope: str) -> bool:
+        try:
+            return self._built_unsafe(arg, scope)
+        except RecursionError:  # a crafted alias chain: flag the call, never lose the file
+            return True
+
+    def _built_unsafe(self, arg, scope: str) -> bool:
         if arg.type == "identifier":
             name = text(arg)
             return any(
@@ -210,7 +217,16 @@ class Surface:
         return True
 
     def _local_safe(self, name: str, scope: str, seen: set[str]) -> bool:
-        decls = self._decls.get((scope, name))
+        """Every declaration of ``name`` in ``scope`` is safe. Judged once per name
+        (``x2 = x1 + x1`` doubling chains stay linear); a name still being judged
+        reads False, so a cycle is unsafe."""
+        key = (scope, name)
+        if key in self._memo:
+            return self._memo[key]
+        decls = self._decls.get(key)
         if not decls or name in seen:
             return False
-        return all(v is not None and self._safe(v, scope, seen | {name}) for v in decls)
+        self._memo[key] = False
+        ok = all(v is not None and self._safe(v, scope, seen | {name}) for v in decls)
+        self._memo[key] = ok
+        return ok

@@ -35,19 +35,27 @@ FORMS = ("d", "n", "a", "s", "i")
 KEYS = ("entries", "sql")
 
 
+MAX_LINE = 10_000_000  # a line number past any real file is a crafted one
+MAX_NAME = 512
+
+
 def _int(v: object) -> bool:
-    return isinstance(v, int) and not isinstance(v, bool) and v >= 0
+    return isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= MAX_LINE
+
+
+def _qual(v: object, module_ok: bool = False) -> bool:
+    return isinstance(v, str) and len(v) <= MAX_NAME and is_qual(v, module_ok=module_ok)
 
 
 def _ident(v: object) -> bool:
-    return is_qual(v) and "." not in v
+    return _qual(v) and "." not in v
 
 
 def is_entry(rec: object, lang: str) -> bool:
     if not (isinstance(rec, list) and len(rec) == 8 and all(_int(v) for v in rec[5:])):
         return False
     scope, label, form, x, y, _line, start, end = rec
-    if not (is_qual(scope, module_ok=True) and isinstance(form, str) and form in FORMS):
+    if not (_qual(scope, module_ok=True) and isinstance(form, str) and form in FORMS):
         return False
     if not (isinstance(label, str) and cat.entry_kind(lang, label)):
         return False
@@ -56,14 +64,14 @@ def is_entry(rec: object, lang: str) -> bool:
     if start or end:
         return False
     if form == "d":
-        return is_qual(x) and y == ""
+        return _qual(x) and y == ""
     if form == "n":
         return _ident(x) and y == ""
-    return (is_qual(x) if form == "s" else _ident(x)) and _ident(y)
+    return (_qual(x) if form == "s" else _ident(x)) and _ident(y)
 
 
 def is_sql(rec: object) -> bool:
-    return isinstance(rec, list) and len(rec) == 2 and is_qual(rec[0], True) and _int(rec[1])
+    return isinstance(rec, list) and len(rec) == 2 and _qual(rec[0], True) and _int(rec[1])
 
 
 def valid(raw: dict, lang: str) -> bool:

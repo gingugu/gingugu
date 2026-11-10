@@ -99,10 +99,18 @@ def _has_marker(n) -> bool:
 
 
 def _operands(n) -> list:
-    """The operands of a ``+`` chain, flattened (a non-``+`` expression is its own)."""
-    if n.type == "binary_expression" and any(c.type == "+" for c in n.children):
-        return _operands(n.child_by_field_name("left")) + _operands(n.child_by_field_name("right"))
-    return [n]
+    """The operands of a ``+`` chain, flattened (a non-``+`` expression is its own).
+    A loop, not recursion: a crafted thousand-term chain must not cost the language."""
+    out, stack = [], [n]
+    while stack:
+        cur = stack.pop()
+        if cur is None:
+            continue
+        if cur.type == "binary_expression" and any(c.type == "+" for c in cur.children):
+            stack.extend((cur.child_by_field_name("right"), cur.child_by_field_name("left")))
+        else:
+            out.append(cur)
+    return out
 
 
 def _is_sprintf(n) -> bool:
@@ -121,7 +129,10 @@ def _parts(n) -> list | None:
     return [o for o in ops if o.type not in _LITS] or None
 
 
-def _safe(n, assigns: _Assigns, seen: frozenset = frozenset()) -> bool:
+def _safe(n, assigns: _Assigns, memo: dict[str, bool]) -> bool:
+    """Whether one part is known safe. ``memo`` holds each local's verdict, so a
+    name is judged once per function (``x2 = x1 + x1`` doubling chains stay linear);
+    a name still being judged reads False, so a cycle is unsafe."""
     if n is None:
         return False
     if n.type in _LITS or (n.type == "identifier" and _UPPER.match(_txt(n))):
@@ -131,15 +142,19 @@ def _safe(n, assigns: _Assigns, seen: frozenset = frozenset()) -> bool:
     if n.type != "identifier":
         return False
     name = _txt(n)
+    if name in memo:
+        return memo[name]
     found = assigns.get(name)
-    if not found or name in seen:
+    if not found:
         return False
-    return all(_safe(v, assigns, seen | {name}) for v, _ in found)
+    memo[name] = False
+    memo[name] = all(_safe(v, assigns, memo) for v, _ in found)
+    return memo[name]
 
 
-def _unsafe_built(n, assigns: _Assigns) -> bool:
+def _unsafe_built(n, assigns: _Assigns, memo: dict[str, bool]) -> bool:
     parts = _parts(n)
-    return parts is not None and not all(_safe(p, assigns) for p in parts)
+    return parts is not None and not all(_safe(p, assigns, memo) for p in parts)
 
 
 def _flag(call, assigns: _Assigns) -> bool:
@@ -148,13 +163,17 @@ def _flag(call, assigns: _Assigns) -> bool:
     i = 1 if method.endswith("Context") else 0
     if len(args) <= i:
         return False
-    q = args[i]
-    if q.type == "identifier":
-        return any(
-            v is not None and (_unsafe_built(v, assigns) or (c and not _safe(v, assigns)))
-            for v, c in assigns.get(_txt(q), ())
-        )
-    return _unsafe_built(q, assigns)
+    q, memo = args[i], {}
+    try:
+        if q.type == "identifier":
+            return any(
+                v is not None
+                and (_unsafe_built(v, assigns, memo) or (c and not _safe(v, assigns, memo)))
+                for v, c in assigns.get(_txt(q), ())
+            )
+        return _unsafe_built(q, assigns, memo)
+    except RecursionError:  # a crafted alias chain: flag the call, never lose the language
+        return True
 
 
 def _handlers(call, label: str, scope: str) -> list[list]:

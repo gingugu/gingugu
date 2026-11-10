@@ -43,7 +43,8 @@ def _reach(r: surface.Reach) -> dict:
         "symbol": label(r.symbol),
         "line": r.line,
         "hops": r.hops,
-        "via": [label(q) for q in r.via[: surface.MAX_VIA]],
+        "via": [label(q) for q in r.via],
+        "via_cut": r.cut,
     }
 
 
@@ -65,7 +66,7 @@ def _reach_line(r: dict) -> str:
     where = f"{_show(r['path'])}:{r['line']}"
     if r["hops"] == 0:
         return f"{r['category']} {r['sink']} at {where} (in the handler)"
-    path = " > ".join(r["via"]) + (" > ..." if r["hops"] >= surface.MAX_VIA else "")
+    path = " > ".join(r["via"]) + (" > ..." if r["via_cut"] else "")
     hops = f"{r['hops']} hop" + ("s" if r["hops"] > 1 else "")
     return f"{r['category']} {r['sink']} at {where} ({hops}: {path})"
 
@@ -93,7 +94,7 @@ def render(data: dict, name: str) -> str:
             lines.append(head + ": no sink reached")
             continue
         more = e["reach_total"] - SHOWN
-        lines.append(head + (f" ({more} more sinks)" if more > 0 else ""))
+        lines.append(head + (f" ({more} more sink{'s' if more > 1 else ''})" if more > 0 else ""))
         lines.extend(f"    {_reach_line(r)}" for r in e["reach"][:SHOWN])
     if data["unreached"]:
         lines.append("Sinks no entry reaches (internal, or reached in ways the graph cannot see):")

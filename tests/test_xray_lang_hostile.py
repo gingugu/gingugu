@@ -116,7 +116,8 @@ def test_an_adapter_bug_costs_only_its_own_language(tmp_path, monkeypatch, caplo
     with caplog.at_level("WARNING", logger=extract.__name__):
         x = extract.extract(repo, pc)
     assert ("a.py", "b.py") in {(e.src, e.dst) for e in x.edges}
-    assert x.parse_errors == ["c.ts", "d.ts"]  # still nodes, said to be unparsed
+    seen = ([(f.path, f.lang) for f in x.files], x.parse_errors, caplog.text)
+    assert x.parse_errors == ["c.ts", "d.ts"], seen  # still nodes, said to be unparsed
     assert {f.path for f in x.files} == {"a.py", "b.py", "c.ts", "d.ts"}
     assert "adapter bug" in caplog.text  # contained, not hidden
     validate.payload(x.payload())

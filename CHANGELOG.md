@@ -55,8 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   locally (stdio server, proxy and CLI); `gingugu serve` refuses it. The symbol model and its
   cache form moved to `xray/symbols_model.py`, and `EXTRACTOR_VERSION` is now 5, so caches
   rebuild once. Measured on gingugu itself: 47 entry points (24 MCP, 21 `main`, 1 CLI, 1
-  HTTP), 39 reach a sink, 2.6s cold; plain discovery found 4 of the 24 MCP tools reaching a
-  named sink. `MEMORY_XRAY_TABLES=off` drops the `db` sinks. No hook line yet, no migration.
+  HTTP), 39 reach a sink, 2.6s cold; 20 of the 24 MCP tools reach one, most of them through
+  a database table that no import or typed receiver shows. `MEMORY_XRAY_TABLES=off` drops the
+  `db` sinks. No hook line yet, no migration.
 - **X7c: DB tables as edges.** Nothing imports a table, so the code that queries
   `orders` and the migration that creates it never meet in the import graph, and a
   rename or drop breaks callers silently. `xray/table_scan.py` reads what a file

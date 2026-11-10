@@ -73,6 +73,7 @@ def test_every_entry_with_its_reach_most_dangerous_first(repo, env):
             "line": 9,
             "hops": 1,
             "via": ["run", "_go"],
+            "via_cut": False,
         }
     ]
     assert [(r["sink"], r["path"], r["symbol"], r["hops"]) for r in items["reach"]] == [

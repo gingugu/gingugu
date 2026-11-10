@@ -17,6 +17,8 @@ from .symbols_walk import is_qual
 from .validate import is_valid_path
 
 _KINDS = ("function", "method", "class")
+MAX_LINE = 10_000_000  # a line number past any real file is a crafted one
+MAX_NAME = 512  # likewise a qualified name: rendered, so bounded
 
 Def = tuple[str, int, int]  # (kind, line, end)
 Key = tuple[str, str, str, str]  # (src path, src symbol, dst path, dst symbol)
@@ -64,7 +66,11 @@ def to_json(sym: Symbols) -> dict:
 
 
 def _count(v: object, low: int = 0) -> bool:
-    return isinstance(v, int) and not isinstance(v, bool) and v >= low
+    return isinstance(v, int) and not isinstance(v, bool) and low <= v <= MAX_LINE
+
+
+def _qual(v: object, module_ok: bool = False) -> bool:
+    return isinstance(v, str) and len(v) <= MAX_NAME and is_qual(v, module_ok=module_ok)
 
 
 def _is_def(d: object) -> bool:
@@ -77,8 +83,8 @@ def _is_edge(e: object) -> bool:
         and len(e) == 5
         and is_valid_path(e[0])
         and is_valid_path(e[2])
-        and is_qual(e[1], module_ok=True)
-        and is_qual(e[3])
+        and _qual(e[1], module_ok=True)
+        and _qual(e[3])
         and _count(e[4], 1)
     )
 
@@ -88,14 +94,14 @@ def _is_sink(s: object) -> bool:
         isinstance(s, list)
         and len(s) == 4
         and is_valid_path(s[0])
-        and is_qual(s[1], module_ok=True)
+        and _qual(s[1], module_ok=True)
         and cat.category(s[2]) is not None
         and _count(s[3])
     )
 
 
 def _is_node(n: object) -> bool:
-    return isinstance(n, list) and len(n) == 2 and is_valid_path(n[0]) and is_qual(n[1], True)
+    return isinstance(n, list) and len(n) == 2 and is_valid_path(n[0]) and _qual(n[1], True)
 
 
 def _is_direct(d: object) -> bool:
@@ -111,7 +117,7 @@ def _is_entry(e: object) -> bool:
         and cat.is_label(label)
         and kind in cat.KINDS
         and _count(line)
-        and is_qual(handler, module_ok=True)
+        and _qual(handler, module_ok=True)
         and isinstance(inline, bool)
         and isinstance(nodes, list)
         and all(_is_node(n) for n in nodes)
@@ -139,7 +145,7 @@ def from_json(data: object) -> Symbols | None:
     for path, qs in defs.items():
         if not is_valid_path(path):  # rendered to the agent: the brain's own path rule
             return None
-        if not isinstance(qs, dict) or not all(is_qual(q) and _is_def(d) for q, d in qs.items()):
+        if not isinstance(qs, dict) or not all(_qual(q) and _is_def(d) for q, d in qs.items()):
             return None
     if not (all(map(_is_edge, edges)) and all(map(_is_sink, sinks))):
         return None
