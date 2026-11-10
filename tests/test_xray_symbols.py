@@ -299,4 +299,6 @@ def test_the_cache_form_round_trips_through_json():
     ],
 )
 def test_a_cache_form_of_any_other_shape_is_refused(bad):
+    if isinstance(bad, dict) and "unresolved" in bad:  # refused for its own fault, not X7d's keys
+        bad = {**bad, "sinks": [], "entries": []}
     assert symbols.from_json(bad) is None

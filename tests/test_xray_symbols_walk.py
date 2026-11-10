@@ -178,4 +178,12 @@ def test_a_deeply_nested_file_does_not_blow_the_stack():
 
 
 def test_an_empty_module_has_empty_records():
-    assert _walk("") == {"defs": [], "binds": [], "calls": [], "types": [], "other": 0}
+    assert _walk("") == {
+        "defs": [],
+        "binds": [],
+        "calls": [],
+        "types": [],
+        "other": 0,
+        "entries": [],
+        "sql": [],
+    }

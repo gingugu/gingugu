@@ -31,6 +31,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A file too big to read, or past the 200-name cap, is named as unread, and while one
   exists no name is called set or read nowhere - `not set in any file read` instead.
   `MEMORY_XRAY_ENV=off` silences all of it. No migration.
+- **X7d: the attack-surface map.** The import graph says what a change could reach and
+  the call graph says what it does, but neither says which code outside input can get to
+  and what it does once there. `code_xray surface` / `gingugu xray surface [--files a,b]
+  [--path] [--limit] [--json]` lists every entry point with the sinks it reaches through the
+  X17 call graph. Entry points: an MCP tool, resource or prompt, an HTTP route (by decorator
+  or by registrar such as `add_url_rule`), a CLI command (including argparse
+  `set_defaults` and the functions named in `pyproject.toml` `[project.scripts]`), a Celery
+  task, a Python `if __name__ == "__main__"` block, a Go `main`, a NestJS `@Get` and kin,
+  Express-style `app`/`router` verbs, and MCP `server.tool`/`registerTool`. Sinks, most
+  dangerous first: `exec`, `eval`, `deserialize`, `sql` (`sql.built`: a query assembled at
+  runtime from a part not known safe), `fs`, `secret`, `net`, and `db:<table>` (X7c's table
+  uses joined to the definition enclosing them, so a query on an untyped connection still
+  counts). Each entry shows its sinks nearest first with the shortest path and its hops (a
+  hop is one call from the handler; an inline callback's callees are hop 1; a path shows at
+  most 6 names, marked when cut), then the sinks
+  no entry reaches. Test files are left out; with files, only entries in them or reaching
+  into them. Sinks and entries are closed catalogues per language
+  (`xray/surface_catalog.py`): nothing external outside the catalogue is stored, and the
+  symbol cache (`xray-symbols-<digest>.json`), which now also carries sinks and entries,
+  refuses on load any name the catalogue never wrote. Python, TypeScript/JavaScript and Go.
+  A lower bound, like the call graph under it: a missing path is not proof that none exists,
+  and a listed path says the code can reach the sink, not that input flows along it. Answered
+  locally (stdio server, proxy and CLI); `gingugu serve` refuses it. The symbol model and its
+  cache form moved to `xray/symbols_model.py`, and `EXTRACTOR_VERSION` is now 5, so caches
+  rebuild once. Measured on gingugu itself: 47 entry points (24 MCP, 21 `main`, 1 CLI, 1
+  HTTP), 39 reach a sink, 2.6s cold; 20 of the 24 MCP tools reach one, most of them through
+  a database table that no import or typed receiver shows. `MEMORY_XRAY_TABLES=off` drops the
+  `db` sinks. Built for a hostile checkout: each local's safety is judged once per
+  function, cached lines and names are bounded, and a path is capped as it is walked. No hook
+  line yet, no migration.
 - **X7c: DB tables as edges.** Nothing imports a table, so the code that queries
   `orders` and the migration that creates it never meet in the import graph, and a
   rename or drop breaks callers silently. `xray/table_scan.py` reads what a file
@@ -112,8 +142,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Extractor version 4.** The symbol records of TS/JS and Go ride the parse cache, so
-  the cached parses and graph caches rebuild once after upgrading.
+- **Extractor version 5.** The symbol records of TS/JS and Go, and X7d's entry and
+  built-SQL records, ride the parse cache, so the cached parses and graph caches rebuild
+  once after upgrading.
 
 ### Fixed
 

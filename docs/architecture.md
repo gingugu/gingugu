@@ -131,8 +131,8 @@ graph LR
     C -->|add · list · remove · test| W
     C -->|post · inbox · read · claim · done| BP
     C -->|ingest · refresh · blast · overview| XR
-    C -->|brief · callers · history · blindspots · docs · links · env · tables, stdio only: nothing stored| XG
-    X -->|brief · callers · history · blindspots · docs · links · env · tables, answered on this machine| XG
+    C -->|brief · callers · history · blindspots · docs · links · env · tables · surface, stdio only: nothing stored| XG
+    X -->|brief · callers · history · blindspots · docs · links · env · tables · surface, answered on this machine| XG
     A -->|each pending tool call| Y
     Y -->|reads matches| W
     Y -->|logs each trip| T
@@ -1923,6 +1923,40 @@ files read`), and the cache key carries the scanner's version. Not covered: colu
 through model classes (the import graph covers that) and IaC-defined tables. Switch
 `MEMORY_XRAY_TABLES` (default on). No migration, no brain change.
 
+**The attack-surface map (X7d).** The symbol graph says what calls what; this says which of
+that is reachable from outside and what it can do when it gets there. An *entry* is where
+outside input arrives: an MCP tool, resource or prompt, an HTTP route (a decorator or a
+registrar such as `add_url_rule`), a CLI command (including argparse `set_defaults` and the
+functions named in `pyproject.toml` `[project.scripts]`), a Celery task, a Python
+`if __name__ == "__main__"` block, a Go `main`, a NestJS `@Get`, an Express-style
+`app.get(...)`, an MCP `server.tool(...)` or `registerTool(...)`. A *sink* is a call that
+does something an attacker wants done. Both come from closed per-language catalogues
+(`xray/surface_catalog.py`): the walks record only names the catalogue lists, and
+`xray/symbols_model.py` refuses to load a cache holding any other name, so nothing external
+outside the catalogue is stored or shown. Each language's linker (`xray/symbols.py`,
+`lang/ts_symbols.py`, `lang/go_symbols.py`) hands every call verdict to
+`xray/surface_link.py`: an external call the catalogue lists becomes a sink, a handler
+passed by name resolves exactly as a call of that shape would, and an inline callback starts
+from the calls inside its line span. Categories, most dangerous first: `exec`, `eval`,
+`deserialize`, `sql`, `fs`, `secret`, `net`, `db`. `sql.built` is a query assembled at
+runtime (an f-string, `+` chain or template literal) from a part not known safe, handed to a
+query method; a literal, an UPPER_CASE constant, a `?` placeholder list or a local whose
+assignments are all safe does not count. `db:<table>` joins X7c's table uses to the
+definition enclosing each line, so a query on an untyped connection still counts.
+`xray/surface.py` (pure) walks the call edges forward from each entry, breadth first, so the
+path kept to every sink is a shortest one; a hop is one call from the handler (an inline
+callback's callees are hop 1), and a path shows its first 6 names, marked when cut. An http
+registrar's handler is the argument after its path. Entries are listed with the sinks they reach, then the sinks
+no entry reaches; test files are left out; with `files`, only entries in them or reaching
+into them. `code_xray` `surface` (`xray/surface_tool.py`) answers locally like `tables`:
+`gingugu serve` refuses it and the proxy answers it. It is a lower bound (a call through an
+untyped value or an interface is not followed, an entry registered in a form the catalogue
+does not know is not listed), and a listed path says the code can reach the sink, not that
+outside input flows along it. The symbol cache (`xray-symbols-<digest>.json`) now carries
+sinks and entries too, and `EXTRACTOR_VERSION` 5 retires every older parse. Python, TS/JS
+and Go. No hook line yet, no migration, no brain change. `MEMORY_XRAY_TABLES=off` drops the
+`db` sinks only.
+
 **Cross-repo links (X23).** A service ecosystem is wired by names, not imports. The
 `xray/links/` package reads this checkout and its sibling checkouts (the docs map's
 discovery) for two sets of names per file: what the repo *provides* (published package
@@ -2419,8 +2453,8 @@ src/gingugu/
 ├── proxy_vault.py          # Remote mode: the machine's credential vault, screened (reveal refused) and exposed as a server
 ├── proxy_vault_link.py     # Remote mode: runs that vault behind an in-memory MCP session so it can ask the user
 ├── proxy_xray.py           # Remote mode: code_xray reads the checkout here, asks the brain by fingerprint
-├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang, go_symbols* on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), tool_xray (the PreToolUse X-ray decision, kept apart from tool_hook), bash_hook + bash_state (X15: a shell command's dirty-set snapshot and diff; the repos a session touched), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only), board_nudge (X20 sender: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line), board_brief (X20: the brief a board post's `xray: <range>` line asks for, rendered on the receiver), repo_id (X20: a checkout's identity, and the local checkout an `xray: <repo> <range>` line names), resolve_walk + parse_cache (X16: content-only import records, the per-file parse cache), symbols_walk + symbols (X17: the symbol graph - Python walker and shared model, `merge` joins every adapter's share; client only), the TS/JS and Go symbol modules in lang/ (ts_symbols_walk, ts_symbols_types, ts_symbols_valid, ts_exports, ts_symbols; go_symbols_walk, go_symbols_valid, go_symbols; symbols_guard contains a linker's failure), edit_symbols (X17: the tripwire's `Edit lands in` lines), callers_tool (X17: `code_xray` `callers`, local only), edit_note (the note after an edit), literals (who still reads a key an edit removed: `git grep` text matches, not import edges), ledger + ledger_runs (X11 lean: test predictions vs test-runner failures - pytest, vitest, jest, npm/pnpm/yarn/bun test, go test, gotestsum), scar_query (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace), scars (X3, client side: resolves and ranks those hits against the checkout), history (X4: git log summarized as churn, author counts and co-changed pairs, cached by HEAD), hotspots (X4 hotspots + coupling, X6 blind spots, pure), history_tool (`code_xray` `history` / `blindspots`, local only), docs_map + docs_text + docs_cites + docs_tool + docs_hook (X22: which docs cite a file, here and in sibling checkouts; `code_xray` `docs`, local only), env_scan + env_map + env_tool + env_hook (X7a: env vars as edges; `code_xray` `env`, local only), file_facts (the per-file fact cache env_map and table_map share), table_scan + table_map + table_tool + table_hook (X7c: DB tables as edges; `code_xray` `tables`, local only), links/ (X23: model + provides* + mentions* (incl. mentions_repos: a repo named outright) + prose read a checkout into provided and mentioned names; index reads checkouts (8 threads) and cache holds the per-checkout facts; join + join_index (provider index and matchers) + ripple turn them into links, `shared` hosts and the cross-repo ripple; render + tool answer `code_xray` `links` and the brief's section, local only; inbound writes and reads the per-repo summaries the read hook and edit note use)
-├── xray_cli.py             # `gingugu xray brief` (--range / --files / --path / --json), `gingugu xray history` (--files / --path / --limit / --json), `gingugu xray blindspots` (--path / --limit / --json), `gingugu xray docs` (--files / --path / --limit / --json), `gingugu xray links` (--files / --path / --limit / --json / --warm), `gingugu xray env` (--files / --path / --limit / --json), `gingugu xray tables` (--files / --path / --limit / --json) and `gingugu xray score` (--json)
+├── xray/                   # Codebase X-ray: scan, extract, model, lang/ (python + resolve on ast; typescript, ts_*, jsonc, golang, go_symbols* on tree-sitter), local (client); validate, rank, store (brain); hook_common (shared hook state + graph cache), edit_hook (PreToolUse X-ray), tool_xray (the PreToolUse X-ray decision, kept apart from tool_hook), bash_hook + bash_state (X15: a shell command's dirty-set snapshot and diff; the repos a session touched), read_hook (PostToolUse map on arrival), brief (changed files + combined blast, local only), board_nudge (X20 sender: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line), board_brief (X20: the brief a board post's `xray: <range>` line asks for, rendered on the receiver), repo_id (X20: a checkout's identity, and the local checkout an `xray: <repo> <range>` line names), resolve_walk + parse_cache (X16: content-only import records, the per-file parse cache), symbols_walk + symbols + symbols_model (X17: the symbol graph - Python walker, linker and the shared model with its cache form, `merge` joins every adapter's share; client only), the TS/JS and Go symbol modules in lang/ (ts_symbols_walk, ts_symbols_types, ts_symbols_valid, ts_exports, ts_symbols; go_symbols_walk, go_symbols_valid, go_symbols; symbols_guard contains a linker's failure), edit_symbols (X17: the tripwire's `Edit lands in` lines), callers_tool (X17: `code_xray` `callers`, local only), edit_note (the note after an edit), literals (who still reads a key an edit removed: `git grep` text matches, not import edges), ledger + ledger_runs (X11 lean: test predictions vs test-runner failures - pytest, vitest, jest, npm/pnpm/yarn/bun test, go test, gotestsum), scar_query (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace), scars (X3, client side: resolves and ranks those hits against the checkout), history (X4: git log summarized as churn, author counts and co-changed pairs, cached by HEAD), hotspots (X4 hotspots + coupling, X6 blind spots, pure), history_tool (`code_xray` `history` / `blindspots`, local only), docs_map + docs_text + docs_cites + docs_tool + docs_hook (X22: which docs cite a file, here and in sibling checkouts; `code_xray` `docs`, local only), env_scan + env_map + env_tool + env_hook (X7a: env vars as edges; `code_xray` `env`, local only), file_facts (the per-file fact cache env_map and table_map share), table_scan + table_map + table_tool + table_hook (X7c: DB tables as edges; `code_xray` `tables`, local only), surface_catalog + surface_records + surface_link + surface + surface_tool (X7d: the attack-surface map - entry points and the sinks they reach through the call graph; `code_xray` `surface`, local only) with surface_walk_py and lang/ts_surface_walk + lang/go_surface_walk (the per-language entry and built-SQL walks), links/ (X23: model + provides* + mentions* (incl. mentions_repos: a repo named outright) + prose read a checkout into provided and mentioned names; index reads checkouts (8 threads) and cache holds the per-checkout facts; join + join_index (provider index and matchers) + ripple turn them into links, `shared` hosts and the cross-repo ripple; render + tool answer `code_xray` `links` and the brief's section, local only; inbound writes and reads the per-repo summaries the read hook and edit note use)
+├── xray_cli.py             # `gingugu xray brief` (--range / --files / --path / --json), `gingugu xray history` (--files / --path / --limit / --json), `gingugu xray blindspots` (--path / --limit / --json), `gingugu xray docs` (--files / --path / --limit / --json), `gingugu xray links` (--files / --path / --limit / --json / --warm), `gingugu xray env` (--files / --path / --limit / --json), `gingugu xray tables` (--files / --path / --limit / --json), `gingugu xray surface` (--files / --path / --limit / --json) and `gingugu xray score` (--json)
 ├── token_cli.py            # `gingugu token` CLI, incl. the `ssh-mint` forced command
 ├── remote.py               # `gingugu remote`: local (default) or a remote brain, per machine
 ├── remote_args.py          # usage text + argparse for `gingugu remote`, mint ssh argv
@@ -2605,7 +2639,7 @@ src/gingugu/
     ├── credentials.py      # credential_store / get / list / delete (delete takes `confirm`; always a big delete)
     ├── tripwires.py        # memory_tripwire: add / list / remove / test
     ├── board.py            # board tool + gingugu://board/inbox/{persona} resource; derives the author
-    ├── xray.py             # code_xray tool: snapshot selection, blast, overview, refresh, ingest, brief, callers, history, blindspots, docs, links, env, tables
+    ├── xray.py             # code_xray tool: snapshot selection, blast, overview, refresh, ingest, brief, callers, history, blindspots, docs, links, env, tables, surface
     ├── admin.py            # namespaces, export, import (cascade delete and overwriting import take `confirm`)
     ├── summaries.py        # Payload shapes: full summary, compact summary, the picker
     ├── choices.py          # Enum argument parsing, shared error wording

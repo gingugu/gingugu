@@ -12,6 +12,7 @@ a lower bound.
 
 from __future__ import annotations
 
+from .. import surface_link
 from ..symbols import MODULE, Symbols
 from .ts_exports import EXT, Modules
 from .ts_resolve import Resolver
@@ -167,11 +168,32 @@ class _Linker:
             return ("sym", rel, qual) if qual in self._defs(rel) else None
         return self._callee(rel, caller, form, x, y)
 
+    def _ext_name(self, rel: str, rec: list) -> str | None:
+        """The dotted name a call leaving the repo targets (``child_process.exec``,
+        ``fs.writeFile``), or the global it names (``eval``, ``fetch``)."""
+        caller, form, x, y = rec[0], rec[1], rec[2], rec[3]
+        if form == "s" or self._typed(rel, caller, x)[0]:
+            return None
+        defs = self._defs(rel)
+        if any((f"{s}.{x}" if s else x) in defs for s in self._scopes(rel, caller)):
+            return None
+        bind = self._table(rel)[0].get(x)
+        if bind is None:
+            base = x
+        else:
+            spec = bind[2].removeprefix("node:")
+            base = spec if bind[0] == "i" or bind[3] == "default" else f"{spec}.{bind[3]}"
+        return base if form == "n" else f"{base}.{y}"
+
     def link(self) -> Symbols:
         out = self.out
+        col = surface_link.Collector("typescript", out.defs)
         for rel, raw in self.raws.items():
+            col.file(rel, raw)
             for rec in raw["calls"]:
                 target = self._call(rel, rec)
+                node = target[1:] if isinstance(target, tuple) else None
+                col.call(rel, rec, node, None if node else self._ext_name(rel, rec))
                 if target == EXT:
                     out.external += 1
                 elif target is None:
@@ -181,6 +203,13 @@ class _Linker:
                     key = (rel, rec[0], target[1], target[2])
                     if (key[0], key[1]) != (key[2], key[3]):
                         out.edges[key] = out.edges.get(key, 0) + 1
+
+            def resolve(r: list, rel=rel):
+                t = self._call(rel, r)
+                return t[1:] if isinstance(t, tuple) else None
+
+            col.close(rel, resolve)
+        out.sinks, out.entries = col.sinks, col.entries
         return out
 
 

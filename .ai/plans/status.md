@@ -1,15 +1,44 @@
 # Project Status
 
-_Last updated: 2026-11-09 (X17 symbol graph for TS/JS and Go + multi-runner X11 ledger on `feature/x17-ts-go`; literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
+_Last updated: 2026-11-10 (X7d attack-surface map built on `feature/xray-surface`; X17 symbol graph for TS/JS and Go + multi-runner X11 ledger on `feature/x17-ts-go`; literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
 
 ## In Flight
+
+**X7d attack-surface map (2026-11-10, branch `feature/xray-surface`, unreleased; 0.49.0 is held).** Fourth
+slice of X7 (edges beyond imports), the one that makes it a security instrument. The import graph says what a
+change could reach and the call graph what it does; this says which code outside input arrives at and what it
+can do there. `code_xray` `surface` / `gingugu xray surface` (`--files`, `--path`, `--limit`, `--json`)
+lists every entry point with the sinks it reaches through the X17 call graph; answered locally (stdio
+server, proxy, CLI), refused by `gingugu serve` like `tables`. Entries: MCP tool/resource/prompt, HTTP route
+(decorator or registrar), CLI command (including argparse `set_defaults` and `[project.scripts]`
+functions), Celery task, Python `if __name__ == "__main__"`, Go `main`, NestJS `@Get` and kin,
+Express-style `app`/`router` verbs, MCP `server.tool`/`registerTool`. Sinks, in this order: `exec`, `eval`,
+`deserialize`, `sql` (`sql.built`: a query assembled at runtime from a part not known safe), `fs`, `secret`,
+`net`, `db:<table>` (X7c table uses joined to the enclosing definition, so an untyped connection still
+counts). Shortest path per sink by breadth-first reach, hops = calls from the handler (an inline callback's
+callees are hop 1), then the sinks no entry reaches; test files left out; with files, entries in them or
+reaching into them. New modules: `xray/surface_catalog.py` (closed per-language catalogues),
+`surface_records.py` (the `entries` and `sql` walk records and their shape check), `surface_link.py` (the
+Collector each linker feeds), `surface.py` (pure reach), `surface_tool.py` (the action),
+`symbols_model.py` (the symbol model and its cache form, moved out of `symbols.py` to keep it under the
+line limit), `surface_walk_py.py`, `lang/ts_surface_walk.py`, `lang/go_surface_walk.py` (the per-language
+walks). Sinks are a closed catalogue per language: nothing external outside it is stored, and
+`symbols_model.from_json` refuses any name the catalogue never wrote. The symbol cache
+(`xray-symbols-<digest>.json`) now also carries sinks and entries; `EXTRACTOR_VERSION` is 5, so caches
+rebuild once. Python, TS/JS and Go (the X-ray law in `.ai/standards/03-xray.md`). A lower bound, like the
+call graph under it. Measured on gingugu itself: 47 entries (24 mcp, 21 main, 1 cli, 1 http), 39 reach a
+sink, 2.6s cold; 20 of the 24 MCP tools reach one, mostly through database tables. Path and name bounds: each `via` keeps at most `MAX_VIA` (6) names, built during the walk, with a cut flag (`via_cut`, rendered ` > ...`); cached lines are at most 10,000,000 and names 512 characters, in the walk records and `symbols_model` alike; the TS and Go safe-part checks judge each local once per function (a cycle reads unsafe, a crafted alias chain flags the call), Python's follows locals two deep. Spec:
+`tests/test_xray_surface.py`, `test_xray_surface_tool.py`, `test_xray_surface_walk_py.py`,
+`test_xray_surface_walk_ts.py`, `test_xray_surface_walk_go.py`, `test_xray_surface_hostile.py`. No hook line yet - that is a later slice, so
+the read hook and the edit note say nothing about reach to a sink. No migration, no brain change.
+Remaining under X7: X7b HTTP routes (waits on a measurement over a larger set of service repos), then X8.
 
 **X17 for TS/JS and Go + multi-runner ledger (2026-11-09, branch `feature/x17-ts-go`, stacked on `fix/literals-timeout-flake`).**
 The symbol/call graph now covers Python, TypeScript/JavaScript and Go. New: `xray/lang/ts_symbols_walk.py`
 (walker), `ts_symbols_types.py` (type/value refs), `ts_symbols_valid.py` (cache shape check), `ts_exports.py`
 (specifier resolution + barrel following, memoised), `ts_symbols.py` (linker); `go_symbols_walk.py`,
 `go_symbols_valid.py`, `go_symbols.py` (linker). `extract.py` merges every adapter's Symbols via
-`symbols.merge`; extractor version 4 (caches rebuild once). Qualified names may contain `$`; Go methods are
+`symbols.merge`; extractor version 5 with X7d (caches rebuild once). Qualified names may contain `$`; Go methods are
 `Type.Method` and a Go package (directory) is one name scope across files; TS `this.m()` and `new X()` are
 calls, barrels (`export {x} from`, `export *`) are followed up to 8 hops. Calls stay a lower bound in every
 language: TS interface-typed params, callbacks, Go interface values and function values stay unresolved
@@ -2082,10 +2111,12 @@ every row moved up one.
 
 **2026-11-09 (later):** X7 split into slices - X7a env vars, X7b HTTP routes, X7c DB tables, X7d entry-point-to-sink paths; X7a is merged (unreleased) and X7c is built (unreleased); row 1a names what is next. X4 drift moved from row 1a's owed list to its own row 7, above the flight recorder. Row 4 waits: `query_acts` held 25 queries with a fetch/update act after a week (about 100 are needed). X7c was taken before X7b on measured evidence: an intra-repo route join over X23's existing route facts found about 6 true edges across 5 server repos on this machine (all test -> handler) and 0 on gingugu, whose own API is a hand-written dispatch table; X7b waits on a measurement over a larger set of service repos.
 
+**2026-11-10:** no reorder. X7d, the attack-surface map, is built (unreleased; 0.49.0 is held): `code_xray surface` lists every entry point with the sinks it reaches through the call graph, on Python, TS/JS and Go. Row 1a now names X7b HTTP routes, then X8; the hook line for X7d is a later slice.
+
 | # | Item | Old # | Why this position |
 |---|---|---|---|
 | 1 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival shipped in 0.32.0; X19 X-ray brief shipped in 0.34.0; X20 brief on the board shipped in 0.35.0 (repo on the line in 0.36.0); X15 writes from any tool shipped in 0.37.0; X16 incremental refresh shipped in 0.38.0; X17 symbol graph (Python) shipped in 0.39.0; X-ray tuned for the agent, with the lean X11 test ledger, shipped in 0.40.0; X3 scar tissue shipped in 0.41.0; X4 history + X6 blind spots shipped in 0.42.0 (X4 drift: board row 7); X22 docs map shipped in 0.45.0 (hook surfaces built, unreleased); X23 cross-repo links shipped in 0.46.0, in the hooks in 0.47.0; removed-key readers in the edit note shipped in 0.48.0; X21 symbols on the brain owed | 19 | Every sail since 2026-10-26 has gone here. A 21-part roadmap (X1-X21) in its section below |
-| 1a | **X7 edges beyond imports** - X7a env vars as edges merged (#189, unreleased): the file reading an env var and where it is set (`code_xray env`, the read hook and the edit note). X7c DB tables as edges built (unreleased): the file querying a table and the migration or schema that defines or drops it (`code_xray tables`, the read hook and the edit note). X22 hook surfaces built (#188, unreleased). Then X7b HTTP routes, X7d entry-point-to-sink paths, then X8 | 19 | X7 is split into slices, one PR each; env vars first: cheapest, and a rename on either side breaks silently |
+| 1a | **X7 edges beyond imports** - X7a env vars as edges merged (#189, unreleased): the file reading an env var and where it is set (`code_xray env`, the read hook and the edit note). X7c DB tables as edges built (unreleased): the file querying a table and the migration or schema that defines or drops it (`code_xray tables`, the read hook and the edit note). X7d attack-surface map built (unreleased): every entry point and the sinks it reaches through the call graph (`code_xray surface`; no hook line yet). X22 hook surfaces built (#188, unreleased). Then X7b HTTP routes, then X8 | 19 | X7 is split into slices, one PR each; env vars first: cheapest, and a rename on either side breaks silently |
 | 2 | **A calibration ledger** | 14 | New tables, so a migration. Follows X3: the lean X11 ledger (0.40.0) already records predictions, so it scores real data from day one |
 | 3 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
 | 4 | **Paraphrase question set + lexical/semantic arbitration** - labels now recorded at write time (`query_acts`, migration 022, released in 0.43.0); collect, then measure | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
@@ -2804,7 +2835,7 @@ slices alongside them. IDs are stable references, not the order.
 | X4 | **History as a second graph (coupling + hotspots SHIPPED in 0.42.0, #170; drift not built)** - co-change coupling (files that change together without importing each other), churn x centrality x authors as hotspots, per-commit X-ray diffs as architectural drift | git log | `code_xray` `history`, `gingugu xray history`, the read line `Changes with (no import):` (`MEMORY_XRAY_HISTORY`). Code-maat's defaults; last 1,000 non-merge commits, cached by HEAD, client only. Drift needs the import graph of past trees (extraction reads only the working tree), and the nightly dream pass cannot read a checkout (see X16) |
 | X5 | **Module boundaries** - communities that hold up on import graphs | dream clusters | Label propagation fails as-is (see above); needs a decided approach, not a knob |
 | X6 | **Blind-spot map (SHIPPED in 0.42.0, #170)** - centrality x low churn x no tests x single author: where a change would reach furthest with the least review | X1, X4 | The attacker's target list, run first by the defender. `code_xray` `blindspots`, `gingugu xray blindspots`: imported untested source (no direct test importer, no test named for it) by rank over authors, fewest commits on a tie, `single_author` flagged |
-| X7 | **Edges beyond imports** (split 2026-11-09: X7a env vars BUILT, X7c DB tables BUILT, X7b HTTP routes, X7d entry-point-to-sink paths) - env vars, config keys, HTTP routes, DB tables, IaC resources, MCP tool names; entry-point-to-sensitive-sink paths as an attack-surface map | X1 | Where it becomes a security instrument; the largest piece of work |
+| X7 | **Edges beyond imports** (split 2026-11-09: X7a env vars BUILT, X7c DB tables BUILT, X7d entry-point-to-sink paths BUILT (unreleased), X7b HTTP routes) - env vars, config keys, HTTP routes, DB tables, IaC resources, MCP tool names; entry-point-to-sensitive-sink paths as an attack-surface map | X1 | Where it becomes a security instrument; the largest piece of work |
 | X8 | **Dependency X-ray** - third-party packages on the graph: which are load-bearing, how deep, what a compromised package could reach | X1, X7 | Upgrade priority, pinning, incident-day exposure |
 | X9 | **Fleet X-ray** - every repo into one central brain; cross-repo callers and cross-repo blast radius | central brain, scoped tokens | |
 | X10 | **Graph-aware fences** - approval scales with blast radius: leaf edits free, edits reaching top-ranked files need the user's go | X1, hooks, minion grants | |

@@ -11,6 +11,7 @@ Records (lists, so a JSON round trip is the identity):
 - call:   ``[caller, form, x, y, line]``; form "n" is ``x()`` (and ``new x()``), "a" is
   ``x.y()`` on a bare name, "s" is ``this.y()`` in a class, ``x`` being the class.
   Any other shape (chains, ``super()``, ``import()``) is only counted in ``other``.
+- entries, sql: the X7d surface records of ``ts_surface_walk`` (see ``surface_records``).
 - type:   ``[scope, var, form, x, y]``, the forms of ``ts_symbols_types``.
 - ret:    ``[qual, form, x, y]``, a function's declared return type (n, a or p).
 - export: ``[name, spec, orig]``; a spec means a re-export of ``orig`` from it, and
@@ -26,6 +27,7 @@ from __future__ import annotations
 
 from ..symbols_walk import MODULE, is_qual
 from . import ts_parse
+from .ts_surface_walk import Surface
 from .ts_symbols_types import UNKNOWN, text, type_ref, value_ref
 from .ts_symbols_valid import valid
 
@@ -60,8 +62,10 @@ class _Records:
         self.rets: list[list] = []
         self.exports: list[list] = []
         self.other = 0
+        self.surface = Surface()
 
     def result(self) -> dict:
+        entries, sql = self.surface.result()
         return {
             "defs": self.defs,
             "binds": self.binds,
@@ -70,6 +74,8 @@ class _Records:
             "rets": self.rets,
             "exports": self.exports,
             "other": self.other,
+            "entries": entries,
+            "sql": sql,
         }
 
     def params(self, fn, scope: str) -> None:
@@ -242,6 +248,7 @@ def walk(tree) -> dict:
                 )
             continue
         if t == "variable_declarator":
+            rec.surface.declarator(node, scope)
             value = node.child_by_field_name("value")
             var = _ident(node.child_by_field_name("name"))
             if value is not None and value.type in _EXPRS and var is not None:
@@ -255,6 +262,10 @@ def walk(tree) -> dict:
             rec.export(node)
         elif t in ("call_expression", "new_expression"):
             rec.call(node, scope, cls)
+            if t == "call_expression":
+                rec.surface.call(node, scope, cls)
+        elif t == "class_body" and in_class is not None:
+            rec.surface.class_body(node, in_class)
         member_of = in_class if t == "class_body" else None  # members of a named class
         stack.extend((c, qual, member_of, cls, None) for c in reversed(kids))
     return rec.result()

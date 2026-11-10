@@ -22,28 +22,15 @@ from __future__ import annotations
 
 import builtins
 from collections import deque
-from dataclasses import dataclass, field
 
+from . import surface_link
 from .resolve import ModuleIndex, _from_base
-from .symbols_walk import is_qual
+from .symbols_model import Def, Entry, Key, Symbols, from_json, to_json  # noqa: F401
 from .validate import is_valid_path
 
 MODULE = "<module>"
 _BUILTINS = frozenset(dir(builtins))
-_KINDS = ("function", "method", "class")
 _EXT = "external"
-
-Def = tuple[str, int, int]  # (kind, line, end)
-Key = tuple[str, str, str, str]  # (src path, src symbol, dst path, dst symbol)
-
-
-@dataclass
-class Symbols:
-    defs: dict[str, dict[str, Def]] = field(default_factory=dict)
-    edges: dict[Key, int] = field(default_factory=dict)  # -> call sites
-    resolved: int = 0
-    external: int = 0
-    unresolved: int = 0
 
 
 class _Linker:
@@ -148,13 +135,34 @@ class _Linker:
         target = self._name(rel, caller, x, binds)
         return target if target == _EXT else self._member(target, y)
 
+    @staticmethod
+    def _ext_name(rec: list, binds: dict) -> str | None:
+        """The dotted name an external call targets: ``subprocess.run``, ``open``."""
+        form, x, y = rec[1], rec[2], rec[3]
+        b = binds.get(x)
+        if form == "s" or (b is None and x not in _BUILTINS):
+            return None
+        if b is None:
+            base = x
+        elif b[0] == "i":
+            base = b[2]
+        elif b[2] == 0:  # only an absolute import names a module outside the repo
+            base = f"{b[3]}.{b[4]}" if b[3] else b[4]
+        else:
+            return None
+        return base if form == "n" else f"{base}.{y}"
+
     def link(self) -> Symbols:
         out = self.out
+        col = surface_link.Collector("python", out.defs)
         for rel, raw in self.raws.items():
             binds = {b[1]: b for b in raw["binds"]}  # the last binding of a name wins
             types = {(t[0], t[1]): t for t in raw["types"]}
+            col.file(rel, raw)
             for rec in raw["calls"]:
                 target = self._call(rel, rec, types, binds)
+                node = target[1:] if isinstance(target, tuple) else None
+                col.call(rel, rec, node, self._ext_name(rec, binds) if target == _EXT else None)
                 if target == _EXT:
                     out.external += 1
                 elif target is None:
@@ -164,6 +172,13 @@ class _Linker:
                     key = (rel, rec[0], target[1], target[2])
                     if (key[0], key[1]) != (key[2], key[3]):
                         out.edges[key] = out.edges.get(key, 0) + 1
+
+            def resolve(r: list, rel=rel, types=types, binds=binds):
+                t = self._call(rel, r, types, binds)
+                return t[1:] if isinstance(t, tuple) and t[0] == "sym" else None
+
+            col.close(rel, resolve)
+        out.sinks, out.entries = col.sinks, col.entries
         return out
 
 
@@ -186,6 +201,8 @@ def merge(a: Symbols, b: Symbols) -> Symbols:
         resolved=a.resolved + b.resolved,
         external=a.external + b.external,
         unresolved=a.unresolved + b.unresolved,
+        sinks=a.sinks + [s for s in b.sinks if is_valid_path(s[0])],
+        entries=a.entries + [e for e in b.entries if surface_link.placeable(e)],
     )
 
 
@@ -240,56 +257,3 @@ def enclosing(sym: Symbols, path: str, start: int, end: int) -> list[str]:
 def label(qual: str, cap: int = 120) -> str:
     """A qualified name as the agent reads it: identifiers only, but of any length."""
     return qual if len(qual) <= cap else qual[: cap - 3] + "..."
-
-
-def to_json(sym: Symbols) -> dict:
-    return {
-        "defs": {p: {q: list(d) for q, d in qs.items()} for p, qs in sym.defs.items()},
-        "edges": [[*k, n] for k, n in sym.edges.items()],
-        "resolved": sym.resolved,
-        "external": sym.external,
-        "unresolved": sym.unresolved,
-    }
-
-
-def _count(v: object, low: int = 0) -> bool:
-    return isinstance(v, int) and not isinstance(v, bool) and v >= low
-
-
-def _is_def(d: object) -> bool:
-    return isinstance(d, list) and len(d) == 3 and d[0] in _KINDS and _count(d[1]) and _count(d[2])
-
-
-def from_json(data: object) -> Symbols | None:
-    """The cache form back, or None for any shape ``to_json`` never writes (untrusted)."""
-    keys = {"defs", "edges", "resolved", "external", "unresolved"}
-    if not isinstance(data, dict) or set(data) != keys:
-        return None
-    defs, edges = data["defs"], data["edges"]
-    if not isinstance(defs, dict) or not isinstance(edges, list):
-        return None
-    if not all(_count(data[k]) for k in ("resolved", "external", "unresolved")):
-        return None
-    for path, qs in defs.items():
-        if not is_valid_path(path):  # rendered to the agent: the brain's own path rule
-            return None
-        if not isinstance(qs, dict) or not all(is_qual(q) and _is_def(d) for q, d in qs.items()):
-            return None
-    for e in edges:
-        if not (
-            isinstance(e, list)
-            and len(e) == 5
-            and is_valid_path(e[0])
-            and is_valid_path(e[2])
-            and is_qual(e[1], module_ok=True)
-            and is_qual(e[3])
-            and _count(e[4], 1)
-        ):
-            return None
-    return Symbols(
-        defs={p: {q: (d[0], d[1], d[2]) for q, d in qs.items()} for p, qs in defs.items()},
-        edges={(e[0], e[1], e[2], e[3]): e[4] for e in edges},
-        resolved=data["resolved"],
-        external=data["external"],
-        unresolved=data["unresolved"],
-    )

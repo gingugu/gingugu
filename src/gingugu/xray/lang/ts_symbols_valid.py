@@ -6,6 +6,7 @@ identifier chain; a record of any other shape sends the file to be parsed again.
 
 from __future__ import annotations
 
+from .. import surface_records
 from ..symbols_walk import is_qual
 
 _KINDS = {"function", "method", "class"}
@@ -68,9 +69,10 @@ _CHECKS = {
 
 def valid(raw: object) -> bool:
     """Whether ``raw`` is exactly the shape ``ts_symbols_walk.walk`` returns."""
-    if not isinstance(raw, dict) or set(raw) != {*_CHECKS, "other"} or not _int(raw["other"]):
+    keys = {*_CHECKS, "other", *surface_records.KEYS}
+    if not isinstance(raw, dict) or set(raw) != keys or not _int(raw["other"]):
         return False
-    return all(
+    return surface_records.valid(raw, "typescript") and all(
         isinstance(raw[k], list) and all(isinstance(r, list) and f(r) for r in raw[k])
         for k, f in _CHECKS.items()
     )

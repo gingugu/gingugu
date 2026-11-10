@@ -1,7 +1,8 @@
 """Python: parsed with ``ast``, resolved by where each module sits (``resolve``).
 
 Entry points are ``__main__.py``, a ``__main__`` guard, and the targets of the
-root ``pyproject.toml``'s scripts and entry points.
+root ``pyproject.toml``'s scripts and entry points. A target naming a function
+(``pkg.cli:main``) is also an X7d ``cli`` entry of the symbol graph.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from .. import symbols, symbols_walk
 from ..model import Edge, FileInfo, LangResult
 from ..resolve import KIND_RANK, ModuleIndex, resolve_records
 from ..resolve_walk import is_main_guard, walk
+from ..symbols_model import Entry
 from .symbols_guard import contained
 
 
@@ -27,7 +29,20 @@ def _entry_targets(data: dict) -> set[str]:
         groups = project.get("entry-points", {})
         for group in groups.values() if isinstance(groups, dict) else []:
             targets += list(group.values()) if isinstance(group, dict) else []
-    return {t.split(":")[0].strip() for t in targets if isinstance(t, str)}
+    return {t.split("[")[0].strip() for t in targets if isinstance(t, str)}
+
+
+def _script_entries(targets: set[str], idx: ModuleIndex, defs: dict) -> list[Entry]:
+    """``pkg.mod:func`` targets whose function the symbol graph knows, as ``cli`` entries."""
+    out = []
+    for target in sorted(targets):
+        mod, _, func = target.partition(":")
+        path = idx.names.get(mod.strip())
+        found = defs.get(path, {}).get(func.strip()) if path else None
+        if found is not None and found[0] == "function":
+            node = (path, func.strip())
+            out.append(Entry(path, "project.scripts", "cli", found[1], node[1], (node,)))
+    return out
 
 
 def _scripts(manifests: dict[str, bytes], out: LangResult) -> set[str]:
@@ -123,7 +138,9 @@ class PythonAdapter:
     def link(self, raws: dict[str, dict], manifests: dict[str, bytes]) -> LangResult:
         out = LangResult()
         idx = ModuleIndex(list(raws))
-        script_files = {idx.names[m] for m in _scripts(manifests, out) if m in idx.names}
+        targets = _scripts(manifests, out)
+        mods = {t.split(":")[0].strip() for t in targets}
+        script_files = {idx.names[m] for m in mods if m in idx.names}
         for rel, raw in raws.items():
             is_entry = rel in script_files or PurePosixPath(rel).name == "__main__.py"
             if raw["err"]:
@@ -139,6 +156,7 @@ class PythonAdapter:
             out.files.append(FileInfo(rel, is_test(rel), entry, self.name))
         syms = {rel: raw["sym"] for rel, raw in raws.items()}
         out.symbols = contained(self.name, symbols.link, syms, idx)
+        out.symbols.entries += _script_entries(targets, idx, out.symbols.defs)
         return out
 
 

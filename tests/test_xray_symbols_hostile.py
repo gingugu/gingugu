@@ -31,6 +31,8 @@ def _form(defs=None, edges=None) -> dict:
         "resolved": 0,
         "external": 0,
         "unresolved": 0,
+        "sinks": [],
+        "entries": [],
     }
 
 
