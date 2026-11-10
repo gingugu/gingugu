@@ -19,6 +19,7 @@ from .. import surface_route as sr
 
 _LITS = ("interpreted_string_literal", "raw_string_literal")
 Env = dict[str, str]
+NEW_ROUTER = frozenset(("chi.NewRouter", "gin.New", "gin.Default", "echo.New", "http.NewServeMux"))
 
 
 def txt(n) -> str:
@@ -39,6 +40,18 @@ def chain(n) -> str | None:
     if n is None or n.type != "identifier":
         return None
     return ".".join([txt(n), *reversed(parts)])
+
+
+def root_of(name: str, env: Env) -> str:
+    """The root a receiver name stands for: its alias target, else itself."""
+    return env.get("@" + name, name)
+
+
+def track(env: Env, name: str, root: str, prefix: str | None = None) -> None:
+    """Mark ``name`` a tracked router rooted at ``root`` (see ``go_surface_mounts``)."""
+    env["@" + name], env["^" + name] = root, ""
+    if prefix is not None:
+        env[name] = prefix
 
 
 def literal(n) -> str | None:
@@ -111,10 +124,14 @@ def bind(node, env: Env) -> None:
         if nm.type != "identifier":
             continue
         name, val = txt(nm), vals[i] if len(vals) == len(names) else None
-        env.pop(name, None)
+        for key in (name, "@" + name, "^" + name):
+            env.pop(key, None)
         if _is_group(val):
             recv, _ = _callee(val)  # type: ignore[misc]
-            env[name] = _group_prefix(recv, args(val), env)
+            track(env, name, root_of(recv, env), _group_prefix(recv, args(val), env))
+        elif val is not None and val.type == "call_expression":
+            if chain(val.child_by_field_name("function")) in NEW_ROUTER:
+                track(env, name, name)
 
 
 def literal_env(call, env: Env) -> tuple[tuple, Env] | None:
@@ -139,4 +156,5 @@ def literal_env(call, env: Env) -> tuple[tuple, Env] | None:
     names = list(first.children_by_field_name("name")) if first is not None else []
     if names:
         inner[txt(names[0])] = prefix or ""
+        track(inner, txt(names[0]), root_of(c[0], env))
     return (lit.start_byte, lit.end_byte), inner

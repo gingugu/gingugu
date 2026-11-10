@@ -45,9 +45,9 @@ def test_main_and_its_routes() -> None:
         "}\n"  # 11
     )
     assert _walk(src)["entries"] == [
-        ["<module>", "main", "d", "main", "", 5, 0, 0, "", ""],
-        ["main", "http.HandleFunc", "n", "handle", "", 6, 0, 0, "", "/x"],
-        ["main", "http.HandleFunc", "i", "", "", 7, 7, 9, "", "/y"],
+        ["<module>", "main", "d", "main", "", 5, 0, 0, "", "", ""],
+        ["main", "http.HandleFunc", "n", "handle", "", 6, 0, 0, "", "/x", "http"],
+        ["main", "http.HandleFunc", "i", "", "", 7, 7, 9, "", "/y", "http"],
     ]
 
 
@@ -70,9 +70,9 @@ def test_method_routes_and_router_verbs() -> None:
         "}\n"  # 11
     )
     assert _walk(src)["entries"] == [
-        ["Server.routes", "s.mux.HandleFunc", "a", "s", "handleX", 4, 0, 0, "", "/x"],
-        ["Server.routes", "s.r.GET", "a", "s", "list", 5, 0, 0, "GET", "/items"],
-        ["setup", "r.POST", "a", "h", "Create", 9, 0, 0, "POST", "/items"],
+        ["Server.routes", "s.mux.HandleFunc", "a", "s", "handleX", 4, 0, 0, "", "/x", ""],
+        ["Server.routes", "s.r.GET", "a", "s", "list", 5, 0, 0, "GET", "/items", ""],
+        ["setup", "r.POST", "a", "h", "Create", 9, 0, 0, "POST", "/items", "#0"],
     ]
 
 

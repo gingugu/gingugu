@@ -24,6 +24,7 @@ import re
 from .. import surface_catalog as cat
 from .. import surface_records as rec
 from ..symbols_walk import MODULE
+from . import go_surface_mounts as mnt
 from . import go_surface_route as route
 from .go_surface_route import args as _args
 from .go_surface_route import chain as _chain
@@ -175,15 +176,17 @@ def _handlers(call, label: str, scope: str, env: route.Env) -> list[list]:
         if op is not None and op.type == "identifier":
             fld = _txt(last.child_by_field_name("field"))
             out.append([scope, label, "a", _txt(op), fld, line, 0, 0])
-    out = [r + [method, path] for r in out]
+    recv = mnt.recv_of(label, env)
+    out = [r + [method, path, recv] for r in out]
     return [r for r in out if rec.is_entry(r, "go")]
 
 
 def surface(root, pkg: str, scopes: dict) -> dict:
-    """``{"entries": [...], "sql": [...]}`` in source order; ``scopes`` maps each
+    """``{"entries": [...], "sql": [...], "mounts": [...]}`` in source order; ``scopes`` maps each
     function node's ``(start_byte, end_byte)`` to the qual the symbol walk gave it."""
     entries: list[list] = []
     sql: list[list] = []
+    mounts: list[list] = []
     cache: dict[tuple, _Assigns] = {}
     lit_env: dict[tuple, route.Env] = {}  # chi closure span -> env its body runs under
     stack: list[tuple[object, str | None, object, route.Env]] = [(root, MODULE, None, {})]
@@ -191,9 +194,10 @@ def surface(root, pkg: str, scopes: dict) -> dict:
         node, scope, fn, env = stack.pop()
         if node.type in _FUNCS:
             scope, fn, env = scopes.get((node.start_byte, node.end_byte)), node, {}
+            mnt.bind_params(node, env)
             is_main = node.type == "function_declaration" and pkg == "main"
             if scope is not None and is_main and _txt(node.child_by_field_name("name")) == "main":
-                entries.append([MODULE, "main", "d", "main", "", _line(node), 0, 0, "", ""])
+                entries.append([MODULE, "main", "d", "main", "", _line(node), 0, 0, "", "", ""])
         elif node.type == "func_literal":
             env = lit_env.pop((node.start_byte, node.end_byte), env)
         elif node.type in ("short_var_declaration", "assignment_statement", "var_spec"):
@@ -202,6 +206,7 @@ def surface(root, pkg: str, scopes: dict) -> dict:
             scoped = route.literal_env(node, env)
             if scoped is not None:
                 lit_env[scoped[0]] = scoped[1]
+            mounts.extend(mnt.mounts(node, scope, env))
             f = node.child_by_field_name("function")
             if f is not None and f.type == "selector_expression":
                 label = _chain(f)
@@ -214,4 +219,4 @@ def surface(root, pkg: str, scopes: dict) -> dict:
                     if _flag(node, cache[key]):
                         sql.append([scope, _line(node)])
         stack.extend((c, scope, fn, env) for c in reversed(node.children))
-    return {"entries": entries, "sql": sql}
+    return {"entries": entries, "sql": sql, "mounts": mounts}
