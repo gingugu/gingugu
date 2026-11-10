@@ -11,6 +11,7 @@ import ast
 import tomllib
 from pathlib import PurePosixPath
 
+from .. import surface_route as sr
 from .. import symbols, symbols_walk
 from ..model import Edge, FileInfo, LangResult
 from ..resolve import KIND_RANK, ModuleIndex, resolve_records
@@ -19,21 +20,27 @@ from ..symbols_model import Entry
 from .symbols_guard import contained
 
 
-def _entry_targets(data: dict) -> set[str]:
+def _entry_targets(data: dict) -> dict[str, list[str]]:
+    """``pkg.mod:func`` target -> the script names that run it, sorted."""
     project = data.get("project", {})
-    targets: list[object] = []
+    pairs: list[tuple[object, object]] = []
     if isinstance(project, dict):
         for table in ("scripts", "gui-scripts"):
             group = project.get(table, {})
-            targets += list(group.values()) if isinstance(group, dict) else []
+            pairs += list(group.items()) if isinstance(group, dict) else []
         groups = project.get("entry-points", {})
         for group in groups.values() if isinstance(groups, dict) else []:
-            targets += list(group.values()) if isinstance(group, dict) else []
-    return {t.split("[")[0].strip() for t in targets if isinstance(t, str)}
+            pairs += list(group.items()) if isinstance(group, dict) else []
+    out: dict[str, list[str]] = {}
+    for name, t in pairs:
+        if isinstance(t, str):
+            out.setdefault(t.split("[")[0].strip(), []).append(str(name))
+    return {t: sorted(set(names)) for t, names in out.items()}
 
 
-def _script_entries(targets: set[str], idx: ModuleIndex, defs: dict) -> list[Entry]:
-    """``pkg.mod:func`` targets whose function the symbol graph knows, as ``cli`` entries."""
+def _script_entries(targets: dict[str, list[str]], idx: ModuleIndex, defs: dict) -> list[Entry]:
+    """``pkg.mod:func`` targets whose function the symbol graph knows: a ``cli``
+    entry per script name, the name (what a user types) as its route."""
     out = []
     for target in sorted(targets):
         mod, _, func = target.partition(":")
@@ -41,19 +48,23 @@ def _script_entries(targets: set[str], idx: ModuleIndex, defs: dict) -> list[Ent
         found = defs.get(path, {}).get(func.strip()) if path else None
         if found is not None and found[0] == "function":
             node = (path, func.strip())
-            out.append(Entry(path, "project.scripts", "cli", found[1], node[1], (node,)))
+            for name in targets[target]:
+                route = sr.clean(name)
+                out.append(
+                    Entry(path, "project.scripts", "cli", found[1], node[1], (node,), route=route)
+                )
     return out
 
 
-def _scripts(manifests: dict[str, bytes], out: LangResult) -> set[str]:
+def _scripts(manifests: dict[str, bytes], out: LangResult) -> dict[str, list[str]]:
     data = manifests.get("pyproject.toml")
     if data is None:
-        return set()
+        return {}
     try:
         return _entry_targets(tomllib.loads(data.decode("utf-8")))
     except (tomllib.TOMLDecodeError, UnicodeDecodeError):
         out.skipped.append(("pyproject.toml", "malformed"))
-        return set()
+        return {}
 
 
 def is_test(path: str) -> bool:

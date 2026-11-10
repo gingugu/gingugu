@@ -2,7 +2,9 @@
 
 Each language's symbol walk returns, beside its X17 records:
 
-- ``entries``: ``[scope, label, form, x, y, line, start, end]`` - an entry point.
+- ``entries``: ``[scope, label, form, x, y, line, start, end, method, route]`` - an
+  entry point. ``method`` and ``route`` are what it answers to, in the shape
+  ``surface_route`` defines (``""`` when the source gives no literal).
   ``label`` is the decorator or registrar as written (``mcp.tool``, ``app.get``,
   ``http.HandleFunc``) and must be one ``surface_catalog.entry_kind`` knows for
   the language. ``scope`` is the qual the record sits in (``<module>`` at top
@@ -29,6 +31,7 @@ of any other shape sends the file to be parsed again.
 from __future__ import annotations
 
 from . import surface_catalog as cat
+from . import surface_route as sr
 from .symbols_walk import is_qual
 
 FORMS = ("d", "n", "a", "s", "i")
@@ -52,9 +55,11 @@ def _ident(v: object) -> bool:
 
 
 def is_entry(rec: object, lang: str) -> bool:
-    if not (isinstance(rec, list) and len(rec) == 8 and all(_int(v) for v in rec[5:])):
+    if not (isinstance(rec, list) and len(rec) == 10 and all(_int(v) for v in rec[5:8])):
         return False
-    scope, label, form, x, y, _line, start, end = rec
+    scope, label, form, x, y, _line, start, end, method, route = rec
+    if not (sr.is_method(method) and sr.is_route(route)):
+        return False
     if not (_qual(scope, module_ok=True) and isinstance(form, str) and form in FORMS):
         return False
     if not (isinstance(label, str) and cat.entry_kind(lang, label)):

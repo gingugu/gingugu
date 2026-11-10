@@ -15,6 +15,7 @@ handler, the proxy and ``gingugu xray``, like ``table_tool``.
 from __future__ import annotations
 
 from . import hook_common, local, surface, table_map
+from . import surface_route as sr
 from .brief import _safe
 from .hook_common import _show
 from .lang import is_test
@@ -31,7 +32,10 @@ CAVEAT = (
     "an entry registered in a form the catalogue does not know is not listed. A listed "
     "path exists in the code; whether outside input flows along it is not checked. "
     "'sql.built' is a query assembled at runtime from a part not known safe, not a "
-    "proven injection. Test files are left out."
+    "proven injection. Routes are as the file spells them, with a prefix the same file "
+    "gives its router joined in front; '{prefix}' stands for one set at runtime, and a "
+    "route the source does not spell as a literal is shown as not literal. Test files "
+    "are left out."
 )
 
 
@@ -53,6 +57,9 @@ def _entry(e, found: list[surface.Reach]) -> dict:
         "path": _safe(e.path),
         "line": e.line,
         "label": e.label,
+        "method": e.method,
+        "route": e.route,
+        "name": sr.label(e.kind, e.method, e.route, e.label),
         "kind": e.kind,
         "handler": label(e.handler),
         "inline": e.inline,
@@ -89,7 +96,7 @@ def render(data: dict, name: str) -> str:
     ]
     for e in data["entries"]:
         how = "inline in " if e["inline"] else ("" if e["resolved"] else "unresolved ")
-        head = f"- {e['kind']} {e['label']} {_show(e['path'])}:{e['line']} -> {how}{e['handler']}"
+        head = f"- {e['kind']} {e['name']} {_show(e['path'])}:{e['line']} -> {how}{e['handler']}"
         if not e["reach"]:
             lines.append(head + ": no sink reached")
             continue

@@ -70,17 +70,22 @@ class Collector:
         """The file's entries, now its calls are in. ``resolve`` answers a handler
         passed by name as the linker answers a call record of that shape."""
         spans = {scope: list(found) for scope, found in self._spans.items()}
-        for scope, label, form, x, y, line, start, end in self._recs:
+        for scope, label, form, x, y, line, start, end, method, route in self._recs:
             kind = cat.entry_kind(self.lang, label)
             if form == "i":
                 span = next(s for s in spans[scope] if (s[0], s[1]) == (start, end))
                 nodes, direct = tuple(sorted(span[2])), tuple(sorted(set(span[3])))
-                self.entries.append(Entry(rel, label, kind, line, scope, nodes, direct, True))
+                self.entries.append(
+                    Entry(rel, label, kind, line, scope, nodes, direct, True, method, route)
+                )
                 continue
             if form == "d":
                 node = (rel, x) if x in self.defs.get(rel, {}) else None
             else:
                 node = resolve([scope, form, x, y, line])
             handler = node[1] if node else (x if form in ("d", "n") else f"{x}.{y}")
-            self.entries.append(Entry(rel, label, kind, line, handler, (node,) if node else ()))
+            nodes = (node,) if node else ()
+            self.entries.append(
+                Entry(rel, label, kind, line, handler, nodes, (), False, method, route)
+            )
         self._recs, self._spans = [], {}
