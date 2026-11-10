@@ -9,6 +9,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **X7d routes: every entry point says what it answers to.** An entry now carries a
+  `method` and a `route` (shared rules in `xray/surface_route.py`; `{prefix}` marks a
+  prefix set at runtime). HTTP: method and URL - Python decorator verbs, `route`,
+  `api_route`, `add_url_rule`, `add_api_route`, `add_route` and Starlette `Route` (literal
+  `methods=[...]`, else GET), Django `path`/`re_path`; TS/JS Express, Hono and Fastify
+  verbs, Express chained `app.route('/x').get(h)`, NestJS `@Get` under its `@Controller`
+  prefix; Go verbs, Go 1.22 `"GET /x"` ServeMux patterns, chi `Method`/`MethodFunc` and gin
+  `Handle(method, path, h)`. MCP: the registered tool or prompt name (`name=`, else the first
+  literal, else the function name) or the resource URI, and TS `registerTool('name', ...)`.
+  CLI: click and Typer command names (`_` becomes `-`), and each `[project.scripts]` name is
+  its own cli entry. Same-file prefixes are applied: FastAPI `APIRouter(prefix=)`, Flask
+  `Blueprint(url_prefix=)`, NestJS `@Controller`, gin and echo `Group`, chi `Route`/`Group`
+  closures. A literal is kept only when it is short printable ASCII with no quotes,
+  backticks or backslashes and only single inner spaces (Flask `any(a, b)` converters);
+  anything else reads `(route not literal)`. TS route calls also count on router-shaped
+  receivers (`usersRouter`, `adminApp`). `code_xray surface` JSON entries gain `method`,
+  `route` and `name`; the text names entries `http POST /users`.
+- **X7d cross-file mounts.** A route carries the prefixes its router is mounted under in
+  other files (`xray/surface_mounts.py`, collected in `surface_link.py`): FastAPI
+  `include_router(prefix=)` chains, Flask `register_blueprint(url_prefix=)`, Django
+  `include("mod")`, Express `app.use('/api', router)` (ESM default and named exports,
+  `module.exports`, `require`), routers passed into functions (`register(api)`, gin
+  `routes.AddUserRoutes(v1)` across packages), NestJS `setGlobalPrefix` (per app
+  directory), chi `Mount("/admin", adminRouter())` and package-level Go routers. A router
+  mounted in several places is one entry per URL (at most 8). The walk records widen:
+  entries are 11 fields, a new `mounts` record carries the mount calls, the Python walk adds
+  a `vars` record and the TS walk a `decls` record. New modules: `surface_route`,
+  `surface_route_py`, `surface_mount_py`, `symbols_value`, `surface_mounts`,
+  `surface_hook`, `lang/ts_surface_route`, `lang/ts_surface_mounts`, `lang/ts_mount_values`,
+  `lang/go_surface_route`, `lang/go_surface_mounts`, `lang/go_symbols_value`. A mount
+  through a value the call graph does not track (a Go struct-field router) is not followed;
+  the tool's caveat says so. `EXTRACTOR_VERSION` is now 6, so caches rebuild once.
+- **X7d hook lines.** The read hook adds `Surface: entry points here: ...` (each entry's
+  worst sink and hops) and `Surface: sinks here reached from entry points: ...` (every
+  category, `db` and dot-directory tooling included, most dangerous first; 3 shown and `(+N
+  more; code_xray surface has them all)`). The edit note diffs the surface across the edit:
+  the caches as they stood before it against a fingerprint-checked rebuild after it (the
+  parse cache re-parses only the edited file; about 0.26s on gingugu), and says `this edit
+  makes <sink> reachable from <entry> (hops: path)`, `this edit adds entry point ...` or
+  `` `f` is on a path from <entry> to <sink> ``, once per fact per session. When the rebuild
+  cannot run it says `the after-edit reach check was skipped`. About 0.06-0.1s on a first
+  read on gingugu. `MEMORY_XRAY_SURFACE=off` silences both. No migration.
+
+### Fixed
+
+- A Go `var x int` declaration no longer aborts the symbol walk, so the rest of that file
+  keeps its symbols, entries and sinks.
+- chi `MethodFunc` and gin `Handle(method, path, h)` registrations are now entry points.
+- Flask `any(a, b)` converters now read as routes.
+
+### Tested
+
+- An adapter bug costs only its own language: proven for Python, TS/JS and Go, parse and
+  link, cached and uncached. Routes and mounts were checked against real servers: the
+  FastAPI full-stack template, Flask, Express, NestJS, gin and chi examples, and the MCP
+  TypeScript SDK examples.
+
 ---
 
 ## [0.49.0] - 2026-11-10
@@ -63,8 +122,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   HTTP), 39 reach a sink, 2.6s cold; 20 of the 24 MCP tools reach one, most of them through
   a database table that no import or typed receiver shows. `MEMORY_XRAY_TABLES=off` drops the
   `db` sinks. Built for a hostile checkout: each local's safety is judged once per
-  function, cached lines and names are bounded, and a path is capped as it is walked. No hook
-  line yet, no migration.
+  function, cached lines and names are bounded, and a path is capped as it is walked. The hook
+  lines came after (see Unreleased). No migration.
 - **X7c: DB tables as edges.** Nothing imports a table, so the code that queries
   `orders` and the migration that creates it never meet in the import graph, and a
   rename or drop breaks callers silently. `xray/table_scan.py` reads what a file

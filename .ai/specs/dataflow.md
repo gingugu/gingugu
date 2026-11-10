@@ -929,7 +929,7 @@ MEMORY_XRAY_TABLES=off silences every line
 
 ```
 parse (per file, content only): symbol records + entries [scope, label, form, x, y, line,
-    start, end] + sql [scope, line]   -> X16 parse cache, `valid` re-checks the shape
+    start, end, method, route, recv] + sql [scope, line]   -> X16 parse cache, `valid` re-checks the shape
 link (per language): every call verdict -> surface_link.Collector
     Python link also: pyproject scripts/gui-scripts/entry-points `mod:func` -> cli entry
     external call in the catalogue -> Sink (path, caller, name, line); other external -> dropped
@@ -940,6 +940,8 @@ link (per language): every call verdict -> surface_link.Collector
            | 'i' inline callback: start nodes = calls inside its span, direct sinks kept
     -> Symbols.sinks / Symbols.entries -> xray-symbols-<digest>.json (symbols_model.from_json:
        catalogue names, identifier labels and the brain's path rule only)
+mounts (cross-file): `mounts` record -> surface_mounts -> prefixes per router; entry
+    method/route/name from surface_route*, one entry per URL (max 8, {prefix} when runtime)
 answer: surface.build(sym, db_sinks(sym, table_map.uses), skip=is_test)
     db sink = X7c use joined to the innermost definition enclosing its line
     per entry: BFS forward over call edges -> shortest path to each sink node; hops =

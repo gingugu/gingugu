@@ -1954,7 +1954,19 @@ untyped value or an interface is not followed, an entry registered in a form the
 does not know is not listed), and a listed path says the code can reach the sink, not that
 outside input flows along it. The symbol cache (`xray-symbols-<digest>.json`) now carries
 sinks and entries too, and `EXTRACTOR_VERSION` 5 retires every older parse. Python, TS/JS
-and Go. No hook line yet, no migration, no brain change. `MEMORY_XRAY_TABLES=off` drops the
+and Go. No migration, no brain change.
+
+*Routes, mounts and the hook line.* Each entry carries `method`, `route` and `name`
+(`xray/surface_route.py` and a per-language route module; `{prefix}` stands for a prefix set at
+runtime). Same-file prefixes (FastAPI `APIRouter`, Flask `Blueprint`, NestJS `@Controller`, gin/echo
+`Group`, chi `Route`/`Group`) and cross-file mounts (`xray/surface_mounts.py`: `include_router`,
+`register_blueprint`, Django `include`, Express `app.use`, routers passed into functions, NestJS
+`setGlobalPrefix`, chi `Mount`, package-level Go routers) are applied, one entry per URL (at most
+8). A mount through a value the call graph does not track (a Go struct-field router) is not
+followed. `EXTRACTOR_VERSION` is 6. `xray/surface_hook.py` puts the map in the hooks: the read hook
+lists a file's entry points and the sinks in it that entries reach, and the edit note diffs the
+surface across the edit (caches before it against a fingerprint-checked rebuild after it) to say
+what the edit makes reachable, adds, or sits on. `MEMORY_XRAY_SURFACE=off` silences both. `MEMORY_XRAY_TABLES=off` drops the
 `db` sinks only.
 
 **Cross-repo links (X23).** A service ecosystem is wired by names, not imports. The
