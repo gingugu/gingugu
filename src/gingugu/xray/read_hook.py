@@ -29,6 +29,7 @@ from . import (
     local,
     rank,
     scars,
+    surface_hook,
     symbols,
     table_hook,
 )
@@ -274,6 +275,7 @@ def check(payload: dict, state_dir: Path) -> str | None:
                 + _docs_file(root, rel, state_dir)
                 + [ln for ln in [env_hook.file_line(root, rel, state_dir)] if ln]
                 + [ln for ln in [table_hook.file_line(root, rel, state_dir)] if ln]
+                + surface_hook.read_lines(root, rel, state_dir, session_id, fp)  # X7d
             )
             if extra:  # a leaf has no neighbourhood, but its history still speaks
                 near = "\n".join([near or f"GINGUGU X-RAY: {_show(rel)}.", *extra])

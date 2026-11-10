@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import os
 from collections import deque
+from collections.abc import Callable
 from pathlib import Path
 from typing import NamedTuple
 
@@ -70,6 +71,8 @@ def read_lines(root: Path, rel: str, state_dir: Path, session_id: str, fp: str) 
         if not enabled():
             return []
         sym = hook_common.symbols(root, state_dir, session_id, fp)
+        if rel not in sym.defs and not any(e.path == rel for e in sym.entries):
+            return []  # nothing here the call graph holds: no entry, no sink to name
         uses = table_map.read(root, state_dir, budget_s=1.0).uses if table_map.enabled() else {}
         rows = _map(sym, uses)["entries"]
         out = []
@@ -98,7 +101,8 @@ def _reached(key: tuple, entries: list) -> str:
     distinct = list(dict.fromkeys(name(e) for e in entries))
     named = ", ".join(distinct[:2]) + (f" +{len(distinct) - 2}" if len(distinct) > 2 else "")
     n = len(distinct)
-    return f"{category} {sink} (L{line}, `{label(symbol)}`) from {n} entr{'y' if n == 1 else 'ies'}: {named}"
+    who = f"{n} entr{'y' if n == 1 else 'ies'}: {named}"
+    return f"{category} {sink} (L{line}, `{label(symbol)}`) from {who}"
 
 
 # --- after an edit ----------------------------------------------------------------------
@@ -138,11 +142,11 @@ def _reach_of(adj: dict, starts) -> set:
     return seen
 
 
-def on_path(sym: Symbols, rows: list, node: tuple) -> tuple[list, list] | None:
+def on_path(adj: dict, reached: list, rows: list, node: tuple) -> tuple[list, list] | None:
     """(entries that reach ``node``, sinks ``node`` reaches) when both exist: the
-    definition lies on a path from outside input to a sink. None otherwise."""
-    adj = surface._adjacency(sym)
-    entries = [e for e, _ in rows if node in _reach_of(adj, e.nodes)]
+    definition lies on a path from outside input to a sink. None otherwise.
+    ``reached`` is each entry with the set of nodes its handler reaches."""
+    entries = [e for e, nodes in reached if node in nodes]
     if not entries:
         return None
     below = _reach_of(adj, [node])
@@ -159,29 +163,35 @@ def on_path(sym: Symbols, rows: list, node: tuple) -> tuple[list, list] | None:
     return (entries, sinks) if sinks else None
 
 
+SKIPPED = (
+    "- Surface: the after-edit reach check was skipped (the graph rebuild did not "
+    "finish); code_xray surface rebuilds it."
+)
+
+
 def edit_lines(
-    snap: Before, root: Path, rel: str, quals: list[str], state_dir: Path, session_id: str
+    snap: Before,
+    root: Path,
+    rel: str,
+    quals: Callable[[Symbols], list[str]],
+    state_dir: Path,
+    session_id: str,
 ) -> list[str]:
-    """The surface lines after an edit of ``rel`` landing in ``quals``."""
+    """The surface lines after an edit of ``rel``; ``quals`` names the definitions
+    the edit landed in, asked of the graph after the edit."""
     try:
         if not enabled() or snap.sym is None:
             return []
         try:
             after = hook_common.symbols(root, state_dir, session_id)
         except (XrayError, ValueError, OSError):
-            after = None
-        if after is None:
             claim = hook_common.claim_path(state_dir, "xray-surface-skip", session_id, root, rel)
-            if not _claim(claim):
-                return []
-            return [
-                "- Surface: the after-edit reach check was skipped (the graph rebuild did not finish); code_xray surface rebuilds it."
-            ]
+            return [SKIPPED] if _claim(claim) else []
         uses = table_map.read(root, state_dir, budget_s=1.0).uses if table_map.enabled() else {}
         old_rows, new_rows = _map(snap.sym, snap.uses)["entries"], _map(after, uses)["entries"]
         out = _new_entries(old_rows, new_rows, rel, state_dir, session_id, root)
         out += _new_reach(old_rows, new_rows, state_dir, session_id, root)
-        out += _paths(after, new_rows, rel, quals, state_dir, session_id, root)
+        out += _paths(after, new_rows, rel, quals(after), state_dir, session_id, root)
         return out
     except Exception:  # noqa: BLE001 - a hook never raises
         return []
@@ -204,9 +214,8 @@ def _new_entries(old_rows, new_rows, rel, state_dir, session_id, root) -> list[s
     said = "; ".join(
         _worst(e, f) if f else f"{name(e)} (L{e.line}), reaching no sink" for e, f in fresh[:SHOWN]
     )
-    return [
-        f"- Surface: this edit adds entry point{'s' if len(fresh) > 1 else ''} {said}{_more(len(fresh) - SHOWN)}."
-    ]
+    plural = "s" if len(fresh) > 1 else ""
+    return [f"- Surface: this edit adds entry point{plural} {said}{_more(len(fresh) - SHOWN)}."]
 
 
 def _new_reach(old_rows, new_rows, state_dir, session_id, root) -> list[str]:
@@ -244,9 +253,13 @@ def _new_reach(old_rows, new_rows, state_dir, session_id, root) -> list[str]:
 
 
 def _paths(after, rows, rel, quals, state_dir, session_id, root) -> list[str]:
+    if not quals:
+        return []
+    adj = surface._adjacency(after)
+    reached = [(e, _reach_of(adj, e.nodes)) for e, _ in rows]  # once, not per definition
     out = []
     for q in quals:
-        found = on_path(after, rows, (rel, q))
+        found = on_path(adj, reached, rows, (rel, q))
         if found is None or not _claimed(state_dir, session_id, root, f"path\0{rel}\0{q}"):
             continue
         entries, sinks = found
