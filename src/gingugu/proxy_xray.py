@@ -47,6 +47,7 @@ from .xray import (
     extract,
     history_tool,
     local,
+    surface_tool,
     table_tool,
 )
 from .xray.links import tool as links_tool
@@ -59,6 +60,7 @@ HISTORY = history_tool.ACTIONS  # likewise: X4 history, X6 blindspots
 DOCS = docs_tool.ACTIONS  # likewise: X22 docs
 ENV = env_tool.ACTIONS  # likewise: X7a env vars
 TABLES = table_tool.ACTIONS  # likewise: X7c DB tables
+SURFACE = surface_tool.ACTIONS  # likewise: X7d attack-surface map
 LINKS = links_tool.ACTIONS  # likewise: X23 cross-repo links
 
 
@@ -69,7 +71,7 @@ def claims(msg) -> bool:
     params = msg.params or {}
     args = params.get("arguments") or {}
     if params.get("name") == NAME and args.get("action") in (
-        BRIEF, CALLERS, *HISTORY, *DOCS, *ENV, *TABLES, *LINKS,
+        BRIEF, CALLERS, *HISTORY, *DOCS, *ENV, *TABLES, *SURFACE, *LINKS,
     ):  # fmt: skip
         return True
     return (
@@ -216,6 +218,10 @@ class XrayRelay:
         data = await _thread(table_tool.answer, args.get("path"), args.get("files"), _limit(args))
         return CallToolResult(content=[TextContent(type="text", text=json.dumps(data, indent=2))])
 
+    async def _surface(self, args: dict) -> CallToolResult:
+        data = await _thread(surface_tool.answer, args.get("path"), args.get("files"), _limit(args))
+        return CallToolResult(content=[TextContent(type="text", text=json.dumps(data, indent=2))])
+
     async def _links(self, args: dict) -> CallToolResult:
         data = await _thread(links_tool.answer, args.get("path"), args.get("files"), _limit(args))
         return CallToolResult(content=[TextContent(type="text", text=json.dumps(data, indent=2))])
@@ -233,6 +239,8 @@ class XrayRelay:
             return await self._env(args)
         if args.get("action") in TABLES:
             return await self._tables(args)
+        if args.get("action") in SURFACE:
+            return await self._surface(args)
         if args.get("action") in LINKS:
             return await self._links(args)
         repo = await _thread(local.root, args.pop("path", None))

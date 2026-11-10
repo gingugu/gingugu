@@ -152,6 +152,18 @@ def collect_assigns(tree: ast.Module) -> Assigns:
     return found
 
 
+def _is_main_test(test: ast.expr) -> bool:
+    """``__name__ == "__main__"``, either way round."""
+    if not (isinstance(test, ast.Compare) and len(test.ops) == 1):
+        return False
+    sides = (test.left, test.comparators[0])
+    if not isinstance(test.ops[0], ast.Eq):
+        return False
+    names = [s for s in sides if isinstance(s, ast.Name) and s.id == "__name__"]
+    consts = [s for s in sides if isinstance(s, ast.Constant) and s.value == "__main__"]
+    return len(names) == 1 and len(consts) == 1
+
+
 class Surface:
     """Collects ``entries`` and ``sql`` as ``symbols_walk.walk`` visits the tree."""
 
@@ -160,6 +172,12 @@ class Surface:
         self.sql: list[list] = []
         self._assigns = collect_assigns(tree)
         self._decorators: set[int] = set()
+        for node in tree.body:  # `if __name__ == "__main__":` - a script's entry point
+            if isinstance(node, ast.If) and _is_main_test(node.test):
+                end = node.end_lineno or node.lineno
+                self.entries.append(
+                    [MODULE, "__main__", "i", "", "", node.lineno, node.lineno, end]
+                )
 
     def definition(self, node: ast.AST, scope: str, name: str) -> None:
         """A def or class: its decorators are entries (functions only), never registrars."""
@@ -174,14 +192,19 @@ class Surface:
         """A call: a registrar makes an entry, a query method may make a ``sql`` record."""
         if id(node) not in self._decorators:
             label = dotted(node.func)
-            if label and label.rsplit(".", 1)[-1] in cat._PY_REGISTRARS:  # not d.get(k)
+            if label and cat.py_registrar(label):  # not d.get(k)
                 self._registrar(node, label, scope, cls)
         if isinstance(node.func, ast.Attribute) and node.func.attr in cat.SQL_METHODS["python"]:
             if node.args and self._flagged(node.args[0], self._assigns.get(scope, {})):
                 self.sql.append([scope, node.lineno])
 
     def _registrar(self, node: ast.Call, label: str, scope: str, cls: str | None) -> None:
-        for arg in [*node.args, *(k.value for k in node.keywords)]:
+        args = list(node.args)
+        if cat.entry_kind("python", label) == "http":  # the path comes first, never the handler
+            if "." not in label and not (args and _is_str(args[0])):
+                return  # a bare `path(x)` is Django's only with a literal route
+            args = args[1:]
+        for arg in [*args, *(k.value for k in node.keywords)]:
             if isinstance(arg, ast.Name):
                 form, x, y = "n", arg.id, ""
             elif isinstance(arg, ast.Attribute) and isinstance(arg.value, ast.Name):

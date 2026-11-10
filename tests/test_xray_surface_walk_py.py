@@ -162,3 +162,34 @@ def test_the_validator_refuses_foreign_shapes() -> None:
         assert not symbols_walk.valid({**good, "entries": [bad_entry]}), bad_entry
     assert not symbols_walk.valid({**good, "sql": [["<module>", "1"]]})
     assert not surface_records.valid({"entries": [], "sql": None}, "python")
+
+
+def test_an_http_registrar_takes_its_handler_after_the_path() -> None:
+    src = (
+        "app.add_route(DERIVE_PATH, derive, methods=['POST'])\n"  # 1: a constant path
+        "target = path(state_dir)\n"  # 2: a bare `path` without a literal route
+        "urlpatterns = [path('a/', show)]\n"  # 3
+        "mcp.add_tool(handler)\n"  # 4: no path: the first argument is the handler
+    )
+    assert _walk(src)["entries"] == [
+        ["<module>", "app.add_route", "n", "derive", "", 1, 0, 0],
+        ["<module>", "path", "n", "show", "", 3, 0, 0],
+        ["<module>", "mcp.add_tool", "n", "handler", "", 4, 0, 0],
+    ]
+
+
+def test_a_main_guard_is_an_inline_entry_over_its_block() -> None:
+    src = (
+        "import sys\n"  # 1
+        "def main(): pass\n"  # 2
+        "if __name__ == '__main__':\n"  # 3
+        "    sys.exit(main())\n"  # 4
+        "if '__main__' == __name__:\n"  # 5
+        "    main()\n"  # 6
+        "if __name__ != '__main__':\n"  # 7: not a guard
+        "    pass\n"  # 8
+    )
+    assert _walk(src)["entries"] == [
+        ["<module>", "__main__", "i", "", "", 3, 3, 4],
+        ["<module>", "__main__", "i", "", "", 5, 5, 6],
+    ]

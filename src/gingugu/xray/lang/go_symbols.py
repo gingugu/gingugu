@@ -22,6 +22,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 
+from .. import surface_link
 from ..symbols import Symbols
 from ..symbols_walk import MODULE
 
@@ -198,11 +199,22 @@ class _Linker:
         known, ty = self._package_var(k, x)
         return self._member(ty, y) if known else None
 
+    def _ext_name(self, rel: str, rec: list) -> str | None:
+        """``<import path>.<name>`` for a call into a package outside the repo."""
+        if rec[1] != "a" or (rec[0] != MODULE and (rec[0], rec[2]) in self.local[rel]):
+            return None
+        path = self.imports[rel].get(rec[2])
+        return f"{path}.{rec[3]}" if path else None
+
     def link(self) -> Symbols:
         out = self.out
+        col = surface_link.Collector("go", out.defs)
         for rel, r in self.raws.items():
+            col.file(rel, r)
             for rec in r["calls"]:
                 target = self._call(rel, rec)
+                node = target if isinstance(target, tuple) else None
+                col.call(rel, rec, node, self._ext_name(rel, rec) if target == _EXT else None)
                 if target == _EXT:
                     out.external += 1
                 elif target is None:
@@ -212,6 +224,13 @@ class _Linker:
                     key = (rel, rec[0], target[0], target[1])
                     if (key[0], key[1]) != (key[2], key[3]):
                         out.edges[key] = out.edges.get(key, 0) + 1
+
+            def resolve(c: list, rel=rel):
+                t = self._call(rel, c)
+                return t if isinstance(t, tuple) else None
+
+            col.close(rel, resolve)
+        out.sinks, out.entries = col.sinks, col.entries
         return out
 
 

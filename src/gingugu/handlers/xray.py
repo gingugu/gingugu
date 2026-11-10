@@ -28,6 +28,7 @@ from ..xray import (
     history_tool,
     local,
     store,
+    surface_tool,
     table_tool,
 )
 from ..xray.links import tool as links_tool
@@ -47,6 +48,7 @@ _ACTIONS = (
     *docs_tool.ACTIONS,
     *env_tool.ACTIONS,
     *table_tool.ACTIONS,
+    *surface_tool.ACTIONS,
     *links_tool.ACTIONS,
 )
 _CAVEAT = brief.CAVEAT
@@ -133,7 +135,13 @@ def register(mcp, ctx: ServerContext) -> None:
         but never set here or set but never read here first; computed locally), "tables"
         (files: the DB tables each file uses and where each is defined or dropped, and the
         ones it defines or drops with who else uses them; no files: every table, the ones
-        used but defined nowhere here or dropped but still used first; computed locally).
+        used but defined nowhere here or dropped but still used first; computed locally),
+        "surface" (the attack-surface map: every entry point - route, MCP tool, CLI
+        command, task, Go main - with the sinks it reaches through the call graph,
+        command execution, eval, deserialisation, built SQL, file writes, secrets,
+        network, DB tables, most dangerous first with the shortest path, then the sinks
+        no entry reaches; files: only entries in them or reaching into them; computed
+        locally).
 
         ``path`` is any directory in the git checkout (default: the working directory).
         The snapshot is rebuilt automatically when the checkout's source content changed,
@@ -168,6 +176,10 @@ def register(mcp, ctx: ServerContext) -> None:
                 if ctx.transport != "stdio":
                     return _err(_NO_DISK)
                 return table_tool.answer(path, files, limit)
+            if action in surface_tool.ACTIONS:
+                if ctx.transport != "stdio":
+                    return _err(_NO_DISK)
+                return surface_tool.answer(path, files, limit)
             if action in links_tool.ACTIONS:
                 if ctx.transport != "stdio":
                     return _err(_NO_DISK)

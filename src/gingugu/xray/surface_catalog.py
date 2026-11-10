@@ -107,7 +107,9 @@ _PY_REGISTRARS = {
     "add_tool": "mcp",
     "set_defaults": "cli",  # argparse: set_defaults(func=handler)
 }
-_PY_BARE = {"shared_task": "task"}  # the decorators that mean something with no receiver
+# Single names that mean something with no receiver: a decorator, or the walk's own
+# label for a script's `if __name__ == "__main__":` block.
+_PY_BARE = {"shared_task": "task", "__main__": "main"}
 _JS_VERBS = _HTTP - {"api_route", "websocket"} | {"all"}
 JS_RECEIVERS = frozenset({"app", "router", "server", "fastify", "hono"})
 _JS_MCP_RECV = frozenset({"server", "mcp", "mcpServer"})
@@ -135,6 +137,12 @@ def is_label(label: object) -> bool:
     if not isinstance(label, str) or not 0 < len(label) <= MAX_LABEL:
         return False
     return all(p.replace("$", "_").isidentifier() for p in label.split("."))
+
+
+def py_registrar(label: str) -> bool:
+    """Whether a Python CALL to ``label`` registers a handler. A verb only makes
+    an entry as a decorator: ``app.get(...)`` as a plain call is ``dict.get``."""
+    return is_label(label) and label.rsplit(".", 1)[-1] in _PY_REGISTRARS
 
 
 def entry_kind(lang: str, label: str) -> str | None:
