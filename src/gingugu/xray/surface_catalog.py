@@ -115,9 +115,10 @@ JS_RECEIVERS = frozenset({"app", "router", "server", "fastify", "hono"})
 _JS_MCP_RECV = frozenset({"server", "mcp", "mcpServer"})
 _JS_MCP = frozenset({"tool", "resource", "prompt"})
 _JS_REGISTER = frozenset({"registerTool", "registerResource", "registerPrompt"})
-_TS_DECOS = frozenset("Get Post Put Patch Delete All Head Options".split())  # NestJS
+TS_DECOS = frozenset("Get Post Put Patch Delete All Head Options".split())  # NestJS
 _GO_LAST = frozenset(
-    "HandleFunc Handle GET POST PUT PATCH DELETE Get Post Put Patch Delete Any".split()
+    "HandleFunc Handle Method MethodFunc GET POST PUT PATCH DELETE Get Post Put Patch Delete "
+    "Any".split()
 )
 # Method names that run a query: a built string handed to one is flagged.
 SQL_METHODS: dict[str, frozenset[str]] = {
@@ -137,6 +138,14 @@ def is_label(label: object) -> bool:
     if not isinstance(label, str) or not 0 < len(label) <= MAX_LABEL:
         return False
     return all(p.replace("$", "_").isidentifier() for p in label.split("."))
+
+
+def router_shaped(name: str | None) -> bool:
+    """A JS receiver a route call is made on: a known server name, or one named
+    for a router or an app (``usersRouter``, ``adminApp``) - never an HTTP client."""
+    return name is not None and (
+        name in JS_RECEIVERS or name.endswith(("Router", "router", "App", "app"))
+    )
 
 
 def py_registrar(label: str) -> bool:
@@ -166,8 +175,8 @@ def entry_kind(lang: str, label: str) -> str | None:
         return _PY_LAST.get(last)
     if lang == "typescript":
         if len(parts) == 1:
-            return "http" if last in _TS_DECOS else None
-        if recv in JS_RECEIVERS and last in _JS_VERBS:
+            return "http" if last in TS_DECOS else None
+        if router_shaped(recv) and last in _JS_VERBS:
             return "http"
         if (recv in _JS_MCP_RECV and last in _JS_MCP) or (recv and last in _JS_REGISTER):
             return "mcp"

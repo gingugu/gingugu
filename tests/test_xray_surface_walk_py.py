@@ -27,8 +27,8 @@ def test_the_walk_has_both_keys_and_round_trips() -> None:
 def test_a_decorated_function_is_an_entry_on_the_decorator_line() -> None:
     src = "@app.get('/x')\nasync def items():\n    pass\n\n@router.post\ndef make():\n    pass\n"
     assert _walk(src)["entries"] == [
-        ["<module>", "app.get", "d", "items", "", 1, 0, 0],
-        ["<module>", "router.post", "d", "make", "", 5, 0, 0],
+        ["<module>", "app.get", "d", "items", "", 1, 0, 0, "GET", "/x", "app"],
+        ["<module>", "router.post", "d", "make", "", 5, 0, 0, "POST", "", "router"],
     ]
 
 
@@ -40,7 +40,19 @@ def test_a_nested_handler_keeps_its_qual_and_its_scope() -> None:
         "        return vault.get(service)\n"  # 4
     )
     assert _walk(src)["entries"] == [
-        ["register", "mcp.tool", "d", "register.credential_get", "", 2, 0, 0]
+        [
+            "register",
+            "mcp.tool",
+            "d",
+            "register.credential_get",
+            "",
+            2,
+            0,
+            0,
+            "",
+            "credential_get",
+            "#0",
+        ]
     ]
 
 
@@ -51,7 +63,9 @@ def test_a_method_handler_and_a_class_decorator() -> None:
         "    def run(self):\n"  # 3
         "        pass\n"  # 4
     )
-    assert _walk(src)["entries"] == [["Api", "cli.command", "d", "Api.run", "", 2, 0, 0]]
+    assert _walk(src)["entries"] == [
+        ["Api", "cli.command", "d", "Api.run", "", 2, 0, 0, "", "run", "cli"]
+    ]
 
 
 def test_decorators_that_are_not_entries_are_ignored() -> None:
@@ -67,7 +81,7 @@ def test_decorators_that_are_not_entries_are_ignored() -> None:
 
 def test_a_bare_shared_task_is_an_entry() -> None:
     assert _walk("@shared_task\ndef job(): pass\n")["entries"] == [
-        ["<module>", "shared_task", "d", "job", "", 1, 0, 0]
+        ["<module>", "shared_task", "d", "job", "", 1, 0, 0, "", "", ""]
     ]
 
 
@@ -80,9 +94,9 @@ def test_registrars_name_the_first_name_shaped_argument() -> None:
         "    p.set_defaults(func=cmd_run)\n"  # 5: a keyword argument counts too
     )
     assert _walk(src)["entries"] == [
-        ["<module>", "app.add_url_rule", "n", "index", "", 1, 0, 0],
-        ["<module>", "path", "a", "views", "show", 2, 0, 0],
-        ["setup", "p.set_defaults", "n", "cmd_run", "", 5, 0, 0],
+        ["<module>", "app.add_url_rule", "n", "index", "", 1, 0, 0, "GET", "/x", "app"],
+        ["<module>", "path", "a", "views", "show", 2, 0, 0, "", "a/", ""],
+        ["setup", "p.set_defaults", "n", "cmd_run", "", 5, 0, 0, "", "", "p"],
     ]
 
 
@@ -94,8 +108,20 @@ def test_a_registrar_given_self_method_is_form_s() -> None:
         "        app.add_api_route('/y', self.index)\n"  # 4
     )
     assert _walk(src)["entries"] == [
-        ["Server.setup", "self.app.add_url_rule", "s", "Server", "index", 3, 0, 0],
-        ["Server.setup", "app.add_api_route", "s", "Server", "index", 4, 0, 0],
+        [
+            "Server.setup",
+            "self.app.add_url_rule",
+            "s",
+            "Server",
+            "index",
+            3,
+            0,
+            0,
+            "GET",
+            "/x",
+            "#0",
+        ],
+        ["Server.setup", "app.add_api_route", "s", "Server", "index", 4, 0, 0, "GET", "/y", "app"],
     ]
 
 
@@ -172,9 +198,9 @@ def test_an_http_registrar_takes_its_handler_after_the_path() -> None:
         "mcp.add_tool(handler)\n"  # 4: no path: the first argument is the handler
     )
     assert _walk(src)["entries"] == [
-        ["<module>", "app.add_route", "n", "derive", "", 1, 0, 0],
-        ["<module>", "path", "n", "show", "", 3, 0, 0],
-        ["<module>", "mcp.add_tool", "n", "handler", "", 4, 0, 0],
+        ["<module>", "app.add_route", "n", "derive", "", 1, 0, 0, "POST", "", "app"],
+        ["<module>", "path", "n", "show", "", 3, 0, 0, "", "a/", ""],
+        ["<module>", "mcp.add_tool", "n", "handler", "", 4, 0, 0, "", "handler", "mcp"],
     ]
 
 
@@ -190,6 +216,6 @@ def test_a_main_guard_is_an_inline_entry_over_its_block() -> None:
         "    pass\n"  # 8
     )
     assert _walk(src)["entries"] == [
-        ["<module>", "__main__", "i", "", "", 3, 3, 4],
-        ["<module>", "__main__", "i", "", "", 5, 5, 6],
+        ["<module>", "__main__", "i", "", "", 3, 3, 4, "", "", ""],
+        ["<module>", "__main__", "i", "", "", 5, 5, 6, "", "", ""],
     ]

@@ -121,9 +121,12 @@ API = (
 def test_ts_entries_named_and_inline() -> None:
     sym = _ts({"jobs.ts": JOBS, "api.ts": API})
     by_line = {e.line: e for e in sym.entries}
-    assert by_line[2] == Entry("api.ts", "app.get", "http", 2, "list", (("api.ts", "list"),))
+    assert by_line[2] == Entry(
+        "api.ts", "app.get", "http", 2, "list", (("api.ts", "list"),), method="GET", route="/x"
+    )
     inline = by_line[3]
     assert inline.inline and inline.handler == "<module>"
+    assert (inline.method, inline.route) == ("POST", "/y")
     assert inline.nodes == (("jobs.ts", "run"),)
     assert inline.direct == (("eval", 5),)
 
@@ -162,6 +165,8 @@ def test_go_main_and_a_method_handler_reach_exec() -> None:
     assert [(r.sink, r.hops) for r in rows[("http.HandleFunc", "Server.handle")]] == [
         ("os/exec.Command", 0)
     ]
+    routes = {e.handler: (e.method, e.route) for e, _ in data["entries"]}
+    assert routes == {"Server.handle": ("", "/x"), "main": ("", "")}
     assert [(r.sink, r.hops, r.via) for r in rows[("main", "main")]] == []  # a value, not a call
 
 
@@ -214,8 +219,14 @@ def test_the_cache_refuses_a_name_the_catalogue_never_wrote() -> None:
         {**good, "entries": [[*entry[:4], "h\nINJECTED", *entry[5:]]]},
         {**good, "entries": [[entry[0], "app get", *entry[2:]]]},
         {**good, "entries": [[*entry[:2], "rce", *entry[3:]]]},
-        {**good, "entries": [[*entry[:7], "yes"]]},
+        {**good, "entries": [[*entry[:7], "yes", *entry[8:]]]},
         {**good, "entries": [["/etc/passwd", *entry[1:]]]},
+        {**good, "entries": [[*entry[:8], "get", entry[9]]]},  # a method not in METHODS
+        {**good, "entries": [[*entry[:8], "POST|GET", entry[9]]]},  # out of order
+        {**good, "entries": [[*entry[:9], "/x\nIGNORE PREVIOUS"]]},
+        {**good, "entries": [[*entry[:9], "/`x`"]]},
+        {**good, "entries": [[*entry[:9], "/" + "x" * 300]]},
+        {**good, "entries": [entry[:8]]},  # the pre-route shape
     ):
         assert symbols.from_json(bad) is None, bad
 
@@ -246,13 +257,26 @@ def test_a_pyproject_script_function_is_a_cli_entry() -> None:
     }
     sym = python.ADAPTER.extract(files, manifests).symbols
     (e,) = sym.entries
-    assert (e.path, e.label, e.kind, e.line, e.handler) == (
+    assert (e.path, e.label, e.kind, e.line, e.handler, e.route) == (
         "pkg/cli.py",
         "project.scripts",
         "cli",
         2,
         "main",
+        "tool",
     )
     assert [(r.sink, r.hops) for _, f in surface.build(sym)["entries"] for r in f] == [
         ("os.system", 0)
     ]
+
+
+def test_each_script_name_is_its_own_cli_entry() -> None:
+    files = {"pkg/__init__.py": b"", "pkg/cli.py": b"def main():\n    pass\n"}
+    manifests = {
+        "pyproject.toml": (
+            b'[project.scripts]\ntool = "pkg.cli:main"\nt = "pkg.cli:main"\n'
+            b'"bad`name" = "pkg.cli:main"\n'
+        )
+    }
+    sym = python.ADAPTER.extract(files, manifests).symbols
+    assert sorted(e.route for e in sym.entries) == ["", "t", "tool"]  # an unsafe name: ""

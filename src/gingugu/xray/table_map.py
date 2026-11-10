@@ -65,6 +65,19 @@ def dropped(m: TableMap, name: str) -> list[tuple[str, int]]:
     return [(f, n) for f, n in m.drops.get(name, []) if f not in defining and not _is_test(f)]
 
 
+def cached_uses(root: Path, state_dir: Path) -> Refs:
+    """The table uses as last cached, nothing re-read: what the checkout looked like
+    before an edit changed it (the edit note's before-and-after diff)."""
+    from . import hook_common
+
+    entries, _ = _load(state_dir / f"{_spec().cache_prefix}-{hook_common._digest(root)}.json")
+    out: Refs = {}
+    for rel, e in entries.items():
+        for name, line in e["uses"]:
+            out.setdefault(name, []).append((rel, line))
+    return out
+
+
 def read(root: Path, state_dir: Path, *, budget_s: float | None = None) -> TableMap:
     """The table map for the checkout at ``root``, from the cache where it holds.
     With ``budget_s``, files not reached in time keep their cached entry, or wait

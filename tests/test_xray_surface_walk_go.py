@@ -45,9 +45,9 @@ def test_main_and_its_routes() -> None:
         "}\n"  # 11
     )
     assert _walk(src)["entries"] == [
-        ["<module>", "main", "d", "main", "", 5, 0, 0],
-        ["main", "http.HandleFunc", "n", "handle", "", 6, 0, 0],
-        ["main", "http.HandleFunc", "i", "", "", 7, 7, 9],
+        ["<module>", "main", "d", "main", "", 5, 0, 0, "", "", ""],
+        ["main", "http.HandleFunc", "n", "handle", "", 6, 0, 0, "", "/x", "http"],
+        ["main", "http.HandleFunc", "i", "", "", 7, 7, 9, "", "/y", "http"],
     ]
 
 
@@ -70,9 +70,9 @@ def test_method_routes_and_router_verbs() -> None:
         "}\n"  # 11
     )
     assert _walk(src)["entries"] == [
-        ["Server.routes", "s.mux.HandleFunc", "a", "s", "handleX", 4, 0, 0],
-        ["Server.routes", "s.r.GET", "a", "s", "list", 5, 0, 0],
-        ["setup", "r.POST", "a", "h", "Create", 9, 0, 0],
+        ["Server.routes", "s.mux.HandleFunc", "a", "s", "handleX", 4, 0, 0, "", "/x", ""],
+        ["Server.routes", "s.r.GET", "a", "s", "list", 5, 0, 0, "GET", "/items", ""],
+        ["setup", "r.POST", "a", "h", "Create", 9, 0, 0, "POST", "/items", "#0"],
     ]
 
 
@@ -117,9 +117,9 @@ def test_the_validator_refuses_foreign_shapes() -> None:
     good = _walk('package main\n\nfunc main() {\n\thttp.HandleFunc("/x", h)\n}\n')
     assert go_symbols_walk.valid(good)
     for bad in (
-        ["main", "http.Nope", "n", "h", "", 4, 0, 0],
-        ["main", "http.HandleFunc", "n", "", "", 4, 0, 0],
-        ["main", "http.HandleFunc", "n", "h", "", 4, 4, 4],
+        ["main", "http.Nope", "n", "h", "", 4, 0, 0, "", ""],
+        ["main", "http.HandleFunc", "n", "", "", 4, 0, 0, "", ""],
+        ["main", "http.HandleFunc", "n", "h", "", 4, 4, 4, "", ""],
     ):
         assert not go_symbols_walk.valid({**good, "entries": [bad]}), bad
     assert not go_symbols_walk.valid({**good, "sql": [["main"]]})

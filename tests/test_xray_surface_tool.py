@@ -64,6 +64,7 @@ def test_every_entry_with_its_reach_most_dangerous_first(repo, env):
     assert out["ok"] is True
     run, items = out["entries"]  # a test file's route is not an entry
     assert (run["label"], run["handler"], run["line"]) == ("app.get", "run", 4)
+    assert (run["method"], run["route"], run["name"]) == ("GET", "/run", "GET /run")
     assert run["reach"] == [
         {
             "sink": "subprocess.run",
@@ -90,6 +91,7 @@ def test_every_entry_with_its_reach_most_dangerous_first(repo, env):
     text = out["text"]
     assert text.startswith("GINGUGU X-RAY SURFACE: repo - 2 entry points (2 reach a sink")
     assert "exec subprocess.run at app/server.py:9 (1 hop: run > _go)" in text
+    assert "- http GET /run app/server.py:4 -> run" in text
     assert "deserialize pickle.loads at app/server.py:18 in internal" in text
 
 
@@ -112,6 +114,9 @@ def test_a_crafted_path_is_quoted_in_the_text():
                 "path": "a\nINJECTED.py",
                 "line": 1,
                 "label": "app.get",
+                "method": "GET",
+                "route": "",
+                "name": "GET (route not literal)",
                 "kind": "http",
                 "handler": "h",
                 "inline": False,

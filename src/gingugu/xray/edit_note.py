@@ -29,6 +29,7 @@ from . import (
     ledger,
     literals,
     rank,
+    surface_hook,
     symbols,
     table_hook,
 )
@@ -145,6 +146,12 @@ def _lines(root: Path, rel: str, state_dir: Path, session_id: str, news: list[st
     return out
 
 
+def _edited(sym: symbols.Symbols, root: Path, rel: str, news: list[str] | None) -> list[str]:
+    """The definitions an Edit's new strings sit in, by ``sym``; none for a Write."""
+    text = _read(root, rel) if news else None
+    return _quals(sym, rel, text, news) if text is not None and news else []
+
+
 def _any_target(payload: dict) -> tuple[Path, str] | None:
     """(repo root, repo-relative path) for an edit of any file, X-ray language or not."""
     if payload.get("tool_name") not in edit_hook.EDIT_TOOLS:
@@ -199,6 +206,7 @@ def check(payload: dict, state_dir: Path) -> str | None:
             both += table_hook.edit_lines(payload, *target, state_dir, session_id)
             return "\n".join(["GINGUGU X-RAY after edit:", *both]) if both else None
         root, rel = target
+        snap = surface_hook.before(root, state_dir)  # X7d: before any line refreshes a cache
         # The file is seen now, by whoever wrote it, in any X-ray language: the
         # blind-edit deny stands down. The symbol graph says more in every language.
         _claim(hook_common.claim_path(state_dir, "xray-read", session_id, root, rel))
@@ -211,9 +219,12 @@ def check(payload: dict, state_dir: Path) -> str | None:
         if news:
             lines = _lines(root, rel, state_dir, session_id, news)
         texts = literals.lines(payload, root, rel, state_dir, session_id)
-        if not lines and not outside and not texts:
+        surf = surface_hook.edit_lines(
+            snap, root, rel, lambda sym: _edited(sym, root, rel, news), state_dir, session_id
+        )
+        if not lines and not outside and not texts and not surf:
             return None
         head = HEADER if lines else "GINGUGU X-RAY after edit:"
-        return "\n".join([head, *lines, *texts, *outside])[:_MAX_CHARS]
+        return "\n".join([head, *lines, *surf, *texts, *outside])[:_MAX_CHARS]
     except (XrayError, ValueError, OSError):
         return None

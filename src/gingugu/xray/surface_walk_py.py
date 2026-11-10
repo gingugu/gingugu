@@ -21,6 +21,8 @@ from __future__ import annotations
 import ast
 
 from . import surface_catalog as cat
+from . import surface_route_py as route
+from .surface_mount_py import Mounts
 
 MODULE = "<module>"
 _DEFS = (ast.FunctionDef, ast.AsyncFunctionDef)
@@ -171,22 +173,29 @@ class Surface:
         self.entries: list[list] = []
         self.sql: list[list] = []
         self._assigns = collect_assigns(tree)
+        self._m = Mounts(self._assigns)
         self._decorators: set[int] = set()
         for node in tree.body:  # `if __name__ == "__main__":` - a script's entry point
             if isinstance(node, ast.If) and _is_main_test(node.test):
                 end = node.end_lineno or node.lineno
                 self.entries.append(
-                    [MODULE, "__main__", "i", "", "", node.lineno, node.lineno, end]
+                    [MODULE, "__main__", "i", "", "", node.lineno, node.lineno, end, "", "", ""]
                 )
 
     def definition(self, node: ast.AST, scope: str, name: str) -> None:
         """A def or class: its decorators are entries (functions only), never registrars."""
+        self._m.definition(node, name)
         for deco in getattr(node, "decorator_list", []):
             if isinstance(deco, ast.Call):
                 self._decorators.add(id(deco))
             label = dotted(deco.func if isinstance(deco, ast.Call) else deco)
-            if isinstance(node, _DEFS) and label and cat.entry_kind("python", label):
-                self.entries.append([scope, label, "d", name, "", deco.lineno, 0, 0])
+            kind = cat.entry_kind("python", label) if label else None
+            if isinstance(node, _DEFS) and label and kind:
+                m, r = route.resolve(
+                    kind, label, deco, name.rsplit(".", 1)[-1], self._lookup(scope)
+                )
+                recv = self._m.recv(scope, label)
+                self.entries.append([scope, label, "d", name, "", deco.lineno, 0, 0, m, r, recv])
 
     def call(self, node: ast.Call, scope: str, cls: str | None) -> None:
         """A call: a registrar makes an entry, a query method may make a ``sql`` record."""
@@ -194,6 +203,7 @@ class Surface:
             label = dotted(node.func)
             if label and cat.py_registrar(label):  # not d.get(k)
                 self._registrar(node, label, scope, cls)
+        self._m.call(node, scope, self._lookup(scope))
         if isinstance(node.func, ast.Attribute) and node.func.attr in cat.SQL_METHODS["python"]:
             if node.args and self._flagged(node.args[0], self._assigns.get(scope, {})):
                 self.sql.append([scope, node.lineno])
@@ -215,8 +225,31 @@ class Surface:
                     form, x, y = "a", base, arg.attr
             else:
                 continue
-            self.entries.append([scope, label, form, x, y, node.lineno, 0, 0])
+            kind = cat.entry_kind("python", label) or ""
+            m, r = route.resolve(kind, label, node, y or x, self._lookup(scope))
+            recv = self._m.recv(scope, label)
+            self.entries.append([scope, label, form, x, y, node.lineno, 0, 0, m, r, recv])
             return
+
+    @property
+    def mounts(self) -> list[list]:
+        return self._m.mounts
+
+    @property
+    def vars(self) -> list[list]:
+        return self._m.vars
+
+    def _lookup(self, scope: str) -> route.Lookup:
+        """Receiver name -> its assigned value in ``scope``, else at module level."""
+
+        def find(name: str) -> ast.expr | None:
+            for key in (scope, MODULE):
+                values = self._assigns.get(key, {}).get(name)
+                if values:
+                    return values[-1]
+            return None
+
+        return find
 
     @staticmethod
     def _flagged(first: ast.expr, assigns: dict[str, list[ast.expr | None]]) -> bool:

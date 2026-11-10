@@ -12,6 +12,7 @@ import pytest
 
 from gingugu.xray import extract, validate
 from gingugu.xray.lang.golang import ADAPTER as GO
+from gingugu.xray.lang.python import ADAPTER as PY
 from gingugu.xray.lang.ts_config import leaves
 from gingugu.xray.lang.typescript import ADAPTER as TS
 from tests.xray_lang_fixtures import _repo, edges, run_adapter
@@ -104,21 +105,37 @@ def test_an_adapter_recursing_out_costs_only_its_own_language(tmp_path, monkeypa
     validate.payload(x.payload())
 
 
+_LANGS = {
+    "python": ({"a.py": "import b\n", "b.py": ""}, ("a.py", "b.py")),
+    "typescript": ({"c.ts": 'import "./d";\n', "d.ts": ""}, ("c.ts", "d.ts")),
+    "go": ({"go.mod": "module m\n", "e/e.go": "package e\n", "f/f.go": "package f\n"}, None),
+}
+
+
 @pytest.mark.parametrize("cache", [False, True])
 @pytest.mark.parametrize("step", ["parse", "link"])
-def test_an_adapter_bug_costs_only_its_own_language(tmp_path, monkeypatch, caplog, cache, step):
+@pytest.mark.parametrize("broken", ["python", "typescript", "go"])
+def test_an_adapter_bug_costs_only_its_own_language(
+    tmp_path, monkeypatch, caplog, cache, step, broken
+):
     def boom(self, *args):
         raise TypeError("adapter bug")
 
-    monkeypatch.setattr(type(TS), step, boom)
-    repo = _repo(tmp_path / "r", {"a.py": "import b\n", "b.py": "", "c.ts": "", "d.ts": ""})
+    adapter = {"python": PY, "typescript": TS, "go": GO}[broken]
+    monkeypatch.setattr(type(adapter), step, boom)
+    files = {k: v for fs, _ in _LANGS.values() for k, v in fs.items()}
+    repo = _repo(tmp_path / "r", files)
     pc = tmp_path / "pc" if cache else None
     with caplog.at_level("WARNING", logger=extract.__name__):
         x = extract.extract(repo, pc)
-    assert ("a.py", "b.py") in {(e.src, e.dst) for e in x.edges}
+    found = {(e.src, e.dst) for e in x.edges}
+    for lang, (_, edge) in _LANGS.items():
+        if lang != broken and edge is not None:
+            assert edge in found, (lang, found)  # every other language still lands
+    mine = sorted(p for p in _LANGS[broken][0] if p.endswith(adapter.extensions))
     seen = ([(f.path, f.lang) for f in x.files], x.parse_errors, caplog.text)
-    assert x.parse_errors == ["c.ts", "d.ts"], seen  # still nodes, said to be unparsed
-    assert {f.path for f in x.files} == {"a.py", "b.py", "c.ts", "d.ts"}
+    assert x.parse_errors == mine, seen  # still nodes, said to be unparsed
+    assert set(mine) <= {f.path for f in x.files}
     assert "adapter bug" in caplog.text  # contained, not hidden
     validate.payload(x.payload())
 

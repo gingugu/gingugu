@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from . import surface_catalog as cat
+from . import surface_route as sr
 from .symbols_walk import is_qual
 from .validate import is_valid_path
 
@@ -36,6 +37,8 @@ class Entry:
     nodes: tuple[Node, ...]  # where its reach starts; empty when unresolved
     direct: tuple[tuple[str, int], ...] = ()  # sinks an inline callback calls itself
     inline: bool = False
+    method: str = ""  # surface_route: "" or "GET", "GET|POST"...
+    route: str = ""  # the route, tool name or command it answers to; "" unknown
 
 
 @dataclass
@@ -59,7 +62,7 @@ def to_json(sym: Symbols) -> dict:
         "sinks": [list(s) for s in sym.sinks],
         "entries": [
             [e.path, e.label, e.kind, e.line, e.handler, [list(n) for n in e.nodes]]
-            + [[list(d) for d in e.direct], e.inline]
+            + [[list(d) for d in e.direct], e.inline, e.method, e.route]
             for e in sym.entries
         ],
     }
@@ -109,11 +112,13 @@ def _is_direct(d: object) -> bool:
 
 
 def _is_entry(e: object) -> bool:
-    if not (isinstance(e, list) and len(e) == 8 and isinstance(e[2], str)):
+    if not (isinstance(e, list) and len(e) == 10 and isinstance(e[2], str)):
         return False
-    path, label, kind, line, handler, nodes, direct, inline = e
+    path, label, kind, line, handler, nodes, direct, inline, method, route = e
     return (
-        is_valid_path(path)
+        sr.is_method(method)
+        and sr.is_route(route)
+        and is_valid_path(path)
         and cat.is_label(label)
         and kind in cat.KINDS
         and _count(line)
@@ -129,7 +134,7 @@ def _is_entry(e: object) -> bool:
 def _entry(e: list) -> Entry:
     nodes = tuple((n[0], n[1]) for n in e[5])
     direct = tuple((d[0], d[1]) for d in e[6])
-    return Entry(e[0], e[1], e[2], e[3], e[4], nodes, direct, e[7])
+    return Entry(e[0], e[1], e[2], e[3], e[4], nodes, direct, e[7], e[8], e[9])
 
 
 def from_json(data: object) -> Symbols | None:

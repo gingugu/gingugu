@@ -25,6 +25,7 @@ from collections.abc import Callable
 from .. import surface_link
 from ..symbols import Symbols
 from ..symbols_walk import MODULE
+from .go_symbols_value import value_resolver
 
 _EXT = "external"
 _BUILTINS = frozenset(
@@ -209,6 +210,7 @@ class _Linker:
     def link(self) -> Symbols:
         out = self.out
         col = surface_link.Collector("go", out.defs)
+        value = value_resolver(self.local, self.key, self.pvars, self._chain)
         for rel, r in self.raws.items():
             col.file(rel, r)
             for rec in r["calls"]:
@@ -229,7 +231,8 @@ class _Linker:
                 t = self._call(rel, c)
                 return t if isinstance(t, tuple) else None
 
-            col.close(rel, resolve)
+            col.close(rel, resolve, value)
+        col.finish()
         out.sinks, out.entries = col.sinks, col.entries
         return out
 

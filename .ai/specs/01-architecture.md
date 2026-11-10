@@ -942,7 +942,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   imports say what a change *could* reach; definitions and calls say what it does.
   Each adapter's parse also yields per-file records (Python `xray/symbols_walk`, TS/JS
   `lang/ts_symbols_walk`, Go `lang/go_symbols_walk`; content-only, so they ride the
-  X16 parse cache as `"sym"`; extractor version 5), and each adapter's linker
+  X16 parse cache as `"sym"`; extractor version 6), and each adapter's linker
   (`xray/symbols`, `lang/ts_symbols`, `lang/go_symbols`) resolves them through its own
   module index, `symbols.merge` joining the shares in `extract.py`. *A lower bound by
   construction*: a call resolves only through a definition in scope, an import
@@ -1056,7 +1056,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   named `app`, `router`, `server`, `fastify` or `hono`, MCP `server.tool` and
   `registerTool`/`registerResource`/`registerPrompt`, NestJS `@Get` and kin. Go: `main`, and
   `HandleFunc`, `Handle` and the router verbs on any receiver. Each language's content-only
-  walk adds two records beside its symbols (`xray/surface_records.py`, shape-checked on load):
+  walk adds three records beside its symbols (`xray/surface_records.py`, shape-checked on load):
   `entries` (`surface_walk_py`, `lang/ts_surface_walk`, `lang/go_surface_walk`) and `sql`, a
   query method handed a string built at runtime from a part not known safe. Each linker passes
   every call verdict to `xray/surface_link.Collector`: an external call the catalogue lists
@@ -1066,7 +1066,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   untrusted cache form moved to `xray/symbols_model.py` (`symbols.py` stays under the line
   limit); `from_json` refuses any sink name the catalogue never wrote, any non-identifier label
   and any path the brain's rule rejects, any line past 10,000,000 and any name past 512
-  characters. `EXTRACTOR_VERSION` is 5. An http registrar's handler is taken after its path,
+  characters. `EXTRACTOR_VERSION` is 6 (5 before the routes slice). An http registrar's handler is taken after its path,
   and a bare `path(x)` counts only with a literal route; a Python `__main__` block is an
   inline `main` entry. The TS and Go safe-part checks judge each local once per function. `xray/surface.py` is pure:
   breadth-first forward from each entry's start nodes, so the path to each sink is a shortest
@@ -1079,7 +1079,24 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   (calls through untyped values, interfaces and callbacks are not followed; an unknown
   registration form is not listed); a listed path exists in the code, whether input flows along
   it is not checked. Measured on gingugu itself: 47 entries (24 mcp, 21 main, 1 cli, 1 http),
-  39 reach a sink, 2.6s cold. No hook line yet, no migration, no brain change.
+  39 reach a sink, 2.6s cold. No migration, no brain change.
+  *Routes, mounts and the hook line (unreleased).* Entries carry `method`, `route` and `name`
+  (`xray/surface_route.py`: clean/method_of/methods/go_pattern/join/label; `surface_route_py.py`,
+  `lang/ts_surface_route.py`, `lang/go_surface_route.py` per language; `{prefix}` = a prefix set
+  at runtime). A literal is kept only as short printable ASCII, no quotes, backticks or
+  backslashes, `;` or `|`, a space only after a comma; else `(route not literal)`. Same-file prefixes are applied in
+  the walk; cross-file mounts are a `mounts` record `[scope,line,parent,prefix,form,x,y,arg]`
+  (forms n,a,m,r,cn,ca,pn,pa,g) that `surface_mounts.py` resolves through `surface_link.Collector`
+  (`surface_mount_py.py`, `symbols_value.py`, `lang/ts_surface_mounts.py`, `lang/ts_mount_values.py`,
+  `lang/go_surface_mounts.py`, `lang/go_symbols_value.py`): FastAPI/Flask/Django/Express/NestJS/gin/chi
+  chains; a router mounted in several places is one entry per URL (`MAX_URLS` 8). Entries are 11
+  fields `[scope,label,form,x,y,line,start,end,method,route,recv]`; the Python walk adds `vars`, the
+  TS walk `decls`. `EXTRACTOR_VERSION` is 6. A mount through a value the call graph does not track
+  (a Go struct-field router) is not followed. `xray/surface_hook.py` (wired in `read_hook.py` and
+  `edit_note.py`, `MEMORY_XRAY_SURFACE=off`): the read hook lists a file's entry points and the sinks
+  in it that entries reach; the edit note snapshots the caches before the edit
+  (`hook_common.cached_symbols`, `table_map.cached_uses`), rebuilds after (fingerprint-checked, parse
+  cache re-parses only the edited file) and diffs.
 - **Codebase X-ray: cross-repo links (X23, released in 0.46.0).** A service ecosystem
   is wired by names, not imports. `xray/links/` reads this checkout and its sibling
   checkouts (the docs map's discovery) for the names each file *provides* (`provides*.py`:

@@ -23,7 +23,7 @@ from __future__ import annotations
 import builtins
 from collections import deque
 
-from . import surface_link
+from . import surface_link, symbols_value
 from .resolve import ModuleIndex, _from_base
 from .symbols_model import Def, Entry, Key, Symbols, from_json, to_json  # noqa: F401
 from .validate import is_valid_path
@@ -177,7 +177,9 @@ class _Linker:
                 t = self._call(rel, r, types, binds)
                 return t[1:] if isinstance(t, tuple) and t[0] == "sym" else None
 
-            col.close(rel, resolve)
+            value = symbols_value.make(rel, raw, binds, self._bound, self.idx)
+            col.close(rel, resolve, value)
+        col.finish()
         out.sinks, out.entries = col.sinks, col.entries
         return out
 

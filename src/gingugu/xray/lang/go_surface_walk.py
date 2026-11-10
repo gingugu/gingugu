@@ -24,6 +24,11 @@ import re
 from .. import surface_catalog as cat
 from .. import surface_records as rec
 from ..symbols_walk import MODULE
+from . import go_surface_mounts as mnt
+from . import go_surface_route as route
+from .go_surface_route import args as _args
+from .go_surface_route import chain as _chain
+from .go_surface_route import txt as _txt
 
 _LITS = ("interpreted_string_literal", "raw_string_literal")
 _FUNCS = ("function_declaration", "method_declaration")
@@ -31,28 +36,8 @@ _UPPER = re.compile(r"^[A-Z][A-Z0-9_]*$")
 _Assigns = dict[str, list[tuple[object, bool]]]  # name -> (value node or None, is "+=")
 
 
-def _txt(n) -> str:
-    return n.text.decode("utf-8", "replace") if n is not None else ""
-
-
 def _line(n) -> int:
     return n.start_point[0] + 1
-
-
-def _args(call) -> list:
-    a = call.child_by_field_name("arguments")
-    return [c for c in a.named_children if c.type != "comment"] if a is not None else []
-
-
-def _chain(n) -> str | None:
-    """``a.b.c`` for a selector chain over identifiers (or a lone identifier)."""
-    parts: list[str] = []
-    while n is not None and n.type == "selector_expression":
-        parts.append(_txt(n.child_by_field_name("field")))
-        n = n.child_by_field_name("operand")
-    if n is None or n.type != "identifier":
-        return None
-    return ".".join([_txt(n), *reversed(parts)])
 
 
 def _names(n) -> list:
@@ -176,8 +161,9 @@ def _flag(call, assigns: _Assigns) -> bool:
         return True
 
 
-def _handlers(call, label: str, scope: str) -> list[list]:
+def _handlers(call, label: str, scope: str, env: route.Env) -> list[list]:
     args, line = _args(call), _line(call)
+    method, path = route.entry_route(label, args, env)
     out: list[list] = []
     for a in args[1:]:
         if a.type == "func_literal":
@@ -190,34 +176,47 @@ def _handlers(call, label: str, scope: str) -> list[list]:
         if op is not None and op.type == "identifier":
             fld = _txt(last.child_by_field_name("field"))
             out.append([scope, label, "a", _txt(op), fld, line, 0, 0])
+    recv = mnt.recv_of(label, env)
+    out = [r + [method, path, recv] for r in out]
     return [r for r in out if rec.is_entry(r, "go")]
 
 
 def surface(root, pkg: str, scopes: dict) -> dict:
-    """``{"entries": [...], "sql": [...]}`` in source order; ``scopes`` maps each
+    """``{"entries": [...], "sql": [...], "mounts": [...]}`` in source order; ``scopes`` maps each
     function node's ``(start_byte, end_byte)`` to the qual the symbol walk gave it."""
     entries: list[list] = []
     sql: list[list] = []
+    mounts: list[list] = []
     cache: dict[tuple, _Assigns] = {}
-    stack: list[tuple[object, str | None, object]] = [(root, MODULE, None)]
+    lit_env: dict[tuple, route.Env] = {}  # chi closure span -> env its body runs under
+    stack: list[tuple[object, str | None, object, route.Env]] = [(root, MODULE, None, {})]
     while stack:
-        node, scope, fn = stack.pop()
+        node, scope, fn, env = stack.pop()
         if node.type in _FUNCS:
-            scope, fn = scopes.get((node.start_byte, node.end_byte)), node
+            scope, fn, env = scopes.get((node.start_byte, node.end_byte)), node, {}
+            mnt.bind_params(node, env)
             is_main = node.type == "function_declaration" and pkg == "main"
             if scope is not None and is_main and _txt(node.child_by_field_name("name")) == "main":
-                entries.append([MODULE, "main", "d", "main", "", _line(node), 0, 0])
+                entries.append([MODULE, "main", "d", "main", "", _line(node), 0, 0, "", "", ""])
+        elif node.type == "func_literal":
+            env = lit_env.pop((node.start_byte, node.end_byte), env)
+        elif node.type in ("short_var_declaration", "assignment_statement", "var_spec"):
+            route.bind(node, env)
         elif node.type == "call_expression" and scope is not None:
+            scoped = route.literal_env(node, env)
+            if scoped is not None:
+                lit_env[scoped[0]] = scoped[1]
+            mounts.extend(mnt.mounts(node, scope, env))
             f = node.child_by_field_name("function")
             if f is not None and f.type == "selector_expression":
                 label = _chain(f)
                 if label and cat.entry_kind("go", label):
-                    entries.extend(_handlers(node, label, scope))
+                    entries.extend(_handlers(node, label, scope, env))
                 if _txt(f.child_by_field_name("field")) in cat.SQL_METHODS["go"]:
                     key = (fn.start_byte, fn.end_byte) if fn is not None else ()
                     if key not in cache:
                         cache[key] = _assigns(fn) if fn is not None else {}
                     if _flag(node, cache[key]):
                         sql.append([scope, _line(node)])
-        stack.extend((c, scope, fn) for c in reversed(node.children))
-    return {"entries": entries, "sql": sql}
+        stack.extend((c, scope, fn, env) for c in reversed(node.children))
+    return {"entries": entries, "sql": sql, "mounts": mounts}

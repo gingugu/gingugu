@@ -11,7 +11,10 @@ Records (lists, so a JSON round trip is the identity):
 - call:   ``[caller, form, x, y, line]``; form "n" is ``x()`` (and ``new x()``), "a" is
   ``x.y()`` on a bare name, "s" is ``this.y()`` in a class, ``x`` being the class.
   Any other shape (chains, ``super()``, ``import()``) is only counted in ``other``.
-- entries, sql: the X7d surface records of ``ts_surface_walk`` (see ``surface_records``).
+- entries, sql, mounts: the X7d surface records of ``ts_surface_walk`` (see
+  ``surface_records``).
+- decls:  ``[scope, name]``, a variable declared by name (``ts_surface_mounts``); a
+  ``module.exports = x`` is an export record of the default.
 - type:   ``[scope, var, form, x, y]``, the forms of ``ts_symbols_types``.
 - ret:    ``[qual, form, x, y]``, a function's declared return type (n, a or p).
 - export: ``[name, spec, orig]``; a spec means a re-export of ``orig`` from it, and
@@ -27,6 +30,7 @@ from __future__ import annotations
 
 from ..symbols_walk import MODULE, is_qual
 from . import ts_parse
+from .ts_surface_mounts import module_export
 from .ts_surface_walk import Surface
 from .ts_symbols_types import UNKNOWN, text, type_ref, value_ref
 from .ts_symbols_valid import valid
@@ -65,7 +69,7 @@ class _Records:
         self.surface = Surface()
 
     def result(self) -> dict:
-        entries, sql = self.surface.result()
+        entries, sql, mounts = self.surface.result()
         return {
             "defs": self.defs,
             "binds": self.binds,
@@ -76,6 +80,8 @@ class _Records:
             "other": self.other,
             "entries": entries,
             "sql": sql,
+            "mounts": mounts,
+            "decls": self.surface.mounts.decls,
         }
 
     def params(self, fn, scope: str) -> None:
@@ -236,6 +242,8 @@ def walk(tree) -> dict:
                 if ret is not None:
                     rec.rets.append([inner, *ret])
             rec.params(node, inner or MODULE)
+            if name:
+                rec.surface.mounts.params(node, inner)
             stack.extend((c, inner, None, body_cls, None) for c in reversed(kids))
             continue
         if name and kind == "class":
@@ -264,6 +272,10 @@ def walk(tree) -> dict:
             rec.call(node, scope, cls)
             if t == "call_expression":
                 rec.surface.call(node, scope, cls)
+        elif t == "assignment_expression":
+            exported = module_export(node)
+            if exported:
+                rec.exports.append(["default", "", exported])
         elif t == "class_body" and in_class is not None:
             rec.surface.class_body(node, in_class)
         member_of = in_class if t == "class_body" else None  # members of a named class
