@@ -274,7 +274,7 @@ Generated sets hold real memory content and stay in `bench/local/`.
   import):` (`MEMORY_XRAY_HISTORY`). `docs` (X22) is a reverse index from a file to the docs that cite it,
   here and in sibling checkouts (`xray/docs_map.py`, `MEMORY_XRAY_DOCS`); `env` (X7a, unreleased) lists the files that read an env var and the config that sets it
   (`xray/env_map.py`, `MEMORY_XRAY_ENV`); `tables` (X7c, unreleased) lists the files that define, drop and use a DB table
-  (`xray/table_map.py`, `MEMORY_XRAY_TABLES`); `surface` (X7d, unreleased) lists every entry point (MCP tool, HTTP route, CLI command, task, `main`) with the sinks it reaches through the call graph, most dangerous first, from closed per-language catalogues (`xray/surface.py`; no hook line yet); `links` (X23) is the same
+  (`xray/table_map.py`, `MEMORY_XRAY_TABLES`); `surface` (X7d, unreleased) lists every entry point (MCP tool, HTTP route, CLI command incl. `[project.scripts]` functions, task, Python `__main__` block, Go `main`) with the sinks it reaches through the call graph, most dangerous first, each path capped at 6 names and marked when cut, from closed per-language catalogues (`xray/surface.py`; no hook line yet); `links` (X23) is the same
   kind of local answer for cross-repo wiring: which sibling checkouts lean on this repo by names it
   provides (hosts, routes, images, packages, IaC resources, CI checkouts, cites; `xray/links/`,
   `MEMORY_XRAY_LINKS`; the read hook and edit note name outside dependents from a per-repo summary, 0.47.0); the read hook, edit note and Bash X-ray also name the docs citing a file from X22's own per-repo summary (`xray/docs_hook.py`, unreleased); the brief gains `Other repos leaning on these files`, `Ripple across

@@ -931,9 +931,12 @@ MEMORY_XRAY_TABLES=off silences every line
 parse (per file, content only): symbol records + entries [scope, label, form, x, y, line,
     start, end] + sql [scope, line]   -> X16 parse cache, `valid` re-checks the shape
 link (per language): every call verdict -> surface_link.Collector
+    Python link also: pyproject scripts/gui-scripts/entry-points `mod:func` -> cli entry
     external call in the catalogue -> Sink (path, caller, name, line); other external -> dropped
     sql record -> Sink 'sql.built' where it sits
     entry: 'd' own definition | 'n'/'a'/'s' handler resolved like a call of that form
+           (an http registrar's handler is taken after its path; a bare `path(x)` needs a literal)
+           | 'i' Python `if __name__ == "__main__":` block, label `__main__`, kind main
            | 'i' inline callback: start nodes = calls inside its span, direct sinks kept
     -> Symbols.sinks / Symbols.entries -> xray-symbols-<digest>.json (symbols_model.from_json:
        catalogue names, identifier labels and the brain's path rule only)
@@ -945,7 +948,8 @@ answer: surface.build(sym, db_sinks(sym, table_map.uses), skip=is_test)
     entries sorted by worst reach then path; then sinks no entry reaches
 files given -> entries in them or whose reach lands in them; unreached sinks in them
 output      -> entries [{path, line, label, kind, handler, inline, resolved, reach: [{sink,
-               category, path, symbol, line, hops, via}] (20 at most), reach_total}],
+               category, path, symbol, line, hops, via (<= 6 names), via_cut}] (20 at most),
+               reach_total}],
                unreached, totals {entries, reaching, unresolved, sinks, unreached}; limit
                capped at 200; text <= 8800 chars, 3 sinks shown per entry; caveat
 MEMORY_XRAY_TABLES=off -> no db sinks; gingugu serve -> refused (the brain never reads a path)

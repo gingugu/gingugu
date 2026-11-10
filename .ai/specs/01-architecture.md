@@ -1065,9 +1065,13 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   calls in its span resolved to and keeps the sinks it calls itself. The symbol model and its
   untrusted cache form moved to `xray/symbols_model.py` (`symbols.py` stays under the line
   limit); `from_json` refuses any sink name the catalogue never wrote, any non-identifier label
-  and any path the brain's rule rejects. `EXTRACTOR_VERSION` is 5. `xray/surface.py` is pure:
+  and any path the brain's rule rejects, any line past 10,000,000 and any name past 512
+  characters. `EXTRACTOR_VERSION` is 5. An http registrar's handler is taken after its path,
+  and a bare `path(x)` counts only with a literal route; a Python `__main__` block is an
+  inline `main` entry. The TS and Go safe-part checks judge each local once per function. `xray/surface.py` is pure:
   breadth-first forward from each entry's start nodes, so the path to each sink is a shortest
-  one (`hops` = calls from the handler; an inline callback's callees are hop 1); `db:<table>`
+  one (`hops` = calls from the handler; an inline callback's callees are hop 1; `via` keeps
+  the first `MAX_VIA` = 6 names, built during the walk, with `via_cut`); `db:<table>`
   sinks join X7c's table uses to the definition enclosing the line, so an untyped connection
   still counts. Entries sort by their worst sink then path; then the sinks no entry reaches.
   `surface_tool` is `code_xray` `surface` (local only, like `tables`; `gingugu serve` refuses

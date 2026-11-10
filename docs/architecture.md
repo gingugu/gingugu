@@ -1945,7 +1945,8 @@ assignments are all safe does not count. `db:<table>` joins X7c's table uses to 
 definition enclosing each line, so a query on an untyped connection still counts.
 `xray/surface.py` (pure) walks the call edges forward from each entry, breadth first, so the
 path kept to every sink is a shortest one; a hop is one call from the handler (an inline
-callback's callees are hop 1). Entries are listed with the sinks they reach, then the sinks
+callback's callees are hop 1), and a path shows its first 6 names, marked when cut. An http
+registrar's handler is the argument after its path. Entries are listed with the sinks they reach, then the sinks
 no entry reaches; test files are left out; with `files`, only entries in them or reaching
 into them. `code_xray` `surface` (`xray/surface_tool.py`) answers locally like `tables`:
 `gingugu serve` refuses it and the proxy answers it. It is a lower bound (a call through an
