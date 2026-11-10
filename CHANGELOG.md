@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.50.0] - 2026-11-10
+
 ### Added
 
 - **X7d routes: every entry point says what it answers to.** An entry now carries a
