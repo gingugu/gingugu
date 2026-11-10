@@ -131,8 +131,8 @@ graph LR
     C -->|add · list · remove · test| W
     C -->|post · inbox · read · claim · done| BP
     C -->|ingest · refresh · blast · overview| XR
-    C -->|brief · callers · history · blindspots · docs · links · env, stdio only: nothing stored| XG
-    X -->|brief · callers · history · blindspots · docs · links · env, answered on this machine| XG
+    C -->|brief · callers · history · blindspots · docs · links · env · tables, stdio only: nothing stored| XG
+    X -->|brief · callers · history · blindspots · docs · links · env · tables, answered on this machine| XG
     A -->|each pending tool call| Y
     Y -->|reads matches| W
     Y -->|logs each trip| T
