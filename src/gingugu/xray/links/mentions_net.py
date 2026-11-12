@@ -124,12 +124,14 @@ def scan_net(path: str, lines: list[str], sink: Sink, code: bool) -> None:
         n = i + 1
         if "://" in ln:
             for m in _URL.finditer(ln):
-                sink.add(HOST, norm_host(m.group(1)), path, n)
+                host = norm_host(m.group(1))
+                sink.add(HOST, host, path, n)
                 rest = m.group(2)
                 if rest and not re.split(r"[?#]", rest, maxsplit=1)[0].endswith(".git"):
                     route = norm_route(rest)
                     if route and route != "/":
-                        sink.add(ROUTE, route, path, n)
+                        # the host goes with it (X7b): a path on another host is not ours
+                        sink.add(ROUTE, route, path, n, detail=host or "")
         kv = _KV_HOST.match(ln) if "host" in ln.lower() else None
         if kv and "host" in kv.group(1).lower() and (kv.group(2) or not code):
             sink.add(HOST, norm_host(kv.group(3)), path, n)

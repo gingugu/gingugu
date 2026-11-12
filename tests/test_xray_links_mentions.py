@@ -195,6 +195,21 @@ def test_urls_give_a_host_and_a_route():
     assert one(files, HOST, "svc-a.acme.io").line == 1
 
 
+def test_a_url_route_carries_its_host_and_a_relative_one_none():
+    # X7b: a path inside a URL to another host is not a call into this repo
+    src = (
+        'A = "https://github.com/golang/go/issues/1"\n'
+        'B = "http://localhost:8000/api/users"\n'
+        'C = fetch("/api/teams")\n'
+    )
+    files = {"web/a.ts": src}
+    assert got(files, ROUTE) == {
+        ("/golang/go/issues/1", "github.com"),
+        ("/api/users", ""),
+        ("/api/teams", ""),
+    }
+
+
 def test_host_valued_config_keys():
     files = {
         "config/app.yaml": 'upstream:\n  host: svc-a.acme.io\n  hostname: "b.acme.io"\n',
