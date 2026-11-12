@@ -4,7 +4,7 @@ _Last updated: 2026-11-11 (X7b HTTP routes as edges built on `feature/xray-route
 
 ## In Flight
 
-**X7b HTTP routes as edges (2026-11-11, branch `feature/xray-routes`, PR #196, unreleased).** Nothing imports a route, so
+**X7b HTTP routes as edges (2026-11-11, merged in #196, RELEASED in 0.51.0).** Nothing imports a route, so
 a frontend's `fetch('/api/users')` and the handler that answers it never meet in the import graph. `code_xray`
 `routes` / `gingugu xray routes` (`--files`, `--path`, `--limit`, `--json`) joins the routes this repo serves
 (X7d entry points, mounted to full URLs, test files left out) to the calls that reach them (X23 route mentions;
