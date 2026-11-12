@@ -21,6 +21,7 @@ ACTIONS = ("routes",)
 MAX_LIMIT = 200
 MAX_CHARS = 8800
 MAX_LOCS = 10
+MAX_FILES = 50  # named files answered; the rest are dropped, never half-answered
 SHOWN = 3
 CAVEAT = (
     "Only literal route strings are seen: a URL built from pieces is missed. Routes come "
@@ -95,16 +96,16 @@ def render(data: dict, name: str) -> str:
     return _fit(lines)
 
 
-def _file(m: route_map.RouteMap, rel: str) -> dict:
+def _file(m: route_map.RouteMap, rel: str, cap: int) -> dict:
+    """One file's routes and calls; each list at most ``cap`` rows, so a file
+    with thousands of routes never floods the answer (totals say how many)."""
     mine = groups_of(s for s in m.serves if s.path == rel)
-    in_edges = route_map.served_in(m, rel)
+    by_group: dict[Group, set[tuple[str, int]]] = defaultdict(set)
+    for e in route_map.served_in(m, rel):
+        by_group[(e.serve.path, e.serve.head, e.serve.key)].add((e.call.path, e.call.line))
     serves = []
     for k, group in mine.items():
-        found = {
-            (e.call.path, e.call.line)
-            for e in in_edges
-            if (e.serve.path, e.serve.head, e.serve.key) == k
-        }
+        found = by_group.get(k, set())
         callers = sorted(found, key=lambda pl: caller_key(*pl))
         serves.append(
             {
@@ -135,9 +136,10 @@ def _file(m: route_map.RouteMap, rel: str) -> dict:
     unserved = [{"route": u.key, "line": u.line} for u in m.unserved if u.path == rel]
     return {
         "path": _safe(rel),
-        "serves": sorted(serves, key=lambda r: r["line"]),
-        "calls": sorted(calls, key=lambda r: r["line"]),
-        "unserved": sorted(unserved, key=lambda r: r["line"]),
+        "serves": sorted(serves, key=lambda r: r["line"])[:cap],
+        "calls": sorted(calls, key=lambda r: r["line"])[:cap],
+        "unserved": sorted(unserved, key=lambda r: r["line"])[:cap],
+        "totals": {"serves": len(serves), "calls": len(calls), "unserved": len(unserved)},
     }
 
 
@@ -193,5 +195,6 @@ def answer(
     rel = [p for p in local.seeds(named, repo) if p] if named else None
     state = load_config().db_path.parent / "hook-sessions"
     m = route_map.read(repo, state, session_id=session_id)
-    data = {"files": [_file(m, p) for p in rel]} if rel else _repo(m, limit)
+    cap = min(max(0, limit), MAX_LIMIT)
+    data = {"files": [_file(m, p, cap) for p in rel[:MAX_FILES]]} if rel else _repo(m, limit)
     return {"ok": True, **data, "text": render(data, repo.name), "caveat": CAVEAT}

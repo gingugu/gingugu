@@ -15,6 +15,7 @@ are a router's, each pinned by a false edge measured on real repos:
 
 from __future__ import annotations
 
+import time
 from collections import defaultdict
 from typing import NamedTuple
 
@@ -23,6 +24,9 @@ from .links.join_index import _seg_eq, _segs
 
 PREFIX = "{prefix}"  # surface_route: a prefix set at runtime, of unknown length
 MAX_EDGES = 20_000
+MAX_SERVES = 5_000  # routes read; past it a hostile repo buys nothing more
+MAX_CALLS = 50_000
+MAX_CANDIDATES = 256  # routes tried per call, after the shape index narrows them
 UNSERVED_NEAR = 2  # leading names a call must share with a served route to be 'missing'
 _LOCAL_SUFFIXES = (".local", ".localhost", ".internal")
 _SPEC_WORDS = ("openapi", "swagger")
@@ -97,14 +101,56 @@ def _wanted(c: Call, own_hosts) -> bool:
     )
 
 
-def _matches(segs: list[str], s: Serve) -> bool:
-    tail = _segs(s.key)
-    if not s.partial:
-        return _seg_eq(segs, tail)
-    head = _segs(s.head)
+class Overrun(Exception):
+    """The join ran past its deadline: the map is partial, so it says nothing."""
+
+
+class _Cand(NamedTuple):
+    serve: Serve
+    head: tuple[str, ...]
+    tail: tuple[str, ...]
+
+
+def _matches(segs: list[str], c: _Cand) -> bool:
+    if not c.serve.partial:
+        return _seg_eq(segs, list(c.tail))
+    head, tail = list(c.head), list(c.tail)
     if len(segs) < len(head) + len(tail):
         return False
     return _seg_eq(segs[: len(head)], head) and _seg_eq(segs[len(segs) - len(tail) :], tail)
+
+
+class _Index:
+    """Served routes by shape, each split into segments once: a complete route by
+    (length, last name), a partial one by its last name."""
+
+    def __init__(self, serves) -> None:
+        self.complete: dict[tuple[int, str], list[_Cand]] = defaultdict(list)
+        self.partial: dict[str, list[_Cand]] = defaultdict(list)
+        for s in list(s for s in serves if s is not None)[:MAX_SERVES]:
+            tail = tuple(_segs(s.key))
+            c = _Cand(s, tuple(_segs(s.head)) if s.partial else (), tail)
+            if s.partial:
+                self.partial[tail[-1]].append(c)
+            else:
+                self.complete[(len(tail), tail[-1])].append(c)
+
+    def candidates(self, segs: list[str]) -> list[_Cand]:
+        last = segs[-1]
+        out = self.complete.get((len(segs), last), []) + self.partial.get(last, [])
+        if last != model.WILD:  # a call's unknown last part matches only a parameter
+            out = out + self.complete.get((len(segs), model.WILD), [])
+            out = out + self.partial.get(model.WILD, [])
+        return out[:MAX_CANDIDATES]
+
+
+def _calls_in_order(calls) -> list[Call]:
+    return sorted(set(calls), key=lambda c: (c.path, c.line, c.key))[:MAX_CALLS]
+
+
+def _check(deadline: float | None, i: int) -> None:
+    if deadline is not None and i % 64 == 0 and time.monotonic() > deadline:
+        raise Overrun
 
 
 def _names(s: Serve) -> int:
@@ -120,14 +166,6 @@ def _near_dirs(a: str, b: str) -> int:
     return n
 
 
-def _index(serves) -> dict[str, list[Serve]]:
-    by_last: dict[str, list[Serve]] = defaultdict(list)
-    for s in serves:
-        if s is not None:
-            by_last[_segs(s.key)[-1]].append(s)
-    return by_last
-
-
 def _resolve(c: Call, hits: list[Serve]) -> tuple[list[Serve], bool]:
     """The serves a call resolves to, and whether more than one file is left."""
     top = max((_names(s), not s.partial) for s in hits)
@@ -137,18 +175,26 @@ def _resolve(c: Call, hits: list[Serve]) -> tuple[list[Serve], bool]:
     return best, len({s.path for s in best}) > 1
 
 
-def join(serves, calls, own_hosts=frozenset(), cap: int = MAX_EDGES) -> list[Edge]:
-    """Every call's edges to the routes it reaches, in caller order."""
-    by_last = _index(serves)
+def join(
+    serves,
+    calls,
+    own_hosts=frozenset(),
+    cap: int = MAX_EDGES,
+    *,
+    deadline: float | None = None,
+) -> list[Edge]:
+    """Every call's edges to the routes it reaches, in caller order. Raises
+    ``Overrun`` past ``deadline`` (``time.monotonic``)."""
+    ix = _Index(serves)
     out: list[Edge] = []
-    for c in sorted(set(calls), key=lambda c: (c.path, c.line, c.key)):
+    for i, c in enumerate(_calls_in_order(calls)):
+        _check(deadline, i)
         if not _wanted(c, own_hosts):
             continue
         segs = _segs(c.key)
-        cands = by_last.get(segs[-1], [])
-        if segs[-1] != model.WILD:  # a call's unknown last part matches only a parameter
-            cands = cands + by_last.get(model.WILD, [])
-        hits = [s for s in cands if s.path != c.path and _matches(segs, s)]
+        hits = [
+            k.serve for k in ix.candidates(segs) if k.serve.path != c.path and _matches(segs, k)
+        ]
         if not hits:
             continue
         best, ambiguous = _resolve(c, hits)
@@ -164,53 +210,49 @@ def join(serves, calls, own_hosts=frozenset(), cap: int = MAX_EDGES) -> list[Edg
     return out
 
 
-def _known(serves) -> dict[str, list[list[str]]]:
-    """Each route's known leading names, by its first one: only a route sharing
-    a call's first name can share any."""
-    out: dict[str, list[list[str]]] = defaultdict(list)
-    for s in serves:
-        if s is None:
-            continue
-        known = _segs(s.head) if s.partial else _segs(s.key)
-        if known and known[0] != model.WILD:
-            out[known[0]].append(known)
+def _prefixes(serves) -> set[tuple[str, ...]]:
+    """Every run of leading names a served route starts with (a partial route's
+    known head only), up to its first parameter."""
+    out: set[tuple[str, ...]] = set()
+    for s in list(s for s in serves if s is not None)[:MAX_SERVES]:
+        names = _segs(s.head) if s.partial else _segs(s.key)
+        for i, name in enumerate(names):
+            if name == model.WILD:
+                break
+            out.add(tuple(names[: i + 1]))
     return out
 
 
-def near(c: Call, serves, known: dict | None = None) -> int:
-    """Leading names ``c`` shares with the closest served route (a partial
-    route's known head only); a parameter ends the run."""
+def near(c: Call, serves, prefixes: set | None = None) -> int:
+    """Leading names ``c`` shares with the closest served route; a parameter
+    ends the run. Linear in the call's length, whatever the route count."""
+    known = prefixes if prefixes is not None else _prefixes(serves)
     segs = _segs(c.key)
-    if not segs:
-        return 0
-    known_by = known if known is not None else _known(serves)
-    best = 0
-    for names in known_by.get(segs[0], ()):
-        n = 0
-        for x, y in zip(segs, names, strict=False):
-            if y == model.WILD or x != y:
-                break
-            n += 1
-        best = max(best, n)
-    return best
+    n = 0
+    while n < len(segs) and tuple(segs[: n + 1]) in known:
+        n += 1
+    return n
 
 
-def unserved(serves, calls, edges, own_hosts=frozenset()) -> list[Call]:
+def unserved(
+    serves, calls, edges, own_hosts=frozenset(), *, deadline: float | None = None
+) -> list[Call]:
     """Calls no served route answers, though they share two leading names with
     one: a typo, or an endpoint renamed or removed on the other side. A call
-    that is only the start of a served route is a base URL, not a call."""
+    that is only the start of a served route is a base URL, not a call. Raises
+    ``Overrun`` past ``deadline``."""
     joined = {e.call for e in edges}
-    by_last = _index(serves)
-    known = _known(serves)
+    ix = _Index(serves)
+    known = _prefixes(serves)
     out = []
-    for c in sorted(set(calls), key=lambda c: (c.path, c.line, c.key)):
+    for i, c in enumerate(_calls_in_order(calls)):
+        _check(deadline, i)
         if c in joined or not _wanted(c, own_hosts):
             continue
         segs = _segs(c.key)
-        cands = by_last.get(segs[-1], []) + by_last.get(model.WILD, [])
-        if any(_matches(segs, s) for s in cands):
+        if any(_matches(segs, k) for k in ix.candidates(segs)):
             continue  # served, only in its own file: the route's own declaration
         n = near(c, serves, known)
-        if n >= UNSERVED_NEAR and n < len(_segs(c.key)):
+        if n >= UNSERVED_NEAR and n < len(segs):
             out.append(c)
     return out

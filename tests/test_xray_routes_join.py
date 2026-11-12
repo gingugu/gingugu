@@ -169,6 +169,31 @@ def test_unserved_matches_a_partial_head():
     assert rj.near(calls[0], serves) == 1
 
 
+def test_a_deadline_past_raises_overrun():
+    import pytest
+
+    serves = [_s(f"/api/r{i}", path=f"api/r{i}.py") for i in range(5)]
+    calls = [_c(f"/api/r{i}") for i in range(5)]
+    with pytest.raises(rj.Overrun):
+        rj.join(serves, calls, deadline=0.0)
+    with pytest.raises(rj.Overrun):
+        rj.unserved(serves, calls, [], deadline=0.0)
+
+
+def test_a_hostile_route_count_stays_bounded():
+    # thousands of routes sharing a first name and a parameter tail: the shape
+    # index and the candidate cap keep each call's work flat
+    import time
+
+    serves = [_s(f"/api/r{i}/{{id}}", path=f"api/r{i}.py") for i in range(5000)]
+    calls = [_c(f"/api/x{i}/foo", path=f"web/c{i}.ts") for i in range(5000)]
+    t = time.monotonic()
+    edges = rj.join(serves, calls)
+    rj.unserved(serves, calls, edges)
+    assert time.monotonic() - t < 3.0
+    assert edges == []
+
+
 def test_edges_are_ordered_and_capped():
     serves = [_s(f"/api/r{i}", path=f"api/r{i}.py") for i in range(5)]
     calls = [_c(f"/api/r{i}", path="web/a.ts", line=10 - i) for i in range(5)]

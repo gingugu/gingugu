@@ -59,7 +59,7 @@ AI client (Claude Code / Cursor / Windsurf / …)
    `xray/` (Codebase X-ray: `scan` + `extract` + `lang/` (one adapter per language: `python`
    on `ast` with `resolve`; `typescript` + `ts_*` + `jsonc` and `golang` on tree-sitter) +
    `model` + `local` + `parse_cache` + `resolve_walk` on the client, `validate` +
-   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check), `tool_xray` (the PreToolUse X-ray decision, apart from `tool_hook`), `bash_hook` + `bash_state` (X15: a shell command's writes get their X-ray; the repos a session touched) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), `symbols_walk` + `symbols` (X17: the symbol graph - per-file definition/binding/call/type records, resolved to call edges; client only, cached beside the graph; the Python walker and the shared model, `symbols.merge` joins every adapter's share), the TS/JS and Go symbol modules under `lang/` (`ts_symbols_walk`, `ts_symbols_types`, `ts_symbols_valid`, `ts_exports` - specifier resolution and barrel following, `ts_symbols`; `go_symbols_walk`, `go_symbols_valid`, `go_symbols`; `symbols_guard` - a linker that raises costs only its language's call graph), `edit_symbols` (X17: the tripwire's `Edit lands in` lines), `callers_tool` (X17: `code_xray` `callers`, local only), `edit_note` (the PostToolUse note after an edit: cross-file callers of the definitions touched, nearest tests), `literals` (who still reads a key an Edit/MultiEdit removed: a `git grep` text match, labelled as such, never an import edge), `ledger` + `ledger_runs` (X11 lean: X-ray's test predictions vs test-runner failures - pytest, vitest, jest, npm/pnpm/yarn/bun test, go test, gotestsum - local; `gingugu xray score`), `board_nudge` (X20 sender: asks a board post from a branch ahead of the default branch for its range, once per session, from `gingugu hook tool`), `board_brief` (X20: the brief a board post's `xray:` line asks for, rendered on the receiver), `repo_id` (X20: a checkout's identity and where the repo a post names is checked out here), `scar_query` (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace, bug/decision/architecture/fact/pattern only; never sees a checkout) + `scars` (X3, client side: resolves a hit's path tokens against the checkout's source files, ranks by type weight over files named, reads only the repo's own namespace, never `crow`; derived at read time, no table, no migration; appended to the read neighbourhood and the blind-edit deny), `history` (X4: git log summarized as churn, author counts and co-changed pairs, cached by HEAD), `hotspots` (X4 hotspots + coupling, X6 blind spots; pure), `history_tool` (`code_xray` `history`/`blindspots`, local only), `docs_map` + `docs_text` + `docs_cites` + `docs_tool` + `docs_hook` (X22: the reverse index from a file to the docs that cite it, here and in sibling checkouts; `code_xray` `docs`, local only; the hooks read a per-repo summary), `env_scan` + `env_map` + `env_tool` + `env_hook` (X7a: env vars as edges, client only; `code_xray` `env`), `file_facts` (the per-file cache plumbing `env_map` and `table_map` share) + `table_scan` + `table_map` + `table_tool` + `table_hook` (X7c: DB tables as edges, client only; `code_xray` `tables`), `surface_catalog` + `surface_records` + `surface_link` + `surface` + `surface_tool` (X7d: the attack-surface map, entry points and the sinks they reach through the X17 call graph, client only; `code_xray` `surface`), with `symbols_model` (the symbol model and its cache form) and the per-language entry and built-SQL walks `surface_walk_py`, `lang/ts_surface_walk`, `lang/go_surface_walk` and the `links/` package (X23: zero-config cross-repo links - what each checkout provides and mentions, joined into links, `shared` hosts and a cross-repo ripple; `code_xray` `links`, local only), the hook side that builds the graph itself and never
+   `rank` + `store` on the brain, plus `hook_common` (shared hook state and graph cache), `edit_hook` (edit-time check), `tool_xray` (the PreToolUse X-ray decision, apart from `tool_hook`), `bash_hook` + `bash_state` (X15: a shell command's writes get their X-ray; the repos a session touched) and `read_hook` (map on arrival), `brief` (X19: changed files by rank + combined blast, local only; CLI `xray_cli`), `symbols_walk` + `symbols` (X17: the symbol graph - per-file definition/binding/call/type records, resolved to call edges; client only, cached beside the graph; the Python walker and the shared model, `symbols.merge` joins every adapter's share), the TS/JS and Go symbol modules under `lang/` (`ts_symbols_walk`, `ts_symbols_types`, `ts_symbols_valid`, `ts_exports` - specifier resolution and barrel following, `ts_symbols`; `go_symbols_walk`, `go_symbols_valid`, `go_symbols`; `symbols_guard` - a linker that raises costs only its language's call graph), `edit_symbols` (X17: the tripwire's `Edit lands in` lines), `callers_tool` (X17: `code_xray` `callers`, local only), `edit_note` (the PostToolUse note after an edit: cross-file callers of the definitions touched, nearest tests), `literals` (who still reads a key an Edit/MultiEdit removed: a `git grep` text match, labelled as such, never an import edge), `ledger` + `ledger_runs` (X11 lean: X-ray's test predictions vs test-runner failures - pytest, vitest, jest, npm/pnpm/yarn/bun test, go test, gotestsum - local; `gingugu xray score`), `board_nudge` (X20 sender: asks a board post from a branch ahead of the default branch for its range, once per session, from `gingugu hook tool`), `board_brief` (X20: the brief a board post's `xray:` line asks for, rendered on the receiver), `repo_id` (X20: a checkout's identity and where the repo a post names is checked out here), `scar_query` (X3, brain side: an FTS5 phrase match on a file's basename in one project namespace, bug/decision/architecture/fact/pattern only; never sees a checkout) + `scars` (X3, client side: resolves a hit's path tokens against the checkout's source files, ranks by type weight over files named, reads only the repo's own namespace, never `crow`; derived at read time, no table, no migration; appended to the read neighbourhood and the blind-edit deny), `history` (X4: git log summarized as churn, author counts and co-changed pairs, cached by HEAD), `hotspots` (X4 hotspots + coupling, X6 blind spots; pure), `history_tool` (`code_xray` `history`/`blindspots`, local only), `docs_map` + `docs_text` + `docs_cites` + `docs_tool` + `docs_hook` (X22: the reverse index from a file to the docs that cite it, here and in sibling checkouts; `code_xray` `docs`, local only; the hooks read a per-repo summary), `env_scan` + `env_map` + `env_tool` + `env_hook` (X7a: env vars as edges, client only; `code_xray` `env`), `file_facts` (the per-file cache plumbing `env_map` and `table_map` share) + `table_scan` + `table_map` + `table_tool` + `table_hook` (X7c: DB tables as edges, client only; `code_xray` `tables`), `surface_catalog` + `surface_records` + `surface_link` + `surface` + `surface_tool` (X7d: the attack-surface map, entry points and the sinks they reach through the X17 call graph, client only; `code_xray` `surface`), with `symbols_model` (the symbol model and its cache form) and the per-language entry and built-SQL walks `surface_walk_py`, `lang/ts_surface_walk`, `lang/go_surface_walk`, `route_join` + `route_map` + `route_tool` + `route_show` + `route_hook` (X7b: the routes this repo serves joined to the calls that reach them, client only; `code_xray` `routes`) and the `links/` package (X23: zero-config cross-repo links - what each checkout provides and mentions, joined into links, `shared` hosts and a cross-repo ripple; `code_xray` `links`, local only), the hook side that builds the graph itself and never
    touches the brain; see Key Decisions), `proxy_xray` (the proxy's local half of `code_xray`),
    `board_watch` +
    `board_watch_remote`, `board_watch_emit` (the `gingugu board watch` wake-up command; see Key
@@ -1006,7 +1006,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   read hook, edit note and Bash X-ray read only it (`Docs cite it:` / `Docs still cite
   it:`), once per file per session (`xray-docs-edit` claim shared by edit note and Bash).
   No migration, no brain change.
-- **Codebase X-ray: env vars as edges (X7a, unreleased).** Nothing imports an
+- **Codebase X-ray: env vars as edges (X7a, released in 0.49.0).** Nothing imports an
   environment variable, so a reader and the config that sets it never meet in the graph.
   `xray/env_scan.scan_text(rel, text)` is pure: literal upper-snake names
   (`[A-Z][A-Z0-9_]{1,63}`) in known read forms (Python, TS/JS, Go, shell `${X:-}`) and set
@@ -1022,7 +1022,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   False. A file past either cap is `unread` (`EnvMap.unread`); while any is, nothing is
   called set or read nowhere (`not set in any file read`, and the edit note is silent).
   Switch `MEMORY_XRAY_ENV`. No migration.
-- **Codebase X-ray: DB tables as edges (X7c, unreleased).** Nothing imports a table, so
+- **Codebase X-ray: DB tables as edges (X7c, released in 0.49.0).** Nothing imports a table, so
   the code that queries it and the migration that creates it never meet in the graph.
   `xray/table_scan.scan_text(rel, text)` is pure: `(defines, drops, uses)` as (name, line),
   lowercased, one per name per line. Defines: `CREATE [TEMP] [VIRTUAL] TABLE|VIEW`,
@@ -1042,7 +1042,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   lines (a table defined nowhere here, only when the repo defines at least one; a
   definition other files use; a drop other files still use), on a 1s scan budget, silent
   while the map is incomplete. Switch `MEMORY_XRAY_TABLES`. No migration.
-- **Codebase X-ray: the attack-surface map (X7d, unreleased).** The symbol graph says what
+- **Codebase X-ray: the attack-surface map (X7d, released in 0.49.0).** The symbol graph says what
   calls what; this says which of it is reachable from outside and what it can do there. Two
   closed catalogues in `xray/surface_catalog.py`, per language (`python`, `typescript` for
   TS and JS, `go`): *sinks* by dotted name into the categories `exec`, `eval`, `deserialize`,
@@ -1080,7 +1080,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   registration form is not listed); a listed path exists in the code, whether input flows along
   it is not checked. Measured on gingugu itself: 47 entries (24 mcp, 21 main, 1 cli, 1 http),
   39 reach a sink, 2.6s cold. No migration, no brain change.
-  *Routes, mounts and the hook line (unreleased).* Entries carry `method`, `route` and `name`
+  *Routes, mounts and the hook line (released in 0.50.0).* Entries carry `method`, `route` and `name`
   (`xray/surface_route.py`: clean/method_of/methods/go_pattern/join/label; `surface_route_py.py`,
   `lang/ts_surface_route.py`, `lang/go_surface_route.py` per language; `{prefix}` = a prefix set
   at runtime). A literal is kept only as short printable ASCII, no quotes, backticks or
@@ -1097,6 +1097,26 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   in it that entries reach; the edit note snapshots the caches before the edit
   (`hook_common.cached_symbols`, `table_map.cached_uses`), rebuilds after (fingerprint-checked, parse
   cache re-parses only the edited file) and diffs.
+- **Codebase X-ray: HTTP routes as edges (X7b, unreleased).** Nothing imports a route, so a
+  frontend's `fetch('/api/users')` and the handler that answers it never meet in the graph.
+  `xray/route_join.py` joins the routes this repo serves (X7d's http entries, mounted to full
+  URLs, test files left out) to the calls that reach them (X23's route mentions, read through
+  `route_map.py`; a URL route now carries its host in the mention's detail). The rules are a
+  router's: a route believed complete (no `{prefix}`) matches only a call of its exact shape; a
+  `{prefix}` partial matches on its known head and tail and needs at least 2 names; the most
+  specific route wins, then the server nearest the caller by directory, and a tie is flagged
+  ambiguous; a path inside a URL to another host never joins; generic routes are skipped; a call
+  never joins a route in its own file. A call is "served nowhere here" when no route matches
+  though it shares at least 2 leading names with one and is not a base URL. `route_tool` is
+  `code_xray` `routes` (local only, like `surface`; `gingugu serve` refuses it, the proxy and the
+  CLI answer): with files, the routes each serves with who calls each and the calls each makes
+  with what serves each; without, every route by its callers, calls served nowhere here first;
+  `route_show` renders. `route_hook` adds the read hook's `Routes:` line (4 items at most) and
+  the edit note: an edit that adds a call served nowhere here (code callers only, and only when
+  the map is trustworthy: `2 * unserved_code <= joined_code`) or stops serving a route other
+  files still call; 3 at most, once per route per session. Switch `MEMORY_XRAY_ROUTES`. No
+  migration, no brain change. Measured: frontend-to-backend edges sampled correct 7/7, 6/6 and
+  7/7 on fully mounted repos. Bound: recall depends on which frameworks X7d reads routes from.
 - **Codebase X-ray: cross-repo links (X23, released in 0.46.0).** A service ecosystem
   is wired by names, not imports. `xray/links/` reads this checkout and its sibling
   checkouts (the docs map's discovery) for the names each file *provides* (`provides*.py`:

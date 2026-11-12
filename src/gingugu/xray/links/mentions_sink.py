@@ -30,13 +30,20 @@ class Sink:
         line: int,
         detail: str = "",
         target: str = "",
+        local_first: bool = False,
     ) -> bool:
+        """``local_first``: a fact with no detail outranks one with it, whatever
+        the lines (a relative route is a call here; one in another host's URL is not)."""
         if not key:
             return False
         ident = (kind, key, path, target)
         old = self._facts.get(ident)
-        if old is not None and old.line <= line:
-            return False
+        if old is not None:
+            if local_first and bool(old.detail) != bool(detail):
+                if not old.detail:
+                    return False  # the local one is already kept
+            elif old.line <= line:
+                return False
         self._facts[ident] = Fact(kind, key, path, line, detail, target)
         return old is None
 

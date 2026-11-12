@@ -50,14 +50,13 @@ def trusted(m: route_map.RouteMap, exclude=()) -> bool:
 
 def _serves(m: route_map.RouteMap, rel: str) -> list[str]:
     mine = groups_of(s for s in m.serves if s.path == rel)
-    edges = route_map.served_in(m, rel)
+    by_group: dict[tuple, list[tuple[str, int]]] = {}
+    for e in route_map.served_in(m, rel):
+        k = (e.serve.path, e.serve.head, e.serve.key)
+        by_group.setdefault(k, []).append((e.call.path, e.call.line))
     out = []
     for k, group in sorted(mine.items(), key=lambda kv: line_of(kv[1])):
-        found = _callers(
-            (e.call.path, e.call.line)
-            for e in edges
-            if (e.serve.path, e.serve.head, e.serve.key) == k
-        )
+        found = _callers(by_group.get(k, ()))
         route = _show(display(group))
         if found:
             locs = _more([f"{_show(p)}:{n}" for p, n in found[:LOCS]], len(found))
@@ -154,9 +153,14 @@ def _new_calls(m: route_map.RouteMap, rel: str, added) -> list[tuple[str, str, s
     if route_join.caller_class(rel) != "code":
         return []  # a test probing a 404 is not a typo
     out = []
+    unserved = set(m.unserved)
+    here: dict[str, list] = {}
+    for c in m.calls:
+        if c.path == rel:
+            here.setdefault(c.key, []).append(c)
     for key, _host in added:
-        mine = [c for c in m.calls if c.path == rel and c.key == key]
-        if not mine or not any(c in m.unserved for c in mine):
+        mine = here.get(key, [])
+        if not mine or not any(c in unserved for c in mine):
             continue
         if not trusted(m, exclude=mine):
             continue

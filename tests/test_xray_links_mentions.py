@@ -210,6 +210,16 @@ def test_a_url_route_carries_its_host_and_a_relative_one_none():
     }
 
 
+def test_a_relative_route_outranks_the_same_path_on_another_host():
+    foreign_first = 'A = "https://github.com/api/users"\nB = fetch("/api/users")\n'
+    local_first = 'B = fetch("/api/users")\nA = "https://github.com/api/users"\n'
+    for src in (foreign_first, local_first):
+        fact = one({"web/a.ts": src}, ROUTE, "/api/users")
+        assert fact.detail == "" and fact.line == (2 if src is foreign_first else 1)
+    both_foreign = 'A = "https://github.com/api/users"\nB = "https://gitlab.com/api/users"\n'
+    assert one({"web/a.ts": both_foreign}, ROUTE, "/api/users").line == 1
+
+
 def test_host_valued_config_keys():
     files = {
         "config/app.yaml": 'upstream:\n  host: svc-a.acme.io\n  hostname: "b.acme.io"\n',

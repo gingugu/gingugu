@@ -22,6 +22,7 @@ from .links import model
 from .route_join import Call, Edge, Serve
 
 DEFAULT_BUDGET_S = 120.0  # a deliberate read; hooks pass their own
+JOIN_GRACE_S = 1.0  # with a budget, the join may run this long past the scan's deadline
 
 
 class RouteMap(NamedTuple):
@@ -72,8 +73,13 @@ def read(
     calls = [
         Call(f.key, f.path, f.line, f.detail) for f in facts.mentioned if f.kind == model.ROUTE
     ]
-    edges = route_join.join(serves, calls, own_hosts)
-    miss = route_join.unserved(serves, calls, edges, own_hosts)
+    # the join shares the budget: a hostile repo's route count never stalls a hook
+    join_by = None if budget_s is None else deadline + JOIN_GRACE_S
+    try:
+        edges = route_join.join(serves, calls, own_hosts, deadline=join_by)
+        miss = route_join.unserved(serves, calls, edges, own_hosts, deadline=join_by)
+    except route_join.Overrun:
+        return RouteMap(tuple(serves), tuple(calls), (), (), False, left)
     return RouteMap(tuple(serves), tuple(calls), tuple(edges), tuple(miss), not left, left)
 
 
