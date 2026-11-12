@@ -180,18 +180,24 @@ def test_a_deadline_past_raises_overrun():
         rj.unserved(serves, calls, [], deadline=0.0)
 
 
-def test_a_hostile_route_count_stays_bounded():
-    # thousands of routes sharing a first name and a parameter tail: the shape
-    # index and the candidate cap keep each call's work flat
-    import time
+def test_a_hostile_route_count_stays_bounded(monkeypatch):
+    # thousands of routes of one shape: the candidate cap keeps each call's work
+    # flat. Counted, not timed: a loaded CI runner makes any wall clock flaky.
+    serves = [_s(f"/api/r{i}/{{id}}", path=f"api/r{i}.py") for i in range(3000)]
+    calls = [_c(f"/api/x{i}/foo", path=f"web/c{i}.ts") for i in range(400)]
+    tried = 0
+    real = rj._matches
 
-    serves = [_s(f"/api/r{i}/{{id}}", path=f"api/r{i}.py") for i in range(5000)]
-    calls = [_c(f"/api/x{i}/foo", path=f"web/c{i}.ts") for i in range(5000)]
-    t = time.monotonic()
+    def counting(segs, cand):
+        nonlocal tried
+        tried += 1
+        return real(segs, cand)
+
+    monkeypatch.setattr(rj, "_matches", counting)
     edges = rj.join(serves, calls)
     rj.unserved(serves, calls, edges)
-    assert time.monotonic() - t < 3.0
     assert edges == []
+    assert tried <= 2 * len(calls) * rj.MAX_CANDIDATES  # join + unserved, never x routes
 
 
 def test_edges_are_ordered_and_capped():
