@@ -792,7 +792,7 @@ code_xray links / gingugu xray links (stdio handler, or the proxy; serve refuses
     provides*.py   -> provided facts: package, image, host, route (unmounted tails), resource;
                       tests and fixtures provide nothing (they still mention)
     mentions*.py + prose.py -> mentioned facts: ci, submodule, repo-dep, dep, image, host,
-                      route, name, cite (repo@sha path), doc (prose), repo-name (a repo
+                      route (a URL route carries its host in detail), name, cite (repo@sha path), doc (prose), repo-name (a repo
                       named outright: bare hyphenated name, owner/name, GitHub URL); <= 2000 facts, 200 names;
                       a name is never read from .env* files, a secret-named line, a known
                       token prefix or a random-looking value (names are cached on disk)
@@ -977,6 +977,42 @@ edit note (Edit / MultiEdit / Write of a file in an X-ray language)
     claims xray-surface-edit (each fact once per session)
     rebuild raises -> "the after-edit reach check was skipped ..." (claim xray-surface-skip)
 MEMORY_XRAY_SURFACE=off -> no surface lines; any failure -> no line, never an error
+```
+
+**HTTP routes as edges (X7b, `xray/route_tool.py`).** `code_xray` `routes` / `gingugu xray
+routes` read `route_map.read` and answer locally (served side from X7d, calling side from X23):
+
+```
+route_map.read: serves = X7d http entries (mounted to full URLs; lang.is_test files excluded)
+    calls = X23 ROUTE mentions from index.scan_repo(own=True); a URL route carries its host in
+    detail, and a relative mention outranks the same path on another host
+    -> route_join.join: shape index; a complete route matches only its exact shape, a {prefix}
+       route matches on head + tail (>= 2 names); the most specific route wins, then the server
+       nearest the caller by directory, a tie is flagged ambiguous; a foreign host never joins;
+       a call never joins a route in its own file
+    -> route_join.unserved: no edge, but >= 2 leading names shared with a route and not a base URL
+    hook budget: BUDGET_S 1.0 for the mention scan + JOIN_GRACE_S 1.0 for the join; join or
+       unserved raising Overrun -> a partial map (no edges, complete False), silent
+files given -> per file: routes served with their callers, calls made with what serves each
+               (ambiguous flagged), calls served nowhere here
+no files    -> every route by its callers, calls served nowhere here first; limit capped at 200;
+               text <= 8800 chars
+MEMORY_XRAY_ROUTES=off -> ValueError; gingugu serve -> refused (the brain never reads a path)
+```
+
+The route map reaches the hooks the way the table map does (this repo only):
+
+```
+read hook (PostToolUse Read): a file's first read -> route_hook.file_line -> route_map.read
+    (budget_s=1.0) -> "Routes: serves <route> (called by x.ts:N, ...); calls <route> (served by
+    f.py:N), <route> (served nowhere here)" (4 items at most); "served nowhere here" only when
+    the map is trusted: at least one call from code joined and 2 * unserved_code <= joined_code
+edit note (PostToolUse Edit/Write/MultiEdit): routes in the new text minus the old -> an added
+    call served nowhere here (code callers only, same trust gate), or a route no longer served
+    that other files still call; 3 at most, claimed once per route per session and only when
+    said (a line past the cap is never claimed)
+an incomplete map (budget ran out) says nothing
+MEMORY_XRAY_ROUTES=off silences every line
 ```
 
 **Readers of a removed key (xray/literals, board d5639dd5).** The edit note also

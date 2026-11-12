@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   host). A call is "served nowhere here" when no route answers it though it shares two
   leading names with one. The read hook names a file's routes and calls (`Routes:` line); the
   edit note says when an edit adds a call served nowhere here (code only, and only when the
-  map is trustworthy: joined calls from code at least twice the unserved ones) or stops
+  map is trustworthy: at least one call from code joined, and joined calls from code at least twice the unserved ones) or stops
   serving a route other files still call. `MEMORY_XRAY_ROUTES=off` silences it. Answered
   locally (stdio server, proxy, CLI), refused by `gingugu serve`. Measured on real repos:
   frontend-to-backend edges sampled correct 7/7, 6/6, 7/7 where the routes are fully mounted.

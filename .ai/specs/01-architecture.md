@@ -938,7 +938,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `gingugu serve` refuses it (it cannot read the caller's checkout) and the proxy
   claims it and answers it locally. A range is checked before git sees it (no
   option, whitespace or control characters).
-- **Codebase X-ray: the symbol graph (X17, Python released in 0.39.0; TS/JS and Go unreleased).** Files and
+- **Codebase X-ray: the symbol graph (X17, Python released in 0.39.0; TS/JS and Go released in 0.49.0).** Files and
   imports say what a change *could* reach; definitions and calls say what it does.
   Each adapter's parse also yields per-file records (Python `xray/symbols_walk`, TS/JS
   `lang/ts_symbols_walk`, Go `lang/go_symbols_walk`; content-only, so they ride the
@@ -1113,7 +1113,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   with what serves each; without, every route by its callers, calls served nowhere here first;
   `route_show` renders. `route_hook` adds the read hook's `Routes:` line (4 items at most) and
   the edit note: an edit that adds a call served nowhere here (code callers only, and only when
-  the map is trustworthy: `2 * unserved_code <= joined_code`) or stops serving a route other
+  the map is trustworthy: at least one call from code joined and `2 * unserved_code <= joined_code`) or stops serving a route other
   files still call; 3 at most, once per route per session. Switch `MEMORY_XRAY_ROUTES`. No
   migration, no brain change. Measured: frontend-to-backend edges sampled correct 7/7, 6/6 and
   7/7 on fully mounted repos. Bound: recall depends on which frameworks X7d reads routes from.

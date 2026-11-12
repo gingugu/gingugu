@@ -131,8 +131,8 @@ graph LR
     C -->|add · list · remove · test| W
     C -->|post · inbox · read · claim · done| BP
     C -->|ingest · refresh · blast · overview| XR
-    C -->|brief · callers · history · blindspots · docs · links · env · tables · surface, stdio only: nothing stored| XG
-    X -->|brief · callers · history · blindspots · docs · links · env · tables · surface, answered on this machine| XG
+    C -->|brief · callers · history · blindspots · docs · links · env · tables · routes · surface, stdio only: nothing stored| XG
+    X -->|brief · callers · history · blindspots · docs · links · env · tables · routes · surface, answered on this machine| XG
     A -->|each pending tool call| Y
     Y -->|reads matches| W
     Y -->|logs each trip| T
@@ -1985,7 +1985,7 @@ answers it. With files it lists the routes each serves with who calls each, and 
 makes with what serves each; without, every route by its callers, the calls served nowhere here
 first. `xray/route_hook.py` puts the map in the hooks: the read hook adds a `Routes:` line (4
 items at most), and the edit note says when an edit adds a call served nowhere here (code
-callers only, and only when the map is trustworthy: joined calls from code at least twice the
+callers only, and only when the map is trustworthy: at least one call from code joined, and joined calls from code at least twice the
 unserved ones) or stops serving a route other files still call (3 at most, once per route per
 session). `MEMORY_XRAY_ROUTES=off` silences it. Recall depends on which frameworks X7d reads
 routes from. No migration, no brain change.
@@ -2672,7 +2672,7 @@ src/gingugu/
     ├── credentials.py      # credential_store / get / list / delete (delete takes `confirm`; always a big delete)
     ├── tripwires.py        # memory_tripwire: add / list / remove / test
     ├── board.py            # board tool + gingugu://board/inbox/{persona} resource; derives the author
-    ├── xray.py             # code_xray tool: snapshot selection, blast, overview, refresh, ingest, brief, callers, history, blindspots, docs, links, env, tables, surface
+    ├── xray.py             # code_xray tool: snapshot selection, blast, overview, refresh, ingest, brief, callers, history, blindspots, docs, links, env, tables, routes, surface
     ├── admin.py            # namespaces, export, import (cascade delete and overwriting import take `confirm`)
     ├── summaries.py        # Payload shapes: full summary, compact summary, the picker
     ├── choices.py          # Enum argument parsing, shared error wording
