@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 from typing import NamedTuple
 
-from . import hook_common, route_join
+from . import hook_common, lang, route_join
 from .links import model
 from .route_join import Call, Edge, Serve
 
@@ -42,7 +42,7 @@ def serves_of(sym) -> list[Serve]:
     """Served routes from a symbol graph's HTTP entries; a test's route serves nothing."""
     out = []
     for e in sym.entries:
-        if e.kind != "http" or not e.route or model.is_test(e.path):
+        if e.kind != "http" or not e.route or lang.is_test(e.path):
             continue
         s = route_join.serve(e.route, e.path, e.line, e.method)
         if s is not None:

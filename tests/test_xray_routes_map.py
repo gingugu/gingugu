@@ -73,6 +73,47 @@ def test_by_file_views(repo, tmp_path):
     assert route_map.uncalled(m) == []
 
 
+POLYGLOT = {
+    "server/app.ts": (
+        "import express from 'express'\n"  # 1
+        "const app = express()\n"  # 2
+        "app.get('/api/items/:id', (req, res) => res.send('x'))\n"  # 3
+    ),
+    "go/main.go": (
+        "package main\n"  # 1
+        'import "net/http"\n'  # 2
+        "func orders(w http.ResponseWriter, r *http.Request) {}\n"  # 3
+        "func main() {\n"  # 4
+        '\thttp.HandleFunc("/api/orders", orders)\n'  # 5
+        "}\n"  # 6
+    ),
+    "go/main_test.go": 'package main\nfunc TestX() { http.Get("/api/items/9") }\n',
+    "scripts/load.py": "import httpx\nhttpx.get('/api/orders')\n",
+    "cli/client.go": 'package cli\nimport "net/http"\nfunc F() { http.Get("/api/items/7") }\n',
+    "web/a.spec.ts": "it('x', () => fetch('/api/orders'))\n",
+}
+
+
+def test_every_language_serves_and_calls(tmp_path):
+    from gingugu.xray import route_join
+
+    repo = _repo(tmp_path, POLYGLOT)
+    m = route_map.read(repo, tmp_path / "state")
+    assert sorted((s.path, s.key) for s in m.serves) == [
+        ("go/main.go", "/api/orders"),
+        ("server/app.ts", "/api/items/*"),
+    ]
+    got = sorted((e.call.path, e.serve.path) for e in m.edges)
+    assert got == [
+        ("cli/client.go", "server/app.ts"),
+        ("go/main_test.go", "server/app.ts"),
+        ("scripts/load.py", "go/main.go"),
+        ("web/a.spec.ts", "go/main.go"),
+    ]
+    assert route_join.caller_class("go/main_test.go") == "test"
+    assert route_join.caller_class("web/a.spec.ts") == "test"
+
+
 def test_off_switch(monkeypatch):
     monkeypatch.setenv("MEMORY_XRAY_ROUTES", "off")
     assert not route_map.enabled()

@@ -86,7 +86,9 @@ def local_host(host: str, own_hosts=frozenset()) -> bool:
 
 def caller_class(path: str) -> str:
     """``code``, ``test`` or ``doc`` (an OpenAPI or Swagger spec is a doc)."""
-    if model.is_test(path):
+    from . import lang  # a test by its language's rule (_test.go, .spec.ts) or by its folder
+
+    if lang.is_test(path) or model.is_test(path):
         return "test"
     if model.is_doc(path) or any(w in path.lower() for w in _SPEC_WORDS):
         return "doc"
