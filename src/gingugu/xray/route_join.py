@@ -164,17 +164,30 @@ def join(serves, calls, own_hosts=frozenset(), cap: int = MAX_EDGES) -> list[Edg
     return out
 
 
-def near(c: Call, serves) -> int:
-    """Leading names ``c`` shares with the closest served route (a partial
-    route's known head only); a parameter ends the run."""
-    segs = _segs(c.key)
-    best = 0
+def _known(serves) -> dict[str, list[list[str]]]:
+    """Each route's known leading names, by its first one: only a route sharing
+    a call's first name can share any."""
+    out: dict[str, list[list[str]]] = defaultdict(list)
     for s in serves:
         if s is None:
             continue
         known = _segs(s.head) if s.partial else _segs(s.key)
+        if known and known[0] != model.WILD:
+            out[known[0]].append(known)
+    return out
+
+
+def near(c: Call, serves, known: dict | None = None) -> int:
+    """Leading names ``c`` shares with the closest served route (a partial
+    route's known head only); a parameter ends the run."""
+    segs = _segs(c.key)
+    if not segs:
+        return 0
+    known_by = known if known is not None else _known(serves)
+    best = 0
+    for names in known_by.get(segs[0], ()):
         n = 0
-        for x, y in zip(segs, known, strict=False):
+        for x, y in zip(segs, names, strict=False):
             if y == model.WILD or x != y:
                 break
             n += 1
@@ -188,6 +201,7 @@ def unserved(serves, calls, edges, own_hosts=frozenset()) -> list[Call]:
     that is only the start of a served route is a base URL, not a call."""
     joined = {e.call for e in edges}
     by_last = _index(serves)
+    known = _known(serves)
     out = []
     for c in sorted(set(calls), key=lambda c: (c.path, c.line, c.key)):
         if c in joined or not _wanted(c, own_hosts):
@@ -196,7 +210,7 @@ def unserved(serves, calls, edges, own_hosts=frozenset()) -> list[Call]:
         cands = by_last.get(segs[-1], []) + by_last.get(model.WILD, [])
         if any(_matches(segs, s) for s in cands):
             continue  # served, only in its own file: the route's own declaration
-        n = near(c, serves)
+        n = near(c, serves, known)
         if n >= UNSERVED_NEAR and n < len(_segs(c.key)):
             out.append(c)
     return out

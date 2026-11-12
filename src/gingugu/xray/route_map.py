@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from . import hook_common, route_join
-from .links import index, model
+from .links import model
 from .route_join import Call, Edge, Serve
 
 DEFAULT_BUDGET_S = 120.0  # a deliberate read; hooks pass their own
@@ -59,6 +59,8 @@ def read(
 ) -> RouteMap:
     """The route map of the checkout at ``root``. ``sym`` reuses a symbol graph
     the caller already holds; ``budget_s`` bounds the mention scan."""
+    from .links import index  # here, not at import: index -> brief -> read_hook -> us
+
     if sym is None:
         sym = hook_common.symbols(root, state_dir, session_id)
     serves = serves_of(sym)

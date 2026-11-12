@@ -29,6 +29,7 @@ from . import (
     ledger,
     literals,
     rank,
+    route_hook,
     surface_hook,
     symbols,
     table_hook,
@@ -207,6 +208,7 @@ def check(payload: dict, state_dir: Path) -> str | None:
             return "\n".join(["GINGUGU X-RAY after edit:", *both]) if both else None
         root, rel = target
         snap = surface_hook.before(root, state_dir)  # X7d: before any line refreshes a cache
+        rsnap = route_hook.before(root, state_dir)  # X7b: likewise
         # The file is seen now, by whoever wrote it, in any X-ray language: the
         # blind-edit deny stands down. The symbol graph says more in every language.
         _claim(hook_common.claim_path(state_dir, "xray-read", session_id, root, rel))
@@ -214,6 +216,7 @@ def check(payload: dict, state_dir: Path) -> str | None:
         outside += _docs(root, rel, state_dir, session_id)  # X22
         outside += env_hook.edit_lines(payload, root, rel, state_dir, session_id)  # X7a
         outside += table_hook.edit_lines(payload, root, rel, state_dir, session_id)  # X7c
+        outside += route_hook.edit_lines(payload, root, rel, state_dir, session_id, rsnap)  # X7b
         lines: list[str] = []
         news = _news(payload)
         if news:

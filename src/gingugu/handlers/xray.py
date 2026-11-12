@@ -27,6 +27,7 @@ from ..xray import (
     extract,
     history_tool,
     local,
+    route_tool,
     store,
     surface_tool,
     table_tool,
@@ -48,6 +49,7 @@ _ACTIONS = (
     *docs_tool.ACTIONS,
     *env_tool.ACTIONS,
     *table_tool.ACTIONS,
+    *route_tool.ACTIONS,
     *surface_tool.ACTIONS,
     *links_tool.ACTIONS,
 )
@@ -136,6 +138,9 @@ def register(mcp, ctx: ServerContext) -> None:
         (files: the DB tables each file uses and where each is defined or dropped, and the
         ones it defines or drops with who else uses them; no files: every table, the ones
         used but defined nowhere here or dropped but still used first; computed locally),
+        "routes" (files: the HTTP routes each file serves with who in this repo calls each,
+        and the calls it makes with what serves each; no files: every route by its callers,
+        calls served nowhere here first; computed locally),
         "surface" (the attack-surface map: every entry point - route, MCP tool, CLI
         command, task, Go main - with the sinks it reaches through the call graph,
         command execution, eval, deserialisation, built SQL, file writes, secrets,
@@ -176,6 +181,10 @@ def register(mcp, ctx: ServerContext) -> None:
                 if ctx.transport != "stdio":
                     return _err(_NO_DISK)
                 return table_tool.answer(path, files, limit)
+            if action in route_tool.ACTIONS:
+                if ctx.transport != "stdio":
+                    return _err(_NO_DISK)
+                return route_tool.answer(path, files, limit)
             if action in surface_tool.ACTIONS:
                 if ctx.transport != "stdio":
                     return _err(_NO_DISK)
