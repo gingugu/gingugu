@@ -28,6 +28,7 @@ from . import (
     hotspots,
     local,
     rank,
+    route_hook,
     scars,
     surface_hook,
     symbols,
@@ -275,6 +276,9 @@ def check(payload: dict, state_dir: Path) -> str | None:
                 + _docs_file(root, rel, state_dir)
                 + [ln for ln in [env_hook.file_line(root, rel, state_dir)] if ln]
                 + [ln for ln in [table_hook.file_line(root, rel, state_dir)] if ln]
+                + [
+                    ln for ln in [route_hook.file_line(root, rel, state_dir, session_id, fp)] if ln
+                ]  # X7b
                 + surface_hook.read_lines(root, rel, state_dir, session_id, fp)  # X7d
             )
             if extra:  # a leaf has no neighbourhood, but its history still speaks

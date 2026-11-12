@@ -1,53 +1,27 @@
 # Project Status
 
-_Last updated: 2026-11-10 (X7d routes, cross-file mounts and the surface hook line on `feature/xray-surface-hook`; X7d attack-surface map built on `feature/xray-surface`; X17 symbol graph for TS/JS and Go + multi-runner X11 ledger on `feature/x17-ts-go`; literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
+_Last updated: 2026-11-11 (X7b HTTP routes as edges built on `feature/xray-routes`; X7d routes, mounts and the surface hook line released in 0.50.0, the attack-surface map in 0.49.0; X17 symbol graph for TS/JS and Go + multi-runner X11 ledger on `feature/x17-ts-go`; literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
 
 ## In Flight
 
-**X7d routes, cross-file mounts and the surface hook line (2026-11-10, branch `feature/xray-surface-hook`, unreleased).**
-Follow-on to the attack-surface map below. Every entry carries `method` and `route` (`xray/surface_route.py`;
-`{prefix}` = a prefix set at runtime): HTTP method + URL across Python, TS/JS and Go (decorators, registrars,
-Express chained `app.route('/x').get(h)`, NestJS `@Get` under `@Controller`, Go 1.22 `"GET /x"` patterns, chi
-`Method`/`MethodFunc`, gin `Handle`), MCP tool/prompt name or resource URI, CLI command names plus each
-`[project.scripts]` name. Same-file prefixes (FastAPI `APIRouter`, Flask `Blueprint`, NestJS `@Controller`, gin/echo
-`Group`, chi `Route`/`Group`) and cross-file mounts (`xray/surface_mounts.py`: `include_router`,
-`register_blueprint`, Django `include`, Express `app.use`, routers passed into functions, `setGlobalPrefix`, chi
-`Mount`, package-level Go routers; one entry per URL, max 8). Walk records widen (entries 11 fields, `mounts`,
-Python `vars`, TS `decls`); `EXTRACTOR_VERSION` 6. Limit: a mount through an untracked value (a Go struct-field
-router) is not followed. Hook lines (`xray/surface_hook.py`, `MEMORY_XRAY_SURFACE=off` silences): the read hook
-names the entry points in a file and the sinks in it that entries reach (3 shown, `+N more`); the edit note diffs
-before/after (cache snapshot vs a fingerprint-checked rebuild, ~0.26s on gingugu) and says what the edit makes
-reachable, adds, or sits on, once per fact per session. Checked on real FastAPI, Flask, Express, NestJS, gin, chi
-and MCP TS SDK servers. Adapter isolation proven for Python, TS and Go. No migration.
-
-**X7d attack-surface map (2026-11-10, branch `feature/xray-surface`, unreleased; 0.49.0 is held).** Fourth
-slice of X7 (edges beyond imports), the one that makes it a security instrument. The import graph says what a
-change could reach and the call graph what it does; this says which code outside input arrives at and what it
-can do there. `code_xray` `surface` / `gingugu xray surface` (`--files`, `--path`, `--limit`, `--json`)
-lists every entry point with the sinks it reaches through the X17 call graph; answered locally (stdio
-server, proxy, CLI), refused by `gingugu serve` like `tables`. Entries: MCP tool/resource/prompt, HTTP route
-(decorator or registrar), CLI command (including argparse `set_defaults` and `[project.scripts]`
-functions), Celery task, Python `if __name__ == "__main__"`, Go `main`, NestJS `@Get` and kin,
-Express-style `app`/`router` verbs, MCP `server.tool`/`registerTool`. Sinks, in this order: `exec`, `eval`,
-`deserialize`, `sql` (`sql.built`: a query assembled at runtime from a part not known safe), `fs`, `secret`,
-`net`, `db:<table>` (X7c table uses joined to the enclosing definition, so an untyped connection still
-counts). Shortest path per sink by breadth-first reach, hops = calls from the handler (an inline callback's
-callees are hop 1), then the sinks no entry reaches; test files left out; with files, entries in them or
-reaching into them. New modules: `xray/surface_catalog.py` (closed per-language catalogues),
-`surface_records.py` (the `entries`, `sql` and - since the routes slice - `mounts` walk records and their shape check), `surface_link.py` (the
-Collector each linker feeds), `surface.py` (pure reach), `surface_tool.py` (the action),
-`symbols_model.py` (the symbol model and its cache form, moved out of `symbols.py` to keep it under the
-line limit), `surface_walk_py.py`, `lang/ts_surface_walk.py`, `lang/go_surface_walk.py` (the per-language
-walks). Sinks are a closed catalogue per language: nothing external outside it is stored, and
-`symbols_model.from_json` refuses any name the catalogue never wrote. The symbol cache
-(`xray-symbols-<digest>.json`) now also carries sinks and entries; `EXTRACTOR_VERSION` was 5 here (6 since the routes slice), so caches
-rebuild once. Python, TS/JS and Go (the X-ray law in `.ai/standards/03-xray.md`). A lower bound, like the
-call graph under it. Measured on gingugu itself: 47 entries (24 mcp, 21 main, 1 cli, 1 http), 39 reach a
-sink, 2.6s cold; 20 of the 24 MCP tools reach one, mostly through database tables. Path and name bounds: each `via` keeps at most `MAX_VIA` (6) names, built during the walk, with a cut flag (`via_cut`, rendered ` > ...`); cached lines are at most 10,000,000 and names 512 characters, in the walk records and `symbols_model` alike; the TS and Go safe-part checks judge each local once per function (a cycle reads unsafe, a crafted alias chain flags the call), Python's follows locals two deep. Spec:
-`tests/test_xray_surface.py`, `test_xray_surface_tool.py`, `test_xray_surface_walk_py.py`,
-`test_xray_surface_walk_ts.py`, `test_xray_surface_walk_go.py`, `test_xray_surface_hostile.py`. The hook line came in the slice above
-(`surface_hook.py`, read hook and edit note). No migration, no brain change.
-Remaining under X7: X7b HTTP routes (waits on a measurement over a larger set of service repos), then X8.
+**X7b HTTP routes as edges (2026-11-11, branch `feature/xray-routes`, PR #196, unreleased).** Nothing imports a route, so
+a frontend's `fetch('/api/users')` and the handler that answers it never meet in the import graph. `code_xray`
+`routes` / `gingugu xray routes` (`--files`, `--path`, `--limit`, `--json`) joins the routes this repo serves
+(X7d entry points, mounted to full URLs, test files left out) to the calls that reach them (X23 route mentions;
+a URL route now carries its host in the mention's detail). Modules: `xray/route_join.py` (the join),
+`route_map.py` (the checkout map), `route_tool.py` (the action), `route_hook.py` (read line and edit note),
+`route_show.py` (rendering). Router rules: a complete route matches only a call of its exact shape; a `{prefix}`
+route matches on its known head and tail and needs at least 2 names; the most specific route wins, then the
+server nearest the caller by directory, and a tie is flagged ambiguous; a path inside a URL to another host never
+joins; generic routes are skipped; a call never joins a route in its own file. "Served nowhere here" = no route
+answers it though it shares at least 2 leading names with one and it is not a base URL. With files: the routes
+each file serves with who calls each, and the calls it makes with what serves each; without: every route by its
+callers, the calls served nowhere here first. Read hook `Routes:` line (4 items at most); edit note, once per
+route per session, 3 at most: an edit that adds a call served nowhere here (code callers only, and only when the
+map is trustworthy: at least one call from code joined and `2 * unserved_code <= joined_code`) or stops serving a route other files still call.
+`MEMORY_XRAY_ROUTES=off` silences it. Answered locally (stdio server, proxy, CLI), refused by `gingugu serve`.
+No migration, no brain change. Measured: frontend-to-backend edges sampled correct 7/7, 6/6 and 7/7 on fully
+mounted repos. Bound: recall depends on which frameworks X7d reads routes from.
 
 **X17 for TS/JS and Go + multi-runner ledger (2026-11-09, branch `feature/x17-ts-go`, stacked on `fix/literals-timeout-flake`).**
 The symbol/call graph now covers Python, TypeScript/JavaScript and Go. New: `xray/lang/ts_symbols_walk.py`
@@ -83,7 +57,7 @@ fixture in `tests/conftest.py` raises it to 30 s for the suite, since those test
 found, not how fast; `test_the_sweep_stays_inside_the_hook_budget` still holds the 1.5 s wall
 clock. Production timeout unchanged. Full suite 4408 passed.
 
-**X7a: never 'set nowhere' past an unread file (2026-11-09, merged in #191 as 8499179, unreleased).**
+**X7a: never 'set nowhere' past an unread file (2026-11-09, merged in #191 as 8499179, released in 0.49.0).**
 Carried from X7c's security review. A file too big to read (256 KiB) or cut at the 200-name
 cap may set or read any name, so `EnvMap.unread` (from `file_facts.read`) now names those
 files, and while any exist: the read hook's `Env:` line says `X (not set in any file read;
@@ -91,9 +65,9 @@ files, and while any exist: the read hook's `Env:` line says `X (not set in any 
 here`; the edit note's `set nowhere in this repo` line stays silent; `code_xray env` flags
 `not set in any file read` / `not read in any file read` (sorted with the one-sided names,
 not counted in `never_set`/`never_read`) and returns `unread`. A complete read keeps the old
-wording. Spec: `tests/test_xray_env_unread.py` (8 tests). Full suite 4407 passed. Unreleased.
+wording. Spec: `tests/test_xray_env_unread.py` (8 tests). Full suite 4407 passed. Released in 0.49.0.
 
-**X7c DB tables as edges (2026-11-09, merged in #190 as 3da7fd6, unreleased).** Third slice of X7 (edges
+**X7c DB tables as edges (2026-11-09, merged in #190 as 3da7fd6, released in 0.49.0).** Third slice of X7 (edges
 beyond imports), taken before X7b. Nothing imports a table, so the code that queries it and
 the migration that creates it never meet in the import graph, and a rename or drop breaks
 callers silently. `xray/table_scan.py` (pure: `(defines, drops, uses)` as (name, line),
@@ -138,9 +112,9 @@ lists them; the cache key carries the scanner's version (`table_scan.SCAN_VERSIO
 `file_facts.VERSION` 2), a cache too big to read back is never written, cached line numbers
 are capped, and the edit note scans each text once and skips one past the file cap. Spec:
 `tests/test_xray_tables_map.py`, `test_xray_tables_tool.py`, `test_xray_tables_hooks.py`,
-`test_xray_tables_review.py` (121 tests). Full suite 4399 passed. Unreleased.
+`test_xray_tables_review.py` (121 tests). Full suite 4399 passed. Released in 0.49.0.
 
-**X7a env vars as edges (2026-11-09, branch `feature/xray-env`, merged to main in #189, unreleased).** First slice of X7 (edges beyond imports). Nothing imports an
+**X7a env vars as edges (2026-11-09, branch `feature/xray-env`, merged to main in #189, released in 0.49.0).** First slice of X7 (edges beyond imports). Nothing imports an
 environment variable, so the code reading `DB_URL` and the compose file, k8s manifest, CI
 workflow, Dockerfile or example env template setting it never meet in the import graph, and
 a rename on either side breaks silently. `xray/env_scan.py` (pure: literal upper-snake names
@@ -203,11 +177,11 @@ X-ray brief RELEASED in 0.34.0 (#157); X20 brief on the board RELEASED in 0.35.0
 (#158), live-test fixes in 0.35.1 (#159), not-available note in 0.35.2 (#160), repo on
 the line in 0.36.0 (#161); X15 writes from any tool RELEASED in 0.37.0 (#163); X16 incremental refresh
 RELEASED in 0.38.0 (#164); X17 symbol graph (Python)
-RELEASED in 0.39.0 (TS/JS + Go built on `feature/x17-ts-go`, unreleased) (#165); X-ray tuned for the agent
+RELEASED in 0.39.0 (#165; TS/JS + Go released in 0.49.0); X-ray tuned for the agent
 RELEASED in 0.40.0 (#166); X3 scar tissue RELEASED in 0.41.0 (#168); X4 history + X6
 blind spots RELEASED in 0.42.0 (#170); X22 docs map RELEASED in 0.45.0 (#174); X23 cross-repo links RELEASED in 0.46.0 (#176),
 in the hooks in 0.47.0 (#177/#178); removed-key readers in the edit note RELEASED in
-0.48.0 (#182); X22 hook surfaces built on `feature/xray-docs-hooks`, unreleased; X21 symbols on the brain owed** (2026-10-30). The
+0.48.0 (#182); X22 hook surfaces built on `feature/xray-docs-hooks`, released in 0.49.0; X21 symbols on the brain owed** (2026-10-30). The
 end goal was restated: a sophisticated map before any work starts, so the map
 reaches the agent on reads and on any write, not only through the edit tools. New
 items X14-X21 (section 19); build order X14, X19, X20, X15, X16, X17, X3, then X4/X6.
@@ -266,6 +240,29 @@ mid-capture; `overview.top` and the payload's `skipped` are bounded but not
 paged; a git `core.fsmonitor`-style check for other config that runs code.
 
 ## Recently Completed
+
+**X7d routes, cross-file mounts and the surface hook line (2026-11-10, #195; RELEASED in 0.50.0).**
+Follow-on to the attack-surface map below. Every entry carries `method` and `route` (`xray/surface_route.py`;
+`{prefix}` = a prefix set at runtime): HTTP method + URL across Python, TS/JS and Go, MCP tool/prompt name or
+resource URI, CLI command names plus each `[project.scripts]` name. Same-file prefixes (FastAPI `APIRouter`, Flask
+`Blueprint`, NestJS `@Controller`, gin/echo `Group`, chi `Route`/`Group`) and cross-file mounts
+(`xray/surface_mounts.py`: `include_router`, `register_blueprint`, Django `include`, Express `app.use`, routers
+passed into functions, `setGlobalPrefix`, chi `Mount`, package-level Go routers; one entry per URL, max 8).
+`EXTRACTOR_VERSION` 6. Limit: a mount through an untracked value (a Go struct-field router) is not followed.
+Hook lines (`xray/surface_hook.py`, `MEMORY_XRAY_SURFACE=off` silences): the read hook names the entry points in
+a file and the sinks in it that entries reach; the edit note diffs before/after and says what the edit makes
+reachable, adds, or sits on, once per fact per session. No migration.
+
+**X7d attack-surface map (2026-11-10; RELEASED in 0.49.0).** Fourth slice of X7 (edges beyond imports), the one
+that makes it a security instrument. `code_xray` `surface` / `gingugu xray surface` (`--files`, `--path`,
+`--limit`, `--json`) lists every entry point with the sinks it reaches through the X17 call graph; answered
+locally (stdio server, proxy, CLI), refused by `gingugu serve`. Sinks in this order: `exec`, `eval`,
+`deserialize`, `sql`, `fs`, `secret`, `net`, `db:<table>` (X7c table uses joined to the enclosing definition).
+Shortest path per sink by breadth-first reach, test files left out. Modules: `xray/surface_catalog.py` (closed
+per-language catalogues), `surface_records.py`, `surface_link.py`, `surface.py`, `surface_tool.py`,
+`symbols_model.py`, `surface_walk_py.py`, `lang/ts_surface_walk.py`, `lang/go_surface_walk.py`. Python, TS/JS and
+Go; a lower bound, like the call graph under it. Measured on gingugu itself: 47 entries, 39 reach a sink, 2.6s
+cold. Spec: `tests/test_xray_surface*.py`. No migration, no brain change.
 
 **Plain `gingugu init` refreshes a stock old hook (2026-11-06, #186; RELEASED in 0.48.1).** Rolling out 0.48.0 showed `init` skipping every
 existing hook ("exists; use --force"), so the new PreToolUse doorway reached no
@@ -2129,10 +2126,12 @@ every row moved up one.
 
 **2026-11-10:** no reorder. X7d, the attack-surface map, is built (unreleased; 0.49.0 is held): `code_xray surface` lists every entry point with the sinks it reaches through the call graph, on Python, TS/JS and Go. Row 1a now names X7b HTTP routes, then X8; the hook line for X7d followed on `feature/xray-surface-hook`, with routes and cross-file mounts.
 
+**2026-11-11:** no reorder. X7b, HTTP routes as edges, is built on `feature/xray-routes` (unreleased) and measured on 11 public full-stack apps and a second machine's repos: it joins X7d's mounted routes to the calls that reach them, and where routes are fully mounted the frontend-to-backend edges are real at high precision (the 2026-11-09 figure joined unmounted X23 route tails). X7d route coverage gaps bound its recall and are the next slice: Django/DRF routers, Next.js app-router file routes, flask-restx `add_resource`, Koa routes without a leading slash, and Go route groups in closures. Then X8.
+
 | # | Item | Old # | Why this position |
 |---|---|---|---|
-| 1 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival shipped in 0.32.0; X19 X-ray brief shipped in 0.34.0; X20 brief on the board shipped in 0.35.0 (repo on the line in 0.36.0); X15 writes from any tool shipped in 0.37.0; X16 incremental refresh shipped in 0.38.0; X17 symbol graph (Python) shipped in 0.39.0; X-ray tuned for the agent, with the lean X11 test ledger, shipped in 0.40.0; X3 scar tissue shipped in 0.41.0; X4 history + X6 blind spots shipped in 0.42.0 (X4 drift: board row 7); X22 docs map shipped in 0.45.0 (hook surfaces built, unreleased); X23 cross-repo links shipped in 0.46.0, in the hooks in 0.47.0; removed-key readers in the edit note shipped in 0.48.0; X21 symbols on the brain owed | 19 | Every sail since 2026-10-26 has gone here. A 21-part roadmap (X1-X21) in its section below |
-| 1a | **X7 edges beyond imports** - X7a env vars as edges merged (#189, unreleased): the file reading an env var and where it is set (`code_xray env`, the read hook and the edit note). X7c DB tables as edges built (unreleased): the file querying a table and the migration or schema that defines or drops it (`code_xray tables`, the read hook and the edit note). X7d attack-surface map built (unreleased): every entry point and the sinks it reaches through the call graph (`code_xray surface`); X7d now has routes, cross-file mounts and the hook line (`feature/xray-surface-hook`, unreleased). X22 hook surfaces built (#188, unreleased). Then X7b HTTP routes, then X8 | 19 | X7 is split into slices, one PR each; env vars first: cheapest, and a rename on either side breaks silently |
+| 1 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival shipped in 0.32.0; X19 X-ray brief shipped in 0.34.0; X20 brief on the board shipped in 0.35.0 (repo on the line in 0.36.0); X15 writes from any tool shipped in 0.37.0; X16 incremental refresh shipped in 0.38.0; X17 symbol graph (Python) shipped in 0.39.0; X-ray tuned for the agent, with the lean X11 test ledger, shipped in 0.40.0; X3 scar tissue shipped in 0.41.0; X4 history + X6 blind spots shipped in 0.42.0 (X4 drift: board row 7); X22 docs map shipped in 0.45.0 (hook surfaces released in 0.49.0); X23 cross-repo links shipped in 0.46.0, in the hooks in 0.47.0; removed-key readers in the edit note shipped in 0.48.0; X21 symbols on the brain owed | 19 | Every sail since 2026-10-26 has gone here. A 21-part roadmap (X1-X21) in its section below |
+| 1a | **X7 edges beyond imports** - X7a env vars as edges released in 0.49.0 (#189): the file reading an env var and where it is set (`code_xray env`, the read hook and the edit note). X7c DB tables as edges released in 0.49.0 (#190): the file querying a table and the migration or schema that defines or drops it (`code_xray tables`, the read hook and the edit note). X7d attack-surface map released in 0.49.0: every entry point and the sinks it reaches through the call graph (`code_xray surface`); its routes, cross-file mounts and hook line released in 0.50.0 (#195). X7b HTTP routes as edges built (`feature/xray-routes`, unreleased): served routes joined to the calls that reach them (`code_xray routes`, the read hook and the edit note). X22 hook surfaces released in 0.49.0 (#188). Next: the X7d route coverage gaps (Django/DRF routers, Next.js app-router file routes, flask-restx, Koa, Go route groups), then X8 | 19 | X7 is split into slices, one PR each; env vars first: cheapest, and a rename on either side breaks silently |
 | 2 | **A calibration ledger** | 14 | New tables, so a migration. Follows X3: the lean X11 ledger (0.40.0) already records predictions, so it scores real data from day one |
 | 3 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
 | 4 | **Paraphrase question set + lexical/semantic arbitration** - labels now recorded at write time (`query_acts`, migration 022, released in 0.43.0); collect, then measure | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
@@ -2837,7 +2836,7 @@ read never fires, and a write through the shell bypasses X-ray entirely. X1-X13
 describe what is stored; X14-X18 add how the map reaches the agent, how it
 stays current, and how it is seen.
 
-**Build order:** X14, X19, X20, X15, X16, X17 (all shipped by 0.40.0), X3 (0.41.0), X4/X6 (0.42.0; X4 drift owed), X22 docs map (0.45.0; hook surfaces built, unreleased), X23 cross-repo links (0.46.0; hook surfaces 0.47.0), then X7/X8, with X21 no later
+**Build order:** X14, X19, X20, X15, X16, X17 (all shipped by 0.40.0), X3 (0.41.0), X4/X6 (0.42.0; X4 drift owed), X22 docs map (0.45.0; hook surfaces 0.49.0), X23 cross-repo links (0.46.0; hook surfaces 0.47.0), then X7/X8, with X21 no later
 than the first of X7/X9 that needs symbols on the brain. X18 ships in
 slices alongside them. IDs are stable references, not the order.
 
@@ -2851,7 +2850,7 @@ slices alongside them. IDs are stable references, not the order.
 | X4 | **History as a second graph (coupling + hotspots SHIPPED in 0.42.0, #170; drift not built)** - co-change coupling (files that change together without importing each other), churn x centrality x authors as hotspots, per-commit X-ray diffs as architectural drift | git log | `code_xray` `history`, `gingugu xray history`, the read line `Changes with (no import):` (`MEMORY_XRAY_HISTORY`). Code-maat's defaults; last 1,000 non-merge commits, cached by HEAD, client only. Drift needs the import graph of past trees (extraction reads only the working tree), and the nightly dream pass cannot read a checkout (see X16) |
 | X5 | **Module boundaries** - communities that hold up on import graphs | dream clusters | Label propagation fails as-is (see above); needs a decided approach, not a knob |
 | X6 | **Blind-spot map (SHIPPED in 0.42.0, #170)** - centrality x low churn x no tests x single author: where a change would reach furthest with the least review | X1, X4 | The attacker's target list, run first by the defender. `code_xray` `blindspots`, `gingugu xray blindspots`: imported untested source (no direct test importer, no test named for it) by rank over authors, fewest commits on a tie, `single_author` flagged |
-| X7 | **Edges beyond imports** (split 2026-11-09: X7a env vars BUILT, X7c DB tables BUILT, X7d entry-point-to-sink paths BUILT (unreleased; routes, cross-file mounts and the hook line built on `feature/xray-surface-hook`), X7b HTTP routes) - env vars, config keys, HTTP routes, DB tables, IaC resources, MCP tool names; entry-point-to-sensitive-sink paths as an attack-surface map | X1 | Where it becomes a security instrument; the largest piece of work |
+| X7 | **Edges beyond imports** (split 2026-11-09: X7a env vars RELEASED in 0.49.0, X7c DB tables RELEASED in 0.49.0, X7d entry-point-to-sink paths RELEASED (0.49.0; routes, cross-file mounts and the hook line in 0.50.0), X7b HTTP routes BUILT (unreleased, `feature/xray-routes`)) - env vars, config keys, HTTP routes, DB tables, IaC resources, MCP tool names; entry-point-to-sensitive-sink paths as an attack-surface map | X1 | Where it becomes a security instrument; the largest piece of work |
 | X8 | **Dependency X-ray** - third-party packages on the graph: which are load-bearing, how deep, what a compromised package could reach | X1, X7 | Upgrade priority, pinning, incident-day exposure |
 | X9 | **Fleet X-ray** - every repo into one central brain; cross-repo callers and cross-repo blast radius | central brain, scoped tokens | |
 | X10 | **Graph-aware fences** - approval scales with blast radius: leaf edits free, edits reaching top-ranked files need the user's go | X1, hooks, minion grants | |
@@ -2861,11 +2860,11 @@ slices alongside them. IDs are stable references, not the order.
 | X14 | **Map on arrival (SHIPPED in 0.32.0, #153)** - a short repo overview (size, languages, top-ranked files, entry points) on the session's first touch of a repo, then an up-to-4-line neighbourhood (rank, importers, nearest tests since the X-ray tuning, imports; X17 adds a fifth, `Most called`, in any language) on a file's first `Read` | X1 graph cache, hooks | PostToolUse context, non-blocking. Leaf files stay silent. First touch, not session start, so a session that never touches code pays nothing |
 | X15 | **Writes from any tool (RELEASED in 0.37.0)** - before a Bash call `gingugu hook tool` snapshots the dirty set of up to 8 candidate checkouts (cwd repo, repos the session touched, repos of paths in the command); after it `gingugu hook bash` (new doorway `post_bash_xray.py`, matcher `Bash`) diffs it and X-rays the changed source files, and a deleted file's old importers from the cached graph | X2, hooks | Command parsing can never be complete; watching the checkout catches every write path, and any harness that edits through a shell. Informs, cannot deny; shares the edit tripwire's once-per-file claim; a repo reached only by a `cd` inside a script is not watched |
 | X16 | **Incremental refresh (RELEASED in 0.38.0, #164)** - the hooks' graph build caches each file's parse by content (`xray/parse_cache.py`, `xray-parse-<sha16(root)>.json`; adapters split into `parse`/`valid`/`link`) and re-parses only files whose bytes changed; linking always reruns. Refresh after writes stays lazy (the next hook call pays only for what changed); the nightly dream pass was dropped - the brain cannot read a client's checkout. Measured: django (3,050 files) one edit 0.82s instead of 4.3s, unchanged 0.37s; vite (1,639 TS/JS files) one edit 0.48s, cold 1.0s | X1, hooks | A full re-extract grows with the repo: 4.3s on django |
-| X17 | **Symbol graph (Python RELEASED in 0.39.0, #165; TS/JS + Go built on `feature/x17-ts-go`, unreleased)** - definitions, call sites and resolved call edges; the edit tripwire names the definitions an edit lands in and their callers, the read neighbourhood the most-called definitions, `code_xray` `callers` one symbol's callers and reach. Client-side (`xray/symbols_walk.py`, `xray/symbols.py`, cache `xray-symbols-<sha16(root)>.json`), a lower bound (unresolved calls counted, never guessed). Measured, share of non-external calls resolved: Python 64.4% (gingugu), TS/JS 52.9% (vite) / 78.4% (express example app) / 62.5% (gingugu `ui/`), Go 75.4% (gin) / 76.6% (bubbletea); `require_write_id` 8 direct callers, 72 files by call vs 262 by import | `xray/lang/` adapters, X16 parse cache | The resolution X7 needs to name the function an entry point reaches, not just the file. Phase 2 (TS/JS + Go, tree-sitter) BUILT: `xray/lang/ts_symbols*.py`, `ts_exports.py`, `go_symbols*.py`, merged by `symbols.merge` |
+| X17 | **Symbol graph (Python RELEASED in 0.39.0, #165; TS/JS + Go released in 0.49.0)** - definitions, call sites and resolved call edges; the edit tripwire names the definitions an edit lands in and their callers, the read neighbourhood the most-called definitions, `code_xray` `callers` one symbol's callers and reach. Client-side (`xray/symbols_walk.py`, `xray/symbols.py`, cache `xray-symbols-<sha16(root)>.json`), a lower bound (unresolved calls counted, never guessed). Measured, share of non-external calls resolved: Python 64.4% (gingugu), TS/JS 52.9% (vite) / 78.4% (express example app) / 62.5% (gingugu `ui/`), Go 75.4% (gin) / 76.6% (bubbletea); `require_write_id` 8 direct callers, 72 files by call vs 262 by import | `xray/lang/` adapters, X16 parse cache | The resolution X7 needs to name the function an entry point reaches, not just the file. Phase 2 (TS/JS + Go, tree-sitter) BUILT: `xray/lang/ts_symbols*.py`, `ts_exports.py`, `go_symbols*.py`, merged by `symbols.merge` |
 | X21 | **Symbols on the brain (OWED)** - brain tables for definitions and call edges (a migration), ingested with the snapshot, so `code_xray` `callers` works through `gingugu serve` and across repos | X17, X1 store, X9 | Owed by the X17 approval (2026-10-30), which was given on the condition that brain tables follow. Lands when X7 or X9 first needs symbols on the brain; until then the symbol graph stays on the client |
 | X19 | **X-ray brief (SHIPPED in 0.34.0, #157)** - the changed files by rank with importer counts, plus their combined blast (code and candidate tests), for an agent that fires no hooks | X1, X14 graph cache | `code_xray` `brief` (`range`, `files`, `path`) and `gingugu xray brief [--range R \| --files a,b] [--path P] [--json]`. Computed on the caller's machine from the hook graph cache; nothing stored, the brain never asked; `gingugu serve` refuses it, the proxy answers it locally. Compact `text` <= 8800 chars, for reviews, handoffs and `board watch --exec`. `xray/brief.py`, `xray_cli.py` |
 | X20 | **Brief on the board (RELEASED in 0.35.0)** - a handoff carries its X-ray brief without anyone asking. Why next: the agents X19 is for fire no hooks, so a brief they must request is a brief they rarely see | X19, agent board | When a board post names a range (`xray: <range>`), the RECEIVING side renders `xray brief` for it and attaches the text: the prompt hook's board mail (Claude Code) and `board watch --exec` (Codex). Rendered on the receiver's machine from its own checkout; the post itself carries only the ref, never paths or the brief. BUILT as a line of its own `xray: <range>` in the body: board mail appends at most one per prompt (<= 3500 chars, the prompt's cwd); `board watch` adds an `xray` field, appends to `text` and sets `GINGUGU_POST_XRAY` (<= 3 per batch, the watcher's cwd). Same range gate as `brief`, ref <= 200 chars. Sender nudge: the first board post of a session from a branch ahead of the default branch, naming no range, is denied once with the exact `xray:` line (`xray/board_nudge.py`). A receiver with no cwd or outside a repo gets one line naming `gingugu xray brief --range <ref>` (0.35.2). Part 2: `xray: <repo> <range>` names the repo, found locally via `xray/repo_id` (0.36.0). Switch `MEMORY_XRAY_BOARD`. `xray/board_brief.py` |
-| X22 | **Docs map (SHIPPED in 0.45.0)** - which docs cite a changed file, here and in sibling checkouts: where the runbooks live and which ones a change touches | X3 matcher, X19 brief | `code_xray` `docs`, `gingugu xray docs`, and two brief sections (`Docs citing the changed files:`, `Docs still citing a deleted or renamed file:`). A citation is a path mention that resolves to exactly one repo file; a sibling doc counts only repo-qualified paths (`name/path`, `owner/name/path`), GitHub links to this repo and prose placing a path in it. Client only, no migration, `MEMORY_XRAY_DOCS`. Hook surfaces built (unreleased): `xray/docs_hook.py` keeps a per-repo summary `xray-docs-in-<digest>.json`, refreshed by the map on arrival when older than 10 minutes on a 1s sibling budget; a file's first read, the edit note and the Bash X-ray name the docs citing it (`Docs cite it:` / `Docs still cite it:`), once per file per session |
+| X22 | **Docs map (SHIPPED in 0.45.0)** - which docs cite a changed file, here and in sibling checkouts: where the runbooks live and which ones a change touches | X3 matcher, X19 brief | `code_xray` `docs`, `gingugu xray docs`, and two brief sections (`Docs citing the changed files:`, `Docs still citing a deleted or renamed file:`). A citation is a path mention that resolves to exactly one repo file; a sibling doc counts only repo-qualified paths (`name/path`, `owner/name/path`), GitHub links to this repo and prose placing a path in it. Client only, no migration, `MEMORY_XRAY_DOCS`. Hook surfaces released in 0.49.0: `xray/docs_hook.py` keeps a per-repo summary `xray-docs-in-<digest>.json`, refreshed by the map on arrival when older than 10 minutes on a 1s sibling budget; a file's first read, the edit note and the Bash X-ray name the docs citing it (`Docs cite it:` / `Docs still cite it:`), once per file per session |
 | X23 | **Cross-repo links (SHIPPED in 0.46.0)** - which other checkouts lean on this one, by names the code already uses (hosts, routes, images, packages, IaC resources, CI checkouts, `repo@sha` cites), and the ripple of a change across repos | X22 sibling discovery, X19 brief | `code_xray` `links`, `gingugu xray links`, and two brief sections (`Other repos leaning on these files`, `Ripple across repos`). Zero config: no map file in any repo. Each link has file:line evidence, certain or flagged. Client only, no migration, `MEMORY_XRAY_LINKS`. Hook surfaces (read hook map and first-read lines, edit note) and named-repo recall (edge-level 11/26 -> 21/26 on a real ecosystem) released in 0.47.0; cold reads on worker processes in 0.47.1 |
 | X18 | **X-ray Explorer** - a view in the Memory Explorer: repo as a 3D city (height = rank, colour = churn or tests, districts = X5 boundaries), animated blast radius, X7 attack paths, X6 blind-spot heat, X3 scar markers linking into the memory drawer, X4 drift slider over snapshots | `ui/`, `ui_api/` read-only observer | Ships in slices; city + blast radius first |
 

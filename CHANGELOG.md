@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **X7b: HTTP routes as edges.** Nothing imports a route, so a frontend's
+  `fetch('/api/users')` and the handler that answers it are invisible to each other in the
+  import graph. `code_xray` `routes` / `gingugu xray routes` (`--files`, `--path`, `--limit`,
+  `--json`) joins the routes this repo serves (X7d's entry points, mounted to full URLs, test
+  files left out) to the calls that reach them (X23's route mentions): with files, the routes
+  each file serves with who calls each, and the calls it makes with what serves each; with
+  none, every route by its callers, the calls served nowhere here first. The join follows a
+  router's rules: a route believed complete matches only a call of its shape, one under a
+  runtime prefix (`{prefix}`) matches on its known head and tail, the most specific route
+  wins, then the server nearest the caller in a monorepo, and a tie is flagged ambiguous. A
+  path inside a URL to another host never joins (X23 route mentions now carry the URL's
+  host). A call is "served nowhere here" when no route answers it though it shares two
+  leading names with one. The read hook names a file's routes and calls (`Routes:` line); the
+  edit note says when an edit adds a call served nowhere here (code only, and only when the
+  map is trustworthy: at least one call from code joined, and joined calls from code at least twice the unserved ones) or stops
+  serving a route other files still call. `MEMORY_XRAY_ROUTES=off` silences it. Answered
+  locally (stdio server, proxy, CLI), refused by `gingugu serve`. Measured on real repos:
+  frontend-to-backend edges sampled correct 7/7, 6/6, 7/7 where the routes are fully mounted.
+
 ---
 
 ## [0.50.0] - 2026-11-10

@@ -7,8 +7,8 @@ the host's disk, and the tool there refuses one. So the proxy claims every
 this machine. It also claims every ``brief`` (changed files and their combined
 blast), every ``callers`` (one symbol's callers, X17) and every ``history`` and
 ``blindspots`` (X4, X6), every ``docs`` (X22), every ``env`` (X7a), every ``tables``
-(X7c), every ``surface`` (X7d) and every ``links`` (X23), each answered whole from
-the local checkout; the brain is never asked. The rest goes through
+(X7c), every ``routes`` (X7b), every ``surface`` (X7d) and every ``links`` (X23),
+each answered whole from the local checkout; the brain is never asked. The rest goes through
 ``xray.local``, the same code the local server runs:
 
 1. fingerprint the checkout (cheap: no parsing) and ask the brain by fingerprint;
@@ -47,6 +47,7 @@ from .xray import (
     extract,
     history_tool,
     local,
+    route_tool,
     surface_tool,
     table_tool,
 )
@@ -60,6 +61,7 @@ HISTORY = history_tool.ACTIONS  # likewise: X4 history, X6 blindspots
 DOCS = docs_tool.ACTIONS  # likewise: X22 docs
 ENV = env_tool.ACTIONS  # likewise: X7a env vars
 TABLES = table_tool.ACTIONS  # likewise: X7c DB tables
+ROUTES = route_tool.ACTIONS  # likewise: X7b HTTP routes
 SURFACE = surface_tool.ACTIONS  # likewise: X7d attack-surface map
 LINKS = links_tool.ACTIONS  # likewise: X23 cross-repo links
 
@@ -71,7 +73,7 @@ def claims(msg) -> bool:
     params = msg.params or {}
     args = params.get("arguments") or {}
     if params.get("name") == NAME and args.get("action") in (
-        BRIEF, CALLERS, *HISTORY, *DOCS, *ENV, *TABLES, *SURFACE, *LINKS,
+        BRIEF, CALLERS, *HISTORY, *DOCS, *ENV, *TABLES, *ROUTES, *SURFACE, *LINKS,
     ):  # fmt: skip
         return True
     return (
@@ -218,6 +220,10 @@ class XrayRelay:
         data = await _thread(table_tool.answer, args.get("path"), args.get("files"), _limit(args))
         return CallToolResult(content=[TextContent(type="text", text=json.dumps(data, indent=2))])
 
+    async def _routes(self, args: dict) -> CallToolResult:
+        data = await _thread(route_tool.answer, args.get("path"), args.get("files"), _limit(args))
+        return CallToolResult(content=[TextContent(type="text", text=json.dumps(data, indent=2))])
+
     async def _surface(self, args: dict) -> CallToolResult:
         data = await _thread(surface_tool.answer, args.get("path"), args.get("files"), _limit(args))
         return CallToolResult(content=[TextContent(type="text", text=json.dumps(data, indent=2))])
@@ -239,6 +245,8 @@ class XrayRelay:
             return await self._env(args)
         if args.get("action") in TABLES:
             return await self._tables(args)
+        if args.get("action") in ROUTES:
+            return await self._routes(args)
         if args.get("action") in SURFACE:
             return await self._surface(args)
         if args.get("action") in LINKS:
