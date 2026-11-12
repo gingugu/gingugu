@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.51.0] - 2026-11-11
+
 ### Added
 
 - **X7b: HTTP routes as edges.** Nothing imports a route, so a frontend's
