@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **X7d reads routes from more frameworks.** The attack-surface map (`code_xray` `surface`)
+  and the route join (`code_xray` `routes`) now see: Django `path` routes are rooted and a `re_path` regex is read as a route only when it is one (named groups become `{name}`, anything else regex-shaped is `(route not literal)`); a class-based view (`X.as_view()`) names its class; a DRF `router.register` is the list and the detail route, mounted by `include(router.urls)`; a flask-restx or flask-restful class (`@ns.route` on a class, `api.add_resource`) is one entry per view method per path, with `Namespace(path=)`, `Api(bp)` and `add_namespace` prefixes; router subclasses (`UserAPIRouter(prefix=)`) keep their prefix; a Next.js app-router `route.ts` answers the URL its path spells, once per exported method; a route written without a leading slash (koa-router) is rooted and `new Router()` is a router; Go group closures (`m.Group("/x", func() {...})`) prefix what is registered inside them, an empty path is the group's own prefix, and a handler wrapped in calls is found. A Go call that only shares a verb's name (`slog.Any("error", err)`) is no longer an entry. Measured, HTTP entries with a rooted route, 0.51.0 -> now: umami (Next.js) 0 -> 203, dify (flask-restx) 46 -> 993, paperless-ngx (DRF) 0 -> 89, linkding (Django) 0 -> 50, outline (Koa) 30 -> 258, gitea (Go groups) 857 -> 1150, mealie 279 -> 291; memos went from 26 routes, 17 of them logger keys, to 9 real ones. Not read: DRF `@action` routes, a Django `include([...])` of a nested pattern list, Next.js `pages/api` files and `export { GET }` lists, gitea `Combo(...)` chains, generated grpc-gateway patterns; and a Python package rooted somewhere other than the repo root or `src/` (`api/`, `backend/`) resolves no cross-file mounts, so its routes stay as each file spells them. Work on a hostile file stays bounded: at most 16 paths per registration and 2,000
+  entries per file, Go group closures tracked 32 deep. The graph caches rebuild once (extractor
+  version 7). No migration, no brain change.
+
+### Changed
+
+- A Django route is now reported rooted (`/login/`, not `login/`), which is what lets a call
+  join it.
+
 ---
 
 ## [0.51.0] - 2026-11-11

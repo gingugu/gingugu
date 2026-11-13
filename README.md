@@ -186,7 +186,11 @@ route matches only its exact shape, the most specific route wins, then the serve
 caller), and a path inside a URL to another host never joins. A file's first read adds a `Routes:`
 line (which also marks a call served nowhere here when the map is trustworthy), and an edit says when it adds a call served nowhere here or stops serving a route other files
 still call; `MEMORY_XRAY_ROUTES=off` silences both. How many routes it finds depends on which
-frameworks the surface map reads routes from.
+frameworks the surface map reads routes from: FastAPI, Starlette, Flask (blueprints, flask-restx
+and flask-restful resources), Django (`path`, `re_path`, class-based views, DRF routers),
+Express, Koa, Fastify, Hono, NestJS, Next.js app-router `route.ts` files, and Go's `net/http`,
+gin, echo and chi
+(groups and group closures included).
 
 That is the part that makes the memory worth having, and it is in the box.
 
