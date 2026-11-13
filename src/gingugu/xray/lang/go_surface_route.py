@@ -31,6 +31,7 @@ from .. import surface_route as sr
 _LITS = ("interpreted_string_literal", "raw_string_literal")
 Env = dict[str, str]
 MAX_DEPTH = 32  # group closures nested deeper than this add no prefix
+MAX_ENV = 768  # env keys (3 per tracked name) past which a closure gets no env of its own
 _PATTERNS = frozenset(("Handle", "HandleFunc", "Method", "MethodFunc"))
 NEW_ROUTER = frozenset(("chi.NewRouter", "gin.New", "gin.Default", "echo.New", "http.NewServeMux"))
 
@@ -181,7 +182,7 @@ def literal_env(call, env: Env) -> tuple[tuple, Env] | None:
         lit, spare = a[1], True
         if _depth(env) < MAX_DEPTH:
             prefix = _group_prefix(c[0], a, env)
-    if lit is None:
+    if lit is None or len(env) > MAX_ENV:  # each closure copies the env: bound the copy
         return None
     inner = dict(env)
     params = lit.child_by_field_name("parameters")

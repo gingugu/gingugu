@@ -56,8 +56,8 @@ def method_exports(node) -> list[tuple[str, int]]:
     """(verb, line) for each method-named function an ``export_statement`` declares
     at the top level: ``export [async] function GET`` or ``export const GET = <fn>``."""
     decl = node.child_by_field_name("declaration")
-    if decl is None:
-        return []
+    if decl is None or any(c.type == "default" for c in node.children):
+        return []  # `export default function GET` is the default export, not a method
     if decl.type == "function_declaration":
         name = decl.child_by_field_name("name")
         verb = text(name) if name is not None else ""

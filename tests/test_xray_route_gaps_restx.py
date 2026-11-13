@@ -159,3 +159,25 @@ def test_a_restx_namespace_mounted_in_another_file_end_to_end() -> None:
         ("DELETE", "/console/api/apps/<uuid:app_id>"),
         ("GET", "/console/api/apps/<uuid:app_id>"),
     ]
+
+
+# --- hostile input -------------------------------------------------------------------
+
+
+def test_ten_thousand_route_decorators_on_one_class_are_bounded() -> None:
+    decos = "".join(f"@ns.route('/p{i}')\n" for i in range(10_000))
+    methods = "".join(f"    def m{i}(self): pass\n" for i in range(2_000))
+    src = decos + "class Apps(Resource):\n    def get(self): pass\n" + methods
+    assert len(_raw(src)["entries"]) <= 2000
+
+
+def test_ten_thousand_add_resource_calls_are_bounded() -> None:
+    paths = ", ".join(f"'/p{i}'" for i in range(16))
+    src = RESOURCE + f"api.add_resource(Apps, {paths})\n" * 10_000
+    assert len(_raw(src)["entries"]) <= 2000
+
+
+def test_every_fresh_record_is_one_the_cache_would_accept() -> None:
+    long = "h" * 600  # a handler name past surface_records.MAX_NAME
+    src = f"urlpatterns = [path('a/', {long}), path('b/', ok)]\n"
+    assert [(r[3], r[9]) for r in _raw(src)["entries"]] == [("ok", "/b/")]

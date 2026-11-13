@@ -210,3 +210,14 @@ def test_ten_thousand_nested_groups_do_not_cost_the_file() -> None:
     body = 'm.Group("/a", func() {\n' * depth + 'm.Get("/x", h)\n' + "})\n" * depth
     routes = _routes(body)  # must return, not raise; the route is clean or ""
     assert len(routes) <= 1
+
+
+def test_thousands_of_groups_and_closures_in_one_function_are_bounded() -> None:
+    import time
+
+    n = 6_000
+    body = "".join(f'g{i} := r.Group("/x")\n' for i in range(n))
+    body += 'r.Route("/y", func(p chi.Router) {})\n' * n
+    start = time.monotonic()
+    _routes(body)
+    assert time.monotonic() - start < 20  # was quadratic: every closure copied every name

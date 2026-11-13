@@ -15,6 +15,10 @@ flask-restx / flask-restful resources.
 - ``register``: ``R.register("prefix", ViewSet)`` is the list and the detail
   route, only when ``R`` is a plain name the file last assigns from a constructor
   ending in ``Router`` (``trailing_slash=False`` there drops the trailing slashes).
+
+A hostile file cannot buy unbounded work: a class's view methods are read once,
+class expansion stops at ``MAX_ENTRIES`` records per file, and ``settle`` keeps
+only records ``surface_records.is_entry`` accepts, at most ``MAX_ENTRIES``.
 """
 
 from __future__ import annotations
@@ -26,6 +30,7 @@ from . import surface_route as sr
 from . import surface_route_py as route
 
 Handler = tuple[str, str, str]
+MAX_ENTRIES = 2000  # per file, as surface_link.MAX_PER_FILE: more is never linked
 
 
 class Later:
@@ -65,13 +70,20 @@ class Views:
 
     def __init__(self) -> None:
         self._defs: dict[str, tuple[str, list[str]]] = {}
+        self._methods: dict[int, list[str]] = {}  # id(class node) -> its view methods
+        self._made = 0  # records class decorators have expanded to
 
     def define(self, node: ast.AST, qual: str) -> None:
         if not isinstance(node, ast.ClassDef):
             return
         prior = self._defs.get(node.name)
         if prior is None or prior[0].count(".") > qual.count("."):
-            self._defs[node.name] = (qual, _methods_of(node))
+            self._defs[node.name] = (qual, self._of(node))
+
+    def _of(self, node: ast.AST) -> list[str]:
+        if id(node) not in self._methods:
+            self._methods[id(node)] = _methods_of(node)
+        return self._methods[id(node)]
 
     def decorated(
         self,
@@ -84,10 +96,12 @@ class Views:
         recv: str,
     ) -> list[list]:
         """The entries a route decorator on class ``qual`` makes."""
-        if not isinstance(deco, ast.Call):
+        if not isinstance(deco, ast.Call) or self._made >= MAX_ENTRIES:
             return []
         routes = route.paths(deco, label, lookup)
-        return _entries([scope, label, deco.lineno, recv], qual, _methods_of(node), routes)
+        made = _entries([scope, label, deco.lineno, recv], qual, self._of(node), routes)
+        self._made += len(made)
+        return made
 
     def resource(
         self, node: ast.Call, label: str, scope: str, lookup: route.Lookup, recv: str
@@ -108,9 +122,14 @@ class Views:
         return [Later(base, x, routes)]
 
     def settle(self, items: list) -> list[list]:
-        """``items`` with every ``Later`` replaced by its records."""
+        """``items`` with every ``Later`` replaced by its records; only records of
+        the walk's shape are kept, at most ``MAX_ENTRIES``."""
+        from .surface_records import is_entry  # surface_records imports the walk
+
         out: list[list] = []
         for it in items:
+            if len(out) >= MAX_ENTRIES:
+                break
             if not isinstance(it, Later):
                 out.append(it)
                 continue
@@ -120,7 +139,7 @@ class Views:
                 out.extend([*b[:9], r, b[10]] for r in it.routes)
             else:
                 out.extend(_entries([b[0], b[1], b[5], b[10]], found[0], found[1], it.routes))
-        return out
+        return [r for r in out[:MAX_ENTRIES] if is_entry(r, "python")]
 
 
 def _methods_of(node: ast.AST) -> list[str]:

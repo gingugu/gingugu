@@ -170,3 +170,12 @@ def test_a_route_file_entry_resolves_to_its_function() -> None:
     sym = A.extract({k: v.encode() for k, v in files.items()}, {}).symbols
     [e] = [e for e in sym.entries if e.kind == "http"]
     assert (e.label, e.handler, e.nodes) == ("GET", "GET", (("app/api/x/route.ts", "GET"),))
+
+
+def test_a_default_export_is_not_a_method_export() -> None:
+    assert _entries("export default function GET() {}\n") == []
+
+
+def test_a_nest_route_too_long_to_be_clean_is_no_route() -> None:
+    src = f"@Controller('{'a' * 200}')\nclass C {{\n  @Get('{'b' * 200}')\n  x() {{}}\n}}\n"
+    assert [r for _, _, r in _routes(src)] == [""]
