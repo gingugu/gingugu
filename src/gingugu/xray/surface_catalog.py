@@ -104,9 +104,18 @@ _PY_LAST = {
 # Called with a handler, not used as a decorator: the last name decides.
 _PY_REGISTRARS = {
     **dict.fromkeys("add_url_rule add_api_route add_route Route path re_path".split(), "http"),
+    # flask-restx/flask-restful `api.add_resource(Cls, "/x")`; a DRF router's
+    # `router.register("prefix", ViewSet)` (the walk checks the receiver is a router).
+    **dict.fromkeys(("add_resource", "register"), "http"),
     "add_tool": "mcp",
     "set_defaults": "cli",  # argparse: set_defaults(func=handler)
 }
+# Registrars that are only ever calls: as a decorator the name means something else
+# (`@atexit.register`, `@admin.register(Model)`), so a decorator never makes an entry.
+PY_CALL_ONLY = frozenset({"add_resource", "register"})
+# The methods a class-based view answers by defining them (flask-restx `Resource`,
+# Flask `MethodView`, Django `View`).
+PY_VIEW_METHODS = ("get", "post", "put", "patch", "delete", "head", "options")
 # Single names that mean something with no receiver: a decorator, or the walk's own
 # label for a script's `if __name__ == "__main__":` block.
 _PY_BARE = {"shared_task": "task", "__main__": "main"}
@@ -116,6 +125,9 @@ _JS_MCP_RECV = frozenset({"server", "mcp", "mcpServer"})
 _JS_MCP = frozenset({"tool", "resource", "prompt"})
 _JS_REGISTER = frozenset({"registerTool", "registerResource", "registerPrompt"})
 TS_DECOS = frozenset("Get Post Put Patch Delete All Head Options".split())  # NestJS
+# Next.js app router: a `route.ts` exports one function per method it answers. The
+# walk records the export wherever it is; the linker keeps it only in a route file.
+NEXT_VERBS = frozenset("GET POST PUT PATCH DELETE HEAD OPTIONS".split())
 _GO_LAST = frozenset(
     "HandleFunc Handle Method MethodFunc GET POST PUT PATCH DELETE Get Post Put Patch Delete "
     "Any".split()
@@ -175,7 +187,7 @@ def entry_kind(lang: str, label: str) -> str | None:
         return _PY_LAST.get(last)
     if lang == "typescript":
         if len(parts) == 1:
-            return "http" if last in TS_DECOS else None
+            return "http" if last in TS_DECOS or last in NEXT_VERBS else None
         if router_shaped(recv) and last in _JS_VERBS:
             return "http"
         if (recv in _JS_MCP_RECV and last in _JS_MCP) or (recv and last in _JS_REGISTER):
