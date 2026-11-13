@@ -10,12 +10,13 @@ from __future__ import annotations
 import ast
 from collections.abc import Callable
 
+from . import surface_regex_py as regex
 from . import surface_route as sr
 
 # These take `methods=[...]`; Flask, Starlette and FastAPI all default to GET.
 _METHODS_KW = frozenset("route api_route add_url_rule add_api_route add_route Route".split())
 _PATH_KW = ("path", "rule")
-_ROUTERS = {"APIRouter": "prefix", "Blueprint": "url_prefix"}
+MAX_PATHS = 16  # per registration: a crafted file cannot fan one call out into thousands
 Lookup = Callable[[str], "ast.expr | None"]
 
 
@@ -49,20 +50,66 @@ def _methods(call: ast.Call) -> str:
     return sr.methods([_literal(e) for e in node.elts])
 
 
+def _ctor(made: ast.Call) -> str:
+    fn = made.func
+    return fn.attr if isinstance(fn, ast.Attribute) else getattr(fn, "id", "")
+
+
+def _own(made: ast.Call) -> str | None:
+    """The prefix the constructor call ``made`` sets itself; None when it sets none.
+    ``*Router`` -> ``prefix=``, ``*Blueprint`` -> ``url_prefix=``, ``Namespace`` ->
+    ``path=`` else ``/`` + its first positional literal."""
+    ctor = _ctor(made)
+    if ctor.endswith("Router"):
+        node = _kw(made, "prefix")
+    elif ctor.endswith("Blueprint"):
+        node = _kw(made, "url_prefix")
+    elif ctor.endswith("Namespace"):
+        node = _kw(made, "path")
+        if node is None and made.args and not isinstance(made.args[0], ast.Starred):
+            lit = _literal(made.args[0])
+            return sr.clean("/" + lit) or sr.PREFIX if lit else sr.PREFIX
+    else:
+        return None
+    if node is None:
+        return None
+    return sr.clean(_literal(node)) or sr.PREFIX
+
+
 def _prefix(label: str, lookup: Lookup) -> str:
-    """The same-file router prefix for ``label``'s receiver; ``""`` when none."""
+    """The same-file router prefix for ``label``'s receiver; ``""`` when none.
+    A ``*Api`` handed a name takes that name's own prefix (one hop, no more)."""
     recv = label.rpartition(".")[0]
     if not recv or "." in recv:
         return ""
     made = lookup(recv)
     if not isinstance(made, ast.Call):
         return ""
-    ctor = made.func.attr if isinstance(made.func, ast.Attribute) else getattr(made.func, "id", "")
-    kw = _ROUTERS.get(ctor)
-    node = _kw(made, kw) if kw else None
-    if node is None:
-        return ""
-    return sr.clean(_literal(node)) or sr.PREFIX
+    if _ctor(made).endswith("Api"):
+        if not made.args or not isinstance(made.args[0], ast.Name):
+            return ""
+        made = lookup(made.args[0].id)
+        if not isinstance(made, ast.Call) or _ctor(made).endswith("Api"):
+            return ""
+    return _own(made) or ""
+
+
+def paths(node: ast.Call, label: str, lookup: Lookup, skip: int = 0) -> list[str]:
+    """The routes of every literal positional path argument after the first
+    ``skip`` (at most ``MAX_PATHS``), the receiver's prefix joined in front."""
+    out: list[str] = []
+    try:
+        prefix = _prefix(label, lookup)
+        for arg in node.args[skip:]:
+            raw = _literal(arg)
+            if raw is None:
+                continue
+            out.append("" if raw and not sr.clean(raw) else sr.join(prefix, raw))
+            if len(out) >= MAX_PATHS:
+                break
+    except (ValueError, RecursionError, AttributeError):
+        return []
+    return out
 
 
 def _http(label: str, node: ast.expr, lookup: Lookup) -> tuple[str, str]:
@@ -76,8 +123,13 @@ def _http(label: str, node: ast.expr, lookup: Lookup) -> tuple[str, str]:
     if not isinstance(node, ast.Call):
         return method, ""
     raw = _literal(_first(node, *_PATH_KW))
+    if last == "re_path":
+        found = regex.route(raw)
+        return method, sr.join(_prefix(label, lookup), found) if found else ""
     if raw is None or (raw and not sr.clean(raw)):
         return method, ""
+    if last == "path":  # Django routes are rooted: "login/" is /login/, "" is /
+        raw = raw if raw.startswith("/") else "/" + raw
     return method, sr.join(_prefix(label, lookup), raw)
 
 

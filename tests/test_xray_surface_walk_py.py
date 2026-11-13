@@ -95,7 +95,7 @@ def test_registrars_name_the_first_name_shaped_argument() -> None:
     )
     assert _walk(src)["entries"] == [
         ["<module>", "app.add_url_rule", "n", "index", "", 1, 0, 0, "GET", "/x", "app"],
-        ["<module>", "path", "a", "views", "show", 2, 0, 0, "", "a/", ""],
+        ["<module>", "path", "a", "views", "show", 2, 0, 0, "", "/a/", ""],
         ["setup", "p.set_defaults", "n", "cmd_run", "", 5, 0, 0, "", "", "p"],
     ]
 
@@ -199,7 +199,7 @@ def test_an_http_registrar_takes_its_handler_after_the_path() -> None:
     )
     assert _walk(src)["entries"] == [
         ["<module>", "app.add_route", "n", "derive", "", 1, 0, 0, "POST", "", "app"],
-        ["<module>", "path", "n", "show", "", 3, 0, 0, "", "a/", ""],
+        ["<module>", "path", "n", "show", "", 3, 0, 0, "", "/a/", ""],
         ["<module>", "mcp.add_tool", "n", "handler", "", 4, 0, 0, "", "handler", "mcp"],
     ]
 

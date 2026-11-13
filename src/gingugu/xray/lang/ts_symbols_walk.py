@@ -268,6 +268,8 @@ def walk(tree) -> dict:
             rec.imports(node)
         elif t == "export_statement":
             rec.export(node)
+            if node.parent is not None and node.parent.type == "program":
+                rec.surface.export(node)
         elif t in ("call_expression", "new_expression"):
             rec.call(node, scope, cls)
             if t == "call_expression":

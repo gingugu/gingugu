@@ -17,6 +17,7 @@ from ..symbols import MODULE, Symbols
 from .ts_exports import EXT, Modules
 from .ts_mount_values import Values
 from .ts_resolve import Resolver
+from .ts_surface_next import route_of
 
 MAX_DEPTH = 6  # how many calls deep a value's type is chased (`a = b.f()`, `b = c.g()`, ...)
 JS_GLOBALS = frozenset(
@@ -188,7 +189,7 @@ class _Linker:
 
     def link(self) -> Symbols:
         out = self.out
-        col = surface_link.Collector("typescript", out.defs)
+        col = surface_link.Collector("typescript", out.defs, route_of)
         values = Values(self.raws, self.mods)
         for rel, raw in self.raws.items():
             col.file(rel, raw)

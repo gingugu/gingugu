@@ -24,6 +24,7 @@ from dataclasses import replace
 from . import surface_catalog as cat
 from . import surface_mounts as sm
 from .symbols_model import Entry, Node, Sink
+from .symbols_walk import MODULE
 from .validate import is_valid_path
 
 Resolve = Callable[[list], Node | None]  # a call-shaped record -> (path, qual) or None
@@ -43,8 +44,13 @@ def placeable(e: Entry) -> bool:
 
 
 class Collector:
-    def __init__(self, lang: str, defs: dict[str, dict]) -> None:
-        self.lang, self.defs = lang, defs
+    def __init__(
+        self,
+        lang: str,
+        defs: dict[str, dict],
+        file_route: Callable[[str], str | None] | None = None,
+    ) -> None:
+        self.lang, self.defs, self.file_route = lang, defs, file_route
         self.sinks: list[Sink] = []
         self.entries: list[Entry] = []
         self._recs: list[list] = []
@@ -90,6 +96,10 @@ class Collector:
         spans = {scope: list(found) for scope, found in self._spans.items()}
         for scope, label, form, x, y, line, start, end, method, route, recv in self._recs:
             kind = cat.entry_kind(self.lang, label)
+            if self.file_route and form == "d" and scope == MODULE and label in cat.NEXT_VERBS:
+                route = self.file_route(rel)  # a route file's own export: the path is the route
+                if route is None:
+                    continue
             if form == "i":
                 span = next(s for s in spans[scope] if (s[0], s[1]) == (start, end))
                 nodes, direct = tuple(sorted(span[2])), tuple(sorted(set(span[3])))

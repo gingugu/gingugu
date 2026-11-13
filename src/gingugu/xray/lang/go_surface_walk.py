@@ -32,6 +32,7 @@ from .go_surface_route import txt as _txt
 
 _LITS = ("interpreted_string_literal", "raw_string_literal")
 _FUNCS = ("function_declaration", "method_declaration")
+_WRAP_DEPTH = 4
 _UPPER = re.compile(r"^[A-Z][A-Z0-9_]*$")
 _Assigns = dict[str, list[tuple[object, bool]]]  # name -> (value node or None, is "+=")
 
@@ -161,8 +162,33 @@ def _flag(call, assigns: _Assigns) -> bool:
         return True
 
 
+def _wrapped(call) -> tuple | None:
+    """The handler a wrapping call holds: its first argument, through at most 4
+    nested calls. (form, x, y, start line, end line), or None."""
+    for _ in range(_WRAP_DEPTH):
+        a = _args(call)[:1]
+        h = a[0] if a else None
+        if h is None:
+            return None
+        if h.type == "identifier":
+            return "n", _txt(h), "", 0, 0
+        if h.type == "selector_expression":
+            op = h.child_by_field_name("operand")
+            if op is not None and op.type == "identifier":
+                return "a", _txt(op), _txt(h.child_by_field_name("field")), 0, 0
+            return None
+        if h.type == "func_literal":
+            return "i", "", "", _line(h), h.end_point[0] + 1
+        if h.type != "call_expression":
+            return None
+        call = h
+    return None
+
+
 def _handlers(call, label: str, scope: str, env: route.Env) -> list[list]:
     args, line = _args(call), _line(call)
+    if not route.is_route(label, args):
+        return []
     method, path = route.entry_route(label, args, env)
     out: list[list] = []
     for a in args[1:]:
@@ -176,6 +202,10 @@ def _handlers(call, label: str, scope: str, env: route.Env) -> list[list]:
         if op is not None and op.type == "identifier":
             fld = _txt(last.child_by_field_name("field"))
             out.append([scope, label, "a", _txt(op), fld, line, 0, 0])
+    if last is not None and last.type == "call_expression":
+        wrapped = _wrapped(last)
+        if wrapped is not None:
+            out.append([scope, label, *wrapped[:3], line, *wrapped[3:]])
     recv = mnt.recv_of(label, env)
     out = [r + [method, path, recv] for r in out]
     return [r for r in out if rec.is_entry(r, "go")]

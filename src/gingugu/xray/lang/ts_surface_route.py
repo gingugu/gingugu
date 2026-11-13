@@ -28,6 +28,14 @@ def literal(node) -> str | None:
     return ""
 
 
+def rooted(route: str) -> str:
+    """An HTTP route written without a leading ``/`` (koa-router
+    ``post("documents.info")``) given one; ``""``, ``*`` and rooted routes as is."""
+    if not route or route[0] in "/*":
+        return route
+    return sr.clean("/" + route)
+
+
 def _last(node) -> str | None:
     """The last name of a ``recv`` expression (``app``, ``this.app`` -> ``app``)."""
     if node is None:
@@ -126,4 +134,7 @@ def nest_route(deco, prefix: str) -> str:
             return ""  # an argument that is not a safe literal: route unknown
     if prefix == sr.PREFIX:
         return sr.join(prefix, q)
-    return sr.clean("/" + sr.join(prefix, q).lstrip("/")) if (prefix or q) else "/"
+    if not (prefix or q):
+        return "/"
+    joined = sr.join(prefix, q)  # "" when the two together are no clean route
+    return sr.clean("/" + joined.lstrip("/")) if joined else ""

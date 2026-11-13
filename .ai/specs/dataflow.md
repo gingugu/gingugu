@@ -935,7 +935,11 @@ link (per language): every call verdict -> surface_link.Collector
     external call in the catalogue -> Sink (path, caller, name, line); other external -> dropped
     sql record -> Sink 'sql.built' where it sits
     entry: 'd' own definition | 'n'/'a'/'s' handler resolved like a call of that form
-           (an http registrar's handler is taken after its path; a bare `path(x)` needs a literal)
+           (an http registrar's handler is taken after its path; a bare `path(x)` needs a literal;
+            `X.as_view()` names the class; DRF `register` -> list + detail route; a route-decorated
+            class or `add_resource(Cls, ...)` -> one 'd' entry per view method per path)
+           | 'd' TS exported top-level GET/POST/...: route "" in the walk (cache is by content);
+             the linker sets ts_surface_next.route_of(path) or drops the entry
            | 'i' Python `if __name__ == "__main__":` block, label `__main__`, kind main
            | 'i' inline callback: start nodes = calls inside its span, direct sinks kept
     -> Symbols.sinks / Symbols.entries -> xray-symbols-<digest>.json (symbols_model.from_json:
