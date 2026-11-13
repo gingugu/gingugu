@@ -25,7 +25,11 @@ from . import surface_route as sr
 from . import surface_route_py as route
 
 MODULE = "<module>"
-_MOUNTS = {"include_router": "prefix", "register_blueprint": "url_prefix"}
+_MOUNTS = {
+    "include_router": "prefix",
+    "register_blueprint": "url_prefix",
+    "add_namespace": "path",
+}
 _CHILD_KW = ("router", "blueprint")
 _MAX_PARAM = 99  # surface_records.is_recv allows `#` and two digits
 
@@ -127,8 +131,17 @@ class Mounts:
         if len(node.args) < 2 or not isinstance(node.args[1], ast.Call):
             return
         inc = node.args[1]
-        mod = route._literal(inc.args[0]) if inc.args else None
         lit = route._literal(node.args[0])
+        if _name_of(inc.func) == "include" and inc.args and lit is not None:
+            urls = inc.args[0]  # include(router.urls): a DRF router mounted
+            if isinstance(urls, ast.Attribute) and urls.attr == "urls":
+                if isinstance(urls.value, ast.Name):
+                    self._root(scope, urls.value.id)
+                    prefix = sr.clean(lit) or (sr.PREFIX if lit else "")
+                    row = [scope, node.lineno, "", prefix, "n", urls.value.id, "", 0]
+                    self.mounts.append(row)
+                    return
+        mod = route._literal(inc.args[0]) if inc.args else None
         if _name_of(inc.func) != "include" or mod is None or lit is None:
             return
         if not _dotted_module(mod):

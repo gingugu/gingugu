@@ -41,13 +41,14 @@ def test_main_and_its_routes() -> None:
         '\thttp.HandleFunc("/y", func(w http.ResponseWriter, r *http.Request) {\n'  # 7
         "\t\tsave(r)\n"  # 8
         "\t})\n"  # 9
-        '\thttp.Handle("/z", wrap(handle))\n'  # 10: the last argument is a call
+        '\thttp.Handle("/z", wrap(handle))\n'  # 10: a wrapping call: the handler is found inside
         "}\n"  # 11
     )
     assert _walk(src)["entries"] == [
         ["<module>", "main", "d", "main", "", 5, 0, 0, "", "", ""],
         ["main", "http.HandleFunc", "n", "handle", "", 6, 0, 0, "", "/x", "http"],
         ["main", "http.HandleFunc", "i", "", "", 7, 7, 9, "", "/y", "http"],
+        ["main", "http.Handle", "n", "handle", "", 10, 0, 0, "", "/z", "http"],
     ]
 
 

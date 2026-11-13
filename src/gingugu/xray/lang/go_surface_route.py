@@ -9,8 +9,19 @@ Pure helpers for ``go_surface_walk``; none recurses. A prefix environment is a
 - chi ``r.Route("/x", func(p chi.Router) {...})`` binds ``p`` to ``join(prefix(r),
   "/x")`` inside the literal; ``r.Group(func(p chi.Router) {...})`` binds ``p`` to
   ``prefix(r)`` unchanged.
+- Group closure ``R.Group("/x", func() {...}, mw...)`` (the literal is the second
+  argument): inside the literal ``R`` carries ``join(prefix(R), "/x")`` and keeps its
+  root-router tracking, so closures nest; outside, ``R`` is unchanged. With a first
+  parameter, that parameter gets the prefix and root, and ``R`` keeps its own. A
+  non-literal path joins ``PREFIX``; an empty one leaves the prefix. Nesting is
+  tracked ``MAX_DEPTH`` deep; a deeper closure adds no prefix (bounded copying).
 - An entry's route is its first argument when that is a string literal, else "";
-  the receiver's prefix goes in front. Every route passes ``surface_route.clean``.
+  the receiver's prefix goes in front. An empty literal is the prefix itself (no
+  prefix: ""). Every route passes ``surface_route.clean``.
+- ``is_route``: a verb name (every ``_GO_LAST`` name but Handle/HandleFunc/Method/
+  MethodFunc) whose first argument is a string literal that is neither empty nor
+  ``/``-led, a call or a function literal registers nothing (``slog.Any("error",
+  err)``); a name or ``x.y`` first argument keeps route "".
 """
 
 from __future__ import annotations
@@ -19,6 +30,8 @@ from .. import surface_route as sr
 
 _LITS = ("interpreted_string_literal", "raw_string_literal")
 Env = dict[str, str]
+MAX_DEPTH = 32  # group closures nested deeper than this add no prefix
+_PATTERNS = frozenset(("Handle", "HandleFunc", "Method", "MethodFunc"))
 NEW_ROUTER = frozenset(("chi.NewRouter", "gin.New", "gin.Default", "echo.New", "http.NewServeMux"))
 
 
@@ -85,15 +98,32 @@ def entry_route(label: str, call_args: list, env: Env) -> tuple[str, str]:
     second = literal(call_args[1]) if len(call_args) > 2 else None
     if last in ("HandleFunc", "Handle", "Method", "MethodFunc") and path and second is not None:
         # method first: chi Method/MethodFunc, gin Handle("GET", "/x", h)
-        method, route = (sr.methods([path]) if path.upper() == path else ""), second
+        method, route, raw = (sr.methods([path]) if path.upper() == path else ""), second, second
     elif last in ("HandleFunc", "Handle"):
         method, route = sr.go_pattern(path) if path else ("", "")
+        raw = path
     else:
         method, route = ("" if last == "Any" else sr.method_of(label)), path or ""
-    if not route:
-        return method, ""
+        raw = path
     recv = label.rpartition(".")[0]
-    return method, sr.join(env.get(recv, ""), route)
+    if not route and raw != "":  # not a literal route: nothing to prefix
+        return method, ""
+    return method, sr.join(env.get(recv, ""), route)  # "" literal: the prefix itself
+
+
+def is_route(label: str, call_args: list) -> bool:
+    """Whether a call to ``label`` can register a route (the verb gate)."""
+    if label.rsplit(".", 1)[-1] in _PATTERNS or not call_args:
+        return True
+    first = call_args[0]
+    path = literal(first)
+    if path is not None:
+        return path == "" or path.startswith("/")
+    return first.type not in ("call_expression", "func_literal")
+
+
+def _depth(env: Env) -> int:
+    return int(env.get("!", "0"))
 
 
 def _group_prefix(recv: str, call_args: list, env: Env) -> str:
@@ -141,13 +171,16 @@ def literal_env(call, env: Env) -> tuple[tuple, Env] | None:
     if c is None or c[0] is None or c[1] not in ("Route", "Group"):
         return None
     a = args(call)
+    lit, prefix, spare = None, env.get(c[0], ""), False
     if c[1] == "Route":
-        lit, prefix = (a[1] if len(a) > 1 and a[1].type == "func_literal" else None), None
-        if lit is not None:
+        lit = a[1] if len(a) > 1 and a[1].type == "func_literal" else None
+        prefix = _group_prefix(c[0], a, env) if lit is not None else prefix
+    elif _lit_arg(a) is not None:
+        lit = a[0]
+    elif len(a) > 1 and a[1].type == "func_literal":  # gitea m.Group("/x", func() {...})
+        lit, spare = a[1], True
+        if _depth(env) < MAX_DEPTH:
             prefix = _group_prefix(c[0], a, env)
-    else:
-        lit = _lit_arg(a)
-        prefix = env.get(c[0], "")
     if lit is None:
         return None
     inner = dict(env)
@@ -157,4 +190,8 @@ def literal_env(call, env: Env) -> tuple[tuple, Env] | None:
     if names:
         inner[txt(names[0])] = prefix or ""
         track(inner, txt(names[0]), root_of(c[0], env))
+    elif spare:  # no parameter: the receiver itself carries the prefix inside
+        track(inner, c[0], root_of(c[0], env), prefix)
+    if spare:
+        inner["!"] = str(_depth(env) + 1)
     return (lit.start_byte, lit.end_byte), inner

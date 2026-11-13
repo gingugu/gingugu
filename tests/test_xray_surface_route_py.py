@@ -137,7 +137,7 @@ def test_registrars_take_their_route_and_methods() -> None:
         ("app.add_url_rule", "GET", "/b"),
         ("router.add_api_route", "DELETE", "/c"),
         ("Route", "GET", "/d"),
-        ("path", "", "items/<int:pk>/"),
+        ("path", "", "/items/<int:pk>/"),
     ]
 
 

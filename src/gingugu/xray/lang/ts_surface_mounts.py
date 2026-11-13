@@ -6,7 +6,8 @@
   declared by (a ``require`` binding is a bind, not a decl) - the linker's "is this
   name a value declared here" answer;
 - router names: a name this file declares from ``express()``, ``express.Router()`` or
-  ``Router()`` is router-shaped like ``app`` or ``usersRouter`` (``cat.router_shaped``);
+  ``Router()`` (or koa's ``new Router()``) is router-shaped like ``app`` or
+  ``usersRouter`` (``cat.router_shaped``);
 - parameters by function scope, so a receiver that is the i-th parameter reads ``#<i>``;
 - mount sites: ``P.use("/lit", child)``, a router handed to a function
   (``register(api)``: form ``pn``/``pa``, the passed router is the mount's parent),
@@ -46,10 +47,10 @@ def is_require(value) -> str | None:
 
 
 def _makes_router(value) -> bool:
-    if value is None or value.type != "call_expression":
+    if value is None or value.type not in ("call_expression", "new_expression"):
         return False
-    fn = value.child_by_field_name("function")
-    if fn is None:
+    fn = value.child_by_field_name("constructor" if value.type == "new_expression" else "function")
+    if fn is None or (value.type == "new_expression" and fn.type != "identifier"):
         return False
     if fn.type == "identifier":
         return text(fn) in ("express", "Router")

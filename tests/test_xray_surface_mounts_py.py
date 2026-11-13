@@ -156,7 +156,7 @@ def test_django_include() -> None:
         ),
         "shop/views.py": "def item(request, pk): pass\n",
     }
-    assert _routes(files) == {"item": "api/items/<int:pk>/"}
+    assert _routes(files) == {"item": "/api/items/<int:pk>/"}
 
 
 def test_a_router_nobody_mounts_keeps_its_own_route() -> None:

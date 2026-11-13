@@ -21,6 +21,7 @@ from __future__ import annotations
 import ast
 
 from . import surface_catalog as cat
+from . import surface_class_py as klass
 from . import surface_route_py as route
 from .surface_mount_py import Mounts
 
@@ -170,7 +171,9 @@ class Surface:
     """Collects ``entries`` and ``sql`` as ``symbols_walk.walk`` visits the tree."""
 
     def __init__(self, tree: ast.Module) -> None:
-        self.entries: list[list] = []
+        self._entries: list = []
+        self._views = klass.Views()
+        self._done: list[list] | None = None
         self.sql: list[list] = []
         self._assigns = collect_assigns(tree)
         self._m = Mounts(self._assigns)
@@ -178,24 +181,34 @@ class Surface:
         for node in tree.body:  # `if __name__ == "__main__":` - a script's entry point
             if isinstance(node, ast.If) and _is_main_test(node.test):
                 end = node.end_lineno or node.lineno
-                self.entries.append(
+                self._entries.append(
                     [MODULE, "__main__", "i", "", "", node.lineno, node.lineno, end, "", "", ""]
                 )
 
     def definition(self, node: ast.AST, scope: str, name: str) -> None:
-        """A def or class: its decorators are entries (functions only), never registrars."""
+        """A def or class: its decorators are entries, never registrars. A class
+        under a route decorator is one entry per view method it defines."""
         self._m.definition(node, name)
+        self._views.define(node, name)
         for deco in getattr(node, "decorator_list", []):
             if isinstance(deco, ast.Call):
                 self._decorators.add(id(deco))
             label = dotted(deco.func if isinstance(deco, ast.Call) else deco)
             kind = cat.entry_kind("python", label) if label else None
-            if isinstance(node, _DEFS) and label and kind:
+            if not label or not kind or label.rsplit(".", 1)[-1] in cat.PY_CALL_ONLY:
+                continue
+            recv = self._m.recv(scope, label)
+            if isinstance(node, ast.ClassDef):
+                if kind == "http":
+                    look = self._lookup(scope)
+                    self._entries.extend(
+                        self._views.decorated(node, scope, name, deco, label, look, recv)
+                    )
+            elif isinstance(node, _DEFS):
                 m, r = route.resolve(
                     kind, label, deco, name.rsplit(".", 1)[-1], self._lookup(scope)
                 )
-                recv = self._m.recv(scope, label)
-                self.entries.append([scope, label, "d", name, "", deco.lineno, 0, 0, m, r, recv])
+                self._entries.append([scope, label, "d", name, "", deco.lineno, 0, 0, m, r, recv])
 
     def call(self, node: ast.Call, scope: str, cls: str | None) -> None:
         """A call: a registrar makes an entry, a query method may make a ``sql`` record."""
@@ -209,27 +222,37 @@ class Surface:
                 self.sql.append([scope, node.lineno])
 
     def _registrar(self, node: ast.Call, label: str, scope: str, cls: str | None) -> None:
+        last = label.rsplit(".", 1)[-1]
+        recv = self._m.recv(scope, label)
+        if last in cat.PY_CALL_ONLY:
+            look = self._lookup(scope)
+            if last == "register":
+                self._entries.extend(klass.register(node, label, scope, look, recv))
+            else:
+                self._entries.extend(self._views.resource(node, label, scope, look, recv))
+            return
         args = list(node.args)
         if cat.entry_kind("python", label) == "http":  # the path comes first, never the handler
             if "." not in label and not (args and _is_str(args[0])):
                 return  # a bare `path(x)` is Django's only with a literal route
             args = args[1:]
         for arg in [*args, *(k.value for k in node.keywords)]:
-            if isinstance(arg, ast.Name):
-                form, x, y = "n", arg.id, ""
-            elif isinstance(arg, ast.Attribute) and isinstance(arg.value, ast.Name):
-                base = arg.value.id
-                if cls is not None and base in ("self", "cls"):
-                    form, x, y = "s", cls, arg.attr
-                else:
-                    form, x, y = "a", base, arg.attr
-            else:
+            target = klass.handler(arg, cls)
+            if target is None:
                 continue
+            form, x, y = target
             kind = cat.entry_kind("python", label) or ""
             m, r = route.resolve(kind, label, node, y or x, self._lookup(scope))
-            recv = self._m.recv(scope, label)
-            self.entries.append([scope, label, form, x, y, node.lineno, 0, 0, m, r, recv])
+            self._entries.append([scope, label, form, x, y, node.lineno, 0, 0, m, r, recv])
             return
+
+    @property
+    def entries(self) -> list[list]:
+        """Every entry; the ones that waited on a class defined later are settled
+        the first time this is read, once the whole file has been walked."""
+        if self._done is None:
+            self._done = self._views.settle(self._entries)
+        return self._done
 
     @property
     def mounts(self) -> list[list]:

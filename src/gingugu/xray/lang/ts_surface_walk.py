@@ -23,6 +23,7 @@ import re
 from .. import surface_catalog as cat
 from .. import surface_route as sr
 from ..symbols_walk import is_qual
+from . import ts_surface_next as tn
 from . import ts_surface_route as tr
 from .ts_surface_mounts import MountScan
 from .ts_symbols_types import text
@@ -115,6 +116,12 @@ class Surface:
         if name is not None and name.type == "identifier":
             self._decls.setdefault((scope, text(name)), []).append(value)
 
+    def export(self, node) -> None:
+        """A top-level ``export`` of a method-named function: a "d" entry, route
+        left "" (the path-derived route is the linker's, the cache keys on content)."""
+        for verb, line in tn.method_exports(node):
+            self.entries.append(["<module>", verb, "d", verb, "", line, 0, 0, verb, "", ""])
+
     def class_body(self, node, cls: str) -> None:
         """NestJS-style decorators precede the method they decorate."""
         pending: list = []
@@ -176,7 +183,7 @@ class Surface:
                         cls,
                         pos.start_point[0] + 1,
                         ve[1],
-                        chain[1],
+                        tr.rooted(chain[1]),
                         self.mounts.recv([chain[0]], scope),
                     )
 
@@ -185,6 +192,11 @@ class Surface:
         if len(args) < 2 or args[0].type not in ("string", "template_string"):
             return
         route = tr.literal(args[0]) or ""
+        if (
+            "." in label
+            and cat.entry_kind("typescript", "router." + label.rsplit(".", 1)[1]) == "http"
+        ):
+            route = tr.rooted(route)  # a route call (declared-router ones included)
         recv = self.mounts.entry(label, scope)
         self._handlers(label, args[1:], scope, cls, line, sr.method_of(label), route, recv)
 
