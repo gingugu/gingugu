@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.52.0] - 2026-11-13
+
 ### Added
 
 - **X7d reads routes from more frameworks.** The attack-surface map (`code_xray` `surface`)
