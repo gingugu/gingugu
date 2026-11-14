@@ -97,6 +97,14 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         self._tokens = tokens
         self._derived = derived
 
+    def _parent_still_covers(self, grant: Grant) -> bool:
+        """A token a scoped token derived dies with its parent: revoked or
+        narrowed, the parent's current grant must still cover it."""
+        if grant.parent is None:
+            return True
+        current = self._tokens.grant_named(grant.parent) if self._tokens else None
+        return current is not None and current.covers(grant)
+
     def _identify(self, header: str) -> tuple[Grant, str] | None:
         """The grant a header carries and its kind: owner, derived or scoped."""
         # Bytes, not str: compare_digest raises on a non-ASCII str, and a
@@ -110,7 +118,7 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         if self._derived is not None:
             grant = self._derived.resolve(presented)
             if grant is not None:
-                return grant, DERIVED
+                return (grant, DERIVED) if self._parent_still_covers(grant) else None
         if self._tokens is None:
             return None
         grant = self._tokens.resolve(presented)

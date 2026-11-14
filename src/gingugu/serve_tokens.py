@@ -18,6 +18,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import secrets
 import tempfile
 from datetime import UTC, datetime
@@ -30,6 +31,7 @@ from .grants import LEVELS, WRITE, Grant
 logger = logging.getLogger(__name__)
 
 _VERSION = 1
+_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 _FileKey = tuple[int, int, int]  # (st_mtime_ns, st_size, st_ino)
 
 
@@ -137,6 +139,10 @@ class TokenStore:
         """Create a token for ``name``; returns the plaintext, shown once."""
         if not name or not name.strip():
             raise ValueError("token name must not be empty")
+        if not _NAME_RE.fullmatch(name):
+            # The name is who the token speaks as on the board: no "derived:"
+            # prefix, newline or other shape that could pass for someone else.
+            raise ValueError("token name must be letters, digits, '.', '_' or '-'")
         if not namespaces:
             raise ValueError("a token needs at least one namespace grant")
         if Grant(name, namespaces).is_full:  # also validates levels and names
@@ -210,6 +216,22 @@ class TokenStore:
             return False
         self._write(kept)
         return True
+
+    def grant_named(self, name: str) -> Grant | None:
+        """The current grant of the scoped token called ``name``, or None
+        (gone, an owner token, or an unreadable file)."""
+        try:
+            entries = self._entries()
+        except ValueError:
+            return None
+        for entry in entries:
+            if entry.get("name") == name and entry.get("owner") is not True:
+                try:
+                    grant = Grant(name, dict(entry.get("namespaces") or {}))
+                except (ValueError, TypeError):
+                    return None
+                return None if grant.is_full else grant
+        return None
 
     def resolve(self, token: str) -> Grant | None:
         """The grant a presented token carries, or None (unknown / unreadable)."""

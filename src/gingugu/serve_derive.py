@@ -27,7 +27,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from .derived_tokens import DEFAULT_TTL, DerivedTokens
-from .grants import FULL, WILDCARD, WRITE, Grant, origin_name
+from .grants import FULL, WILDCARD, Grant, origin_name
 from .serve import OWNER, SCOPED
 from .serve_tokens import parse_grant_spec
 
@@ -77,22 +77,13 @@ def _grant_from(body: dict) -> Grant:
     return grant
 
 
-def _within(parent: Grant, child: Grant) -> bool:
-    """Whether ``child`` grants nothing ``parent`` does not."""
-    for ns, level in child.namespaces.items():
-        have = parent.namespaces.get(WILDCARD) if ns == WILDCARD else parent.level(ns)
-        if have is None or (level == WRITE and have != WRITE):
-            return False
-    return True
-
-
 def _scoped_grant_from(body: dict, parent: Grant) -> Grant:
     """A scoped token's derived grant: its own, or narrower, and named for it."""
     home = _optional_name(body, "home")
     requested = _grant_from({**body, "name": None, "home": None})  # validates the grant
     namespaces = dict(parent.namespaces if body.get("grant") is None else requested.namespaces)
-    child = Grant(f"derived:{parent.name}", namespaces, home=home, derived=True)
-    if not _within(parent, child):
+    child = Grant(f"derived:{parent.name}", namespaces, home=home, derived=True, parent=parent.name)
+    if not parent.covers(child):
         raise _Wider("a scoped token may not derive a wider grant than its own")
     if child.home is not None and not child.can_read(child.home):
         raise _BadRequest("home must be a namespace the grant can read")
@@ -126,7 +117,7 @@ def derive_endpoint(derived: DerivedTokens):
             ttl = _ttl_from(body)
             if kind == SCOPED:
                 grant = _scoped_grant_from(body, caller)
-                token = derived.mint(grant, ttl, max_alike=SCOPED_LIVE_MAX)
+                token = derived.mint(grant, ttl, per_parent=SCOPED_LIVE_MAX)
             else:
                 grant = _grant_from(body)
                 origin = origin_name(caller.name) if caller else None

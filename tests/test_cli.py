@@ -53,7 +53,7 @@ def test_bare_invocation_runs_stdio_server(monkeypatch):
     "sub, target",
     [
         ("serve", "gingugu.serve.serve"),
-        ("promote", "gingugu.promote.main"),
+        ("promote", "gingugu.promote_cli.main"),
     ],
 )
 def test_subcommands_dispatch(monkeypatch, sub, target):

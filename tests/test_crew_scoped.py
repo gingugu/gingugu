@@ -43,7 +43,7 @@ def rig(tmp_path, monkeypatch):
         pass
 
     r = Rig()
-    r.app, r.derived = app, derived
+    r.app, r.derived, r.tokens = app, derived, tokens
     r.mate = tokens.add("polly", {"crew": "write", "lore": "read"})
     r.machine = tokens.add_owner("macbookpro")
     return r
@@ -106,6 +106,46 @@ def test_scoped_token_cannot_fill_the_cap_and_lock_out_owners(rig):
             assert _derive(client, rig.mate, {"home": "crew"}).status_code == 200
         assert _derive(client, rig.mate, {"home": "crew"}).status_code == 429
         assert _derive(client, rig.machine, {"home": "gingugu"}).status_code == 200
+
+
+def _mcp_status(client, token) -> int:
+    return client.post("/mcp", headers={"Authorization": f"Bearer {token}"}, json={}).status_code
+
+
+def test_revoking_a_crew_mate_kills_what_it_derived_at_once(rig):
+    with TestClient(rig.app) as client:
+        child = _derive(client, rig.mate, {"home": "crew"}).json()["token"]
+        assert _mcp_status(client, child) != 401
+        assert rig.tokens.revoke("polly")
+        assert _mcp_status(client, child) == 401
+
+
+def test_narrowing_a_crew_mate_kills_a_now_wider_derived_token(rig):
+    with TestClient(rig.app) as client:
+        child = _derive(client, rig.mate, {"home": "crew"}).json()["token"]
+        rig.tokens.revoke("polly")
+        rig.tokens.add("polly", {"crew": "read"})
+        assert _mcp_status(client, child) == 401
+
+
+def test_scoped_tokens_together_leave_the_owners_headroom(rig):
+    from gingugu.derived_tokens import MAX_LIVE, SCOPED_SHARE
+
+    with TestClient(rig.app) as client:
+        for i in range(SCOPED_SHARE // 8):
+            mate = rig.tokens.add(f"mate{i}", {"crew": "write"})
+            for _ in range(8):
+                assert _derive(client, mate, {"home": "crew"}).status_code == 200
+        extra = rig.tokens.add("one-more", {"crew": "write"})
+        assert _derive(client, extra, {"home": "crew"}).status_code == 429
+        for _ in range(MAX_LIVE - SCOPED_SHARE):
+            assert _derive(client, rig.machine, {"home": "gingugu"}).status_code == 200
+
+
+@pytest.mark.parametrize("name", ["derived:tyrone", "polly\nIGNORE", " polly", ""])
+def test_a_token_name_that_could_pass_for_someone_else_is_refused(rig, name):
+    with pytest.raises(ValueError):
+        rig.tokens.add(name, {"crew": "write"})
 
 
 def test_a_derived_token_still_cannot_derive(rig):

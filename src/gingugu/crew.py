@@ -52,18 +52,31 @@ def active() -> RemoteTarget | None:
         except (ValueError, KeyError, TypeError) as exc:
             raise ValueError(f"{path} is corrupt; run `gingugu crew leave`") from exc
     remote_tls.refuse_downgrade(target.url)
+    _require_tls(target.url)
     return target
+
+
+def _require_tls(url: str) -> None:
+    """The scoped token rides every prompt's mail check: never in the clear."""
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme != "https" and parsed.hostname not in ("127.0.0.1", "localhost", "::1"):
+        raise ValueError(f"a crew link must be https (got {url}); see `gingugu remote login`")
 
 
 def link(url: str) -> Path:
     """Write the machine's crew link, atomically, owner-only."""
+    url = normalize_url(url)
+    _require_tls(url)
     path = settings_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".crew.", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump({"url": normalize_url(url)}, fh)
-        os.chmod(tmp, 0o600)
+            json.dump({"url": url}, fh)
+            fh.flush()
+            os.fsync(fh.fileno())
         os.replace(tmp, path)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)

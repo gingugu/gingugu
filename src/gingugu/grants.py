@@ -55,6 +55,10 @@ class Grant:
     # stamped by the server, never claimed. The board tells one persona's
     # machines apart by it.
     origin: str | None = None
+    # A token a scoped token derived: that scoped token's name. The brain
+    # re-checks it on every use, so revoking or narrowing the parent reaches
+    # the tokens it derived at once, not when they expire.
+    parent: str | None = None
 
     def __post_init__(self) -> None:
         for ns, level in self.namespaces.items():
@@ -79,6 +83,14 @@ class Grant:
 
     def can_write(self, namespace: str) -> bool:
         return self.level(namespace) == WRITE
+
+    def covers(self, other: Grant) -> bool:
+        """Whether ``other`` grants nothing this grant does not."""
+        for ns, level in other.namespaces.items():
+            have = self.namespaces.get(WILDCARD) if ns == WILDCARD else self.level(ns)
+            if have is None or (level == WRITE and have != WRITE):
+                return False
+        return True
 
 
 FULL = Grant("full", {WILDCARD: WRITE})
