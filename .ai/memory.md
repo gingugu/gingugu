@@ -551,7 +551,8 @@ gap between the count and the rows.
 
 ## Release State
 
-- Current version: **0.52.0** (PyPI, 2026-11-13). Minor: X7d route coverage - routes from Django `re_path`/class views, DRF routers, flask-restx/restful, router subclasses, Next.js app-router `route.ts`, koa-router, and Go group closures (#197). Extractor version 7, no migration.
+- Current version: **0.53.0** (PyPI, 2026-11-13). Minor: crew mates - `gingugu crew add|remove|list|join|leave|status`, `promote --to-crew`, scoped tokens may derive no wider than themselves and die with their parent, crew mail in the prompt hook, `MEMORY_CREW` / `MEMORY_CREW_URL` (#199). No migration.
+- 0.52.0 (PyPI, 2026-11-13). Minor: X7d route coverage - routes from Django `re_path`/class views, DRF routers, flask-restx/restful, router subclasses, Next.js app-router `route.ts`, koa-router, and Go group closures (#197). Extractor version 7, no migration.
 - 0.51.0 (PyPI, 2026-11-11). Minor: X7b HTTP routes as edges - `code_xray` `routes` / `gingugu xray routes`, the read hook's `Routes:` line and the edit note (`MEMORY_XRAY_ROUTES`); X23 URL route mentions carry their host (#196). No migration.
 - 0.50.0 (PyPI, 2026-11-10). Minor: X7d entry routes (method + URL, MCP/CLI names) in Python, TS/JS and Go, routes across files through mount prefixes (one entry per URL), and the surface in the read hook and edit note (#195). Extractor version 6.
 - 0.49.0 (PyPI, 2026-11-10). Minor: X7a env vars and X7c DB tables as edges (#189, #190, #191), X22 docs map in the hooks (#188), X17 symbol graph for TS/JS and Go plus the X11 ledger for every test runner (#193), X7d attack-surface map (#194), literal-grep test timeout fix (#192). Extractor version 5.
