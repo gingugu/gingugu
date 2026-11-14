@@ -26,7 +26,8 @@ import anyio
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from .serve import OWNER
+from .grants import WILDCARD
+from .serve import OWNER, SCOPED
 
 logger = logging.getLogger(__name__)
 
@@ -241,12 +242,24 @@ def _run_warmup(ctx, args: tuple) -> dict:
 # --- routing -----------------------------------------------------------------
 
 
+def _scoped_inbox(args: tuple, grant) -> tuple:
+    """A crew mate's own mail, fenced to what its scoped token can read."""
+    persona, names, shown, agent = args
+    if persona != grant.name:
+        raise PermissionError("a scoped token reads only its own persona's inbox")
+    readable = [n for n in grant.namespaces if n != WILDCARD and grant.can_read(n)]
+    names = readable if names is None else [n for n in names if grant.can_read(n)]
+    return persona, names, shown, agent
+
+
 def _endpoint(parse: Callable, run: Callable, ctx, *, with_origin: bool = False):
     """``with_origin`` appends the calling owner token's name - the machine - to
-    the parsed args, so a route can know who asked without the body saying."""
+    the parsed args, so a route can know who asked without the body saying.
+    It marks the inbox route, the one a scoped token (a crew mate) may also use."""
 
     async def handle(request: Request) -> JSONResponse:
-        if getattr(request.state, "token_kind", None) != OWNER:
+        kind = getattr(request.state, "token_kind", None)
+        if kind != OWNER and not (with_origin and kind == SCOPED):
             return JSONResponse({"error": "only an owner token may use the hook routes"}, 403)
         try:
             body = await request.json()
@@ -256,12 +269,16 @@ def _endpoint(parse: Callable, run: Callable, ctx, *, with_origin: bool = False)
             if not isinstance(body, dict):
                 raise _BadRequest("body must be a JSON object")
             args = parse(body)
-            if with_origin:
+            if with_origin and kind == SCOPED:
+                args = (*_scoped_inbox(args, request.state.grant), None)  # no machine
+            elif with_origin:
                 from .grants import origin_name
 
                 args = (*args, origin_name(getattr(request.state.grant, "name", None)))
         except _BadRequest as exc:
             return JSONResponse({"error": str(exc)}, status_code=400)
+        except PermissionError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=403)
         try:
             return JSONResponse(await anyio.to_thread.run_sync(lambda: run(ctx, args)))
         except Exception:  # noqa: BLE001 - the server never crashes on a hook call

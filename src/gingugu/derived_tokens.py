@@ -41,8 +41,12 @@ class DerivedTokens:
         for key in [k for k, (_, exp) in self._entries.items() if exp <= now]:
             del self._entries[key]
 
-    def mint(self, grant: Grant, ttl: int) -> str:
-        """A new token for ``grant`` valid ``ttl`` seconds; the plaintext is returned once."""
+    def mint(self, grant: Grant, ttl: int, *, max_alike: int | None = None) -> str:
+        """A new token for ``grant`` valid ``ttl`` seconds; the plaintext is returned once.
+
+        ``max_alike`` caps the live tokens sharing this grant's name and origin,
+        so one scoped client cannot fill the shared cap and lock the owners out.
+        """
         if isinstance(ttl, bool) or not isinstance(ttl, int) or not 0 < ttl <= MAX_TTL:
             raise ValueError(f"ttl must be an integer from 1 to {MAX_TTL} seconds")
         token = secrets.token_urlsafe(32)
@@ -51,6 +55,14 @@ class DerivedTokens:
             self._prune(now)
             if len(self._entries) >= MAX_LIVE:
                 raise OverflowError("too many live derived tokens")
+            if max_alike is not None:
+                alike = sum(
+                    1
+                    for g, _ in self._entries.values()
+                    if g.name == grant.name and g.origin == grant.origin
+                )
+                if alike >= max_alike:
+                    raise OverflowError(f"too many live derived tokens for {grant.name}")
             self._entries[_hash(token)] = (grant, now + ttl)
         return token
 

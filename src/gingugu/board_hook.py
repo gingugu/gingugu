@@ -51,7 +51,8 @@ def render(posts: list[dict]) -> str:
             f"- {p.get('kind', 'message')} from {p.get('author')}{on} in {p.get('namespace')} "
             f"(post {p['id']}{reply}): {body}"
         )
-        lines.append(f'  read it: board(action="read", post_id="{p["id"]}")')
+        via = " on the crew server (its `board` tool)" if p.get("_crew") else ""
+        lines.append(f'  read it{via}: board(action="read", post_id="{p["id"]}")')
         if p.get("kind") == "task":
             lines.append(f"  {_task_line(p)}")
     if n > MAX_SHOWN:
@@ -123,6 +124,22 @@ def _remote(
     return [p for p in posts if isinstance(p, dict) and isinstance(p.get("id"), str)]
 
 
+def _crew_mail(me: str, shown: set[str], session_id: str) -> list[dict]:
+    """A local-brain crew mate's mail on its crew brain; [] when unlinked or down.
+
+    Unfenced on this side: the crew brain fences it to the link's scoped token.
+    """
+    from . import crew
+
+    try:
+        target = crew.active()
+    except Exception:  # noqa: BLE001 - a bad link never costs the local mail
+        return []
+    if target is None:
+        return []
+    return [{**p, "_crew": True} for p in _remote(target, me, None, shown, session_id)]
+
+
 def mail(db_path: Path, session_id: str, cwd: str | None = None) -> tuple[str, int] | None:
     """``(block, unread count)`` for this prompt, or None. Never raises."""
     try:
@@ -147,6 +164,7 @@ def _mail(db_path: Path, session_id: str, cwd: str | None) -> tuple[str, int] | 
         posts = _remote(target, me, names, shown, session_id)
     else:
         posts = unread_local(db_path, me, names, shown, agent=agent_session.key(session_id))
+        posts += _crew_mail(me, shown, session_id)
     if not posts:
         return None
     block = render(posts)

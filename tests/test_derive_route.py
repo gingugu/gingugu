@@ -88,9 +88,9 @@ def test_no_grant_means_full_access_with_a_home(rig):
     assert resp.json()["expires_in"] == 120
 
 
-def test_scoped_and_derived_tokens_may_not_derive(rig):
+def test_derived_tokens_may_not_derive(rig):
+    # A scoped token may derive no wider than itself: tests/test_crew_scoped.py.
     with TestClient(rig.app) as client:
-        assert _derive(client, rig.scoped, {"home": "alpha"}).status_code == 403
         child = _derive(client, SERVE_TOKEN, {"home": "gingugu"}).json()["token"]
         assert _derive(client, child, {"home": "gingugu"}).status_code == 403
         assert _derive(client, None, {"home": "gingugu"}).status_code == 401
