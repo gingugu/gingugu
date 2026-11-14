@@ -16,9 +16,10 @@ from hashlib import sha256
 
 SHIPPED: dict[str, dict] = {
     "session_start.py.tmpl": {
-        "current": "8bf3e97e45b0a6ce3c724c8e249589090c672ef43f78eaff68273ac790e43aea",
+        "current": "67f5fad7a9c3ecf64aafe693143a08a69c4e43e415df3bc3433fa36b793d23c8",
         "previous": frozenset(
             {
+                "8bf3e97e45b0a6ce3c724c8e249589090c672ef43f78eaff68273ac790e43aea",
                 "4161085ca8a999c79747262a5c0cdb565292576d8690013e4508d304b4190e18",
                 "ccd5c343020ee0ef897693b9adfa9889a4d0cac2f1977fd1d934d0f650a57752",
                 "f8efd3bb57be3784673e0d7b83b7e393fcde708ef24f3028ca08fe18f567cbad",

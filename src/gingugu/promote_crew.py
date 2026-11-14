@@ -14,9 +14,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from .crew import NAMESPACE as CREW_NAMESPACE
 from .remote import RemoteTarget
-
-CREW_NAMESPACE = "crew"
 
 
 def local_candidates(db_path: Path, namespace: str) -> list[dict]:

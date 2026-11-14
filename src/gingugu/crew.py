@@ -24,6 +24,7 @@ from .config import _default_db_path
 from .remote import RemoteTarget, normalize_url
 
 ENV = "MEMORY_CREW_URL"
+NAMESPACE = "crew"  # the commons every crew mate writes, and everyone loads
 
 
 def settings_path() -> Path:

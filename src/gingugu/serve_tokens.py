@@ -135,8 +135,11 @@ class TokenStore:
 
     # --- public API ----------------------------------------------------------
 
-    def add(self, name: str, namespaces: dict[str, str]) -> str:
-        """Create a token for ``name``; returns the plaintext, shown once."""
+    def add(self, name: str, namespaces: dict[str, str], *, crew: bool = False) -> str:
+        """Create a token for ``name``; returns the plaintext, shown once.
+
+        ``crew`` marks a crew mate's token: the only kind a crew key's SSH
+        mint may rotate (``rotate_crew``)."""
         if not name or not name.strip():
             raise ValueError("token name must not be empty")
         if not _NAME_RE.fullmatch(name):
@@ -160,8 +163,21 @@ class TokenStore:
                 "sha256": _hash(token),
                 "namespaces": dict(namespaces),
                 "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
+                **({"crew": True} if crew else {}),
             }
         )
+        self._write(entries)
+        return token
+
+    def rotate_crew(self, name: str) -> str:
+        """A fresh token for the crew mate ``name``, same grant, old one dead.
+        Anything but an existing crew token is refused - never an owner."""
+        entries = self._load()
+        [entry] = [e for e in entries if e.get("name") == name] or [None]
+        if entry is None or entry.get("crew") is not True or entry.get("owner") is True:
+            raise ValueError(f"{name!r} is not on the crew; the captain runs `gingugu crew add`")
+        token = secrets.token_urlsafe(32)
+        entry["sha256"] = _hash(token)
         self._write(entries)
         return token
 
@@ -202,6 +218,7 @@ class TokenStore:
             {
                 "name": e.get("name"),
                 "owner": bool(e.get("owner") is True),
+                "crew": bool(e.get("crew") is True),
                 "namespaces": e.get("namespaces", {}),
                 "created_at": e.get("created_at"),
             }
