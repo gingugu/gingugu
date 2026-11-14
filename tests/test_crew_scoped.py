@@ -128,6 +128,23 @@ def test_narrowing_a_crew_mate_kills_a_now_wider_derived_token(rig):
         assert _mcp_status(client, child) == 401
 
 
+def test_rotating_a_crew_mate_ends_what_the_old_token_derived(rig):
+    rig.tokens.revoke("polly")
+    first = rig.tokens.add("polly", {"crew": "write"}, crew=True)
+    with TestClient(rig.app) as client:
+        child = _derive(client, first, {"home": "crew"}).json()["token"]
+        rig.tokens.rotate_crew("polly")
+        assert _mcp_status(client, child) == 401
+
+
+def test_re_adding_a_removed_mate_does_not_revive_old_tokens(rig):
+    with TestClient(rig.app) as client:
+        child = _derive(client, rig.mate, {"home": "crew"}).json()["token"]
+        rig.tokens.revoke("polly")
+        rig.tokens.add("polly", {"crew": "write", "lore": "read"})
+        assert _mcp_status(client, child) == 401
+
+
 def test_scoped_tokens_together_leave_the_owners_headroom(rig):
     from gingugu.derived_tokens import MAX_LIVE, SCOPED_SHARE
 

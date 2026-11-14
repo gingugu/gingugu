@@ -2511,6 +2511,10 @@ src/gingugu/
 │   ├── lens.py             # /search (score breakdown) + /stats (prune=False)
 │   └── events.py           # /events: access_log + query_log feed, cursor + replay
 ├── promote.py              # gingugu promote: local "gold" -> a central brain
+├── promote_cli.py          # the promote CLI: URL to URL, or --to-crew
+├── promote_crew.py         # promote --to-crew: this machine's brain file -> its crew
+├── crew.py                 # the crew link (crew.json / MEMORY_CREW_URL), https only
+├── crew_cli.py             # gingugu crew add|remove|list (brain) join|leave|status (mate)
 ├── config.py               # Config + cross-platform DB path (platformdirs)
 │
 │   # ── Onboarding (client-side; not part of the server) ──────────

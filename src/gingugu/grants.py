@@ -59,6 +59,9 @@ class Grant:
     # re-checks it on every use, so revoking or narrowing the parent reaches
     # the tokens it derived at once, not when they expire.
     parent: str | None = None
+    # The parent's token hash when it derived this one: a rotated or re-added
+    # parent of the same name is a different token, and this one dies with the old.
+    parent_key: str | None = None
 
     def __post_init__(self) -> None:
         for ns, level in self.namespaces.items():

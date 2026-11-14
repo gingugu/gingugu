@@ -29,7 +29,7 @@ from starlette.responses import JSONResponse
 from .derived_tokens import DEFAULT_TTL, DerivedTokens
 from .grants import FULL, WILDCARD, Grant, origin_name
 from .serve import OWNER, SCOPED
-from .serve_tokens import parse_grant_spec
+from .serve_tokens import _hash, parse_grant_spec
 
 logger = logging.getLogger(__name__)
 
@@ -77,12 +77,20 @@ def _grant_from(body: dict) -> Grant:
     return grant
 
 
-def _scoped_grant_from(body: dict, parent: Grant) -> Grant:
-    """A scoped token's derived grant: its own, or narrower, and named for it."""
+def _scoped_grant_from(body: dict, parent: Grant, parent_key: str) -> Grant:
+    """A scoped token's derived grant: its own, or narrower, and named for it.
+    ``parent_key`` (the presented token's hash) ties it to that very token."""
     home = _optional_name(body, "home")
     requested = _grant_from({**body, "name": None, "home": None})  # validates the grant
     namespaces = dict(parent.namespaces if body.get("grant") is None else requested.namespaces)
-    child = Grant(f"derived:{parent.name}", namespaces, home=home, derived=True, parent=parent.name)
+    child = Grant(
+        f"derived:{parent.name}",
+        namespaces,
+        home=home,
+        derived=True,
+        parent=parent.name,
+        parent_key=parent_key,
+    )
     if not parent.covers(child):
         raise _Wider("a scoped token may not derive a wider grant than its own")
     if child.home is not None and not child.can_read(child.home):
@@ -116,7 +124,8 @@ def derive_endpoint(derived: DerivedTokens):
                 raise _BadRequest("body must be a JSON object")
             ttl = _ttl_from(body)
             if kind == SCOPED:
-                grant = _scoped_grant_from(body, caller)
+                presented = request.headers.get("authorization", "").partition(" ")[2]
+                grant = _scoped_grant_from(body, caller, _hash(presented))
                 token = derived.mint(grant, ttl, per_parent=SCOPED_LIVE_MAX)
             else:
                 grant = _grant_from(body)

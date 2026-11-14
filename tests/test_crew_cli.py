@@ -109,6 +109,54 @@ def test_a_crew_key_still_hands_out_the_cert_only_on_cert(brain, monkeypatch, ca
     assert code == 2 and out == ""
 
 
+def test_a_removed_mate_with_a_wrong_wrapper_still_gets_no_owner_token(brain, monkeypatch, capsys):
+    # The captain left the key line and its wrapper forgot --crew: the owner path.
+    crew_main(["add", "polly"])
+    crew_main(["remove", "polly"])
+    capsys.readouterr()
+    monkeypatch.setenv("SSH_ORIGINAL_COMMAND", "mint polly")
+    assert token_main(["ssh-mint", "--name", "polly"]) != 0
+    assert capsys.readouterr().out.strip() == ""
+    assert not any(e["owner"] for e in brain.list())
+
+
+def test_a_removed_mate_can_be_taken_back_on(brain, capsys):
+    crew_main(["add", "polly"])
+    crew_main(["remove", "polly"])
+    assert crew_main(["add", "polly"]) == 0
+    capsys.readouterr()
+    crew_main(["list"])
+    assert capsys.readouterr().out.count("polly") == 1
+
+
+def test_a_retired_mate_is_not_listed(brain, capsys):
+    crew_main(["add", "polly"])
+    crew_main(["remove", "polly"])
+    capsys.readouterr()
+    crew_main(["list"])
+    assert "no crew" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("name", ["crow", "crew", "beepboop"])
+def test_crew_add_refuses_a_name_that_would_speak_as_someone_else(brain, tmp_path, name):
+    from gingugu.config import load_config
+    from gingugu.database import Database
+    from gingugu.namespaces import NamespaceManager
+
+    db = Database(tmp_path / "memories.db")
+    db.connect()
+    NamespaceManager(db.conn, load_config()).get_or_create("beepboop")
+    db.conn.commit()
+    db.close()
+    assert crew_main(["add", name]) == 2
+    assert brain.grant_named(name) is None
+
+
+@pytest.mark.parametrize("wrapper", ["relative/path", '/bin/x" evil', "/bin/x\nssh-rsa"])
+def test_crew_add_refuses_a_wrapper_that_would_break_the_key_line(brain, wrapper):
+    assert crew_main(["add", "polly", "--wrapper", wrapper]) == 2
+
+
 # --- mate side -----------------------------------------------------------------
 
 
@@ -185,6 +233,23 @@ def test_join_refuses_on_a_remote_machine(mate, monkeypatch):
     _vault, key = mate
     monkeypatch.setenv("MEMORY_REMOTE_URL", "https://pi.test")
     assert _join(key) == 2
+
+
+def test_leave_removes_a_broken_link_without_touching_tokens(mate, capsys):
+    vault, _key = mate
+    vault["https://other"] = "keep"
+    crew.settings_path().parent.mkdir(parents=True, exist_ok=True)
+    crew.settings_path().write_text("{not json")
+    assert crew_main(["leave"]) == 0
+    assert not crew.settings_path().exists() and vault == {"https://other": "keep"}
+
+
+def test_leave_refuses_while_the_env_names_the_link(mate, monkeypatch):
+    vault, _key = mate
+    vault[URL] = TOKEN
+    monkeypatch.setenv("MEMORY_CREW_URL", URL)
+    assert crew_main(["leave"]) != 0
+    assert vault == {URL: TOKEN}
 
 
 def test_leave_unlinks_and_forgets_the_token(mate, monkeypatch, capsys):

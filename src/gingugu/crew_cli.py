@@ -20,6 +20,8 @@ On the mate's machine (a local brain; MEMORY_PERSONA is the mate's name):
 from __future__ import annotations
 
 import argparse
+import os
+import re
 import shutil
 import subprocess
 import sys
@@ -32,6 +34,7 @@ from .serve_tokens import TokenStore, default_path, parse_grant_spec
 WRAPPER = "/usr/local/bin/gingugu-mint-crew"
 WAITING = 3  # join: the captain has not added the key yet - not a failure
 _NAME_RE = remote._NAME_RE
+_WRAPPER_RE = re.compile(r"^/[A-Za-z0-9._/-]+$")
 
 
 def _run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
@@ -60,9 +63,32 @@ def _parser() -> argparse.ArgumentParser:
 # --- brain side ----------------------------------------------------------------
 
 
+def _taken(name: str) -> str | None:
+    """Why ``name`` cannot be a crew mate's: it would speak as someone else."""
+    import sqlite3
+
+    from .config import load_config
+
+    if name in ("crow", crew.NAMESPACE):
+        return f"{name!r} is a shared namespace"
+    db = load_config().db_path
+    if not db.exists():
+        return None
+    conn = sqlite3.connect(f"{db.resolve().as_uri()}?mode=ro", uri=True)
+    try:
+        row = conn.execute("SELECT 1 FROM namespaces WHERE name = ?", (name,)).fetchone()
+    finally:
+        conn.close()
+    return f"{name!r} is already a namespace here - a persona or a project" if row else None
+
+
 def _add(args: argparse.Namespace) -> int:
     if not _NAME_RE.fullmatch(args.name):
         return _fail(f"invalid name {args.name!r}: letters, digits, '.', '_' or '-'", 2)
+    if not _WRAPPER_RE.fullmatch(args.wrapper):
+        return _fail(f"--wrapper must be an absolute path, got {args.wrapper!r}", 2)
+    if why := _taken(args.name):
+        return _fail(f"{why}; pick another name", 2)
     TokenStore(default_path()).add(args.name, parse_grant_spec(args.ns), crew=True)
     print(f"{args.name} is on the crew ({args.ns}).")
     print(f"Append this line to the brain admin's ~/.ssh/authorized_keys, with {args.name}'s")
@@ -75,7 +101,7 @@ def _add(args: argparse.Namespace) -> int:
 
 def _remove(args: argparse.Namespace) -> int:
     store = TokenStore(default_path())
-    if not any(e["name"] == args.name and e["crew"] for e in store.list()):
+    if not any(e["name"] == args.name and e["crew"] and not e["retired"] for e in store.list()):
         return _fail(f"{args.name!r} is not on the crew")
     store.revoke(args.name)
     print(f"{args.name} is off the crew: their token and every token it derived are dead.")
@@ -84,7 +110,7 @@ def _remove(args: argparse.Namespace) -> int:
 
 
 def _list() -> int:
-    mates = [e for e in TokenStore(default_path()).list() if e["crew"]]
+    mates = [e for e in TokenStore(default_path()).list() if e["crew"] and not e["retired"]]
     for e in mates:
         grant = ",".join(f"{ns}={lvl}" for ns, lvl in e["namespaces"].items())
         print(f"{e['name']}  {grant}  {e['created_at']}")
@@ -126,7 +152,7 @@ def _join(args: argparse.Namespace) -> int:
         return _ask_the_captain(key, args.name)
     login = argparse.Namespace(url=url, name=args.name, ssh=args.ssh, key=str(key))
     if remote._login(login) != 0:
-        print("\nNot aboard yet. If the captain has not added you, this is why:")
+        print("\nNot aboard yet (the reason is above). If the captain has not added you yet:")
         return _ask_the_captain(key, args.name)
     url = remote_url_after_login(url)
     crew.link(url)
@@ -151,7 +177,14 @@ def remote_url_after_login(url: str) -> str:
 
 
 def _leave() -> int:
-    target = crew.active()
+    if os.environ.get(crew.ENV) is not None:
+        return _fail(f"unset {crew.ENV} first: `leave` forgets only this machine's own link")
+    try:
+        target = crew.active()
+    except ValueError:  # a corrupt or http link: still remove it
+        crew.unlink()
+        print("Removed a broken crew link; no token was touched.")
+        return 0
     if target is None:
         print("not on a crew")
         return 0

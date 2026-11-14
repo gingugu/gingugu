@@ -35,7 +35,7 @@ _HEALTH_PATH = "/healthz"
 # ``memory_import`` is one request and outgrows that, so the owner can still
 # restore an export to a central brain in one call.
 _MAX_BODY = 64 * 1024 * 1024
-# request.state.token_kind: only an OWNER token may derive (see serve_derive).
+# request.state.token_kind: an OWNER or SCOPED token may derive (see serve_derive).
 OWNER, DERIVED, SCOPED = "owner", "derived", "scoped"
 
 SERVE_USAGE = """\
@@ -102,8 +102,11 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         narrowed, the parent's current grant must still cover it."""
         if grant.parent is None:
             return True
-        current = self._tokens.grant_named(grant.parent) if self._tokens else None
-        return current is not None and current.covers(grant)
+        found = self._tokens.scoped(grant.parent) if self._tokens else None
+        if found is None:
+            return False
+        current, key = found
+        return key == grant.parent_key and current.covers(grant)
 
     def _identify(self, header: str) -> tuple[Grant, str] | None:
         """The grant a header carries and its kind: owner, derived or scoped."""

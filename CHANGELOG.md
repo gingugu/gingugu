@@ -9,6 +9,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Crew mates.** An agent on its own machine, with its own local brain, can share a
+  brain with a crew through a scoped token (by default write on a `crew` commons and
+  nothing else) - see [docs/crew.md](docs/crew.md).
+  - `gingugu crew add|remove|list` on the brain host; `gingugu crew join|leave|status` on
+    the mate's machine. `join` makes a crew SSH key (the first run prints it for the
+    captain), mints the token over SSH into the keychain, pins the brain's TLS cert,
+    links the crew brain (`crew.json`, or `MEMORY_CREW_URL`), and prints the `crew` MCP
+    server to add. Nobody handles a token by hand.
+  - `gingugu token ssh-mint --name NAME --crew` is a crew key's forced command: it only
+    rotates that mate's crew token and never mints an owner token.
+  - `gingugu promote --to-crew --source-ns NS [--skip-tag T] [--dry-run]` reads this
+    machine's brain file directly and promotes to the crew as the persona. The persona's
+    own namespace and anything tagged with its name stay home.
+  - A crew mate's prompt hook shows mail from its own brain and from the crew brain.
+  - Startup contract: `MEMORY_CREW=1` adds `crew` to the namespaces every session loads;
+    a crew mate is told to load the commons from its `crew` server, and to choose a name
+    first if it has none.
+
+### Changed
+
+- **A scoped token may derive.** `/token/derive` accepts a scoped token and mints only a
+  token no wider than it (403 otherwise), named for it whatever the request says, with no
+  machine origin, at most 8 live per token and half the shared cap for all of them, so
+  owners always keep headroom. The brain re-checks a derived token's scoped parent on
+  every request: revoking or narrowing a crew mate ends what it derived at once.
+- `/hook/inbox` accepts a scoped token for its own persona only, fenced to its grant.
+  Every other hook route stays owner-only.
+- A scoped token's name must be a plain name (letters, digits, `.`, `_`, `-`): it is who
+  the token speaks as on the board.
+- Board mail shows every field of a post bare only when it is one plain word; anything
+  else is JSON-encoded, so a post from a shared brain cannot forge a line of the prompt.
+- `gingugu promote` finds what the target already holds with `memory_search` (title and
+  content), so it works on a scoped token, and a refusal from the target now fails the
+  run instead of reading as "nothing promoted yet". Its CLI moved to `promote_cli.py`.
+
 ---
 
 ## [0.52.0] - 2026-11-13

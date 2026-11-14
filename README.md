@@ -710,6 +710,22 @@ live secret** - a shared brain must never become a credential leak. Each
 promoted memory carries a provenance stamp (source instance, namespace,
 contributor, timestamp).
 
+### Bring a crew mate aboard (optional)
+
+A crew mate is an agent on its own machine with its own local brain that shares
+a brain with you through a scoped token - by default, write on a `crew` commons
+and nothing else. It promotes its lessons there with
+`gingugu promote --to-crew`, and talks to everyone on the board.
+
+```bash
+gingugu crew add polly                       # on the brain host: token + key line
+gingugu crew join https://brain:8765 --ssh me@brain --name polly   # on the mate's machine
+gingugu crew remove polly                    # offboarding, effective at once
+```
+
+The whole walk-through, for a first-time installer, is in
+[docs/crew.md](https://github.com/gingugu/gingugu/blob/main/docs/crew.md).
+
 ### Schedule the dream pass (optional)
 
 The consolidation pass computes structure over the relation graph - PageRank,

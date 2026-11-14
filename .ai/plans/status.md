@@ -1,8 +1,24 @@
 # Project Status
 
-_Last updated: 2026-11-13 (X7d route coverage built on `feature/xray-route-gaps`; X7b HTTP routes as edges released in 0.51.0; X7d routes, mounts and the surface hook line released in 0.50.0, the attack-surface map in 0.49.0; X17 symbol graph for TS/JS and Go + multi-runner X11 ledger on `feature/x17-ts-go`; literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
+_Last updated: 2026-11-13 (crew mates built on `feature/crew-chat`; X7d route coverage built on `feature/xray-route-gaps`; X7b HTTP routes as edges released in 0.51.0; X7d routes, mounts and the surface hook line released in 0.50.0, the attack-surface map in 0.49.0; X17 symbol graph for TS/JS and Go + multi-runner X11 ledger on `feature/x17-ts-go`; literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
 
 ## In Flight
+
+**Crew mates (2026-11-13, branch `feature/crew-chat`, unreleased).** A crew mate is an agent on its own
+machine with its own local brain that shares a brain through a scoped token (default `crew=write`): it
+promotes its gold into the `crew` commons and talks on the board. Built so a new machine can join as a new
+persona rather than another copy of an existing one, and so the promotion loop finally runs against a
+scoped target. Server: `/token/derive` accepts a scoped token and derives no wider than it (named for it,
+no origin, 8 live per parent, half of `MAX_LIVE` for all scoped parents); `Grant.parent` is re-checked on
+every request (`serve.BearerAuthMiddleware._parent_still_covers`), so `crew remove` / revoke / narrowing ends
+derived tokens at once; `/hook/inbox` takes a scoped token for its own persona. Client: `crew.py` (the link:
+`crew.json` / `MEMORY_CREW_URL`, https or loopback only), crew mail in `board_hook._crew_mail`,
+`crew_cli.py` (`crew add|remove|list|join|leave|status`), `token ssh-mint --crew` (rotates a crew token,
+never mints an owner), `promote_crew.py` + `promote_cli.py` (`promote --to-crew`), startup contract
+`MEMORY_CREW=1` / crew-mate clause. Guide: `docs/crew.md`. Specs: `tests/test_crew_{scoped,mail,cli,contract}.py`,
+`tests/test_promote_crew.py`. Brain-host step outside the repo: a crew key's forced command needs a wrapper
+that execs `ssh-mint --name "$1" --crew` as the service user - never the owner mint wrapper, which mints an
+owner token for an unknown name.
 
 **X7d route coverage (2026-11-13, branch `feature/xray-route-gaps`, unreleased).** The route join's recall is
 bounded by the routes X7d reads, and only a rooted route matches a call. Django `path` routes are rooted and a `re_path` regex is read as a route only when it is one (named groups become `{name}`, anything else regex-shaped is `(route not literal)`); a class-based view (`X.as_view()`) names its class; a DRF `router.register` is the list and the detail route, mounted by `include(router.urls)`; a flask-restx or flask-restful class (`@ns.route` on a class, `api.add_resource`) is one entry per view method per path, with `Namespace(path=)`, `Api(bp)` and `add_namespace` prefixes; router subclasses (`UserAPIRouter(prefix=)`) keep their prefix; a Next.js app-router `route.ts` answers the URL its path spells, once per exported method; a route written without a leading slash (koa-router) is rooted and `new Router()` is a router; Go group closures (`m.Group("/x", func() {...})`) prefix what is registered inside them, an empty path is the group's own prefix, and a handler wrapped in calls is found. A Go call that only shares a verb's name (`slog.Any("error", err)`) is no longer an entry.

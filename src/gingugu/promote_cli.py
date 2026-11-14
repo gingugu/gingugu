@@ -17,6 +17,7 @@ import argparse
 import asyncio
 import json
 import os
+import sqlite3
 import sys
 
 
@@ -93,7 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         report = _to_crew(args) if args.to_crew else _url_to_url(args)
-    except (ValueError, RuntimeError, OSError) as exc:
+    except (ValueError, RuntimeError, OSError, sqlite3.Error) as exc:
         print(f"gingugu promote: {exc}", file=sys.stderr)
         return 1
     print(json.dumps(report, indent=2))

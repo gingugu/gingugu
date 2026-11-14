@@ -3,11 +3,10 @@
 JSON object out).
 
 They serve the machine's own hooks, which run with the main thread's full view,
-so only an owner token may call them (403 otherwise, like ``/token/derive``).
-The brain does the heavy part - embedding with its warm model, sweeping, ranking
-- and keeps no session state: suppression and the client's namespaces arrive with
-each request. The one write is the ``query_log`` row the hook would have made
-locally.
+so only an owner token may call them (403 otherwise) - except ``/hook/inbox``, a
+crew mate's own mail. The brain embeds, sweeps and ranks, and keeps no session
+state: suppression and the client's namespaces arrive with each request. The one
+write is the ``query_log`` row the hook would have made locally.
 
 Each route is a ``(parse, run)`` pair. ``parse`` validates on the event loop, so
 a bad body costs no thread and writes no log row; ``run`` does the work in a

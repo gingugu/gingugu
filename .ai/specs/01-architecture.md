@@ -1342,6 +1342,16 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   from a local brain, filtered `memory_store` into a central brain with a
   provenance stamp. The server gains no promotion-specific code; the selective
   local→central absorption lives entirely in the client. Keeps the store pure.
+- **Crew mates are a token shape, not a server mode.** One `gingugu serve` is both
+  the owners' remote brain and a crew's central brain; what differs is the token.
+  A crew mate holds a scoped token (`crew=write` by default, marked `crew` in the
+  token file) and keeps its own local brain. Its proxy derives through that scoped
+  token, never wider, and every derived token names its scoped `parent`, which the
+  auth middleware re-checks per request so a revoke reaches it at once. Promotion
+  to the crew (`promote --to-crew`) and the bootstrap (`gingugu crew`) are client
+  code; the server change is only the derive and `/hook/inbox` gates. A crew key's
+  SSH forced command can rotate only its mate's crew token - never mint an owner -
+  so a key line left behind after offboarding is inert.
 - **Onboarding is client-side too.** `gingugu init` (`bootstrap/`) writes no
   server code - it copies packaged templates (`bootstrap/templates/*.tmpl`) into
   a target repo: for Claude Code, a `SessionStart` hook that auto-injects the

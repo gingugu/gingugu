@@ -57,6 +57,12 @@ _SECRET_PATTERNS = [
     re.compile(r"-----BEGIN"),
     re.compile(r"[a-fA-F0-9]{32,}"),  # long hashes / hex secrets
     re.compile(r"""password["']?\s*[:=]\s*\S"""),
+    re.compile(r"\b(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})"),
+    re.compile(r"\bxox[abposr]-[A-Za-z0-9-]{10,}"),  # Slack
+    re.compile(r"\bAIza[0-9A-Za-z_-]{30,}"),  # Google API key
+    re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\."),  # JWT
+    re.compile(r"[a-z][a-z0-9+.-]*://[^\s/:@]+:[^\s/@]+@"),  # URL with user:password
+    re.compile(r"""\b(api[_-]?key|token|secret)["']?\s*[:=]\s*["']?[A-Za-z0-9_\-.]{12,}""", re.I),
 ]
 
 
@@ -76,7 +82,7 @@ def is_promotable(memory: dict, skip_tags: frozenset[str] = frozenset()) -> bool
     tags = {t.lower() for t in memory.get("tags", [])}
     if tags & (EPISODIC_TAGS | PERSONAL_TAGS | SECRET_TAGS | skip_tags):
         return False
-    if contains_secret(memory.get("content", "")):
+    if contains_secret(memory.get("content", "")) or contains_secret(memory.get("title", "")):
         return False
     return True
 

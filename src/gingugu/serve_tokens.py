@@ -26,7 +26,8 @@ from pathlib import Path
 from typing import Any
 
 from .config import load_config
-from .grants import LEVELS, WRITE, Grant
+from .grant_spec import parse_grant_spec  # noqa: F401 - re-exported
+from .grants import WRITE, Grant
 
 logger = logging.getLogger(__name__)
 
@@ -35,32 +36,13 @@ _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 _FileKey = tuple[int, int, int]  # (st_mtime_ns, st_size, st_ino)
 
 
+def _retired(entry: dict) -> bool:
+    return entry.get("retired") is True
+
+
 def default_path() -> Path:
     """The token file, next to the memory DB."""
     return load_config().db_path.parent / "serve_tokens.json"
-
-
-def parse_grant_spec(spec: str) -> dict[str, str]:
-    """Parse ``"name=level,name=level"`` (name may be ``*``) into a grant map."""
-    out: dict[str, str] = {}
-    for part in spec.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        name, sep, level = part.partition("=")
-        name, level = name.strip(), level.strip()
-        if not sep:
-            raise ValueError(f"expected name=level, got {part!r}")
-        if not name:
-            raise ValueError(f"empty namespace name in {part!r}")
-        if level not in LEVELS:
-            raise ValueError(f"level for {name!r} must be one of {', '.join(LEVELS)}")
-        if name in out:
-            raise ValueError(f"namespace {name!r} listed twice")
-        out[name] = level
-    if not out:
-        raise ValueError("no namespace grants given")
-    return out
 
 
 def _hash(token: str) -> str:
@@ -154,6 +136,8 @@ class TokenStore:
                 "'token add NAME --owner', not as a scoped grant"
             )
         entries = self._load()  # raises on a corrupt file; never overwrite it
+        if crew:  # a crew mate taken back on replaces its retired entry
+            entries = [e for e in entries if not (e.get("name") == name and _retired(e))]
         if any(e.get("name") == name for e in entries):
             raise ValueError(f"a token named {name!r} already exists")
         token = secrets.token_urlsafe(32)
@@ -174,7 +158,12 @@ class TokenStore:
         Anything but an existing crew token is refused - never an owner."""
         entries = self._load()
         [entry] = [e for e in entries if e.get("name") == name] or [None]
-        if entry is None or entry.get("crew") is not True or entry.get("owner") is True:
+        if (
+            entry is None
+            or entry.get("crew") is not True
+            or entry.get("owner") is True
+            or _retired(entry)
+        ):
             raise ValueError(f"{name!r} is not on the crew; the captain runs `gingugu crew add`")
         token = secrets.token_urlsafe(32)
         entry["sha256"] = _hash(token)
@@ -219,6 +208,7 @@ class TokenStore:
                 "name": e.get("name"),
                 "owner": bool(e.get("owner") is True),
                 "crew": bool(e.get("crew") is True),
+                "retired": _retired(e),
                 "namespaces": e.get("namespaces", {}),
                 "created_at": e.get("created_at"),
             }
@@ -226,29 +216,46 @@ class TokenStore:
         ]
 
     def revoke(self, name: str) -> bool:
-        """Delete the token called ``name``; False if there was none."""
+        """Delete the token called ``name``; False if there was none.
+
+        A crew mate's entry is retired instead: no hash, so nothing resolves,
+        but the name stays held, so no mint can ever turn it into an owner -
+        not even through a key line left behind with the wrong forced command.
+        """
         entries = self._load()
-        kept = [e for e in entries if e.get("name") != name]
-        if len(kept) == len(entries):
+        hit = [e for e in entries if e.get("name") == name and not _retired(e)]
+        if not hit:
             return False
+        kept = [e for e in entries if e.get("name") != name]
+        if any(e.get("crew") is True for e in hit):
+            kept.append({"name": name, "crew": True, "retired": True, "namespaces": {}})
         self._write(kept)
         return True
 
-    def grant_named(self, name: str) -> Grant | None:
-        """The current grant of the scoped token called ``name``, or None
-        (gone, an owner token, or an unreadable file)."""
+    def scoped(self, name: str) -> tuple[Grant, str] | None:
+        """The live scoped token ``name``: its current grant and stored hash,
+        or None (gone, retired, an owner token, or an unreadable file)."""
         try:
             entries = self._entries()
         except ValueError:
             return None
         for entry in entries:
-            if entry.get("name") == name and entry.get("owner") is not True:
-                try:
-                    grant = Grant(name, dict(entry.get("namespaces") or {}))
-                except (ValueError, TypeError):
-                    return None
-                return None if grant.is_full else grant
+            if entry.get("name") != name or entry.get("owner") is True or _retired(entry):
+                continue
+            stored = entry.get("sha256")
+            try:
+                grant = Grant(name, dict(entry.get("namespaces") or {}))
+            except (ValueError, TypeError):
+                return None
+            if grant.is_full or not isinstance(stored, str):
+                return None
+            return grant, stored
         return None
+
+    def grant_named(self, name: str) -> Grant | None:
+        """The current grant of the live scoped token ``name``, or None."""
+        found = self.scoped(name)
+        return found[0] if found else None
 
     def resolve(self, token: str) -> Grant | None:
         """The grant a presented token carries, or None (unknown / unreadable)."""

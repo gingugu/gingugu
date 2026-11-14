@@ -34,6 +34,8 @@ Usage:
                                      one key per machine so revoking sticks).
                                      "cert" instead prints the brain's generated
                                      TLS cert, for `gingugu remote login` to pin.
+  gingugu token ssh-mint --name N --crew  A crew key's forced command: rotates
+                                     only crew mate N's token, never an owner.
 
 SPEC is comma-separated name=level pairs, level read or write, name may be *:
   gingugu token add laptop-2 --ns gingugu=write,crow=read
