@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.53.0] - 2026-11-13
+
 ### Added
 
 - **Crew mates.** An agent on its own machine, with its own local brain, can share a
