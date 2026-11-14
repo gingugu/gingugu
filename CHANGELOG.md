@@ -34,8 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A scoped token may derive.** `/token/derive` accepts a scoped token and mints only a
   token no wider than it (403 otherwise), named for it whatever the request says, with no
   machine origin, at most 8 live per token and half the shared cap for all of them, so
-  owners always keep headroom. The brain re-checks a derived token's scoped parent on
-  every request: revoking or narrowing a crew mate ends what it derived at once.
+  owners always keep headroom. The brain re-checks a derived token's scoped parent (by
+  name and token hash) on every request: revoking, rotating or narrowing a crew mate ends
+  what it derived at once. A revoked crew mate's name stays held, so no SSH mint can ever
+  turn it into an owner token.
+- The promotion secret filter also holds back GitHub, Slack and Google keys, JWTs,
+  credentials in a URL and `token=` / `api_key=` assignments, in the title as well as the
+  content.
 - `/hook/inbox` accepts a scoped token for its own persona only, fenced to its grant.
   Every other hook route stays owner-only.
 - A scoped token's name must be a plain name (letters, digits, `.`, `_`, `-`): it is who
