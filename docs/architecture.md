@@ -17,13 +17,13 @@ A third path is the **stdio proxy**: when a remote brain is selected
 (`gingugu remote on`, or `MEMORY_REMOTE_URL`), a bare `gingugu` does not open the
 local DB. It relays the client's stdio to `gingugu serve` over streamable HTTP,
 so every client config stays `command: gingugu`. The proxy sends the machine's
-owner token only to `POST /token/derive`, which trades it for a short-lived **derived
+owner token (a crew mate's proxy: its scoped token) only to `POST /token/derive`, which trades it for a short-lived **derived
 token** carrying the client's `MEMORY_GRANT`, home namespace and an origin (the owner
 token's name, stamped server-side); the proxy uses
 that on `/mcp` and refreshes it, and never falls back to the local DB.
 The Claude Code hooks follow the same switch: with a remote brain on, prompt
 recall, tripwires and minion warm-up stop reading the local DB and ask the brain
-over owner-token-only `POST /hook/*` routes, keeping per-session suppression on
+over owner-token `POST /hook/*` routes (a crew mate's scoped token may read only `/hook/inbox`, its own mail), keeping per-session suppression on
 the machine (see **Hooks in remote mode** in `.ai/specs/dataflow.md`).
 `gingugu ui` (the Memory Explorer) follows the same switch: it is a read-only
 observer that answers from the local DB, or with a remote brain on forwards to
@@ -2365,8 +2365,11 @@ it). See README for an example.
 `gingugu serve` accepts three kinds of Bearer token. The **owner token**
 (`MEMORY_SERVE_TOKEN`, the persisted `<db-dir>/serve_token`, or a per-machine
 owner entry in the token store) has full access. **Derived tokens** are
-short-lived, memory-only tokens minted at `POST /token/derive` (owner only) for
-the stdio proxy, carrying a grant and a home namespace. **Scoped tokens** give
+short-lived, memory-only tokens minted at `POST /token/derive` for the stdio
+proxy, carrying a grant and a home namespace: an owner token derives anything; a
+scoped token (a crew mate's, marked `crew` in the token file) only its own grant or
+narrower, and the server re-checks that parent on every request, so revoking,
+rotating or narrowing it ends what it derived. **Scoped tokens** give
 one client a slice of the brain:
 
 ```bash
@@ -2472,11 +2475,11 @@ src/gingugu/
 ├── __init__.py             # Package init + version
 │
 │   # ── Entry points ──────────────────────────────────────────────
-├── server.py               # MCP server; stdio / serve / token / remote / promote / init / harness / ui / dream / board watch / embed / xray / hook dispatch, plus the remote-proxy branch of bare `gingugu`
+├── server.py               # MCP server; stdio / serve / token / remote / promote / crew / init / harness / ui / dream / board watch / embed / xray / hook dispatch, plus the remote-proxy branch of bare `gingugu`
 ├── serve.py                # gingugu serve: streamable HTTP + Bearer auth + /healthz + POST /token/derive + TLS; build_app
 ├── serve_tls.py            # serve's TLS: auto (https off loopback) / on / off, generated self-signed leaf or your own
 ├── serve_tokens.py         # Serve tokens: hashed store, scoped + per-machine owner tokens
-├── serve_derive.py         # POST /token/derive: owner token -> short-lived derived token
+├── serve_derive.py         # POST /token/derive: owner or scoped token -> short-lived derived token (scoped: no wider)
 ├── serve_hooks.py          # POST /hook/recall|tripwires|trip|warmup|inbox|scars: the brain's side of remote-mode hooks
 ├── derived_tokens.py       # Derived tokens: in-memory, hashed, TTL-bound; never on disk
 ├── proxy.py                # Remote mode: stdio <-> streamable-HTTP relay, reconnect, refresh
@@ -2513,7 +2516,7 @@ src/gingugu/
 ├── promote.py              # gingugu promote: local "gold" -> a central brain
 ├── promote_cli.py          # the promote CLI: URL to URL, or --to-crew
 ├── promote_crew.py         # promote --to-crew: this machine's brain file -> its crew
-├── crew.py                 # the crew link (crew.json / MEMORY_CREW_URL), https only
+├── crew.py                 # the crew link (crew.json / MEMORY_CREW_URL), https or loopback only
 ├── crew_cli.py             # gingugu crew add|remove|list (brain) join|leave|status (mate)
 ├── config.py               # Config + cross-platform DB path (platformdirs)
 │
@@ -2614,7 +2617,7 @@ src/gingugu/
 ├── client_grants.py        # each server publishes its grant + ancestor chain; hooks read the ones meeting them
 ├── claude_trust.py         # whether Claude Code trusts a folder (untrusted-minion warning)
 ├── recall_pick.py          # pick(): the recall pipeline shared by the local hook and /hook/recall
-├── hook_remote.py          # hooks' transport to a remote brain: owner token, None on any failure
+├── hook_remote.py          # hooks' transport to a remote brain: the keychain token for its URL, None on any failure
 ├── hook_remote_flows.py    # remote recall / warm-up / scars (X3) / tripwire rules (60s cache) / trip report; _sendable name filter
 ├── tripwire.py             # Tripwire matching (pure regex) + load_tripwires, the remote-brain seam
 ├── board.py                # The agent board store: post / inbox / thread (claim / done re-exported from board_tasks)
@@ -2624,7 +2627,7 @@ src/gingugu/
 ├── board_watch_remote.py   # the remote watch: persona-named session token, subscriptions/listen, 1s-30s reconnect backoff
 ├── board_watch_emit.py     # the line (labelled as from another agent; carries the X20 brief), the delivery cursor, --exec hardening
 ├── board_delivery.py       # board post/reply delivery receipt: can the recipient persona's known clients read it
-├── board_hook.py           # board mail for the prompt hook: unread posts, grant-fenced, per-session shown ids, local or POST /hook/inbox; a task gets its claim call or holder; appends an X20 brief
+├── board_hook.py           # board mail for the prompt hook: unread posts, grant-fenced, per-session shown ids, local (plus the crew brain's, with a crew link) or POST /hook/inbox; fields shown bare only as plain words; a task gets its claim call or holder; appends an X20 brief
 ├── cli_usage.py            # the top-level `gingugu --help` text (USAGE)
 ├── post_tool_hook.py       # gingugu hook read / hook bash / hook edit: PostToolUse entry point (X-ray map on arrival: repo map + a Read file's neighbourhood; X15: what a shell command's writes reach, plus test-runner outcomes for the test ledger; the note after an edit); informs, never blocks
 ├── tool_hook.py            # gingugu hook tool: PreToolUse entry point (tripwires, X-ray edit check and board nudge, minion fence, checkout guard); deny once, re-issue passes

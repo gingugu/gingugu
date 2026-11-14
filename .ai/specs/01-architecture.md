@@ -29,7 +29,8 @@ AI client (Claude Code / Cursor / Windsurf / …)
    share this path: **stdio** (default) and **streamable HTTP** via `serve.py`
    (`gingugu serve`), which wraps the same server in a Starlette app with
    Bearer-token auth middleware, a `/healthz` probe, `POST /token/derive` and,
-   given the server's context, the owner-only `POST /hook/*` routes and the
+   given the server's context, the `POST /hook/*` routes (owner-only, except
+   `/hook/inbox`, which a scoped token may read for its own persona) and the
    owner-only `GET /ui/api/*` Explorer read routes (`serve_ui.py`); the
    middleware resolves each token to a grant and a kind (see **Scoped tokens**
    and **Remote mode** below). The `credential_*` tools
@@ -400,7 +401,8 @@ tokens from `gingugu token add NAME --ns gingugu=write,crow=read`. A **grant**
 ```
 Authorization: Bearer <token>
   → BearerAuthMiddleware (serve.py): owner token → FULL; derived → DerivedTokens
-    (in memory); scoped → TokenStore (SHA-256 lookup in serve_tokens.json);
+    (in memory; one a scoped token derived is re-checked against its parent's
+    current entry and hash on every request, `_parent_still_covers`); scoped → TokenStore (SHA-256 lookup in serve_tokens.json);
     none → 401; sets request.state.grant and request.state.token_kind
   → tool wrapper (handlers/__init__.py, the _HeartbeatMCP proxy):
     fence.request_grant reads the grant off this call's own HTTP request
@@ -446,7 +448,7 @@ open the local DB: `proxy.py` relays MCP JSON-RPC between its stdio and
 `gingugu serve`, so client configs stay `command: gingugu`.
 
 ```
-client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh)──▶ serve
+client ⇄ stdio ⇄ proxy ──POST /token/derive (owner or crew scoped token, once + refresh)──▶ serve
                     └─────Bearer <derived token>  /mcp (streamable HTTP)────▶ serve
 ```
 
@@ -500,10 +502,13 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   `total: 0`, exactly as local mode reports it); an unrecognised reply passes
   through.
 - **Derive route** (`serve_derive.py`, `POST /token/derive`): `BearerAuthMiddleware`
-  tags each request `token_kind` (owner, derived, scoped); only an owner token
-  may derive (others get 403). `DerivedTokens` (`derived_tokens.py`) keeps
-  SHA-256 -> (grant, expiry) in memory: TTL up to 1h, at most 256 live (429
-  past it), nothing on disk, so a server restart drops them all. The owner token
+  tags each request `token_kind` (owner, derived, scoped); an owner token may
+  derive anything, a scoped token only its own grant or narrower (403 when wider),
+  named `derived:<its name>` with `parent`/`parent_key` set and no origin, at most
+  `SCOPED_LIVE_MAX` 8 live; a derived token gets 403. `DerivedTokens`
+  (`derived_tokens.py`) keeps SHA-256 -> (grant, expiry) in memory: TTL up to 1h,
+  at most 256 live, of which tokens with a scoped parent take at most
+  `SCOPED_SHARE` 128 (429 past either), nothing on disk, so a server restart drops them all. The owner token
   never goes on `/mcp`. The derived grant's `origin` is stamped from the
   calling owner token's name (`grants.origin_name`); a caller cannot claim one.
 - **Grant additions** (`grants.py`): `Grant.home` is the namespace a call that
@@ -538,7 +543,7 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner token, once + refresh
   `initialize` behind it.
 - **Hooks in remote mode** (board #1 B2, `hook_remote.py` client,
   `serve_hooks.py` server): with a remote brain on, the three hooks never open
-  the local DB or load a local encoder. They POST to owner-token-only routes on
+  the local DB or load a local encoder. They POST to owner-token routes on
   `gingugu serve` (`build_app(..., ctx=ctx)`; `server.build` returns the MCP app
   and its `ServerContext`): `/hook/recall` (the brain strips harness notices and
   applies the length gate, then embeds, sweeps, selects and
@@ -1338,9 +1343,11 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   single owner - scoped tokens partition one owner's brain between clients, not
   tenants - so multi-tenant auth remains roadmap (see `docs/future-architecture.md`).
 - **Promotion is a client, not server logic.** `gingugu promote` (`promote.py`)
-  speaks the public MCP tool surface to two instances - read-only `memory_export`
-  from a local brain, filtered `memory_store` into a central brain with a
-  provenance stamp. The server gains no promotion-specific code; the selective
+  speaks the public MCP tool surface - read-only `memory_export` from a source
+  brain (or, with `--to-crew`, the local DB file read directly by
+  `promote_crew.local_candidates`), and filtered `memory_store` into a central
+  brain with a provenance stamp; what the target already holds is found with
+  `memory_namespaces` + `memory_search(tags="promoted")` keyed on (title, content). The server gains no promotion-specific code; the selective
   local→central absorption lives entirely in the client. Keeps the store pure.
 - **Crew mates are a token shape, not a server mode.** One `gingugu serve` is both
   the owners' remote brain and a crew's central brain; what differs is the token.
@@ -1349,7 +1356,10 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   token, never wider, and every derived token names its scoped `parent`, which the
   auth middleware re-checks per request so a revoke reaches it at once. Promotion
   to the crew (`promote --to-crew`) and the bootstrap (`gingugu crew`) are client
-  code; the server change is only the derive and `/hook/inbox` gates. A crew key's
+  code; the server changes are the derive and `/hook/inbox` gates, `Grant.parent` /
+  `parent_key` / `covers`, the middleware's parent re-check, `TokenStore`'s crew
+  entries (`crew`, retired on revoke, `rotate_crew`, `scoped`) and `ssh-mint
+  --crew`. A crew key's
   SSH forced command can rotate only its mate's crew token - never mint an owner -
   so a key line left behind after offboarding is inert.
 - **Onboarding is client-side too.** `gingugu init` (`bootstrap/`) writes no
@@ -1770,7 +1780,10 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   nothing is marked read. The inbox is fenced by the client's `MEMORY_GRANT`
   (`hook_grant.client_grant`), not the recall namespaces (crow, persona, project):
   a reply lives in its thread's namespace, often another agent's. Remote mode
-  asks `POST /hook/inbox` (3s timeout); shown ids stay on the machine under
+  asks `POST /hook/inbox` (3s timeout); local mode with a crew link also asks the
+  crew brain's `/hook/inbox` on the link's scoped token (`_crew_mail`, posts marked
+  to be read on the `crew` server), and every post field but the JSON-encoded body
+  is shown bare only as one plain word (`_word`); shown ids stay on the machine under
   `board:<session>`. The installed doorway `user_prompt_recall.py` still exits
   on prompts under 40 chars in pure stdlib, except when `MEMORY_PERSONA` is set,
   where a short prompt goes through to the hook (the package load, never the

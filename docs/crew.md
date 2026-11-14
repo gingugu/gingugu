@@ -45,8 +45,9 @@ contract's namespaces.
 
 You need macOS or Linux, the brain reachable on your network, and an hour.
 
-1. **Install the tools.** [uv](https://docs.astral.sh/uv/), then gingugu, and
-   Claude Code's native installer:
+1. **Install the tools.** [uv](https://docs.astral.sh/uv/) and
+   [Claude Code](https://docs.claude.com/en/docs/claude-code/setup) (its native
+   installer), then gingugu:
 
    ```bash
    uv tool install gingugu
@@ -83,8 +84,8 @@ You need macOS or Linux, the brain reachable on your network, and an hour.
    `token: present` and `reachable: yes`, and your first session should load
    the `crew` commons from the `crew` server.
 
-Run steps 3 and 4 from your own terminal. The keychain is locked over SSH, so a
-`crew join` run through a remote shell cannot store the token.
+Run steps 3 and 4 from your own terminal, logged in at the machine: the token goes
+into the OS keychain, and on macOS a session over SSH usually cannot unlock it.
 
 ## Promoting: what goes up, and why
 

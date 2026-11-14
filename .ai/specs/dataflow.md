@@ -111,14 +111,17 @@ stdio without it, CLI, background passes and the owner token carry no grant and
 flow exactly as described.
 
 A remote client authenticates differently. The stdio proxy (`proxy.py`) trades
-the machine's owner token at `POST /token/derive` for a short-lived derived
+the machine's owner token - or a crew mate's scoped token - at `POST /token/derive` for a short-lived derived
 token (in memory, SHA-256 only, TTL <= 1h) and sends only that on `/mcp`;
 `BearerAuthMiddleware` resolves it through `DerivedTokens` and tags the request
 `token_kind=derived`. The derived grant carries the client's `MEMORY_GRANT` and
 a `home` namespace (its `MEMORY_NAMESPACE`). A call that names no namespace
 defaults to that home rather than the server's configured namespace (read by
 `NamespaceManager.resolve_name` and `handlers/scope.read_scope`), and a derived
-grant never reaches `credential_*`. A destructive call over the proxy (a hard
+grant never reaches `credential_*`. A scoped token derives only its own grant or
+narrower (wider is a 403), named for itself with no origin; the derived grant
+keeps its `parent` name and that token's hash (`parent_key`), and the middleware
+drops it the moment the parent is revoked, rotated, re-added or narrowed. A destructive call over the proxy (a hard
 forget, say) takes `confirm` exactly as locally. With `confirm` omitted the brain's
 elicitation relays through the proxy unchanged and the user's answer relays back -
 except for a client known to show no dialog (Claude Code's VS Code extension), whose
@@ -484,7 +487,11 @@ UserPromptSubmit event  →  .claude/hooks/user_prompt_recall.py (pure stdlib)
         in hook-sessions); read-only, nothing marked read. At most 5 posts, a
         300-char JSON-encoded preview each, each with its board(action="read")
         call; a task also with its claim call when open, or its holder
-        (persona, machine, session) when claimed. Never raises. A post body with a line of its own `xray: <range>`
+        (persona, machine, session) when claimed. In local mode with a crew
+        link (crew.json / MEMORY_CREW_URL) the crew brain's inbox is asked too,
+        on the link's scoped token, and its posts say to read them on the `crew`
+        server; every field but the body is shown bare only as one plain word.
+        Never raises. A post body with a line of its own `xray: <range>`
         also gets its X-ray brief appended (X20: the first such post, once per
         prompt, <= 3500 chars, rendered from the prompt's cwd, or from the local
         checkout of the repo an `xray: <repo> <range>` line names; xray/board_brief;
@@ -1165,7 +1172,9 @@ same-user process.
 With a remote brain on (`hook_remote.target()`, i.e. `remote.active()`), each
 hook keeps its local half and asks the brain for the rest. Every request is a
 POST with the machine's owner token from the keychain. An unknown token is a
-401 (the middleware), any other token kind a 403, a malformed or oversized body
+401 (the middleware), any other token kind a 403 - except `/hook/inbox`, which
+takes a crew mate's scoped token for its own persona (403 for any other),
+namespaces cut to its grant and no origin - a malformed or oversized body
 a 400, and an unexpected failure a 500.
 
 ```
@@ -1572,14 +1581,20 @@ named is how the value reaches a command without passing through the transcript.
 ## Promotion (local → central)
 
 ```
-gingugu promote (promote.py — an MCP client, not the server)
-  → memory_export(source_ns) from the LOCAL brain (read-only)
-  → filter: keep verified, minus episodic/personal tags, minus secret-content
-  → memory_export(target_ns) from CENTRAL → collect already-promoted source ids
-  → memory_store each fresh one into CENTRAL with a provenance stamp
+gingugu promote (promote_cli.py → promote.py — an MCP client, not the server)
+  → source: memory_export(source_ns) from a source brain over HTTP, or with
+    --to-crew (promote_crew.py) the LOCAL brain file read directly, read-only;
+    the persona's own namespace is refused as a source
+  → filter: keep verified, minus episodic/personal tags (and, --to-crew, the
+    persona's name and each --skip-tag), minus secret-looking content or title
+  → memory_namespaces(list) + memory_search(target_ns, tags="promoted") on
+    CENTRAL → what it already holds, keyed on (title, content): search carries
+    no metadata and a scoped token may not export. Any refusal fails the run.
+  → memory_store each fresh one into CENTRAL (--to-crew: `crew`, as the
+    persona) with a provenance stamp
      (metadata.promoted_from{instance,namespace,id,contributor,promoted_at}
-      + `promoted` tag + source="promotion:<ns>")
-  → idempotent: re-runs skip ids already present
+      + `promoted` tag + source="promotion:<ns>"); a refused store fails the run
+  → idempotent: a memory already there is skipped; an edited one goes up again
 ```
 
 Stage 1 = insert + skip-already-promoted. Stage 2 (consolidate near-dupes into
