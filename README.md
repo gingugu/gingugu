@@ -483,7 +483,8 @@ other than localhost (DNS-rebinding protection); on a LAN bind the Bearer token
 is the gate.
 
 Beside `/mcp` and `/healthz`, the server exposes `POST /token/derive`, the
-owner-only `POST /hook/*` routes used by remote-mode hooks, and the owner-only
+`POST /hook/*` routes used by remote-mode hooks (owner-only, except that a crew
+mate's scoped token may read `/hook/inbox` for its own persona), and the owner-only
 `GET /ui/api/*` routes that let `gingugu ui` on another machine show this brain
 (read-only; a scoped token gets 403).
 
@@ -632,10 +633,12 @@ Hard deletes past 10 in a session are gated by the hook alone: it asks, and
 nothing is checked server-side.
 
 Plain `http` to a non-loopback host starts with a warning. The proxy sends the
-machine token only to `POST /token/derive` (owner tokens only; scoped tokens get
-403), which trades it for a session token held in memory on the server (stamped with
+machine token only to `POST /token/derive`, which trades it for a session token held in memory on the server (stamped with
 the owner token's name as its origin, the machine; the caller cannot claim one): valid
-at most an hour, SHA-256 only, at most 256 live, gone when the server restarts.
+at most an hour, SHA-256 only, at most 256 live, gone when the server restarts. A crew
+mate's scoped token may derive too, but only its own grant or narrower, at most 8 live
+(128 across all crew mates, so owners keep headroom), with no origin; revoking,
+rotating or narrowing it ends what it derived at once. A derived token cannot derive.
 The session token carries the client's `MEMORY_GRANT` (full if unset) and its
 `MEMORY_NAMESPACE` as its **home**, so a call that names no namespace lands in
 the client's own namespace rather than the server's. The proxy refreshes the
@@ -709,6 +712,22 @@ personal-context tags, and it **refuses to promote anything that looks like a
 live secret** - a shared brain must never become a credential leak. Each
 promoted memory carries a provenance stamp (source instance, namespace,
 contributor, timestamp).
+
+### Bring a crew mate aboard (optional)
+
+A crew mate is an agent on its own machine with its own local brain that shares
+a brain with you through a scoped token - by default, write on a `crew` commons
+and nothing else. It promotes its lessons there with
+`gingugu promote --to-crew`, and talks to everyone on the board.
+
+```bash
+gingugu crew add polly                       # on the brain host: token + key line
+gingugu crew join https://brain:8765 --ssh me@brain --name polly   # on the mate's machine
+gingugu crew remove polly                    # offboarding, effective at once
+```
+
+The whole walk-through, for a first-time installer, is in
+[docs/crew.md](https://github.com/gingugu/gingugu/blob/main/docs/crew.md).
 
 ### Schedule the dream pass (optional)
 
@@ -1386,6 +1405,8 @@ Environment variables (all optional):
 | `MEMORY_CONFIRM_DESTRUCTIVE` | *(unset: confirmations on)* | Destructive tools (hard `memory_forget`, cascading namespace delete, `memory_consolidate` with `keep_originals=false`, overwriting `memory_import`, `credential_delete`) need a confirmation: the agent's `confirm=true` for an ordinary delete, your own approval too for a big delete (see **Deletes**). `off` (also `false`, `0`, `no`) skips the dialog and the server-side approval check, for automation. It is read by the server that executes the tool: with a remote brain, set it on the brain for memory tools and on the local proxy for the credential vault (the proxy also reads it for its own screen). It does not silence the hook's permission prompt for a big delete |
 | `MEMORY_GRANT` | *(unset)* | Fence a stdio server like a scoped token: `ns=read\|write,...` (e.g. `my-project=read,minions=write`). Unset is full access. A bad spec, an empty value, or `*=write` refuses to start. Used by a subagent's own `brain` server in its agent file. The client's hooks follow it too, whether it is set in the MCP server's `env` block (the server publishes it) or in the hooks' own environment: recall, tripwires and minion warm-up stay inside it, and an unusable value or a disagreement keeps them quiet |
 | `MEMORY_PERSONA` | *(unset)* | This agent's own namespace (e.g. `research`). Recall, tripwires and the SessionStart contract load `crow`, then the persona, then the repo (recall and tripwires narrowed by `MEMORY_GRANT` when set). A malformed value is ignored |
+| `MEMORY_CREW` | *(unset)* | `1` on a machine whose brain holds a crew's commons: the SessionStart contract adds `crew` after the persona |
+| `MEMORY_CREW_URL` | *(unset)* | A crew mate's crew brain (overrides `crew.json` from `gingugu crew join`; `off` unlinks). https, or http to loopback only. Its prompt hook also shows that brain's board mail, and its SessionStart contract says to load the `crew` commons from the `crew` server |
 | `MEMORY_REMOTE_URL` | *(unset)* | Use this remote brain for this client only (`off` forces local). A bare `gingugu` then relays to it; the credential vault stays local |
 | `MEMORY_XRAY_TRIPWIRE` | `on` | Set `off` to disable the X-ray edit tripwire in `gingugu hook tool` (a blind edit of an imported Python, TypeScript/JavaScript or Go file is denied once with its direct importers and nearest tests); it also turns off the X-ray of a Bash command's writes (`gingugu hook bash`), the post-edit note (`gingugu hook edit`) and the test ledger |
 | `MEMORY_XRAY_MAP` | `on` | Set `off` to disable the X-ray map on arrival in `gingugu hook read` (the repo map on a session's first Read/Grep/Glob of a repo, and each Read source file's importers and imports, once per session) |

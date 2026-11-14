@@ -149,10 +149,14 @@ def main() -> None:
         serve()
         return
     if cmd == ["promote"]:
-        from .promote import main as promote_main
+        from .promote_cli import main as promote_main
 
         _show("promote", lambda: promote_main(sys.argv[2:]) or 0)
         return
+    if cmd == ["crew"]:
+        from .crew_cli import main as crew_main
+
+        raise SystemExit(crew_main(sys.argv[2:]))
     if cmd == ["token"]:
         from .token_cli import main as token_main
 

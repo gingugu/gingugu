@@ -14,7 +14,10 @@ Usage:
   gingugu credential list|delete  This machine's credential vault by hand; delete
                                asks you to type the name back, at a terminal.
                                For a client that cannot show the confirmation.
-  gingugu promote [options]    Promote local gold memories up to a central brain.
+  gingugu promote [options]    Promote local gold memories up to a central brain;
+                               --to-crew sends this machine's to its crew.
+  gingugu crew add|remove|list|join|leave|status  Bring a crew mate (an agent
+                               with its own local brain) aboard a shared brain.
   gingugu init [options]       Bootstrap a repo so an AI assistant uses Gingugu.
   gingugu harness [options]    Install the Claude Code harness on top of init: safety
                                guard, event logs, fenced minions, the creating-pr

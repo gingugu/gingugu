@@ -20,9 +20,10 @@ from .grants import Grant
 
 MAX_TTL = 3600
 DEFAULT_TTL = 3600
-# Only owner tokens can mint, so this guards against a runaway client rather
-# than an attacker: a proxy derives one per refresh, and the rest expire.
+# A proxy derives one per refresh, and the rest expire. Owners may fill the
+# whole cap; tokens derived by scoped tokens (crew mates) only half of it.
 MAX_LIVE = 256
+SCOPED_SHARE = MAX_LIVE // 2  # the rest is the owners' headroom
 
 
 def _hash(token: str) -> str:
@@ -41,8 +42,13 @@ class DerivedTokens:
         for key in [k for k, (_, exp) in self._entries.items() if exp <= now]:
             del self._entries[key]
 
-    def mint(self, grant: Grant, ttl: int) -> str:
-        """A new token for ``grant`` valid ``ttl`` seconds; the plaintext is returned once."""
+    def mint(self, grant: Grant, ttl: int, *, per_parent: int | None = None) -> str:
+        """A new token for ``grant`` valid ``ttl`` seconds; the plaintext is returned once.
+
+        A token a scoped token derives (``grant.parent``) counts against
+        ``per_parent`` for that parent, and all of them together against half
+        the shared cap, so scoped clients can never lock the owners out.
+        """
         if isinstance(ttl, bool) or not isinstance(ttl, int) or not 0 < ttl <= MAX_TTL:
             raise ValueError(f"ttl must be an integer from 1 to {MAX_TTL} seconds")
         token = secrets.token_urlsafe(32)
@@ -51,6 +57,12 @@ class DerivedTokens:
             self._prune(now)
             if len(self._entries) >= MAX_LIVE:
                 raise OverflowError("too many live derived tokens")
+            if grant.parent is not None:
+                scoped = [g.parent for g, _ in self._entries.values() if g.parent is not None]
+                if len(scoped) >= SCOPED_SHARE:
+                    raise OverflowError("too many live tokens derived by scoped tokens")
+                if per_parent is not None and scoped.count(grant.parent) >= per_parent:
+                    raise OverflowError(f"too many live derived tokens for {grant.parent}")
             self._entries[_hash(token)] = (grant, now + ttl)
         return token
 

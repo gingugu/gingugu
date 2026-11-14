@@ -35,7 +35,7 @@ _HEALTH_PATH = "/healthz"
 # ``memory_import`` is one request and outgrows that, so the owner can still
 # restore an export to a central brain in one call.
 _MAX_BODY = 64 * 1024 * 1024
-# request.state.token_kind: only an OWNER token may derive (see serve_derive).
+# request.state.token_kind: an OWNER or SCOPED token may derive (see serve_derive).
 OWNER, DERIVED, SCOPED = "owner", "derived", "scoped"
 
 SERVE_USAGE = """\
@@ -97,6 +97,17 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         self._tokens = tokens
         self._derived = derived
 
+    def _parent_still_covers(self, grant: Grant) -> bool:
+        """A token a scoped token derived dies with its parent: revoked or
+        narrowed, the parent's current grant must still cover it."""
+        if grant.parent is None:
+            return True
+        found = self._tokens.scoped(grant.parent) if self._tokens else None
+        if found is None:
+            return False
+        current, key = found
+        return key == grant.parent_key and current.covers(grant)
+
     def _identify(self, header: str) -> tuple[Grant, str] | None:
         """The grant a header carries and its kind: owner, derived or scoped."""
         # Bytes, not str: compare_digest raises on a non-ASCII str, and a
@@ -110,7 +121,7 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         if self._derived is not None:
             grant = self._derived.resolve(presented)
             if grant is not None:
-                return grant, DERIVED
+                return (grant, DERIVED) if self._parent_still_covers(grant) else None
         if self._tokens is None:
             return None
         grant = self._tokens.resolve(presented)

@@ -67,6 +67,8 @@ def _beyond_crow(cwd):
     persona = os.environ.get("MEMORY_PERSONA", "").strip()
     if valid(persona):
         names.append(persona)
+    if os.environ.get("MEMORY_CREW", "").strip() == "1":  # this brain holds the crew commons
+        names.append("crew")
     # The directory name is pasted into an instruction to the model: a hostile
     # clone name (quotes, newlines) is dropped, never pasted.
     project = _project(cwd)
@@ -100,6 +102,29 @@ def _board_watch():
     )
 
 
+def _crew_mate():
+    """For a crew mate (a local brain linked to a crew brain by
+    MEMORY_CREW_URL): load the crew commons from its ``crew`` server - and
+    with no name yet, choose one first: the name is who it is on the crew."""
+    import re
+
+    if not os.environ.get("MEMORY_CREW_URL", "").strip():
+        return ""
+    persona = os.environ.get("MEMORY_PERSONA", "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", persona) or persona == "crow":
+        return (
+            "CREW: you have no name yet. Before anything else, choose one with the user,\n"
+            "set it as MEMORY_PERSONA, and run `gingugu crew join` with it: your name is\n"
+            "who you are on the crew and on the board.\n"
+        )
+    return (
+        "CREW: you are on a crew. Also load its commons, from your crew server:\n"
+        '  - mcp__crew__memory_context(namespace="crew", task_hint=...)\n'
+        "    # what the crew promoted for everyone. Promote your own gold with\n"
+        "    # `gingugu promote --to-crew --source-ns <ns> --dry-run` first.\n"
+    )
+
+
 def build_startup_contract(cwd: str) -> str:
     """Imperative Gingugu startup contract, injected fresh every session."""
     project = _project(cwd)
@@ -126,6 +151,7 @@ def build_startup_contract(cwd: str) -> str:
         "Rules: do not skip; do not ask which repo you are in (cwd is the answer);\n"
         'if a namespace is missing, create it with memory_namespaces(action="create", name=...).\n'
         "Check memory_recall before asking anything answered in a prior session.\n"
+        f"{_crew_mate()}"
         f"{_board_watch()}"
         "=== END CONTRACT ==="
     )

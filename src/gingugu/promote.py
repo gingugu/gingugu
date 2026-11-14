@@ -14,10 +14,8 @@ land in argv / shell history.
 
 from __future__ import annotations
 
-import argparse
 import json
 import logging
-import os
 import re
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -46,6 +44,7 @@ PERSONAL_TAGS = frozenset(
     }
 )
 SECRET_TAGS = frozenset({"key-rotation"})
+_SEEN_LIMIT = 100_000  # every promoted memory in the target, to skip what went up
 
 # Refuse to promote anything whose content looks like a live secret — a shared
 # brain must never become a credential leak (a real `sk-...` key was found
@@ -58,6 +57,12 @@ _SECRET_PATTERNS = [
     re.compile(r"-----BEGIN"),
     re.compile(r"[a-fA-F0-9]{32,}"),  # long hashes / hex secrets
     re.compile(r"""password["']?\s*[:=]\s*\S"""),
+    re.compile(r"\b(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})"),
+    re.compile(r"\bxox[abposr]-[A-Za-z0-9-]{10,}"),  # Slack
+    re.compile(r"\bAIza[0-9A-Za-z_-]{30,}"),  # Google API key
+    re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\."),  # JWT
+    re.compile(r"[a-z][a-z0-9+.-]*://[^\s/:@]+:[^\s/@]+@"),  # URL with user:password
+    re.compile(r"""\b(api[_-]?key|token|secret)["']?\s*[:=]\s*["']?[A-Za-z0-9_\-.]{12,}""", re.I),
 ]
 
 
@@ -66,14 +71,18 @@ def contains_secret(content: str) -> bool:
     return any(p.search(content or "") for p in _SECRET_PATTERNS)
 
 
-def is_promotable(memory: dict) -> bool:
-    """Apply the locked filter to one exported memory dict."""
+def is_promotable(memory: dict, skip_tags: frozenset[str] = frozenset()) -> bool:
+    """Apply the locked filter to one exported memory dict.
+
+    ``skip_tags`` (lowercase) holds back more: a crew mate's own persona name,
+    and whatever it asked to keep home.
+    """
     if memory.get("confidence") != "verified":
         return False
     tags = {t.lower() for t in memory.get("tags", [])}
-    if tags & EPISODIC_TAGS or tags & PERSONAL_TAGS or tags & SECRET_TAGS:
+    if tags & (EPISODIC_TAGS | PERSONAL_TAGS | SECRET_TAGS | skip_tags):
         return False
-    if contains_secret(memory.get("content", "")):
+    if contains_secret(memory.get("content", "")) or contains_secret(memory.get("title", "")):
         return False
     return True
 
@@ -160,13 +169,35 @@ async def run_promotion(
         export = await _call(src, "memory_export", {"namespace": source_namespace})
     # memory_export wraps the payload: {"ok": True, "export": {memories, ...}}
     candidates = export.get("export", {}).get("memories", [])
-    promotable = [m for m in candidates if is_promotable(m)]
+    return await push(
+        candidates,
+        [m for m in candidates if is_promotable(m)],
+        source_namespace=source_namespace,
+        target_url=target_url,
+        target_token=target_token,
+        target_namespace=target_namespace,
+        contributor=contributor,
+        instance=instance,
+        dry_run=dry_run,
+    )
 
+
+async def push(
+    candidates: list[dict],
+    promotable: list[dict],
+    *,
+    source_namespace: str,
+    target_url: str,
+    target_token: str,
+    target_namespace: str,
+    contributor: str,
+    instance: str,
+    dry_run: bool,
+) -> dict:
+    """Store what the target has not seen yet, stamped; report either way."""
     async with _session(target_url, target_token) as tgt:
-        target_export = await _call(tgt, "memory_export", {"namespace": target_namespace})
-        seen = already_promoted_ids(target_export.get("export", {}).get("memories", []))
-        fresh = [m for m in promotable if m.get("id") not in seen]
-
+        seen = await _seen(tgt, target_namespace)
+        fresh = [m for m in promotable if _key(m) not in seen]
         report = {
             "candidates": len(candidates),
             "promotable": len(promotable),
@@ -178,69 +209,66 @@ async def run_promotion(
         if dry_run:
             report["would_promote"] = [m.get("title") for m in fresh]
             return report
-
         when = datetime.now(UTC).isoformat()
         for mem in fresh:
-            mem["_source_namespace"] = source_namespace
-            tags = list(mem.get("tags", []))
-            if "promoted" not in tags:
-                tags.append("promoted")
-            await _call(
-                tgt,
-                "memory_store",
-                {
-                    "content": mem.get("content", ""),
-                    "title": mem.get("title", ""),
-                    "type": mem.get("type", "fact"),
-                    "confidence": "verified",
-                    "tags": ",".join(tags),
-                    "namespace": target_namespace,
-                    "source": f"promotion:{source_namespace}",
-                    "metadata": provenance(mem, instance, contributor, when),
-                    "dedupe_check": False,
-                    "relation_check": False,
-                },
-            )
+            await _store(tgt, mem, source_namespace, target_namespace, instance, contributor, when)
             report["promoted"] += 1
     return report
 
 
-def main(argv: list[str] | None = None) -> None:
-    """Console entry point for ``gingugu promote``."""
-    import asyncio
+def _key(memory: dict) -> tuple[str, str]:
+    """What makes two memories the same promotion: title and content. Search
+    results carry no metadata, so a scoped token cannot read the stamps; an
+    edited source memory goes up again as its new version."""
+    return (memory.get("title") or "", memory.get("content") or "")
 
-    parser = argparse.ArgumentParser(prog="gingugu promote", description=__doc__)
-    parser.add_argument(
-        "--source-url", required=True, help="Source MCP URL (e.g. http://host:8765/mcp)"
+
+async def _seen(tgt, target_namespace: str) -> set[tuple[str, str]]:
+    """What the target already holds. A namespace not there yet holds none;
+    any other refusal raises - it is never read as "nothing promoted yet"."""
+    listed = await _call(tgt, "memory_namespaces", {"action": "list"})
+    if not listed.get("ok"):
+        raise RuntimeError(f"cannot read the target: {listed.get('error', listed)}")
+    names = {ns.get("name") for ns in listed.get("namespaces", []) if isinstance(ns, dict)}
+    if target_namespace not in names:
+        return set()
+    # memory_search, not memory_export: a crew mate's scoped token may not export.
+    found = await _call(
+        tgt,
+        "memory_search",
+        {
+            "namespace": target_namespace,
+            "tags": "promoted",
+            "include_deprecated": True,
+            "limit": _SEEN_LIMIT,
+        },
     )
-    parser.add_argument("--target-url", required=True, help="Central MCP URL")
-    parser.add_argument("--source-ns", required=True, help="Source namespace to read from")
-    parser.add_argument("--target-ns", required=True, help="Central namespace to write to")
-    parser.add_argument("--contributor", default=os.environ.get("USER", "unknown"))
-    parser.add_argument("--instance", default="local", help="Label for this source instance")
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Report what would promote, write nothing"
+    if not found.get("ok"):
+        raise RuntimeError(f"cannot read the target: {found.get('error', found)}")
+    return {_key(m) for m in found.get("memories", []) if isinstance(m, dict)}
+
+
+async def _store(tgt, mem: dict, source_ns: str, target_ns: str, instance, contributor, when):
+    """Store one stamped memory in the target; a refusal raises."""
+    mem["_source_namespace"] = source_ns
+    tags = list(mem.get("tags", []))
+    if "promoted" not in tags:
+        tags.append("promoted")
+    stored = await _call(
+        tgt,
+        "memory_store",
+        {
+            "content": mem.get("content", ""),
+            "title": mem.get("title", ""),
+            "type": mem.get("type", "fact"),
+            "confidence": "verified",
+            "tags": ",".join(tags),
+            "namespace": target_ns,
+            "source": f"promotion:{source_ns}",
+            "metadata": provenance(mem, instance, contributor, when),
+            "dedupe_check": False,
+            "relation_check": False,
+        },
     )
-    args = parser.parse_args(argv)
-
-    source_token = os.environ.get("GINGUGU_SOURCE_TOKEN", "")
-    target_token = os.environ.get("GINGUGU_TARGET_TOKEN", "")
-
-    from .config import setup_logging
-
-    setup_logging("INFO")
-    report = asyncio.run(
-        run_promotion(
-            source_url=args.source_url,
-            source_token=source_token,
-            source_namespace=args.source_ns,
-            target_url=args.target_url,
-            target_token=target_token,
-            target_namespace=args.target_ns,
-            contributor=args.contributor,
-            instance=args.instance,
-            dry_run=args.dry_run,
-        )
-    )
-    logger.info("promotion report: %s", json.dumps(report, indent=2))
-    print(json.dumps(report, indent=2))
+    if not stored.get("ok"):
+        raise RuntimeError(f"the target refused {mem.get('title')!r}: {stored.get('error')}")

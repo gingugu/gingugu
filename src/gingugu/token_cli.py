@@ -34,6 +34,8 @@ Usage:
                                      one key per machine so revoking sticks).
                                      "cert" instead prints the brain's generated
                                      TLS cert, for `gingugu remote login` to pin.
+  gingugu token ssh-mint --name N --crew  A crew key's forced command: rotates
+                                     only crew mate N's token, never an owner.
 
 SPEC is comma-separated name=level pairs, level read or write, name may be *:
   gingugu token add laptop-2 --ns gingugu=write,crow=read
@@ -64,6 +66,7 @@ def _build_parser() -> argparse.ArgumentParser:
     revoke.add_argument("name")
     mint = sub.add_parser("ssh-mint", add_help=False)
     mint.add_argument("--name")
+    mint.add_argument("--crew", action="store_true")
     return parser
 
 
@@ -78,7 +81,7 @@ def _refuse(reason: str) -> int:
     return 2
 
 
-def _ssh_mint(store: TokenStore, bound: str | None) -> int:
+def _ssh_mint(store: TokenStore, bound: str | None, crew: bool = False) -> int:
     """Forced-command mint. Anything but ``mint [NAME]`` is refused, token-free.
 
     ``bound`` (``--name`` in the authorized_keys line) pins the key to one
@@ -89,6 +92,8 @@ def _ssh_mint(store: TokenStore, bound: str | None) -> int:
     words = (os.environ.get("SSH_ORIGINAL_COMMAND") or "").split()
     if words == ["cert"]:
         return _print_cert()
+    if crew and bound is None:
+        return _refuse("--crew needs --name: a crew key is pinned to one mate")
     if bound is not None:
         if not NAME_RE.fullmatch(bound):
             return _refuse("invalid --name")
@@ -102,7 +107,8 @@ def _ssh_mint(store: TokenStore, bound: str | None) -> int:
         if not NAME_RE.fullmatch(name):
             return _refuse("invalid machine name")
     try:
-        token = store.add_owner(name, replace=True)
+        # A crew key only ever rotates its mate's crew token - never an owner.
+        token = store.rotate_crew(name) if crew else store.add_owner(name, replace=True)
     except ValueError as exc:
         print(f"gingugu token ssh-mint: {exc}", file=sys.stderr)
         return 1
@@ -171,7 +177,7 @@ def main(argv: list[str]) -> int:
                 )
                 print(f"{e['name']}  {spec}  {e['created_at']}")
         elif args.cmd == "ssh-mint":
-            return _ssh_mint(store, args.name)
+            return _ssh_mint(store, args.name, args.crew)
         else:
             if not store.revoke(args.name):
                 print(f"gingugu token: no token named {args.name!r}", file=sys.stderr)

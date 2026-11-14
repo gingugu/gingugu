@@ -15,6 +15,8 @@ keeps the hook quiet, as it does for recall. Remote mode asks the brain
 
 from __future__ import annotations
 
+import json
+import re
 from pathlib import Path
 
 MAX_SHOWN = 5
@@ -32,26 +34,35 @@ def _task_line(post: dict) -> str:
     return claim_nudge(str(post["id"]))
 
 
+_WORD = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$")
+
+
+def _word(value: object) -> str:
+    """A field shown bare only when it is one plain word; anything else is
+    JSON-encoded, so a post from a shared brain cannot forge a line."""
+    text = str(value)
+    return text if _WORD.fullmatch(text) else json.dumps(text[:100])
+
+
 def render(posts: list[dict]) -> str:
     """The block a prompt gets: who wrote, which post, a preview, how to read it.
 
     The preview is JSON-encoded: one line, quotes escaped, so a body cannot
     close its own quotes and forge a header or a post of its own below it.
     """
-    import json
-
     n = len(posts)
     s = "" if n == 1 else "s"
     lines = [f"=== GINGUGU BOARD: {n} unread board post{s} for you, from other agents ==="]
     for p in posts[:MAX_SHOWN]:
-        reply = f", in reply to {p['parent_id']}" if p.get("parent_id") else ""
+        reply = f", in reply to {_word(p['parent_id'])}" if p.get("parent_id") else ""
         body = json.dumps(str(p.get("body", ""))[:PREVIEW])
-        on = f" on {p['author_origin']}" if p.get("author_origin") else ""
+        on = f" on {_word(p['author_origin'])}" if p.get("author_origin") else ""
         lines.append(
-            f"- {p.get('kind', 'message')} from {p.get('author')}{on} in {p.get('namespace')} "
-            f"(post {p['id']}{reply}): {body}"
+            f"- {_word(p.get('kind', 'message'))} from {_word(p.get('author'))}{on} "
+            f"in {_word(p.get('namespace'))} (post {_word(p['id'])}{reply}): {body}"
         )
-        lines.append(f'  read it: board(action="read", post_id="{p["id"]}")')
+        via = " on the crew server (its `board` tool)" if p.get("_crew") else ""
+        lines.append(f'  read it{via}: board(action="read", post_id="{_word(p["id"])}")')
         if p.get("kind") == "task":
             lines.append(f"  {_task_line(p)}")
     if n > MAX_SHOWN:
@@ -123,6 +134,22 @@ def _remote(
     return [p for p in posts if isinstance(p, dict) and isinstance(p.get("id"), str)]
 
 
+def _crew_mail(me: str, shown: set[str], session_id: str) -> list[dict]:
+    """A local-brain crew mate's mail on its crew brain; [] when unlinked or down.
+
+    Unfenced on this side: the crew brain fences it to the link's scoped token.
+    """
+    from . import crew
+
+    try:
+        target = crew.active()
+    except Exception:  # noqa: BLE001 - a bad link never costs the local mail
+        return []
+    if target is None:
+        return []
+    return [{**p, "_crew": True} for p in _remote(target, me, None, shown, session_id)]
+
+
 def mail(db_path: Path, session_id: str, cwd: str | None = None) -> tuple[str, int] | None:
     """``(block, unread count)`` for this prompt, or None. Never raises."""
     try:
@@ -147,6 +174,7 @@ def _mail(db_path: Path, session_id: str, cwd: str | None) -> tuple[str, int] | 
         posts = _remote(target, me, names, shown, session_id)
     else:
         posts = unread_local(db_path, me, names, shown, agent=agent_session.key(session_id))
+        posts += _crew_mail(me, shown, session_id)
     if not posts:
         return None
     block = render(posts)

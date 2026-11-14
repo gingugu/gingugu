@@ -6,7 +6,8 @@ a body that is not a JSON object - is the same answer: ``None``. The caller then
 stays quiet. There is deliberately no local fallback: with a remote brain on, a
 stale local copy would answer questions about a different brain.
 
-The token is the owner token ``gingugu remote login`` put in the keychain. It is
+The token is whatever the keychain holds for the target's URL: the owner token
+``gingugu remote login`` put there, or a crew link's scoped token. It is
 sent as a Bearer header and never logged, printed or put in an exception.
 """
 

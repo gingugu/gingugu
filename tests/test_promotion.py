@@ -98,3 +98,26 @@ def test_already_promoted_ids_reads_metadata():
         {"metadata": "not json"},  # malformed, skipped
     ]
     assert already_promoted_ids(target) == {"a1", "b2"}
+
+
+import pytest  # noqa: E402
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "ghp_" + "a" * 36,
+        "xoxb-1234567890-abcdefghij",
+        "AIza" + "b" * 35,
+        "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.sig",
+        "postgres://admin:hunter22@db.internal/app",
+        "api_key = abcdefghijklmnop",
+    ],
+)
+def test_more_secret_shapes_are_held_back(text):
+    assert contains_secret(text)
+    assert not is_promotable(_mem(content=f"note: {text}"))
+
+
+def test_a_secret_in_the_title_is_held_back():
+    assert not is_promotable(_mem(title="token=" + "z" * 20))
