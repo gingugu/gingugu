@@ -9,7 +9,10 @@ never replaced without ``--adopt``, and a rewrite is backed up first.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+
+import pytest
 
 from gingugu.bootstrap._files import read_template
 from gingugu.bootstrap.harness import main
@@ -154,9 +157,9 @@ def test_edited_docs_file_is_kept(tmp_path):
     assert docs.read_text() == "my own notes\n"
 
 
-def test_adopt_also_takes_over_an_edited_docs_file_with_backup(tmp_path):
+def test_adopting_the_section_also_takes_over_an_edited_docs_file_with_backup(tmp_path):
     claude_md, docs = _paths(tmp_path)
-    claude_md.write_text("# Mine\n")
+    claude_md.write_text(HAND_WRITTEN)
     docs.parent.mkdir(parents=True)
     docs.write_text("my own notes\n")
 
@@ -209,3 +212,74 @@ def test_harness_adopt_flag_reaches_the_global_file(tmp_path, sandboxed_global_r
     assert main(["--path", str(repo), "--adopt"]) == 0
 
     assert "My own old minion rules." not in global_md.read_text()
+
+
+# --- security review findings (2026-11-17) -----------------------------------------
+
+
+def test_crlf_file_keeps_its_bytes_and_the_backup_is_exact(tmp_path):
+    claude_md, _ = _paths(tmp_path)
+    original = b"# Mine\r\n\r\nBe terse.\r\n"
+    claude_md.write_bytes(original)
+    _run(tmp_path)  # append: every pre-existing byte stays put
+    after = claude_md.read_bytes()
+    assert after.startswith(original) and b"\n" not in after.replace(b"\r\n", b"")
+
+    stale = after.replace(b"Subagent Delegation", b"Old Delegation")
+    claude_md.write_bytes(stale)
+    _run(tmp_path)  # refresh: the .bak is the exact bytes
+    assert claude_md.with_suffix(".md.bak").read_bytes() == stale
+
+
+@pytest.mark.skipif(os.name == "nt" or os.geteuid() == 0, reason="needs POSIX perms, non-root")
+def test_unreadable_file_stops_the_run_and_is_not_truncated(tmp_path):
+    claude_md, _ = _paths(tmp_path)
+    claude_md.write_text("# Mine\n\nprecious\n")
+    claude_md.chmod(0o200)
+    try:
+        with pytest.raises(PermissionError):
+            _run(tmp_path)
+    finally:
+        claude_md.chmod(0o600)
+    assert claude_md.read_text() == "# Mine\n\nprecious\n"
+
+
+def test_adopt_without_an_own_section_keeps_an_edited_docs_file(tmp_path):
+    claude_md, docs = _paths(tmp_path)
+    claude_md.write_text("# Mine\n")  # nothing to adopt here
+    docs.parent.mkdir(parents=True)
+    docs.write_text("my own notes\n")
+
+    _run(tmp_path, adopt=True)
+
+    assert docs.read_text() == "my own notes\n"
+
+
+def test_nested_or_fenced_delegation_headings_are_not_the_section(tmp_path):
+    claude_md, _ = _paths(tmp_path)
+    text = (
+        "# Mine\n\n## Reviews\n\n### Delegation of reviews\n\nkeep me\n\n"
+        "## Examples\n\n```md\n## Delegation\nexample only\n```\n"
+    )
+    claude_md.write_text(text)
+
+    _run(tmp_path, adopt=True)
+
+    out = claude_md.read_text()
+    assert out.startswith(text) and DELEGATION_BEGIN in out  # appended, nothing eaten
+
+
+def test_init_adopt_of_a_last_memory_section_keeps_the_delegation_marker():
+    """A hand-written memory section last in the file, then our appended block:
+    init's --adopt must stop before the block's BEGIN comment."""
+    from gingugu.bootstrap.global_rules import END_MARKER, adopt_unmanaged_protocol
+
+    text = (
+        f"# Mine\n\n## Memory Protocol\n\nRun `memory_recall`.\n\n"
+        f"{DELEGATION_BEGIN}\n<!-- note -->\n\n## Subagent Delegation\n\nrules\n\n"
+        f"{DELEGATION_END}\n"
+    )
+    wrapped = adopt_unmanaged_protocol(text)
+
+    assert wrapped is not None
+    assert wrapped.index(END_MARKER) < wrapped.index(DELEGATION_BEGIN)

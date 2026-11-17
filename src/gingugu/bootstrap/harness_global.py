@@ -17,7 +17,8 @@ import re
 from pathlib import Path
 
 from . import global_rules
-from ._files import read_template, safe_read, write_file
+from ._files import read_template, write_file
+from .global_rules import MARKER_RE
 from .harness_shipped import stock_check
 
 DELEGATION_BEGIN = "<!-- BEGIN GINGUGU DELEGATION -->"
@@ -27,42 +28,51 @@ _NOTE = (
     "     replaced on re-run; put your own rules outside them. -->"
 )
 _BLOCK_RE = re.compile(
-    rf"^{re.escape(DELEGATION_BEGIN)}[ \t]*$.*?^{re.escape(DELEGATION_END)}[ \t]*$",
+    rf"^{re.escape(DELEGATION_BEGIN)}[ \t]*\r?$.*?^{re.escape(DELEGATION_END)}[ \t]*\r?$",
     re.M | re.S,
 )
-_HEADING_RE = re.compile(r"^(#{2,6}) (.*)$", re.M)
-# Any gingugu-managed marker. A section never runs into one: the user's file
-# often has the memory-protocol block right after its own sections, and its
-# BEGIN comment sits ABOVE that block's first heading.
-_MARKER_RE = re.compile(r"^<!-- (?:BEGIN|END) GINGUGU [A-Z ]+ -->[ \t]*$", re.M)
+# Only a top-level section counts as "your delegation section": a nested
+# "### Delegation of reviews" under some other heading is not it.
+_SECTION_RE = re.compile(r"^## (.*)$", re.M)
+_PEER_RE = re.compile(r"^#{1,2} ", re.M)
+_FENCE_RE = re.compile(r"^(?:```|~~~)", re.M)
 
 
-def _block() -> str:
+def _block(nl: str) -> str:
     body = read_template("harness/global_delegation_block.md.tmpl").strip()
-    return f"{DELEGATION_BEGIN}\n{_NOTE}\n\n{body}\n\n{DELEGATION_END}"
+    return f"{DELEGATION_BEGIN}\n{_NOTE}\n\n{body}\n\n{DELEGATION_END}".replace("\n", nl)
+
+
+def _in_fence(text: str, pos: int) -> bool:
+    """True when ``pos`` sits inside a fenced code block."""
+    return len(_FENCE_RE.findall(text, 0, pos)) % 2 == 1
 
 
 def _own_section(text: str) -> tuple[int, int, str] | None:
-    """The user's own delegation section: a heading titled so, to the next peer."""
-    for m in _HEADING_RE.finditer(text):
-        level, title = len(m.group(1)), m.group(2).strip()
-        if "delegation" not in title.lower():
+    """The user's own delegation section: a ``## ...Delegation...`` heading, to
+    the next ``#``/``##`` heading or gingugu marker, whichever comes first."""
+    for m in _SECTION_RE.finditer(text):
+        title = m.group(1).strip()
+        if "delegation" not in title.lower() or _in_fence(text, m.start()):
             continue
         end = len(text)
-        for other in _HEADING_RE.finditer(text, m.end()):
-            if len(other.group(1)) <= level:
+        for other in _PEER_RE.finditer(text, m.end()):
+            if not _in_fence(text, other.start()):
                 end = other.start()
                 break
-        marker = _MARKER_RE.search(text, m.end(), end)
-        if marker:
-            end = marker.start()
-        return m.start(), end, title
+        marker = MARKER_RE.search(text, m.end(), end)
+        return m.start(), marker.start() if marker else end, title
     return None
 
 
 def _merge(existing: str, adopt: bool) -> tuple[str | None, str, str]:
-    """``(new_text, status, detail)``; ``new_text`` is None when nothing is written."""
-    block = _block()
+    """``(new_text, status, detail)``; ``new_text`` is None when nothing is written.
+
+    Works on the file's own line endings: a CRLF file gets a CRLF block, and
+    every byte outside the block is kept as it was.
+    """
+    nl = "\r\n" if "\r\n" in existing else "\n"
+    block = _block(nl)
     m = _BLOCK_RE.search(existing)
     if m:
         new = existing[: m.start()] + block + existing[m.end() :]
@@ -73,11 +83,11 @@ def _merge(existing: str, adopt: bool) -> tuple[str | None, str, str]:
         if not adopt:
             return None, "conflict", title
         rest = existing[end:]
-        return existing[:start] + block + ("\n\n" + rest if rest else "\n"), "adopted", title
+        return existing[:start] + block + (nl + nl + rest if rest else nl), "adopted", title
     if not existing.strip():
-        return f"{block}\n", "appended", ""
-    sep = "" if existing.endswith("\n") else "\n"
-    return f"{existing}{sep}\n{block}\n", "appended", ""
+        return f"{block}{nl}", "appended", ""
+    sep = "" if existing.endswith("\n") else nl
+    return f"{existing}{sep}{nl}{block}{nl}", "appended", ""
 
 
 def install_delegation(
@@ -92,18 +102,21 @@ def install_delegation(
     """Install or refresh the delegation block and its rationale file."""
     path = claude_md or global_rules.global_claude_md()
     docs = docs or path.parent / "docs" / "delegation.md"
+    # Bytes, not read_text(): CRLF survives and the .bak is the file as it was.
+    # A file that exists but cannot be read raises here, before anything is written.
+    existing = path.read_bytes().decode() if path.exists() else ""
+    new, status, detail = _merge(existing, adopt)
     results: list[str] = []
     write_file(
         docs,
         read_template("harness/docs/delegation.md.tmpl"),
-        force=force or adopt,  # --adopt hands your own copy over too (backed up)
+        # Adopting your delegation section hands over your rationale file too
+        # (backed up) - on that run only, not on every --adopt.
+        force=force or status == "adopted",
         dry_run=dry_run,
         results=results,
         is_stock=stock_check("docs/delegation.md"),
     )
-
-    existing = safe_read(path) if path.exists() else ""
-    new, status, detail = _merge(existing, adopt)
     if status == "current":
         results.append(f"  delegation block already current (no change) {path}")
         return results
@@ -121,8 +134,8 @@ def install_delegation(
         path.parent.mkdir(parents=True, exist_ok=True)
         if backup:
             bak = original if original is not None else existing
-            path.with_suffix(path.suffix + ".bak").write_text(bak)
-        path.write_text(new or "")
+            path.with_suffix(path.suffix + ".bak").write_bytes(bak.encode())
+        path.write_bytes((new or "").encode())
     verb = {"appended": "append", "refreshed": "refresh", "adopted": "adopt"}[status]
     verb = f"would {verb}" if dry_run else ("adopted" if verb == "adopt" else f"{verb}ed")
     note = f" (your '{detail}' section)" if status == "adopted" else ""

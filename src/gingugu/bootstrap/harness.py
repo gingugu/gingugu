@@ -192,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
     claude_md = target / "CLAUDE.md"
     original = safe_read(claude_md) if claude_md.exists() else None
     user_md = global_rules.global_claude_md()  # init may rewrite (and back up) it before we do
-    user_original = safe_read(user_md) if user_md.exists() else None
+    user_original = user_md.read_bytes().decode() if user_md.exists() else None
 
     migrated: list[str] = []
     if args.migrate:

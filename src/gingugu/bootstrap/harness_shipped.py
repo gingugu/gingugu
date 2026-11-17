@@ -54,9 +54,9 @@ def render(template: str, namespace: str, grant: str) -> str:
 def previous_templates(rel: str) -> tuple[str, ...]:
     """Text of every older shipped version of ``harness/<rel>.tmpl``, LF endings."""
     node = files("gingugu.bootstrap") / "templates" / "harness" / "_shipped"
-    for part in rel.split("/"):
+    *dirs, name = rel.split("/")
+    for part in [*dirs, f"{name}.versions"]:  # never a `*.py` path in the package
         node = node / part
-    node = node.parent / f"{node.name}.versions"  # never a `*.py` path in the package
     if not node.is_dir():
         return ()
     return tuple(
