@@ -4,6 +4,8 @@ _Last updated: 2026-11-17 (hermetic test env on `fix/hermetic-test-env`; smart h
 
 ## In Flight
 
+**Deterministic TUI byte-identity test (2026-11-17, branch `fix/deterministic-tui-test`).** `test_hooks_are_byte_identical_on_a_fancy_terminal[read]` failed on macOS CI: the cold first run's env scan ran out of its 1s budget and dropped the `Env:` line the second run printed. Reproduced with a 1ms budget; the test now switches off the time-budgeted X-ray sections (env, docs, routes) so it compares terminal handling only.
+
 **Hermetic test env (2026-11-17, branch `fix/hermetic-test-env`).** The release dry run for 0.54.0 failed seven
 startup-contract tests because the shell exported `MEMORY_CREW=1` (set in `~/.claude/settings.json` env). The autouse
 `conftest.no_persona` (which cleared only the persona) now clears `MEMORY_PERSONA` / `MEMORY_CREW` / `MEMORY_CREW_URL` for every test.

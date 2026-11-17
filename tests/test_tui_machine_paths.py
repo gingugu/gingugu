@@ -128,6 +128,13 @@ def test_hooks_are_byte_identical_on_a_fancy_terminal(hook, tmp_path):
         "GINGUGU_CACHE_DIR": str(tmp_path / "cache"),
         "PYTHONPATH": str(SRC.parent),
         "XDG_DATA_HOME": str(tmp_path / "xdg"),
+        # These X-ray sections scan the repo on a time budget and leave their line
+        # out when it runs short, so on a slow, loaded runner the first (cold) run
+        # can drop a line the second run prints - different bytes for a reason that
+        # has nothing to do with the terminal. Their content has its own tests.
+        "MEMORY_XRAY_ENV": "off",
+        "MEMORY_XRAY_DOCS": "off",
+        "MEMORY_XRAY_ROUTES": "off",
     }
     (tmp_path / "home").mkdir()
     # Each run gets its own data dir: hooks keep per-session state ("first read gets a map").
