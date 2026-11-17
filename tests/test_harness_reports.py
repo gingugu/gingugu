@@ -95,13 +95,14 @@ def test_harness_on_a_repo_without_claude_md_dry_run_matches_real(tmp_path, caps
     real = _run(["--path", str(repo)], capsys)
 
     claude = repo / "CLAUDE.md"
-    for out, verb in ((dry, "would append"), (real, "appended")):
+    for out, verb in ((dry, "would create"), (real, "created")):
         assert "none present" not in out
-        assert re.search(rf"{verb}\s+{re.escape(str(claude))}  \(new file\)", out)
+        assert re.search(rf"{verb}\s+{re.escape(str(claude))}  \(no protocol block", out)
         assert "below your existing rules" not in out
     text = claude.read_text()
     assert text.startswith("# bare\n")
-    assert "BEGIN GINGUGU MEMORY PROTOCOL" in text and "BEGIN GINGUGU HARNESS" in text
+    # The protocol went to the (sandboxed) ~/.claude/CLAUDE.md instead.
+    assert "BEGIN GINGUGU MEMORY PROTOCOL" not in text and "BEGIN GINGUGU HARNESS" in text
 
 
 @pytest.mark.skipif(os.name == "nt", reason="symlinks need privileges on Windows")

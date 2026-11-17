@@ -171,10 +171,12 @@ def test_scaffolds_the_ai_knowledge_base(repo):
         assert (repo / ".ai" / rel).read_text().strip()
 
 
-def test_claude_md_gets_the_protocol_and_the_harness_block(repo):
+def test_claude_md_gets_the_harness_block_but_not_a_duplicate_protocol(repo):
     _run(repo)
     text = (repo / "CLAUDE.md").read_text()
-    assert BEGIN_MARKER in text  # init's memory protocol, same run
+    # init put the memory protocol in the (sandboxed) ~/.claude/CLAUDE.md, which
+    # Claude Code also loads every request - a repo copy would be paid twice.
+    assert BEGIN_MARKER not in text
     assert HARNESS_BEGIN in text and HARNESS_END in text
     assert "/creating-pr" in text and ".ai/plans/status.md" in text
 

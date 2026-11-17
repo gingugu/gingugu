@@ -239,12 +239,24 @@ def _apply_protocol(
     return lines, status
 
 
+#: Global outcomes after which ~/.claude/CLAUDE.md carries the managed block.
+GLOBAL_COVERS = frozenset({"current", "updated", "appended", "adopted"})
+
+
 def init_global_rules(*, dry_run: bool, adopt: bool = False, path: Path | None = None) -> list[str]:
+    """``install_global_rules`` for callers that only want the report lines."""
+    return install_global_rules(dry_run=dry_run, adopt=adopt, path=path)[0]
+
+
+def install_global_rules(
+    *, dry_run: bool, adopt: bool = False, path: Path | None = None
+) -> tuple[list[str], str]:
     """Install or refresh the managed protocol block in the user-level rules file.
 
-    Never fails the run: this is an additive step inside the repo bootstrap, so a
-    hand-written protocol in the user's file is a warning to act on, not a reason
-    to report the repo bootstrap as failed. Takes no ``force`` — see
+    Returns ``(report lines, status)``; a status in ``GLOBAL_COVERS`` tells the
+    repo step the protocol already loads every session (see ``repo_rules``).
+    Never fails the run: a hand-written protocol in the user's file is a warning
+    to act on, not a reason to fail the bootstrap. Takes no ``force`` — see
     ``merge_block``.
     """
     target = path or global_claude_md()
@@ -255,46 +267,10 @@ def init_global_rules(*, dry_run: bool, adopt: bool = False, path: Path | None =
     lines, status = _apply_protocol(target, existing, protocol, dry_run=dry_run, adopt=adopt)
     results.extend(lines)
     if status == "conflict":
-        return results
+        return results, status
 
     results.append("")
     results.append(
         "Re-run `gingugu init` after upgrading gingugu to refresh the protocol in place."
     )
-    return results
-
-
-REPO_RULES_FILES = ("CLAUDE.md", "AGENTS.md")
-
-
-def init_repo_rules(
-    target: Path, *, dry_run: bool, adopt: bool = False, create: bool = False
-) -> list[str]:
-    """Merge the managed protocol block into the repo's own CLAUDE.md / AGENTS.md.
-
-    Only touches files that already exist — creating an AGENTS.md where none
-    exists would be presumptuous, and the SessionStart hook already carries the
-    protocol into every session regardless of whether a rules file mentions it.
-    ``create`` (``gingugu harness``, which needs a CLAUDE.md) is the exception. No
-    ``--force``: like the global file, it is hand-authored and loaded every session.
-    """
-    protocol = read_template("rules_protocol.md.tmpl")
-    results: list[str] = ["Repo rules files (CLAUDE.md / AGENTS.md):"]
-    found = False
-    for name in REPO_RULES_FILES:
-        rules_path = target / name
-        new = create and name == "CLAUDE.md" and not rules_path.exists()
-        if not rules_path.exists() and not new:
-            continue
-        found = True
-        if new and rules_path.is_symlink():  # dangling: a create would land at its target
-            results.append(f"  skip          {rules_path}  (a symlink; never written through)")
-            continue
-        existing = f"# {target.name}\n" if new else safe_read(rules_path)
-        lines, _ = _apply_protocol(
-            rules_path, existing, protocol, dry_run=dry_run, adopt=adopt, new=new
-        )
-        results.extend(lines)
-    if not found:
-        results.append(f"  none present ({', '.join(REPO_RULES_FILES)}); nothing to do")
-    return results
+    return results, status
