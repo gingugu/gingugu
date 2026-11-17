@@ -127,17 +127,20 @@ def test_startup_protocol_asks_for_one_stats_call() -> None:
 
     root = Path(__file__).resolve().parents[1]
     templates = root / "src" / "gingugu" / "bootstrap" / "templates"
-    for path in (
+    teaching = (
         templates / "rules_protocol.md.tmpl",
         templates / "session_start.py.tmpl",
         root / ".claude" / "hooks" / "session_start.py",
-        root / "CLAUDE.md",
         root / "AGENTS.md",
-    ):
+    )
+    # The repo CLAUDE.md no longer carries the protocol (the user-level file
+    # does, and both load every request), but it must never teach the old form.
+    for path in (*teaching, root / "CLAUDE.md"):
         text = path.read_text(encoding="utf-8")
         assert 'memory_stats(namespace="crow")' not in text, path
-        # "crow,<project>" or "crow[,<persona>],<project>": one call, a list.
-        assert re.search(r'memory_stats\(namespace="crow(,|\[,)', text), path
+        if path in teaching or "memory_stats(" in text:
+            # "crow,<project>" or "crow[,<persona>],<project>": one call, a list.
+            assert re.search(r'memory_stats\(namespace="crow(,|\[,)', text), path
 
 
 @pytest.mark.asyncio
