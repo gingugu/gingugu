@@ -1,8 +1,12 @@
 # Project Status
 
-_Last updated: 2026-11-17 (smart harness on `feature/smart-harness`; repo CLAUDE.md protocol dedupe on `fix/dedupe-repo-protocol`; crew mates built on `feature/crew-chat`; X7d route coverage built on `feature/xray-route-gaps`; X7b HTTP routes as edges released in 0.51.0; X7d routes, mounts and the surface hook line released in 0.50.0, the attack-surface map in 0.49.0; X17 symbol graph for TS/JS and Go + multi-runner X11 ledger on `feature/x17-ts-go`; literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
+_Last updated: 2026-11-17 (hermetic test env on `fix/hermetic-test-env`; smart harness on `feature/smart-harness`; repo CLAUDE.md protocol dedupe on `fix/dedupe-repo-protocol`; crew mates built on `feature/crew-chat`; X7d route coverage built on `feature/xray-route-gaps`; X7b HTTP routes as edges released in 0.51.0; X7d routes, mounts and the surface hook line released in 0.50.0, the attack-surface map in 0.49.0; X17 symbol graph for TS/JS and Go + multi-runner X11 ledger on `feature/x17-ts-go`; literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
 
 ## In Flight
+
+**Hermetic test env (2026-11-17, branch `fix/hermetic-test-env`).** The release dry run for 0.54.0 failed seven
+startup-contract tests because the shell exported `MEMORY_CREW=1` (set in `~/.claude/settings.json` env). The autouse
+`conftest.no_persona` (which cleared only the persona) now clears `MEMORY_PERSONA` / `MEMORY_CREW` / `MEMORY_CREW_URL` for every test.
 
 **Smart harness (2026-11-17, branch `feature/smart-harness`, stacked on `fix/dedupe-repo-protocol`, unreleased).**
 `gingugu harness` becomes the after-upgrade command: a plain re-run refreshes an unedited older copy of any

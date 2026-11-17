@@ -130,13 +130,15 @@ def sandboxed_remote_setting(monkeypatch: pytest.MonkeyPatch, tmp_path_factory):
 
 @pytest.fixture(autouse=True)
 def no_persona(monkeypatch: pytest.MonkeyPatch):
-    """Keep the developer's own MEMORY_PERSONA out of the suite.
+    """Keep the developer's own persona and crew link out of the suite.
 
-    A persona set in the user's Claude Code settings reaches every child
-    process, so without this the namespace-derivation tests pass or fail
-    depending on who runs them. A test that needs one sets it.
+    Set in the user's Claude Code settings ``env``, they reach every child
+    process, so without this the namespace-derivation and startup-contract
+    tests pass or fail depending on who runs them - a run from inside a crew
+    session (``MEMORY_CREW=1``) failed seven. A test that needs one sets it.
     """
-    monkeypatch.delenv("MEMORY_PERSONA", raising=False)
+    for name in ("MEMORY_PERSONA", "MEMORY_CREW", "MEMORY_CREW_URL"):
+        monkeypatch.delenv(name, raising=False)
 
 
 @pytest.fixture(autouse=True)

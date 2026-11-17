@@ -23,11 +23,6 @@ CONTRACTS = {
 }
 
 
-@pytest.fixture(autouse=True)
-def no_persona(monkeypatch):
-    monkeypatch.delenv("MEMORY_PERSONA", raising=False)
-
-
 def _load(path: Path):
     loader = SourceFileLoader(f"contract_{path.stem}", str(path))
     spec = importlib.util.spec_from_loader(loader.name, loader)
