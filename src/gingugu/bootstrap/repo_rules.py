@@ -11,6 +11,7 @@ other clients read it, and Claude Code does not auto-load it.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from ._files import read_template, safe_read
@@ -18,6 +19,10 @@ from .global_rules import BEGIN_MARKER, END_MARKER, _apply_protocol
 
 REPO_RULES_FILES = ("CLAUDE.md", "AGENTS.md")
 _GLOBAL_NOTE = "protocol already loads from ~/.claude/CLAUDE.md"
+# Markers count only on a line of their own: prose quoting one is not a block.
+_BLOCK_RE = re.compile(
+    rf"^{re.escape(BEGIN_MARKER)}[ \t]*$.*?^{re.escape(END_MARKER)}[ \t]*$", re.M | re.S
+)
 
 
 def strip_block(existing: str) -> str | None:
@@ -26,11 +31,11 @@ def strip_block(existing: str) -> str | None:
     Joins the neighbours with one blank line, so a block appended by
     ``merge_block`` comes out as if it had never been added.
     """
-    start, end = existing.find(BEGIN_MARKER), existing.find(END_MARKER)
-    if start == -1 or end == -1 or end < start:
+    m = _BLOCK_RE.search(existing)
+    if m is None:
         return None
-    head = existing[:start].rstrip("\n")
-    tail = existing[end + len(END_MARKER) :].lstrip("\n")
+    head = existing[: m.start()].rstrip("\n")
+    tail = existing[m.end() :].lstrip("\n")
     if not head:
         return tail
     return f"{head}\n\n{tail}" if tail else f"{head}\n"
@@ -43,6 +48,8 @@ def _dedupe_claude_md(path: Path, *, dry_run: bool, new: bool, title: str) -> st
             path.write_text(f"# {title}\n")
         verb = "would create" if dry_run else "created"
         return f"  {verb:<13} {path}  (no protocol block: {_GLOBAL_NOTE})"
+    if path.is_symlink():  # its target may be another rules file, even the global one
+        return f"  skip          {path}  (a symlink; never written through)"
     existing = safe_read(path)
     stripped = strip_block(existing)
     if stripped is None:

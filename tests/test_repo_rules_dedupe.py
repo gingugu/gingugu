@@ -9,6 +9,10 @@ clients read it, and Claude Code does not auto-load it.
 
 from __future__ import annotations
 
+import os
+
+import pytest
+
 from gingugu.bootstrap import init_claude_code
 from gingugu.bootstrap.global_rules import BEGIN_MARKER, END_MARKER, render_block
 from gingugu.bootstrap.repo_rules import init_repo_rules, strip_block
@@ -28,6 +32,11 @@ def test_strip_removes_block_and_keeps_both_neighbours():
 def test_strip_block_at_end_of_file_leaves_one_trailing_newline():
     text = f"# Repo\n\nUse black.\n\n{BLOCK}"
     assert strip_block(text) == "# Repo\n\nUse black.\n"
+
+
+def test_strip_ignores_a_marker_quoted_in_prose():
+    text = f"# Repo\n\nThe block starts at `{BEGIN_MARKER}`.\n\nKeep me.\n\n{BLOCK}"
+    assert strip_block(text) == f"# Repo\n\nThe block starts at `{BEGIN_MARKER}`.\n\nKeep me.\n"
 
 
 def test_strip_returns_none_when_there_is_no_managed_block():
@@ -69,6 +78,23 @@ def test_hand_written_repo_protocol_is_never_touched(tmp_path):
     init_repo_rules(tmp_path, dry_run=False, global_covers=True, adopt=True)
 
     assert claude_md.read_text() == original
+
+
+@pytest.mark.skipif(os.name == "nt", reason="symlinks need privileges on Windows")
+def test_symlinked_claude_md_is_never_written_through(tmp_path):
+    target = tmp_path / "elsewhere" / "CLAUDE.md"  # e.g. ~/.claude/CLAUDE.md itself
+    target.parent.mkdir()
+    original = f"# Global\n\n{BLOCK}"
+    target.write_text(original)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "CLAUDE.md").symlink_to(target)
+
+    out = "\n".join(init_repo_rules(repo, dry_run=False, global_covers=True))
+
+    assert target.read_text() == original
+    assert not (repo / "CLAUDE.md.bak").exists()
+    assert "a symlink; never written through" in out
 
 
 def test_dry_run_removal_writes_nothing(tmp_path):
