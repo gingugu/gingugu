@@ -26,7 +26,7 @@ from . import init_claude_code
 from ._files import read_template, safe_read, write_file
 from .harness_migrate import migrate_settings, retire_legacy
 from .harness_prune import prune
-from .harness_settings import wire_harness_settings
+from .harness_settings import init_user_subagent_model, wire_harness_settings
 from .settings import _HOOKS as _SETTINGS_HOOKS
 from .settings import is_user_level, load_settings, write_settings
 
@@ -279,7 +279,7 @@ def main(argv: list[str] | None = None) -> int:
         dry_run=args.dry_run,
         user_original_kept=init_backed_up or not settings_existed or args.migrate,
     )
-    results.extend(lines)
+    results.extend([*lines, *init_user_subagent_model(dry_run=args.dry_run)])
 
     if args.migrate:
         if settings_start is not None and not args.dry_run:

@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
+from . import settings as _user
 from .settings import load_settings, merge_settings, write_settings
+
+# Default model for subagents whose definition names none (the built-ins Explore,
+# Plan, general-purpose), which otherwise inherit the main thread's model. The
+# repo deny of Agent(model:opus) only stops a spawn that names Opus.
+SUBAGENT_MODEL_ENV = "CLAUDE_CODE_SUBAGENT_MODEL"
+SUBAGENT_MODEL = "sonnet"
 
 _RUN = "uv run $CLAUDE_PROJECT_DIR/.claude/hooks"
 LOG_EVENT_CMD = f"{_RUN}/log_event.py"
@@ -158,3 +166,33 @@ def hook_entries(settings: dict):
             for hook in group["hooks"]:
                 if isinstance(hook, dict):
                     yield event, group, hook
+
+
+def init_user_subagent_model(*, dry_run: bool, path: Path | None = None) -> list[str]:
+    """Set ``CLAUDE_CODE_SUBAGENT_MODEL`` in the user-level settings ``env``.
+
+    Additive, with a ``settings.json.bak``; a value the user already chose is
+    kept, and a file that does not parse is never touched.
+    """
+    path = path or _user.user_settings_path()
+    raw = path.read_text() if path.exists() else None
+    try:
+        data = json.loads(raw) if raw else {}
+    except json.JSONDecodeError:
+        return [f"  WARNING: {path} does not parse; {SUBAGENT_MODEL_ENV} not set"]
+    env = data.get("env") if isinstance(data, dict) else None
+    if not isinstance(data, dict) or (env is not None and not isinstance(env, dict)):
+        return [f"  WARNING: {path} has no usable env object; {SUBAGENT_MODEL_ENV} not set"]
+    current = (env or {}).get(SUBAGENT_MODEL_ENV)
+    if current == SUBAGENT_MODEL:
+        return [f"  {SUBAGENT_MODEL_ENV} already {SUBAGENT_MODEL} (no change) {path}"]
+    if current is not None:
+        return [f"  {SUBAGENT_MODEL_ENV}={current} kept (your choice) {path}"]
+    if dry_run:
+        return [f"  would set {SUBAGENT_MODEL_ENV}={SUBAGENT_MODEL} in {path}"]
+    data.setdefault("env", {})[SUBAGENT_MODEL_ENV] = SUBAGENT_MODEL
+    if raw is not None:
+        path.with_name("settings.json.bak").write_text(raw)
+    write_settings(path, data)
+    note = " (backed up existing to settings.json.bak)" if raw is not None else ""
+    return [f"  set {SUBAGENT_MODEL_ENV}={SUBAGENT_MODEL} in {path}{note}"]
