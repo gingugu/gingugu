@@ -1112,8 +1112,11 @@ It installs:
   whatever you already wrote, only the block's own contents are ever rewritten
   on a re-run, and if the file already contains a memory protocol that `init`
   doesn't manage it writes nothing and tells you how to opt in.
-- **The same, for the repo's own `CLAUDE.md` / `AGENTS.md`** — only files that
-  already exist (it never creates one), same append-only / marked-block rules.
+- **The same, for the repo's own `AGENTS.md`** — only if it already exists (it
+  never creates one), same append-only / marked-block rules. The repo's
+  `CLAUDE.md` gets no block once your user-level file carries it: Claude Code
+  loads both into every request, so a second copy is paid for twice. A copy an
+  earlier `init` wrote there is removed, backed up to `CLAUDE.md.bak` first.
 
 It's idempotent (re-run any time — that's how you pick up protocol changes after
 upgrading), `--dry-run` previews without writing, a hook that is a stock copy of an older
@@ -1123,7 +1126,8 @@ to your user-level rules file. Anything `init` replaces is copied to
 `<name>.bak` first, including a `--client` rules file you wrote yourself.
 
 If a rules file already carries its own hand-written protocol, `init` refuses
-to touch it (see above) — pass **`--adopt`** to wrap that existing section in
+to touch it (see above; a repo `CLAUDE.md` is simply left alone once your
+user-level file carries the protocol) — pass **`--adopt`** to wrap that existing section in
 the managed markers and refresh it to the template in one step, backing up the
 original first. It finds the section by its heading's own title, so it wraps
 the right span even when a neighboring subsection just happens to mention a

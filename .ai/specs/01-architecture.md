@@ -1407,8 +1407,9 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   blocked `.env` write - secret included - before deciding. Transcript backups
   hold the whole session, so they live under `.claude/data/` at 0700/0600.
   It runs `init` with `create_rules=True`, so a missing repo `CLAUDE.md` is
-  created there (`# <dirname>` + the protocol block, reported as a new file) and
-  the harness block lands in it in the same run; plain `init` never creates one.
+  created there (`# <dirname>`, plus the protocol block only when the user-level
+  file does not carry it - see the repo-`CLAUDE.md` dedupe bullet below) and the
+  harness block lands in it in the same run; plain `init` never creates one.
   Every report a dry run prints is what the real run then does: identical bytes
   are `no change`, a forced write over an existing file is `would overwrite`.
 - **`harness --migrate` / `--prune` move a repo off the older per-event kit in
@@ -1455,6 +1456,18 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   wraps that span in the sentinel markers, and immediately re-runs
   `merge_block` to refresh it to the template - one command, one backup of
   the true original.
+- **The repo `CLAUDE.md` does not repeat a protocol the user-level file
+  carries** (`bootstrap/repo_rules.py`, 2026-11-17). Claude Code loads both
+  files into every request, so the same ~6k-char block in each was paid twice.
+  `install_global_rules` returns its status; when it is in `GLOBAL_COVERS`
+  (`current`/`updated`/`appended`/`adopted`), `init_repo_rules(global_covers=True)`
+  skips the repo `CLAUDE.md`, strips a managed block an earlier run left there
+  (`strip_block`, `.bak` first), and creates a title-only file for `harness`.
+  A `conflict` in the user-level file (its own unmanaged protocol) does not
+  count as covered. `AGENTS.md` is still managed: other clients read it and
+  Claude Code does not auto-load it. A symlinked `CLAUDE.md` is skipped, never
+  written through (its target can be the user-level file itself), and markers
+  count only on a line of their own, so prose quoting one is never cut.
 - **A `--force` backup keys off content, never off ownership.** Whether a file
   carries `gingugu-init:managed-file` says whether *we* wrote it; it says nothing
   about whether the user has since edited it. Conditioning the `.bak` on the

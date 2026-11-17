@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **No duplicate memory protocol in a repo's `CLAUDE.md`.** Claude Code loads
+  `~/.claude/CLAUDE.md` and the repo `CLAUDE.md` into every request, so the same
+  managed block in both was paid for twice. When `init` (or `harness`) puts the
+  block in the user-level file, the repo `CLAUDE.md` gets none, and a copy an
+  earlier `init` wrote is removed (backed up to `CLAUDE.md.bak` first). A
+  hand-written protocol and a symlinked `CLAUDE.md` are never touched, and
+  `AGENTS.md` keeps its block, since other clients read it.
+
 ---
 
 ## [0.53.0] - 2026-11-13
