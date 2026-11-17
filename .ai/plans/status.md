@@ -4,6 +4,8 @@ _Last updated: 2026-11-17 (hermetic test env on `fix/hermetic-test-env`; smart h
 
 ## In Flight
 
+**0.54.0 rolled out (2026-11-17).** Fleet (mr-boomtastic-2, dronesense-mbp, pi) on 0.54.0. `gingugu harness` run on this Mac's repos (playtronics with `--adopt`, pill_manager, bspeagle, gingugu.com, and this repo): the user-level delegation block adopted, duplicate repo protocol blocks removed. This repo's `CLAUDE.md` loses its 117-line protocol copy and `.claude/settings.json` gains the force-push denies harness ships (branch `chore/harness-dogfood`).
+
 **Deterministic TUI byte-identity test (2026-11-17, branch `fix/deterministic-tui-test`).** `test_hooks_are_byte_identical_on_a_fancy_terminal[read]` failed on macOS CI: the cold first run's env scan ran out of its 1s budget and dropped the `Env:` line the second run printed. Reproduced with a 1ms budget; the test now switches off the time-budgeted X-ray sections (env, docs, routes) so it compares terminal handling only.
 
 **Hermetic test env (2026-11-17, branch `fix/hermetic-test-env`).** The release dry run for 0.54.0 failed seven

@@ -91,7 +91,9 @@
       "Bash(rm -rf:*)",
       "Bash(npm publish:*)",
       "Bash(uv publish:*)",
-      "Bash(twine upload:*)"
+      "Bash(twine upload:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)"
     ]
   },
   "hooks": {
