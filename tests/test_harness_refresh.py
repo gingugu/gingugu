@@ -94,7 +94,8 @@ def test_crlf_stock_copy_is_still_recognised(tmp_path):
 
     main(["--path", str(repo)])
 
-    assert b"\r\n" not in dest.read_bytes()
+    current = render(read_template(f"harness/{AGENT}.tmpl"), "myrepo", minion_grant("myrepo"))
+    assert dest.read_bytes().replace(b"\r\n", b"\n") == current.encode()
 
 
 def test_edited_copy_is_skipped_without_force(tmp_path, capsys):

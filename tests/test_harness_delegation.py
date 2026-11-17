@@ -231,6 +231,20 @@ def test_crlf_file_keeps_its_bytes_and_the_backup_is_exact(tmp_path):
     assert claude_md.with_suffix(".md.bak").read_bytes() == stale
 
 
+def test_crlf_file_rerun_is_a_byte_identical_no_op(tmp_path):
+    claude_md, _ = _paths(tmp_path)
+    claude_md.write_bytes(b"# Mine\r\n\r\nBe terse.\r\n")
+    _run(tmp_path)
+    once = claude_md.read_bytes()
+
+    out = _run(tmp_path)
+
+    assert claude_md.read_bytes() == once
+    assert b"\n" not in once.replace(b"\r\n", b"")  # no bare LF anywhere
+    assert not claude_md.with_suffix(".md.bak").exists()
+    assert "no change" in out
+
+
 @pytest.mark.skipif(os.name == "nt" or os.geteuid() == 0, reason="needs POSIX perms, non-root")
 def test_unreadable_file_stops_the_run_and_is_not_truncated(tmp_path):
     claude_md, _ = _paths(tmp_path)

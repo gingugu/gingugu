@@ -28,7 +28,9 @@ _NOTE = (
     "     replaced on re-run; put your own rules outside them. -->"
 )
 _BLOCK_RE = re.compile(
-    rf"^{re.escape(DELEGATION_BEGIN)}[ \t]*\r?$.*?^{re.escape(DELEGATION_END)}[ \t]*\r?$",
+    # The match stops right after END: consuming a CRLF's \r here would make every
+    # re-run of a CRLF file look changed and leave a bare \n behind.
+    rf"^{re.escape(DELEGATION_BEGIN)}[ \t]*\r?$.*?^{re.escape(DELEGATION_END)}(?=[ \t]*\r?$)",
     re.M | re.S,
 )
 # Only a top-level section counts as "your delegation section": a nested
