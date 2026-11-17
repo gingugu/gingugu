@@ -60,8 +60,8 @@
   proxy and JSON modes never import `gingugu.tui`, and a change near them carries a
   byte-identity test (see `tests/test_tui_machine_paths.py`: a static import check plus
   the hook entry points under a pty on a colour and a plain terminal).
-- **The suite is offline and bounded.** Two autouse fixtures in
-  `tests/conftest.py` enforce it: `fake_keyring` keeps tests off the OS
+- **The suite is offline and bounded.** Autouse fixtures in
+  `tests/conftest.py` enforce it, among them `fake_keyring` keeps tests off the OS
   keychain, `offline_embeddings` keeps them off the network (the fastembed
   backend otherwise downloads an ~80MB model on a cold cache, untimed). A test
   needing a real external dependency must opt in explicitly. `timeout = 60`
@@ -109,8 +109,8 @@
   one, save the outgoing text as `templates/harness/_shipped/<rel>.versions/<sha12>.tmpl`
   and pin the new hash - harness files are rendered per repo, so a hash alone
   cannot recognise an old copy, and a plain `gingugu harness` refresh needs the text.
-- **The suite is hermetic against the runner's agent identity.** An autouse
-  `conftest.hermetic_identity_env` clears `MEMORY_PERSONA`, `MEMORY_CREW` and
+- **The suite is hermetic against the runner's agent identity.** The autouse
+  `conftest.no_persona` clears `MEMORY_PERSONA`, `MEMORY_CREW` and
   `MEMORY_CREW_URL`, which Claude Code's settings `env` exports into every shell;
   a test that needs one sets it with `monkeypatch`.
 - **Unit tests** for storage, search, relations, context, decay, consolidation.

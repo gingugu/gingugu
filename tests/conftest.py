@@ -63,19 +63,6 @@ def fake_keyring():
     keyring.set_keyring(previous)
 
 
-# Identity variables a developer's agent harness exports into every shell
-# (Claude Code's settings.json `env`). Inherited, they change the startup
-# contract under test - a run from inside a crew session saw seven failures.
-_RUNNER_IDENTITY_ENV = ("MEMORY_PERSONA", "MEMORY_CREW", "MEMORY_CREW_URL")
-
-
-@pytest.fixture(autouse=True)
-def hermetic_identity_env(monkeypatch: pytest.MonkeyPatch):
-    """Start every test with no persona or crew link; a test that needs one sets it."""
-    for name in _RUNNER_IDENTITY_ENV:
-        monkeypatch.delenv(name, raising=False)
-
-
 @pytest.fixture(autouse=True)
 def sandboxed_global_rules(monkeypatch: pytest.MonkeyPatch, tmp_path_factory):
     """Keep the suite out of the developer's real ``~/.claude/CLAUDE.md``.
@@ -143,13 +130,15 @@ def sandboxed_remote_setting(monkeypatch: pytest.MonkeyPatch, tmp_path_factory):
 
 @pytest.fixture(autouse=True)
 def no_persona(monkeypatch: pytest.MonkeyPatch):
-    """Keep the developer's own MEMORY_PERSONA out of the suite.
+    """Keep the developer's own persona and crew link out of the suite.
 
-    A persona set in the user's Claude Code settings reaches every child
-    process, so without this the namespace-derivation tests pass or fail
-    depending on who runs them. A test that needs one sets it.
+    Set in the user's Claude Code settings ``env``, they reach every child
+    process, so without this the namespace-derivation and startup-contract
+    tests pass or fail depending on who runs them - a run from inside a crew
+    session (``MEMORY_CREW=1``) failed seven. A test that needs one sets it.
     """
-    monkeypatch.delenv("MEMORY_PERSONA", raising=False)
+    for name in ("MEMORY_PERSONA", "MEMORY_CREW", "MEMORY_CREW_URL"):
+        monkeypatch.delenv(name, raising=False)
 
 
 @pytest.fixture(autouse=True)
