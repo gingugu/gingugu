@@ -3,12 +3,15 @@
 Plain ``init`` stays gingugu-only. ``harness`` runs ``init`` and then adds the
 rest of the kit: a safety guard and event logging, four fenced minions, the
 ``creating-pr`` skill, the ``.ai/`` knowledge base, and a managed block in the
-repo's ``CLAUDE.md``. Nothing it installs calls out to the network.
+repo's ``CLAUDE.md``; at user level, the Sonnet subagent default and the
+delegation rules (``harness_settings``, ``harness_global``). It is the
+after-upgrade command. Nothing it installs calls out to the network.
 
 Ownership rules, in one place:
 
 - hooks, agents and skill files are *managed*: written through ``write_file``
-  (skip if present, ``--force`` overwrites, a ``.bak`` whenever bytes change);
+  (a stock copy of an older version is refreshed - ``harness_shipped`` - an
+  edited one is skipped, ``--force`` overwrites, a ``.bak`` whenever bytes change);
 - ``.ai/`` files are the user's content once created: written only when missing,
   never overwritten, never backed up;
 - ``CLAUDE.md`` is the user's file: only the text between our markers is ours.
