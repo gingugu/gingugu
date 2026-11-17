@@ -9,7 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`gingugu harness` keeps itself current.** A plain re-run now refreshes any
+  hook, minion or skill that is an unedited copy of a version we shipped (with a
+  `.bak`), and still leaves alone one you edited. Run `gingugu harness` after
+  every upgrade; `init` stays the memory-only subset.
+- **`harness` sets `CLAUDE_CODE_SUBAGENT_MODEL=sonnet`** in
+  `~/.claude/settings.json`, so the built-in subagents (`Explore`, `Plan`,
+  `general-purpose`) stop inheriting Opus. A value you already set is kept.
+- **`harness` installs the subagent-delegation rules at user level**: a managed
+  block in `~/.claude/CLAUDE.md` and the rationale in
+  `~/.claude/docs/delegation.md`. A delegation section you wrote yourself is
+  left alone unless you pass the new `harness --adopt`.
+
 ### Changed
+
+- A managed file that already matches the current version reports
+  `no change (already current)` instead of a `--force` hint.
 
 - **No duplicate memory protocol in a repo's `CLAUDE.md`.** Claude Code loads
   `~/.claude/CLAUDE.md` and the repo `CLAUDE.md` into every request, so the same

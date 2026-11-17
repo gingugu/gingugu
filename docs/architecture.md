@@ -2531,7 +2531,10 @@ src/gingugu/
 │   ├── harness_migrate.py  # harness --migrate: unwire + retire an older per-event hook kit
 │   ├── harness_prune.py    # harness --prune: delete only what the manifest proves it moved
 │   ├── harness_retired.py  # Kit file names, sha256 manifest, symlink checks
-│   ├── harness_settings.py # Harness hooks + deny rules, merged additively; hook-command parsing
+│   ├── harness_settings.py # Harness hooks + deny rules, merged additively; user-level subagent model
+│   ├── harness_shipped.py  # Older harness template texts: refresh a stock copy, keep an edited one
+│   ├── harness_global.py   # User-level delegation block in ~/.claude/CLAUDE.md + docs/delegation.md
+│   ├── harness_claude_md.py # The harness block in a repo's CLAUDE.md
 │   ├── settings.py         # Non-destructive .claude/settings.json merge
 │   ├── shipped.py          # sha256 of every shipped hook template; a stock old copy is refreshed
 │   └── templates/harness/  # Hooks, minions, skill, .ai/ scaffold, CLAUDE.md block

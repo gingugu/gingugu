@@ -405,16 +405,18 @@ automatically on the next start, and a one-shot backup of your database
 (`memories.db.bak-before-vN`) is taken before any migration runs. Your
 memories are never rewritten by an upgrade.
 
-**3. Re-run `gingugu init` in each repo** to pick up improvements to the
-hooks and the session protocol:
+**3. Re-run `gingugu harness` in each repo** (or `gingugu init` in a repo
+that uses only the brain) to pick up improvements to the hooks, minions, skills
+and the session protocol:
 
 ```bash
-cd ~/code/my-repo && gingugu init
+cd ~/code/my-repo && gingugu harness
 ```
 
-A hook that is still a stock copy of an older version is refreshed (reported as
-`refresh`), with the old copy saved as `<name>.bak`. A hook you have edited is
-left alone. `--force` replaces it too, and every other managed file with it.
+A managed file that is still a stock copy of an older version is refreshed
+(reported as `refresh`), with the old copy saved as `<name>.bak`. A file you
+have edited is left alone, and one already current reports `no change`.
+`--force` replaces an edited one too, and every other managed file with it.
 Run `--dry-run` first if you want to see the changes before they land. Your
 `.claude/settings.json` is merged, not overwritten.
 
@@ -1192,12 +1194,30 @@ On top of everything `init` installs, it adds:
 - **`permissions.deny`** entries for Opus minions (`Agent(model:opus)`), force
   pushes, `git reset --hard` and `rm -rf`. Existing entries are kept.
 
-None of it calls out to the network or needs an API key. Same `--force` and
-`--dry-run` semantics as `init`, and the same refusal to install into your home
-directory. The repo's folder name must be a valid namespace.
+And at user level, for every repo:
+
+- **`CLAUDE_CODE_SUBAGENT_MODEL=sonnet`** in `~/.claude/settings.json` - the
+  default for any subagent whose definition names no model. The deny above only
+  stops a spawn that *names* Opus; the built-ins (`Explore`, `Plan`,
+  `general-purpose`) reach it by inheriting the main thread's model. A value
+  you already set is kept.
+- **The subagent-delegation rules**: a managed block in `~/.claude/CLAUDE.md`
+  (the rules, short, since that file is loaded into every request) and
+  `~/.claude/docs/delegation.md` (the rationale, read on demand). A delegation
+  section you wrote yourself is left alone; `--adopt` hands it over, backed up.
+
+**Re-run it after every upgrade.** A plain re-run refreshes any hook, minion or
+skill that is an unedited copy of a version we shipped (with a `.bak`), installs
+anything new, and leaves alone a file you edited - it says which, and `--force`
+replaces it. A file already current reports `no change`. `init` is the
+memory-only subset, for a repo where you want the brain and none of the kit.
+
+None of it calls out to the network or needs an API key. Same `--force`,
+`--dry-run` and `--adopt` semantics as `init`, and the same refusal to install
+into your home directory. The repo's folder name must be a valid namespace.
 
 **Moving off an older hook kit: `--migrate`, then `--prune`.** Plain `harness`
-only ever adds. On a repo that already runs a one-script-per-event logging kit,
+never unwires anything. On a repo that already runs a one-script-per-event logging kit,
 that would leave the old loggers wired beside `log_event`. `gingugu harness
 --migrate` instead:
 

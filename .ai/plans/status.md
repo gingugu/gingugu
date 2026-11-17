@@ -1,8 +1,17 @@
 # Project Status
 
-_Last updated: 2026-11-17 (repo CLAUDE.md protocol dedupe on `fix/dedupe-repo-protocol`; crew mates built on `feature/crew-chat`; X7d route coverage built on `feature/xray-route-gaps`; X7b HTTP routes as edges released in 0.51.0; X7d routes, mounts and the surface hook line released in 0.50.0, the attack-surface map in 0.49.0; X17 symbol graph for TS/JS and Go + multi-runner X11 ledger on `feature/x17-ts-go`; literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
+_Last updated: 2026-11-17 (smart harness on `feature/smart-harness`; repo CLAUDE.md protocol dedupe on `fix/dedupe-repo-protocol`; crew mates built on `feature/crew-chat`; X7d route coverage built on `feature/xray-route-gaps`; X7b HTTP routes as edges released in 0.51.0; X7d routes, mounts and the surface hook line released in 0.50.0, the attack-surface map in 0.49.0; X17 symbol graph for TS/JS and Go + multi-runner X11 ledger on `feature/x17-ts-go`; literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
 
 ## In Flight
+
+**Smart harness (2026-11-17, branch `feature/smart-harness`, stacked on `fix/dedupe-repo-protocol`, unreleased).**
+`gingugu harness` becomes the after-upgrade command: a plain re-run refreshes an unedited older copy of any
+managed hook/minion/skill (older template texts in `templates/harness/_shipped/`, `harness_shipped.py`), keeps
+an edited one, and reports a current one as `no change`. It also installs, at user level,
+`CLAUDE_CODE_SUBAGENT_MODEL=sonnet` and the subagent-delegation rules (`harness_global.py`: managed block in
+`~/.claude/CLAUDE.md` + `~/.claude/docs/delegation.md`, `harness --adopt`). Verified on copies of a real install.
+Specs: `tests/test_harness_refresh.py`, `tests/test_harness_delegation.py`, `tests/test_harness_subagent_model.py`.
+Next: run `harness` across the owner's repos (dry run first), then consider having `fleet.py` run it after upgrades.
 
 **No duplicate protocol in a repo `CLAUDE.md` (2026-11-17, branch `fix/dedupe-repo-protocol`, unreleased).**
 From a `/usage` review: Claude Code loads `~/.claude/CLAUDE.md` and the repo `CLAUDE.md` every request, and
