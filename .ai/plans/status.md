@@ -4,6 +4,10 @@ _Last updated: 2026-11-17 (smart harness on `feature/smart-harness`; repo CLAUDE
 
 ## In Flight
 
+**Hermetic test env (2026-11-17, branch `fix/hermetic-test-env`).** The release dry run for 0.54.0 failed seven
+startup-contract tests because the shell exported `MEMORY_CREW=1` (set in `~/.claude/settings.json` env). An autouse
+`conftest.hermetic_identity_env` now clears `MEMORY_PERSONA` / `MEMORY_CREW` / `MEMORY_CREW_URL` for every test.
+
 **Smart harness (2026-11-17, branch `feature/smart-harness`, stacked on `fix/dedupe-repo-protocol`, unreleased).**
 `gingugu harness` becomes the after-upgrade command: a plain re-run refreshes an unedited older copy of any
 managed hook/minion/skill (older template texts in `templates/harness/_shipped/`, `harness_shipped.py`), keeps

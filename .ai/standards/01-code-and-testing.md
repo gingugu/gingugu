@@ -109,6 +109,10 @@
   one, save the outgoing text as `templates/harness/_shipped/<rel>.versions/<sha12>.tmpl`
   and pin the new hash - harness files are rendered per repo, so a hash alone
   cannot recognise an old copy, and a plain `gingugu harness` refresh needs the text.
+- **The suite is hermetic against the runner's agent identity.** An autouse
+  `conftest.hermetic_identity_env` clears `MEMORY_PERSONA`, `MEMORY_CREW` and
+  `MEMORY_CREW_URL`, which Claude Code's settings `env` exports into every shell;
+  a test that needs one sets it with `monkeypatch`.
 - **Unit tests** for storage, search, relations, context, decay, consolidation.
 - **Integration tests** for end-to-end MCP flows (store → recall → context;
   store → relate → recall include_related).

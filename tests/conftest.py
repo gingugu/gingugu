@@ -63,6 +63,19 @@ def fake_keyring():
     keyring.set_keyring(previous)
 
 
+# Identity variables a developer's agent harness exports into every shell
+# (Claude Code's settings.json `env`). Inherited, they change the startup
+# contract under test - a run from inside a crew session saw seven failures.
+_RUNNER_IDENTITY_ENV = ("MEMORY_PERSONA", "MEMORY_CREW", "MEMORY_CREW_URL")
+
+
+@pytest.fixture(autouse=True)
+def hermetic_identity_env(monkeypatch: pytest.MonkeyPatch):
+    """Start every test with no persona or crew link; a test that needs one sets it."""
+    for name in _RUNNER_IDENTITY_ENV:
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture(autouse=True)
 def sandboxed_global_rules(monkeypatch: pytest.MonkeyPatch, tmp_path_factory):
     """Keep the suite out of the developer's real ``~/.claude/CLAUDE.md``.
