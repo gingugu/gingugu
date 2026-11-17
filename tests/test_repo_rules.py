@@ -17,8 +17,8 @@ from gingugu.bootstrap.global_rules import (
     BEGIN_MARKER,
     END_MARKER,
     adopt_unmanaged_protocol,
-    init_repo_rules,
 )
+from gingugu.bootstrap.repo_rules import init_repo_rules
 
 PROTOCOL = "## Memory Protocol\n\nLoad crow first.\n"
 
@@ -214,10 +214,14 @@ def test_dry_run_adopt_writes_nothing(tmp_path):
 def test_init_claude_code_manages_existing_repo_rules_files(tmp_path):
     repo = tmp_path
     (repo / "CLAUDE.md").write_text("# Conventions\n\nUse black.\n")
+    (repo / "AGENTS.md").write_text("# Agents\n")
 
     init_claude_code(repo, force=False, dry_run=False)
 
-    assert BEGIN_MARKER in (repo / "CLAUDE.md").read_text()
+    # The sandboxed global file got the block, so CLAUDE.md is deduped
+    # (test_repo_rules_dedupe.py); AGENTS.md is still managed.
+    assert BEGIN_MARKER not in (repo / "CLAUDE.md").read_text()
+    assert BEGIN_MARKER in (repo / "AGENTS.md").read_text()
 
 
 @pytest.mark.parametrize("client", ["windsurf", "cursor", "cline"])

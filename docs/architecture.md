@@ -2525,7 +2525,8 @@ src/gingugu/
 │   ├── __init__.py         # gingugu init: hooks + the /sink-the-ship skill
 │   ├── _files.py           # Write primitives; never destroy user bytes without a copy
 │   ├── gitignore.py        # init's .gitignore rules, joined to an earlier run's block
-│   ├── global_rules.py     # The managed protocol block in CLAUDE.md / AGENTS.md
+│   ├── global_rules.py     # The managed protocol block in ~/.claude/CLAUDE.md
+│   ├── repo_rules.py       # ...and in a repo's AGENTS.md (CLAUDE.md only when the global lacks it)
 │   ├── harness.py          # gingugu harness: init + guard, logging, minions, .ai/, CLAUDE.md block
 │   ├── harness_migrate.py  # harness --migrate: unwire + retire an older per-event hook kit
 │   ├── harness_prune.py    # harness --prune: delete only what the manifest proves it moved

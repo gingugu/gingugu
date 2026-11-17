@@ -20,7 +20,8 @@ from ._files import retire_file as _retire_file
 from ._files import write_file as _write_file
 from .gitignore import GITIGNORE_ENTRIES as GITIGNORE_ENTRIES
 from .gitignore import ensure_gitignore
-from .global_rules import init_global_rules, init_repo_rules
+from .global_rules import GLOBAL_COVERS, init_global_rules, install_global_rules
+from .repo_rules import init_repo_rules
 from .settings import (
     MINION_ALLOW,
     init_user_permissions,
@@ -164,7 +165,8 @@ def init_claude_code(
     # files init owns, which is a different and much smaller decision than
     # touching a hand-authored file loaded in every session.
     results.append("")
-    results.extend(init_global_rules(dry_run=dry_run, adopt=adopt))
+    global_lines, global_status = install_global_rules(dry_run=dry_run, adopt=adopt)
+    results.extend(global_lines)
     # Global minions (~/.claude/agents) run in every repo, so their permission
     # lives in the user-level settings too. Additive, backed up, idempotent.
     results.extend(init_user_permissions(dry_run=dry_run))
@@ -172,8 +174,17 @@ def init_claude_code(
     # Same rationale, aimed at the repo's own CLAUDE.md / AGENTS.md instead of
     # the user-level file. Only touches files that already exist, unless the
     # caller (`gingugu harness`) asks for a CLAUDE.md — see init_repo_rules.
+    # When the user-level file carries the block, the repo CLAUDE.md skips it.
     results.append("")
-    results.extend(init_repo_rules(target, dry_run=dry_run, adopt=adopt, create=create_rules))
+    results.extend(
+        init_repo_rules(
+            target,
+            dry_run=dry_run,
+            adopt=adopt,
+            create=create_rules,
+            global_covers=global_status in GLOBAL_COVERS,
+        )
+    )
 
     results.append("")
     results.append(_MCP_HINT)

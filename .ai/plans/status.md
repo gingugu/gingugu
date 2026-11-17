@@ -1,8 +1,16 @@
 # Project Status
 
-_Last updated: 2026-11-13 (crew mates built on `feature/crew-chat`; X7d route coverage built on `feature/xray-route-gaps`; X7b HTTP routes as edges released in 0.51.0; X7d routes, mounts and the surface hook line released in 0.50.0, the attack-surface map in 0.49.0; X17 symbol graph for TS/JS and Go + multi-runner X11 ledger on `feature/x17-ts-go`; literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
+_Last updated: 2026-11-17 (repo CLAUDE.md protocol dedupe on `fix/dedupe-repo-protocol`; crew mates built on `feature/crew-chat`; X7d route coverage built on `feature/xray-route-gaps`; X7b HTTP routes as edges released in 0.51.0; X7d routes, mounts and the surface hook line released in 0.50.0, the attack-surface map in 0.49.0; X17 symbol graph for TS/JS and Go + multi-runner X11 ledger on `feature/x17-ts-go`; literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
 
 ## In Flight
+
+**No duplicate protocol in a repo `CLAUDE.md` (2026-11-17, branch `fix/dedupe-repo-protocol`, unreleased).**
+From a `/usage` review: Claude Code loads `~/.claude/CLAUDE.md` and the repo `CLAUDE.md` every request, and
+`init` wrote the same ~6k-char managed protocol into both. `install_global_rules` now returns its status;
+when the user-level file carries the block (`GLOBAL_COVERS`), `init_repo_rules(global_covers=True)` skips the
+repo `CLAUDE.md`, strips a managed block an earlier run left (`.bak` first), and `harness` creates a
+title-only file. `AGENTS.md` unchanged. `init_repo_rules` moved to the new `bootstrap/repo_rules.py`
+(`global_rules.py` was at 300 lines). Specs: `tests/test_repo_rules_dedupe.py`.
 
 **Crew mates (2026-11-13, branch `feature/crew-chat`, unreleased).** A crew mate is an agent on its own
 machine with its own local brain that shares a brain through a scoped token (default `crew=write`): it
