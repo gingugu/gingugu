@@ -103,6 +103,12 @@
   pins each `bootstrap/templates/*.py.tmpl` sha256 in `bootstrap/shipped.py`. When
   you change a template, move the old `current` into `previous` and pin the new
   one; that is what lets plain `gingugu init` refresh the old stock copies.
+- **Editing a managed harness template keeps its old text.**
+  `tests/test_harness_refresh.py` pins each managed `templates/harness/` template
+  (and `docs/delegation.md`) in `bootstrap/harness_shipped.py`. When you change
+  one, save the outgoing text as `templates/harness/_shipped/<rel>.versions/<sha12>.tmpl`
+  and pin the new hash - harness files are rendered per repo, so a hash alone
+  cannot recognise an old copy, and a plain `gingugu harness` refresh needs the text.
 - **Unit tests** for storage, search, relations, context, decay, consolidation.
 - **Integration tests** for end-to-end MCP flows (store → recall → context;
   store → relate → recall include_related).

@@ -67,6 +67,10 @@ def _has_unmanaged_protocol(existing: str) -> bool:
 
 
 _HEADING_RE = re.compile(r"^(#{1,6}) (.*)$", re.MULTILINE)
+# Any gingugu-managed marker. A hand-written section never runs into one: a
+# managed block's BEGIN comment sits ABOVE its first heading, so a span that
+# ends only at the next heading would swallow it.
+MARKER_RE = re.compile(r"^<!-- (?:BEGIN|END) GINGUGU [A-Z ]+ -->[ \t]*\r?$", re.MULTILINE)
 
 
 def _find_unmanaged_section(existing: str) -> tuple[int, int] | None:
@@ -101,7 +105,8 @@ def _find_unmanaged_section(existing: str) -> tuple[int, int] | None:
             if len(other.group(1)) <= level:
                 end = other.start()
                 break
-        return start, end
+        marker = MARKER_RE.search(existing, m.end(), end)
+        return start, marker.start() if marker else end
     return None
 
 

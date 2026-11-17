@@ -1412,6 +1412,33 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   harness block lands in it in the same run; plain `init` never creates one.
   Every report a dry run prints is what the real run then does: identical bytes
   are `no change`, a forced write over an existing file is `would overwrite`.
+- **`harness` is the after-upgrade command, so a plain re-run refreshes what it
+  installed** (2026-11-17). It used to skip every existing managed file, so an
+  upgrade never reached a repo's minions, skills or hooks. `init` already
+  refreshed its own hooks by sha256 (`shipped.py`), but harness files are
+  rendered per repo, so one shipped version has different bytes everywhere.
+  `harness_shipped.py` therefore keeps each older template TEXT under
+  `templates/harness/_shipped/<rel>.versions/` and `write_file(is_stock=...)`
+  compares the file on disk against each one rendered forward for this repo.
+  Rejected: un-rendering the file (replace the repo's grant and namespace back
+  with placeholders) - it misses a repo whose name also appears in the template
+  text, and the oldest agents spelled the grant inline. The directory suffix is
+  `.versions` so no `*.py` path appears inside the package. Editing a template
+  fails `test_harness_refresh.py` until its old text is saved and the new hash
+  pinned. A file already current reports `no change`, never a `--force` hint.
+- **`harness` also owns the user-level parts of the kit**:
+  `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` (`harness_settings.init_user_subagent_model`;
+  the repo `Agent(model:opus)` deny cannot catch a built-in subagent that
+  inherits Opus) and the subagent-delegation rules (`harness_global.py`): a
+  managed block in `~/.claude/CLAUDE.md` with the rules (loaded every request,
+  kept short) and `~/.claude/docs/delegation.md` with the rationale (read on
+  demand). Kit, not memory, so `init` does not install them. A hand-written
+  delegation section is a conflict unless `--adopt`; the adopted span ends at
+  the next peer heading OR the next gingugu marker, because the memory-protocol
+  block's BEGIN comment sits above its first heading and a heading-only span
+  ate it (caught on a copy of a real `~/.claude/CLAUDE.md`). `init` may rewrite
+  the same file earlier in the run, so `harness` reads it first and backs up
+  that pre-run original.
 - **`harness --migrate` / `--prune` move a repo off the older per-event kit in
   two steps, because a running Claude Code session keeps calling the hooks it
   started with and a missing script blocks the prompt.** `--migrate`

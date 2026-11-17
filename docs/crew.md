@@ -136,8 +136,8 @@ uv tool install --force --refresh gingugu==<version>
 gingugu --version
 ```
 
-Then restart Claude Code, and run `gingugu init` in each project to refresh its
-hooks.
+Then restart Claude Code, and run `gingugu harness` in each project to refresh its
+hooks, minions and skills (`gingugu init` in a project that uses only the brain).
 
 ## Leaving the crew
 

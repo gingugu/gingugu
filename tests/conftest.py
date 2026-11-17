@@ -78,6 +78,7 @@ def sandboxed_global_rules(monkeypatch: pytest.MonkeyPatch, tmp_path_factory):
     monkeypatch.setattr(
         "gingugu.bootstrap.global_rules.global_claude_md", lambda: sandbox, raising=True
     )
+    return sandbox
 
 
 @pytest.fixture(autouse=True)
