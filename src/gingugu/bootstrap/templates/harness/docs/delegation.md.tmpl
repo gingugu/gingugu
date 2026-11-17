@@ -1,0 +1,100 @@
+# Subagent Delegation - rationale and mechanics
+
+<!-- Installed by `gingugu harness`. A plain re-run refreshes this file only while
+     it is an unedited copy of a version we shipped; once you edit it, it is
+     yours and is left alone (use --force to replace it, with a .bak). -->
+
+The operative rules live in the managed Subagent Delegation block of
+`~/.claude/CLAUDE.md`. This file holds the *why* and the enforcement mechanics,
+kept out of that file so they do not cost tokens on every request. Read it
+before changing the delegation policy or an agent definition.
+
+## Why implementation is delegable
+
+The split is not hard-vs-easy, it is undecided-vs-decided. Deciding what to
+build is Opus work. Typing it out once decided is "bounded reasoning against a
+clear spec", which is the Sonnet row. Treating all coding as Opus-tier
+conflates the two and leaves most of the work on the main thread for no reason.
+
+Code is a *better* delegation target than research, not a worse one. A research
+minion returns a conclusion with its reasoning discarded and the main thread has
+to trust it. A coding minion returns an artifact the main thread can run.
+
+The tests-first gate exists because the win only exists when verifying is
+cheaper than writing - if every line has to be read to be trusted, the context
+was spent anyway and nothing was gained. Tests-first makes the spec executable,
+makes verification free, and forces the design to actually be finished before
+handing off.
+
+Fencing: a coding minion needs `Write`, `Edit` and `Bash`, and an allowlist
+denies whole tools, not individual bash commands, so the usual read-only fence
+does not apply. A deny rule matching command text is a speed bump, not a wall.
+
+Ranking/scoring/retrieval math stays on the main thread because the failure
+mode is code that passes the tests and is wrong in a way the tests cannot
+resolve; delegating does not improve the instrument, it only changes who wrote
+the green checkmark. Schema migrations stay because a shipped one can never be
+fixed in place.
+
+## The same split applies to the main thread's own model
+
+Opus is required for greenfield - discovery, architecture, an undefined
+problem. Once the task list is defined and the discovery is done, a whole
+session can run on Sonnet. Choose that at the START of a session.
+
+A mid-session model switch is NOT free: prompt caches are scoped to the model,
+so the first call after a switch re-writes the whole context at cache-write
+rates. On real pull-request turns (150-500k tokens of context, a handful of
+calls) switching Opus -> Sonnet for the turn cost about 50% MORE than staying
+on Opus with a 1-hour cache. It only pays on long turns with many calls.
+
+## Why Opus work is never handed to a cold minion
+
+- A minion returns a *conclusion* with its reasoning discarded. That arrives
+  carrying authority at exactly the moment it is hardest to audit, and taking
+  agent output at face value is a known failure mode.
+- The real cost is not correctness, it is that the main thread never builds the
+  context. Every follow-up question about the hard thing then gets answered from
+  a summary of work it did not do.
+- Genuinely independent Opus-hard tasks are rare. The common shape is one hard
+  thread plus a pile of grunt work - and the grunt work is exactly what Haiku and
+  Sonnet are for.
+
+The escape hatch is a fork, not an Opus minion. A fork (`/subtask`) inherits the
+entire conversation - context, system prompt, model and the parent's prompt
+cache - so it is a branch of the main thread rather than a cold agent working
+from a briefing. Every objection above is about coldness and none apply to a
+fork.
+
+## Enforcement mechanics
+
+- A pinned `model:` in an agent definition is a strong default, not a hard
+  ceiling - a per-invocation model parameter overrides it.
+- `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` (set by `gingugu harness` in the `env` of
+  `~/.claude/settings.json`) is the default for subagents whose definition names
+  no model - the built-ins `Explore`, `Plan`, `general-purpose`, which otherwise
+  inherit the main thread's model. Definitions that pin `haiku` keep it.
+- `permissions.deny: ["Agent(model:opus)"]` (set by `gingugu harness` in each
+  repo) blocks any spawn that explicitly names Opus. It does not catch a spawn
+  that reaches Opus by inheritance - the env var above does.
+- Harder, not set: `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` pins every subagent
+  regardless of frontmatter (exceptions: forks, `model: inherit` skills).
+
+## Agent definitions - notes
+
+- `disallowedTools: Agent` is belt and braces alongside the `tools` allowlist:
+  a minion that spawns its own minions can block on them and return nothing.
+- The body becomes the agent's system prompt. It does not inherit the default
+  Claude Code system prompt, but it does get the full CLAUDE.md hierarchy - so
+  repo rules already apply and do not need restating.
+- The allowlist denies whole tools, not individual bash commands, so any agent
+  granted `Bash` is not fenced by it.
+
+## What delegation is actually optimizing
+
+Not raw token count. The wins are (a) tiering down, putting grunt work on
+Haiku/Sonnet instead of Opus, and (b) keeping the main thread's context clean,
+since a minion returns a conclusion instead of dumping ten files into the
+window. Parallelism buys wall-clock, not dollars - and subagents cold-start
+their own prompt cache. Optimize for the right experience and the right answer;
+the tokens even out.

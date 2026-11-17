@@ -13,6 +13,7 @@ in the caller's care.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from importlib.resources import files
 from pathlib import Path
 
@@ -58,6 +59,7 @@ def write_file(
     results: list[str],
     skip_hint: str = "",
     previous: frozenset[str] = frozenset(),
+    is_stock: Callable[[bytes], bool] | None = None,
 ) -> None:
     """Write ``content`` to ``path``, never destroying the user's bytes.
 
@@ -65,6 +67,8 @@ def write_file(
     ``previous``, the hashes of older versions we shipped there. Such a file is
     a stock copy holding nothing of the user's, so it is refreshed (still with a
     .bak). The same content-not-authorship test ``retire_file`` uses.
+    ``is_stock`` is that test for a file rendered per repo, where a hash of the
+    template cannot match (``harness_shipped.stock_check``).
     """
     if path.is_symlink():
         # Writing would land wherever the link points - possibly outside the repo,
@@ -72,9 +76,15 @@ def write_file(
         results.append(f"  skip   {path}  (a symlink; never written through)")
         return
     existing = safe_read(path) if path.exists() else None
-    stock = existing is not None and bool(previous) and fingerprint(path.read_bytes()) in previous
+    stock = existing is not None and (
+        (bool(previous) and fingerprint(path.read_bytes()) in previous)
+        or (is_stock is not None and is_stock(path.read_bytes()))
+    )
     if existing is not None and not force and not stock:
-        results.append(f"  skip   {path}  (exists; use --force to overwrite){skip_hint}")
+        if existing == content:  # already the current version: nothing to force
+            results.append(f"  no change {path}  (already current)")
+        else:
+            results.append(f"  skip   {path}  (exists; use --force to overwrite){skip_hint}")
         return
     if stock and not force:
         results.append(f"  refresh {path}  (a stock copy of an older version)")

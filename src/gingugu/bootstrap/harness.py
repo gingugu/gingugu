@@ -22,16 +22,18 @@ from pathlib import Path
 
 from .. import tui
 from ..prompt_hook import _PERSONA_RE as NAMESPACE_RE
-from . import init_claude_code
+from . import global_rules, init_claude_code
 from ._files import read_template, safe_read, write_file
+from .harness_claude_md import HARNESS_BEGIN as HARNESS_BEGIN  # re-exported for callers
+from .harness_claude_md import HARNESS_END as HARNESS_END
+from .harness_claude_md import _apply_claude_md
+from .harness_global import install_delegation
 from .harness_migrate import migrate_settings, retire_legacy
 from .harness_prune import prune
 from .harness_settings import init_user_subagent_model, wire_harness_settings
+from .harness_shipped import render, stock_check
 from .settings import _HOOKS as _SETTINGS_HOOKS
 from .settings import is_user_level, load_settings, write_settings
-
-HARNESS_BEGIN = "<!-- BEGIN GINGUGU HARNESS -->"
-HARNESS_END = "<!-- END GINGUGU HARNESS -->"
 
 _T = "harness/"
 _MANAGED = [
@@ -89,19 +91,21 @@ def _install_managed(
     """
     grant = minion_grant(namespace)
 
-    def write(dest: Path, content: str, forced: bool) -> None:
+    def write(dest: Path, content: str, forced: bool, rel: str = "") -> None:
         if forced and force_hooks and dest.is_symlink():  # never write through a link
             results.append(f"  skip   {dest}  (a symlink; not replaced)")
             return
-        write_file(dest, content, force=forced, dry_run=dry_run, results=results)
+        # A stock copy of an older version is refreshed without --force.
+        stock = stock_check(rel, namespace, grant) if rel else None
+        write_file(dest, content, force=forced, dry_run=dry_run, results=results, is_stock=stock)
 
     if force_hooks and not force:
         for name in _INIT_HOOKS:
             write(target / ".claude" / "hooks" / name, read_template(f"{name}.tmpl"), True)
     for template, dest in _MANAGED:
-        content = read_template(f"{_T}{template}.tmpl")
-        content = content.replace("{{grant}}", grant).replace("{{namespace}}", namespace)
-        write(target / dest, content, force or (force_hooks and dest.startswith(".claude/hooks/")))
+        content = render(read_template(f"{_T}{template}.tmpl"), namespace, grant)
+        forced = force or (force_hooks and dest.startswith(".claude/hooks/"))
+        write(target / dest, content, forced, template)
 
 
 def _scaffold_ai(target: Path, *, dry_run: bool, results: list[str]) -> None:
@@ -115,65 +119,6 @@ def _scaffold_ai(target: Path, *, dry_run: bool, results: list[str]) -> None:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(read_template(f"{_T}ai/{rel}.tmpl"))
         results.append(f"  {'would write' if dry_run else 'write':<9} {path}")
-
-
-def merge_harness_block(existing: str, body: str) -> str:
-    """Return ``existing`` with the harness block replaced, or appended if absent.
-
-    Everything outside the markers is preserved byte for byte.
-    """
-    block = f"{HARNESS_BEGIN}\n{body.strip()}\n{HARNESS_END}"
-    start = existing.find(HARNESS_BEGIN)
-    end = existing.find(HARNESS_END)
-    if start != -1 and end > start:
-        return existing[:start] + block + existing[end + len(HARNESS_END) :]
-    sep = "" if not existing or existing.endswith("\n") else "\n"
-    return f"{existing}{sep}\n{block}\n" if existing.strip() else f"{block}\n"
-
-
-def _block_of(text: str) -> str | None:
-    """The marked block in ``text``, markers included, or None when absent."""
-    start, end = text.find(HARNESS_BEGIN), text.find(HARNESS_END)
-    return text[start : end + len(HARNESS_END)] if start != -1 and end > start else None
-
-
-def _apply_claude_md(
-    target: Path, original: str | None, *, dry_run: bool, results: list[str]
-) -> None:
-    """Merge the harness block. ``original`` is the file before this run, if any.
-
-    The backup is that pre-run text, not what init left behind: init may have
-    refreshed its own block (and written CLAUDE.md.bak) moments earlier.
-    """
-    path = target / "CLAUDE.md"
-    if path.is_symlink() and not path.exists():  # dangling; init skipped it too
-        return
-    if not path.exists():  # dry-run: init could not have created it either
-        results.append(f"  would append harness block to {path}")
-        return
-    existing = safe_read(path)
-    body = read_template(f"{_T}claude_md_block.md.tmpl")
-    heading = body.lstrip().splitlines()[0].strip()
-    if _block_of(existing) is None and heading in {ln.strip() for ln in existing.splitlines()}:
-        results.append(f"  skip   {path}  (has its own '{heading}'; harness block not added)")
-        return
-    merged = merge_harness_block(existing, body)
-    if merged == existing:
-        results.append(f"  harness block already current (no change) {path}")
-        return
-    old_block = _block_of(existing)
-    # Back up only when the block's own text changes, not a restored blank line.
-    backup = old_block is not None and old_block != _block_of(merged)
-    if not dry_run:
-        if backup:
-            (target / "CLAUDE.md.bak").write_text(existing if original is None else original)
-        path.write_text(merged)
-    if old_block is None:
-        verb = "would append" if dry_run else "appended"
-    else:
-        verb = "would refresh" if dry_run else "refreshed"
-    note = " (backed up previous to CLAUDE.md.bak)" if backup and not dry_run else ""
-    results.append(f"  {verb} harness block in {path}{note}")
 
 
 def _settings_object(raw: str | None) -> bool:
@@ -195,6 +140,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--force", action="store_true", help="Overwrite managed files that exist")
     parser.add_argument(
         "--dry-run", action="store_true", help="Show what would happen, write nothing"
+    )
+    parser.add_argument(
+        "--adopt",
+        action="store_true",
+        help="Hand your own memory-protocol / delegation sections to gingugu (backed up)",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
@@ -241,6 +191,8 @@ def main(argv: list[str] | None = None) -> int:
 
     claude_md = target / "CLAUDE.md"
     original = safe_read(claude_md) if claude_md.exists() else None
+    user_md = global_rules.global_claude_md()  # init may rewrite (and back up) it before we do
+    user_original = safe_read(user_md) if user_md.exists() else None
 
     migrated: list[str] = []
     if args.migrate:
@@ -254,7 +206,9 @@ def main(argv: list[str] | None = None) -> int:
             write_settings(settings_path, settings)
 
     # create_rules: init writes a missing CLAUDE.md, so the harness block below lands in it.
-    results = init_claude_code(target, force=args.force, dry_run=args.dry_run, create_rules=True)
+    results = init_claude_code(
+        target, force=args.force, dry_run=args.dry_run, adopt=args.adopt, create_rules=True
+    )
     if migrated and not args.dry_run:
         # init backs settings up too - from the already-migrated file. Restore ours.
         (settings_path.parent / "settings.json.bak").write_text(settings_start or "")
@@ -279,7 +233,13 @@ def main(argv: list[str] | None = None) -> int:
         dry_run=args.dry_run,
         user_original_kept=init_backed_up or not settings_existed or args.migrate,
     )
-    results.extend([*lines, *init_user_subagent_model(dry_run=args.dry_run)])
+    results.extend([*lines, "", "Claude Code harness (user level):"])
+    results.extend(init_user_subagent_model(dry_run=args.dry_run))
+    results.extend(
+        install_delegation(
+            dry_run=args.dry_run, adopt=args.adopt, force=args.force, original=user_original
+        )
+    )
 
     if args.migrate:
         if settings_start is not None and not args.dry_run:

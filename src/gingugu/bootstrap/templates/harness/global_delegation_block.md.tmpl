@@ -1,0 +1,41 @@
+## Subagent Delegation (Minions)
+
+**Standing rule. At the start of any multi-part work, run a delegation triage before doing the work:** decompose it, find the genuinely independent parts, fan those out in a single message, and **pick a model tier for every minion deliberately**.
+
+**The governing constraint: never sacrifice any aspect of the work for the opportunity to use a subagent.** A serial answer done right beats a parallel answer done fast and wrong.
+
+Rationale, enforcement mechanics and history: `~/.claude/docs/delegation.md`. Read it before changing this policy or an agent definition.
+
+### Model tiers
+
+**The main thread runs Opus. Minions run Sonnet or Haiku. Opus is never a minion.**
+
+| Tier | Use for |
+| --- | --- |
+| **Haiku** | Mechanical, fully specified, one right answer. Grep sweeps, file inventories, "find every place X appears", format and lint checks. |
+| **Sonnet** | Bounded reasoning against a clear spec. Docs sweeps, consistency checks, read-a-module-and-report, tests to an existing pattern, **and implementing a design that is already settled**. |
+| **Opus** | **Never a minion.** *Deciding* architecture, security-sensitive judgment, multi-file debugging, correctness-critical infra. |
+
+Tied Haiku/Sonnet: round up to Sonnet. Tied Sonnet/Opus: don't delegate. `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` is set, so built-ins (`Explore`, `Plan`, `general-purpose`) default to Sonnet - still name a tier on every spawn.
+
+### Implementation IS delegable. Discovery is not.
+
+- **The split is undecided-vs-decided, not hard-vs-easy.** The main thread owns everything until the how is settled; then a Sonnet minion writes it.
+- **Handoff gate: the main thread writes the tests, the minion makes them pass.** Existing real coverage can serve instead.
+- **Fence coding minions:** `isolation: worktree` by default; a `PreToolUse` hook is the real boundary.
+- **Stays on the main thread regardless:** schema migrations; ranking, scoring and retrieval math; anything approval-gated.
+- **Parallel Opus-hard work goes to a fork (`/subtask`), never an Opus minion.** Name the fork out loud and ask first.
+- **Never switch the main thread's model mid-session to save money** - caches are per model, so the switch re-reads the whole context uncached.
+
+### Agent definitions
+
+`~/.claude/agents/` for every repo, `<repo>/.claude/agents/` for one repo (project wins on a name clash). Every definition carries `model:` (`sonnet` or `haiku`), an explicit `tools:` allowlist, `disallowedTools: Agent`, and a `description:` that singles it out. **Prefer denying a tool over instructing against using it.** `gingugu harness` installs `repo-scout` (haiku), `security-reviewer`, `ai-docs-auditor` and `researcher` (sonnet) in each repo.
+
+### When NOT to delegate
+
+- **Trivial work** - single-file reads, single questions, one-command lookups.
+- **Work needing verbatim content.** A minion returns a conclusion, not exact text.
+- **Anything with external blast radius.** Minions are read, research, and local-file-writes only - a minion cannot come get the user's go.
+- **Sequential dependencies.** If part B needs part A's output, that is not parallel work.
+
+Minions start cold and their output is not shown to the user - brief them properly, and relay what matters.
