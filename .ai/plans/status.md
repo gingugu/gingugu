@@ -1,8 +1,13 @@
 # Project Status
 
-_Last updated: 2026-11-17 (hermetic test env on `fix/hermetic-test-env`; smart harness on `feature/smart-harness`; repo CLAUDE.md protocol dedupe on `fix/dedupe-repo-protocol`; crew mates built on `feature/crew-chat`; X7d route coverage built on `feature/xray-route-gaps`; X7b HTTP routes as edges released in 0.51.0; X7d routes, mounts and the surface hook line released in 0.50.0, the attack-surface map in 0.49.0; X17 symbol graph for TS/JS and Go + multi-runner X11 ledger on `feature/x17-ts-go`; literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
+_Last updated: 2026-11-19 (report verb tags on `fix/tui-verb-tags`; hermetic test env on `fix/hermetic-test-env`; smart harness on `feature/smart-harness`; repo CLAUDE.md protocol dedupe on `fix/dedupe-repo-protocol`; crew mates built on `feature/crew-chat`; X7d route coverage built on `feature/xray-route-gaps`; X7b HTTP routes as edges released in 0.51.0; X7d routes, mounts and the surface hook line released in 0.50.0, the attack-surface map in 0.49.0; X17 symbol graph for TS/JS and Go + multi-runner X11 ledger on `feature/x17-ts-go`; literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
 
 ## In Flight
+
+**Report verb tags (2026-11-19, branch `fix/tui-verb-tags`).** `tui/keygen.classify` checks the line's verb
+before the `already` substring, so the repo-rules `removed` line (whose note says "protocol already loads")
+is tagged `[ OK ]`, not `[SKIP]`; `adopted` joins the OK verbs. Spec:
+`tests/test_tui_render.py::test_classify_verb_wins_over_an_already_in_the_note`.
 
 **0.54.0 rolled out (2026-11-17).** Fleet (mr-boomtastic-2, dronesense-mbp, pi) on 0.54.0. `gingugu harness` run on this Mac's repos (playtronics with `--adopt`, pill_manager, bspeagle, gingugu.com, and this repo): the user-level delegation block adopted, duplicate repo protocol blocks removed. This repo's `CLAUDE.md` loses its 117-line protocol copy and `.claude/settings.json` gains the force-push denies harness ships (branch `chore/harness-dogfood`).
 

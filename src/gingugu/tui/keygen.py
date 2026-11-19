@@ -18,6 +18,7 @@ from .caps import Caps
 
 _OK = ("write", "overwrite", "wired", "updated", "appended", "refreshed", "added", "removed")
 _OK += ("deleted", "created", "backed", "retired", "migrated", "pruned", "moved", "restored")
+_OK += ("adopted",)
 _SKIP = ("skip", "kept", "no change", "nothing", "none present", "left unchanged")
 SHOW_SECONDS = 2.2  # how long the window animates before it settles
 TAGS = {"ok": "[ OK ]", "preview": "[ >> ]", "skip": "[SKIP]", "warn": "[WARN]", "info": "      "}
@@ -35,10 +36,13 @@ def classify(line: str) -> str:
         return "warn"
     if low.startswith("would"):
         return "preview"
-    if low.startswith(_SKIP) or "already" in low:
+    if low.startswith(_SKIP):
         return "skip"
+    # The verb decides before a note's "already" can: "removed ... (already loads)" is a write.
     if low.startswith(_OK):
         return "ok"
+    if "already" in low:
+        return "skip"
     return "info"
 
 

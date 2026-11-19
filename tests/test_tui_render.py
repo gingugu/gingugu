@@ -43,6 +43,14 @@ def test_classify():
     assert keygen.classify("  restart Claude Code") == "info"
 
 
+def test_classify_verb_wins_over_an_already_in_the_note():
+    # A write whose note says "already" is still a write, not a skip.
+    removed = "  removed       /r/CLAUDE.md  (duplicate protocol block; protocol already loads)"
+    assert keygen.classify(removed) == "ok"
+    assert keygen.classify("  adopted       /h/.claude/CLAUDE.md  (your section)") == "ok"
+    assert keygen.classify("  skip          /r/CLAUDE.md  (protocol already loads)") == "skip"
+
+
 def test_score_and_achievement_come_from_the_lines():
     counts = keygen.score(RESULTS)
     assert (counts["ok"], counts["skip"], counts["preview"], counts["warn"]) == (1, 1, 1, 1)
