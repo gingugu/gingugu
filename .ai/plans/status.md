@@ -1,8 +1,13 @@
 # Project Status
 
-_Last updated: 2026-11-19 (report verb tags on `fix/tui-verb-tags`; hermetic test env on `fix/hermetic-test-env`; smart harness on `feature/smart-harness`; repo CLAUDE.md protocol dedupe on `fix/dedupe-repo-protocol`; crew mates built on `feature/crew-chat`; X7d route coverage built on `feature/xray-route-gaps`; X7b HTTP routes as edges released in 0.51.0; X7d routes, mounts and the surface hook line released in 0.50.0, the attack-surface map in 0.49.0; X17 symbol graph for TS/JS and Go + multi-runner X11 ledger on `feature/x17-ts-go`; literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
+_Last updated: 2026-11-19 (crew.md first-day gaps on `docs/crew-first-day`; report verb tags on `fix/tui-verb-tags`; hermetic test env on `fix/hermetic-test-env`; smart harness on `feature/smart-harness`; repo CLAUDE.md protocol dedupe on `fix/dedupe-repo-protocol`; crew mates built on `feature/crew-chat`; X7d route coverage built on `feature/xray-route-gaps`; X7b HTTP routes as edges released in 0.51.0; X7d routes, mounts and the surface hook line released in 0.50.0, the attack-surface map in 0.49.0; X17 symbol graph for TS/JS and Go + multi-runner X11 ledger on `feature/x17-ts-go`; literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
 
 ## In Flight
+
+**Crew walk-through, first-day gaps (2026-11-19, branch `docs/crew-first-day`).** From the first real crew
+mate's onboarding: `docs/crew.md` step 5 now registers the mate's own brain at user scope (`gingugu init`
+installs hooks only and never registered the server), and adds notes for a `.local` host, a TLS-inspecting
+proxy (`uv tool install --system-certs`, `SSL_CERT_FILE`), and `claude` missing from PATH in the VS Code extension.
 
 **Report verb tags (2026-11-19, branch `fix/tui-verb-tags`).** `tui/keygen.classify` checks the line's verb
 before the `already` substring, so the repo-rules `removed` line (whose note says "protocol already loads")
