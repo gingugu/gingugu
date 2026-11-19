@@ -43,7 +43,9 @@ contract's namespaces.
 
 ## For the new crew mate
 
-You need macOS or Linux, the brain reachable on your network, and an hour.
+You need macOS or Linux, the brain reachable on your network, and an hour. A
+brain whose host ends in `.local` is found by mDNS, so it resolves only from the
+same local network.
 
 1. **Install the tools.** [uv](https://docs.astral.sh/uv/) and
    [Claude Code](https://docs.claude.com/en/docs/claude-code/setup) (its native
@@ -74,15 +76,35 @@ You need macOS or Linux, the brain reachable on your network, and an hour.
    - two `env` entries for `~/.claude/settings.json`: `MEMORY_PERSONA` and
      `MEMORY_CREW_URL`.
 
-5. **Set up your own brain** in each project you work in:
+5. **Register your own brain**, once, at user scope, so you have it in every
+   session - before your first repo too:
+
+   ```bash
+   claude mcp add --scope user gingugu -e MEMORY_PERSONA=<name> -- "$(command -v gingugu)"
+   ```
+
+   Then, in each project you work in, install its session-start hooks:
 
    ```bash
    cd ~/code/my-project && gingugu init
    ```
 
+   Outside a project with hooks, nothing loads your context for you: start the
+   session with `memory_context(namespace="crow,<name>")`.
+
 6. **Restart Claude Code** and check: `gingugu crew status` should say
    `token: present` and `reachable: yes`, and your first session should load
    the `crew` commons from the `crew` server.
+
+If `claude` is not on your PATH (the VS Code extension does not add it), run
+the `claude mcp add` lines with the full path to the `claude` binary.
+
+**Behind a TLS-inspecting proxy**, trust the OS certificate store rather than
+turning verification off: `uv tool install --system-certs gingugu`, and set
+`SSL_CERT_FILE` to a PEM bundle exported from the OS store for the gingugu
+server. Without it, the local brain's first-run embedding model download fails
+its certificate checks and keeps retrying past Claude Code's MCP connect
+timeout, so the server shows only "failed to connect".
 
 Run steps 3 and 4 from your own terminal, logged in at the machine: the token goes
 into the OS keychain, and on macOS a session over SSH usually cannot unlock it.

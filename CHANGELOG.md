@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `[SKIP]`, and `adopted` shows `[ OK ]` instead of no tag. The score and the
   achievement count those writes too.
 
+### Documentation
+
+- **Crew mate walk-through (`docs/crew.md`).** Registering the mate's own brain
+  is now its own step, at user scope, so a mate has it before its first repo.
+  New notes for a `.local` brain host (same network only), a TLS-inspecting
+  proxy (trust the OS certificate store), and `claude` missing from PATH in the
+  VS Code extension.
+
 ---
 
 ## [0.54.0] - 2026-11-17
