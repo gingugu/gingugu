@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`init` / `harness` report tags.** A line is tagged by its verb first, so
+  `removed ... (protocol already loads ...)` now shows `[ OK ]` instead of
+  `[SKIP]`, and `adopted` shows `[ OK ]` instead of no tag. The score and the
+  achievement count those writes too.
+
 ---
 
 ## [0.54.0] - 2026-11-17
