@@ -21,7 +21,7 @@ from importlib.resources import files
 
 HARNESS_PINNED: dict[str, str] = {
     "hooks/log_event.py": "4ed12bb177600aa87a28f18fb51c6678307f17764069251af5a6814bcb165454",
-    "hooks/pre_tool_use.py": "ceca92aae807ca5c9fe10f80cbcf22a824a7b7ca1fa4d775c780720491a9a3ce",
+    "hooks/pre_tool_use.py": "c767d6c2726bc5d8e3304c5ec61c98b27ef8cee957d9b1a67bd473f6a445b6de",
     "hooks/pre_compact.py": "5ef7db89e94f03394e02f981cde068afb1a54cd6458ae339ee5673de7773b8f9",
     "agents/repo-scout.md": "9344719b97f7237f5e3cd28c6f15ae05d6a1114c30f993e68f3ac46be394d636",
     "agents/security-reviewer.md": (
