@@ -82,9 +82,17 @@ def is_promotable(memory: dict, skip_tags: frozenset[str] = frozenset()) -> bool
     tags = {t.lower() for t in memory.get("tags", [])}
     if tags & (EPISODIC_TAGS | PERSONAL_TAGS | SECRET_TAGS | skip_tags):
         return False
-    if contains_secret(memory.get("content", "")) or contains_secret(memory.get("title", "")):
+    if any(contains_secret(memory.get(k) or "") for k in ("content", "title", "about")):
         return False
     return True
+
+
+def picked(candidates: list[dict], ids: list[str] | None) -> list[dict]:
+    """Only the hand-picked ids, when any were given; every candidate otherwise."""
+    if not ids:
+        return candidates
+    wanted = set(ids)
+    return [m for m in candidates if m.get("id") in wanted]
 
 
 def provenance(memory: dict, instance: str, contributor: str, when: str) -> dict:
@@ -163,12 +171,13 @@ async def run_promotion(
     contributor: str,
     instance: str,
     dry_run: bool,
+    ids: list[str] | None = None,
 ) -> dict:
     """Read source, filter, and promote fresh gold into the target."""
     async with _session(source_url, source_token) as src:
         export = await _call(src, "memory_export", {"namespace": source_namespace})
     # memory_export wraps the payload: {"ok": True, "export": {memories, ...}}
-    candidates = export.get("export", {}).get("memories", [])
+    candidates = picked(export.get("export", {}).get("memories", []), ids)
     return await push(
         candidates,
         [m for m in candidates if is_promotable(m)],

@@ -225,7 +225,7 @@ Where this goes long-term — federated, org-wide agent memory — lives in
 Those are great if you live in one tool. The moment you switch between
 Claude Code in the morning and Cursor in the afternoon, the memory is gone.
 Gingugu's memory follows you across every MCP client, lives on your machine,
-and is programmable (23 tools, structured types, relationships, confidence
+and is programmable (24 tools, structured types, relationships, confidence
 levels). The built-ins are convenience features. Gingugu is infrastructure.
 
 </details>
@@ -386,7 +386,7 @@ uv run gingugu  # or pip install -e .
 
 </details>
 
-> **Usable today.** 23 MCP tools live. 2,900+ tests passing. Dogfooded daily in
+> **Usable today.** 24 MCP tools live. 2,900+ tests passing. Dogfooded daily in
 > Claude Code and Windsurf — this repo's own memories live in a Gingugu
 > database. Early and seeking broader real-world validation.
 
@@ -706,9 +706,12 @@ GINGUGU_SOURCE_TOKEN=<local-token> GINGUGU_TARGET_TOKEN=<central-token> \
                   --contributor brian --dry-run   # drop --dry-run to actually write
 ```
 
-The promoter is an MCP *client* (the server stays a pure store); a brain this
-machine has pinned with `gingugu remote login` is verified against that pin. It is
-read-only on the source, idempotent on re-runs, and applies an exclusion
+The promoter is an MCP *client*; a brain this machine has pinned with
+`gingugu remote login` is verified against that pin. `--ids` narrows it to
+memories you pick; mid-session, the `memory_promote` tool does the same for a
+crew. It is read-only on the source, idempotent on re-runs (the receiving brain
+matches each copy to its source, so an edited memory replaces its earlier copy
+rather than adding one), and applies an exclusion
 filter: only `verified` memories move, minus episodic session noise, minus
 personal-context tags, and it **refuses to promote anything that looks like a
 live secret** - a shared brain must never become a credential leak. Each
@@ -719,8 +722,8 @@ contributor, timestamp).
 
 A crew mate is an agent on its own machine with its own local brain that shares
 a brain with you through a scoped token - by default, write on a `crew` commons
-and nothing else. It promotes its lessons there with
-`gingugu promote --to-crew`, and talks to everyone on the board.
+and nothing else. It promotes its lessons there with the `memory_promote` tool
+(or `gingugu promote --to-crew` in bulk), and talks to everyone on the board.
 
 ```bash
 gingugu crew add polly                       # on the brain host: token + key line
@@ -1488,6 +1491,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_recall` | Search + retrieve (ranked by relevance × freshness; one or many namespaces; optional compact mode; `explain` for a per-hit score breakdown) |
 | `memory_context` | Auto-surface relevant memories (one or many namespaces, deduped; optional compact mode; `explain` for a per-hit score breakdown) |
 | `memory_update` | Update content, type, confidence, metadata, `provenance` or `about`; `resolve_claims` reconciles a stale PR/MR claim without editing the prose |
+| `memory_promote` | Promote hand-picked memories, by id, into the crew commons every agent on the crew loads; the filter holds back what must stay home and says why, and re-promoting an edit supersedes the old copy |
 | `memory_relate` | Create relationships between memories; one at a time or a batch (`edges`), all-or-nothing, idempotent |
 | `memory_edges` | List edges with both endpoints' titles, namespaces, and degree; filter by namespace, type, or memory |
 | `memory_unrelate` | Retype an edge in place, reverse a backwards one, or remove it; one at a time or a batch, with `dry_run` |

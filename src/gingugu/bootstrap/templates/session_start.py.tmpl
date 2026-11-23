@@ -120,9 +120,31 @@ def _crew_mate():
     return (
         "CREW: you are on a crew. Also load its commons, from your crew server:\n"
         '  - mcp__crew__memory_context(namespace="crew", task_hint=...)\n'
-        "    # what the crew promoted for everyone. Promote your own gold with\n"
-        "    # `gingugu promote --to-crew --source-ns <ns> --dry-run` first.\n"
+        "    # what the crew promoted for everyone.\n"
+    ) + _promote_lesson()
+
+
+def _promote_lesson():
+    """How to feed the crew commons: told to anyone on a crew, nobody else."""
+    return (
+        "PROMOTE: the crew commons is what would have saved a crewmate an hour.\n"
+        "When a lesson is verified and durable - a bug's root cause, a tool or\n"
+        "platform gotcha with its fix, a technique worth reusing, a decision whose\n"
+        "reason outlives the project - promote it the moment you save it:\n"
+        '  - mcp__gingugu__memory_promote(ids="<id>,...")   # dry_run=true to preview\n'
+        "Keep home: session notes, reflections, anything personal to the user,\n"
+        "anything true for a day, every secret. Re-promote after an edit: the crew\n"
+        "copy is superseded, never duplicated.\n"
     )
+
+
+def _crew_owner():
+    """For a machine whose brain holds the crew commons (MEMORY_CREW=1)."""
+    if os.environ.get("MEMORY_CREW", "").strip() != "1":
+        return ""
+    if os.environ.get("MEMORY_CREW_URL", "").strip():
+        return ""  # a mate is taught by _crew_mate; once is enough
+    return _promote_lesson()
 
 
 def build_startup_contract(cwd: str) -> str:
@@ -152,6 +174,7 @@ def build_startup_contract(cwd: str) -> str:
         'if a namespace is missing, create it with memory_namespaces(action="create", name=...).\n'
         "Check memory_recall before asking anything answered in a prior session.\n"
         f"{_crew_mate()}"
+        f"{_crew_owner()}"
         f"{_board_watch()}"
         "=== END CONTRACT ==="
     )

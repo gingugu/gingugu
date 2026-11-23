@@ -1,23 +1,19 @@
-"""Memory mutation tool handlers: store and update.
-
-The write side of the memory surface. Read handlers (recall, context) live in
-``recall.py``; the destructive one (``memory_forget``) in ``forget.py``.
-
-All handlers wrap their work in try/except and return structured dict
-responses — the MCP server must never crash the client flow.
-"""
+"""Memory mutation tool handlers: store and update. Reads live in ``recall.py``,
+``memory_forget`` in ``forget.py``, promotion in ``promote.py``. Every handler
+returns a structured dict and never raises into the MCP loop."""
 
 from __future__ import annotations
 
 import logging
 
-from .. import capability
+from .. import capability, promotion
 from ..models import Confidence, MemoryType, Provenance
 from . import ServerContext
 from .capability_view import summary_with_capability, write_error
 from .choices import parse_choice, parse_clearable
 from .helpers import _check_pin_budget, _coerce_metadata, _err, _split_csv
 from .hints import find_similar, suggest_relations
+from .promote import store_promoted
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +123,10 @@ def register(mcp, ctx: ServerContext) -> None:
                 return _err(cap_error)
             ns_name = ctx.namespaces.resolve_name(namespace)
             ns = ctx.namespaces.get_or_create(ns_name)
+            if promotion.source_of(coerced):  # a promotion: matched on its source id
+                kw = dict(title=title, content=content, about=about, meta=coerced, prov=prov)
+                kw.update(mem_type=mem_type, conf=conf, tags=_split_csv(tags))
+                return store_promoted(ctx, ns, **kw)
             similar = (
                 find_similar(ctx, namespace_id=ns.id, title=title, content=content)
                 if dedupe_check

@@ -120,6 +120,7 @@ def test_ordinary_shell_in_the_gingugu_repo_passes(command):
         ("mcp__gingugu__memory_import", {}),
         ("mcp__gingugu__memory_export", {}),
         ("mcp__gingugu__memory_dream", {}),
+        ("mcp__gingugu__memory_promote", {"ids": "m"}),
         ("mcp__gingugu__memory_tripwire", {"action": "add"}),
         ("mcp__gingugu__memory_tripwire", {"action": "remove"}),
         ("mcp__gingugu__memory_namespaces", {"action": "create"}),

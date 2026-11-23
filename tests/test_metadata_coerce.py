@@ -50,11 +50,11 @@ async def test_memory_store_accepts_dict_metadata(server):
                 "title": "p",
                 "type": "fact",
                 "confidence": "verified",
-                "metadata": {"promoted_from": {"id": "src-1"}},
+                "metadata": {"origin": {"id": "src-1"}},
             },
         )
     )
     assert stored["ok"] is True
     export = _payload(await server.call_tool("memory_export", {"namespace": "meta"}))
     mem = export["export"]["memories"][0]
-    assert json.loads(mem["metadata"]) == {"promoted_from": {"id": "src-1"}}
+    assert json.loads(mem["metadata"]) == {"origin": {"id": "src-1"}}

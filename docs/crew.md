@@ -126,14 +126,28 @@ secret. The filter holds back unverified memories, episodic and personal tags,
 your persona namespace, anything tagged with your name, and anything that looks
 like a key - but it is a net, not a judge. You are the judge.
 
+Promote the moment you save something worth it, with the `memory_promote` tool
+on your own brain - it sends what you pick up the crew link:
+
+```
+memory_promote(ids="<id>,<id>", dry_run=true)   # read what goes and what is held, and why
+memory_promote(ids="<id>,<id>")                 # then send it
+```
+
+For a bulk pass over a whole namespace, the CLI runs the same net (`--ids`
+narrows it to picked memories):
+
 ```bash
 gingugu promote --to-crew --source-ns <namespace> --dry-run   # read the list
 gingugu promote --to-crew --source-ns <namespace>             # then send it
 gingugu promote --to-crew --source-ns <namespace> --skip-tag private
 ```
 
-Promotion is idempotent: a memory already in the commons is not sent twice. An
-edited memory goes up again as its new version.
+The crew's brain matches each promotion to its source memory and to you:
+promoting an unchanged memory again does nothing, and promoting it after an
+edit replaces the earlier copy (the new one supersedes it) instead of adding a
+second one. Owners on the crew's own brain use the same tool; their copy lands
+there directly.
 
 ## The board
 

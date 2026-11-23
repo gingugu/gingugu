@@ -43,15 +43,16 @@ async def promote_to_crew(
     persona: str,
     skip_tags: list[str] | None = None,
     instance: str | None = None,
+    ids: list[str] | None = None,
     dry_run: bool,
 ) -> dict:
     """Filter ``source_namespace`` of the local brain and push its gold to the crew."""
-    from .promote import is_promotable, push
+    from .promote import is_promotable, picked, push
 
     if source_namespace == persona:
         raise ValueError(f"{source_namespace!r} is your persona namespace - your self stays home")
     held = frozenset(t.lower() for t in [persona, *(skip_tags or [])])
-    candidates = local_candidates(db_path, source_namespace)
+    candidates = picked(local_candidates(db_path, source_namespace), ids)
     return await push(
         candidates,
         [m for m in candidates if is_promotable(m, held)],

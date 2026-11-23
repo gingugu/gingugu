@@ -211,7 +211,14 @@ src/gingugu/
   proxy_gate.py      → remote mode: the proxy takes that approval before relaying
                        a big delete to the brain
   portability.py     → export / import a namespace
-  handlers/          → MCP tool handlers: memory.py, forget.py, hints.py,
+  promote.py         → `gingugu promote`: filter + stamp, push gold to a central brain
+  promote_cli.py     → the promote CLI: URL to URL, or --to-crew; --ids picks
+  promote_crew.py    → promote --to-crew: this machine's brain file -> its crew link
+  promotion.py       → the net with reasons, and receive: match a promoted copy on
+                       source id + contributor, supersede an edited one
+  crew.py            → the crew link (crew.json / MEMORY_CREW_URL)
+  handlers/          → MCP tool handlers: memory.py, promote.py (memory_promote),
+                       fence.py, capability_view.py, forget.py, hints.py,
                        recall.py, search.py, stats.py, scope.py, excerpt.py,
                        context_merge.py, relations.py, relation_ops.py,
                        consolidate.py, dream.py, admin.py, credentials.py,
