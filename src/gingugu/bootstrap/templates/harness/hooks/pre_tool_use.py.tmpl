@@ -55,9 +55,12 @@ _LONE_SAFE_COMMAND = re.compile(r"^(ls|find|git)\s[^;&|`$()<>\n]*$")
 # A Helm chart's templates/secret(s).yaml is a Go template, never values, so it is
 # cut from the text before matching. Only that exact name in a `templates` dir:
 # a chart-root secrets.yaml and templates/secret.yaml.bak still block, and so does
-# a real secrets file named in the same command.
+# a real secrets file named in the same command. The name must END there (end of
+# text, whitespace, a quote or a shell separator): `secret.yaml~`, `-old`, `*`
+# (a glob reaching the .bak) and `{,~}` still block. Any directory named
+# `templates` counts; there is no Chart.yaml check.
 _HELM_TEMPLATE_SECRET = re.compile(
-    r"(?<![\w.-])templates[/\\]secrets?\.ya?ml(?![\w.])", re.IGNORECASE
+    r"(?<![\w.-])templates[/\\]secrets?\.ya?ml(?=$|[\s'\"`;|&()<>,}])", re.IGNORECASE
 )
 
 

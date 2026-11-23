@@ -143,6 +143,12 @@ def _bash(command):
         _bash(f"cat `echo {S}s.json`"),
         # A Helm template beside a real secrets file does not launder the file.
         _bash(f"cat charts/x/templates/{S}.yaml {S}s.json"),
+        # Only the exact template name is exempt: not a backup, a glob or a splice.
+        _bash(f"cat templates/{S}s.yaml~"),
+        _bash(f"cat templates/{S}.yaml-old"),
+        _bash(f"cat templates/{S}.yaml*"),
+        _bash(f"cat templates/{S}.yaml$X"),
+        _bash(f"cat templates/{S}.yaml{{,~}}"),
     ],
 )
 def test_guard_blocks_secrets_files(repo, tool, tool_input):
@@ -160,6 +166,7 @@ def test_guard_blocks_secrets_files(repo, tool, tool_input):
         ("Read", {"file_path": f"C:\\repo\\charts\\x\\templates\\{S}.yaml"}),
         _bash(f"cat k8s/external-{S}.yaml"),
         _bash(f"cat templates/{S}.yaml"),
+        _bash(f'cat "charts/x/templates/{S}.yaml" | head'),
         _bash(f"git add k8s/external-{S}.yaml && git commit -m 'add external-{S}.yaml'"),
     ],
 )
