@@ -1,8 +1,18 @@
 # Project Status
 
-_Last updated: 2026-11-19 (crew.md first-day gaps on `docs/crew-first-day`; report verb tags on `fix/tui-verb-tags`; hermetic test env on `fix/hermetic-test-env`; smart harness on `feature/smart-harness`; repo CLAUDE.md protocol dedupe on `fix/dedupe-repo-protocol`; crew mates built on `feature/crew-chat`; X7d route coverage built on `feature/xray-route-gaps`; X7b HTTP routes as edges released in 0.51.0; X7d routes, mounts and the surface hook line released in 0.50.0, the attack-surface map in 0.49.0; X17 symbol graph for TS/JS and Go + multi-runner X11 ledger on `feature/x17-ts-go`; literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
+_Last updated: 2026-11-23 (harness guard secret manifests on `fix/harness-guard-secret-manifests`; crew.md first-day gaps on `docs/crew-first-day`; report verb tags on `fix/tui-verb-tags`; hermetic test env on `fix/hermetic-test-env`; smart harness on `feature/smart-harness`; repo CLAUDE.md protocol dedupe on `fix/dedupe-repo-protocol`; crew mates built on `feature/crew-chat`; X7d route coverage built on `feature/xray-route-gaps`; X7b HTTP routes as edges released in 0.51.0; X7d routes, mounts and the surface hook line released in 0.50.0, the attack-surface map in 0.49.0; X17 symbol graph for TS/JS and Go + multi-runner X11 ledger on `feature/x17-ts-go`; literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
 
 ## In Flight
+
+**Harness guard: secret manifests (2026-11-23, branch `fix/harness-guard-secret-manifests`).** Board task from a
+consuming repo whose local fix `harness --force` erased three times. The shipped `pre_tool_use.py` pattern now
+matches a secrets file only when its name starts with `secret(s)` (`(?<![\w-])`), and cuts Helm
+`templates/secret(s).y(a)ml` before matching. The board's proposed `(^|[/\s'"=])` anchor was measured and rejected:
+it let `.secrets.toml`, Windows paths and metachar-glued names (`x;secrets.json`) through. Outgoing template kept
+under `_shipped/`, hash re-pinned; 28 cases in `tests/test_harness_hooks.py`. The Helm exemption requires the name to
+end there (security review: `secret.yaml~`, `*`, `-old`, `$X` were laundered). Accepted: any `templates/` dir counts
+(no `Chart.yaml` check), and a glued short option (`grep -fsecrets.json`) passes, like `my_secrets.json`. `--force`
+was not silent (it writes a `.bak`), so no overlay mechanism: the cure is the upstream template.
 
 **Crew walk-through, first-day gaps (2026-11-19, branch `docs/crew-first-day`).** From the first real crew
 mate's onboarding: `docs/crew.md` step 5 now registers the mate's own brain at user scope (`gingugu init`

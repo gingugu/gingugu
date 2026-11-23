@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`harness` guard lets Kubernetes and Helm secret manifests through.** The
+  `pre_tool_use.py` guard now treats a file as a secrets file only when its name
+  starts with `secret` or `secrets` (no letter, digit, `_` or `-` glued before it).
+  `external-secret.yaml`,
+  `push-secrets.yaml` and a Helm chart's `templates/secret.yaml` (key names or Go
+  templates, never values) are no longer blocked. `secrets.json`, `.secrets.toml`,
+  a chart-root `secrets.yaml` and `templates/secret.yaml.bak` still are. Re-run
+  `gingugu harness` to pick it up: an unedited copy refreshes, an edited one is kept.
 - **`init` / `harness` report tags.** A line is tagged by its verb first, so
   `removed ... (protocol already loads ...)` now shows `[ OK ]` instead of
   `[SKIP]`, and `adopted` shows `[ OK ]` instead of no tag. The score and the
