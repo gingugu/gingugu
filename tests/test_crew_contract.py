@@ -48,3 +48,29 @@ def test_a_nameless_crew_mate_is_told_to_choose_a_name(contract, monkeypatch):
     text = contract()
     assert "no name" in text and "MEMORY_PERSONA" in text
     assert text.rstrip().endswith("=== END CONTRACT ===")
+
+
+def test_an_owner_on_the_crew_brain_is_taught_to_promote(contract, monkeypatch):
+    monkeypatch.setenv("MEMORY_PERSONA", "beepboop")
+    monkeypatch.setenv("MEMORY_CREW", "1")
+    text = contract()
+    assert "mcp__gingugu__memory_promote(ids=" in text
+    assert "Keep home" in text
+
+
+def test_a_crew_mate_is_taught_to_promote_with_the_tool(contract, monkeypatch):
+    monkeypatch.setenv("MEMORY_PERSONA", "polly")
+    monkeypatch.setenv("MEMORY_CREW_URL", "https://pi.test:8765")
+    text = contract()
+    assert "mcp__gingugu__memory_promote(ids=" in text
+    assert "gingugu promote --to-crew" not in text  # the tool replaces the CLI line
+
+
+def test_a_nameless_mate_is_not_taught_to_promote_yet(contract, monkeypatch):
+    monkeypatch.setenv("MEMORY_CREW_URL", "https://pi.test:8765")
+    assert "memory_promote" not in contract()
+
+
+def test_no_crew_no_promote_lesson(contract, monkeypatch):
+    monkeypatch.setenv("MEMORY_PERSONA", "beepboop")
+    assert "memory_promote" not in contract()

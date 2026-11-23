@@ -8,6 +8,7 @@ dependencies (DB connection, stores, config) into those closures.
 from __future__ import annotations
 
 import functools
+import inspect
 from dataclasses import dataclass
 
 from ..config import Config
@@ -89,7 +90,13 @@ class _HeartbeatMCP:
                     if refused is not None:
                         return {"ok": False, "error": refused}
                     with grants.bind(grant, conn):
-                        return fn(*args, **kwargs)
+                        result = fn(*args, **kwargs)
+                        # An async tool (one that calls another brain) is
+                        # awaited inside the bind: the grant is a ContextVar,
+                        # so it holds for this call's task across the await.
+                        if inspect.isawaitable(result):
+                            result = await result
+                        return result
                 except grants.AccessDenied as exc:
                     # Raised by a store chokepoint the handler did not catch;
                     # the message is safe to return by construction.
@@ -122,6 +129,7 @@ def register_all(mcp, ctx: ServerContext) -> None:
         excerpt,
         forget,
         memory,
+        promote,
         recall,
         relations,
         search,
@@ -131,6 +139,7 @@ def register_all(mcp, ctx: ServerContext) -> None:
     )
 
     memory.register(mcp, ctx)
+    promote.register(mcp, ctx)
     forget.register(mcp, ctx)
     tripwires.register(mcp, ctx)
     board.register(mcp, ctx)

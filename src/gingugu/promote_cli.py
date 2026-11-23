@@ -2,11 +2,12 @@
 
 Two forms:
 
-    gingugu promote --to-crew --source-ns NS [--skip-tag T ...] [--dry-run]
+    gingugu promote --to-crew --source-ns NS [--ids ID,...] [--skip-tag T ...] [--dry-run]
         A crew mate's gold, from this machine's local brain to its crew link,
         as its persona (MEMORY_PERSONA). Run --dry-run first and read the list.
+        Mid-session, the ``memory_promote`` tool does the same for picked ids.
 
-    gingugu promote --source-url URL --target-url URL --source-ns NS --target-ns NS
+    gingugu promote --source-url URL --target-url URL --source-ns NS --target-ns NS [--ids ...]
         Brain to brain over HTTP; tokens from GINGUGU_SOURCE_TOKEN and
         GINGUGU_TARGET_TOKEN so they never land in argv or shell history.
 """
@@ -21,10 +22,15 @@ import sqlite3
 import sys
 
 
+def _ids(raw: str) -> list[str]:
+    return [i.strip() for i in raw.split(",") if i.strip()]
+
+
 def _parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="gingugu promote", description=__doc__)
     p.add_argument("--to-crew", action="store_true", help="Promote to this machine's crew")
     p.add_argument("--source-ns", required=True, help="Source namespace to read from")
+    p.add_argument("--ids", type=_ids, help="Only these memory ids (comma-separated)")
     p.add_argument("--skip-tag", action="append", default=[], help="Hold back this tag too")
     p.add_argument("--source-url", help="Source MCP URL (e.g. https://host:8765/mcp)")
     p.add_argument("--target-url", help="Central MCP URL")
@@ -47,7 +53,10 @@ def _to_crew(args: argparse.Namespace) -> dict:
     if not me:
         raise ValueError("set MEMORY_PERSONA to your name first - promotions go up as you")
     if remote.active() is not None:
-        raise ValueError("this machine's brain is remote already; --to-crew reads a local brain")
+        raise ValueError(
+            "this machine's brain is remote already; --to-crew reads a local brain. "
+            "Promote from a remote brain with the memory_promote tool"
+        )
     target = crew.active()
     if target is None:
         raise ValueError("no crew link; run `gingugu crew join` first")
@@ -62,6 +71,7 @@ def _to_crew(args: argparse.Namespace) -> dict:
             token=token,
             persona=me,
             skip_tags=args.skip_tag,
+            ids=args.ids,
             dry_run=args.dry_run,
         )
     )
@@ -84,6 +94,7 @@ def _url_to_url(args: argparse.Namespace) -> dict:
             target_namespace=args.target_ns,
             contributor=args.contributor,
             instance=args.instance,
+            ids=args.ids,
             dry_run=args.dry_run,
         )
     )

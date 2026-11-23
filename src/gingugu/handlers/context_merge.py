@@ -50,4 +50,18 @@ def merge_namespace_context(
         for tail in tails:
             if rank < len(tail):
                 emit(tail[rank])
-    return out
+    return drop_promoted_copies(out)
+
+
+def drop_promoted_copies(memories: list[Memory]) -> list[Memory]:
+    """Drop a promoted copy whose source is in the same load.
+
+    A copy carries a new id, so the id de-dup above cannot see it: an owner
+    loading ``crow`` and ``crew`` would read the same lesson twice. The source
+    wins - it is the one that gets edited. A copy whose source is not loaded
+    (every mate's view of the commons) stays.
+    """
+    from ..promotion import source_of
+
+    ids = {m.id for m in memories}
+    return [m for m in memories if not ((src := source_of(m.metadata)) and src["id"] in ids)]

@@ -154,3 +154,33 @@ def test_to_crew_says_what_is_missing(monkeypatch, capsys, env, says):
 
 def crew_brain_db(local_brain):
     return local_brain.parent.parent / "pi" / "brain.db"
+
+
+async def test_ids_narrow_the_promotion_to_the_picked_memories(local_brain, crew_brain):
+    target, token = crew_brain
+    by_title = {m["title"]: m["id"] for m in local_candidates(local_brain, "work")}
+    kw = dict(db_path=local_brain, source_namespace="work", target=target, token=token)
+    picked = await promote_to_crew(
+        **kw, persona="polly", ids=[by_title["only a hunch"]], dry_run=True
+    )
+    assert picked["would_promote"] == [] and picked["candidates"] == 1
+    gold = await promote_to_crew(
+        **kw, persona="polly", ids=[by_title["verify the tag before you ship"]], dry_run=True
+    )
+    assert gold["would_promote"] == ["verify the tag before you ship"]
+
+
+def test_an_owner_is_pointed_at_the_tool(monkeypatch, capsys):
+    from gingugu.promote_cli import main
+
+    monkeypatch.setenv("MEMORY_PERSONA", "beepboop")
+    monkeypatch.setenv("MEMORY_REMOTE_URL", "https://pi.test")
+    assert main(["--to-crew", "--source-ns", "work", "--dry-run"]) == 1
+    assert "memory_promote" in capsys.readouterr().err
+
+
+def test_ids_parse_from_a_comma_list():
+    from gingugu.promote_cli import _parser
+
+    args = _parser().parse_args(["--to-crew", "--source-ns", "w", "--ids", "a, b,,c"])
+    assert args.ids == ["a", "b", "c"]
