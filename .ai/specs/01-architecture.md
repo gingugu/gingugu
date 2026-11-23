@@ -1342,20 +1342,29 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   namespaces (see **Scoped tokens**). It stays a single SQLite file and a
   single owner - scoped tokens partition one owner's brain between clients, not
   tenants - so multi-tenant auth remains roadmap (see `docs/future-architecture.md`).
-- **Promotion is a client, not server logic.** `gingugu promote` (`promote.py`)
+- **Promotion picks by id, and the receiving brain matches.** `memory_promote`
+  (`handlers/promote.py`, `promotion.py`) is the agent-facing path: the caller picks
+  ids, the locked filter is a net that says why it holds something back, and the copy
+  lands in this brain's `crew` or goes up a crew mate's link. Matching lives in the
+  receiving brain because only it can read stamps (search returns no metadata):
+  `memory_store` with `promoted_from` is matched on source id + the server-derived
+  contributor, so an edit supersedes and a forged stamp cannot reach another
+  contributor's copies. `memory_context` drops a copy whose source is in the same load.
+- **Bulk promotion is a client.** `gingugu promote` (`promote.py`)
   speaks the public MCP tool surface - read-only `memory_export` from a source
   brain (or, with `--to-crew`, the local DB file read directly by
   `promote_crew.local_candidates`), and filtered `memory_store` into a central
   brain with a provenance stamp; what the target already holds is found with
-  `memory_namespaces` + `memory_search(tags="promoted")` keyed on (title, content). The server gains no promotion-specific code; the selective
-  local→central absorption lives entirely in the client. Keeps the store pure.
+  `memory_namespaces` + `memory_search(tags="promoted")` keyed on (title, content). Its selection and filtering live in the client; the
+  receiving brain does the matching (see the bullet above), so a CLI promotion of an
+  edited memory supersedes its old copy too. `--ids` narrows either form.
 - **Crew mates are a token shape, not a server mode.** One `gingugu serve` is both
   the owners' remote brain and a crew's central brain; what differs is the token.
   A crew mate holds a scoped token (`crew=write` by default, marked `crew` in the
   token file) and keeps its own local brain. Its proxy derives through that scoped
   token, never wider, and every derived token names its scoped `parent`, which the
   auth middleware re-checks per request so a revoke reaches it at once. Promotion
-  to the crew (`promote --to-crew`) and the bootstrap (`gingugu crew`) are client
+  to the crew (`memory_promote`, or `promote --to-crew` in bulk) and the bootstrap (`gingugu crew`) are client
   code; the server changes are the derive and `/hook/inbox` gates, `Grant.parent` /
   `parent_key` / `covers`, the middleware's parent re-check, `TokenStore`'s crew
   entries (`crew`, retired on revoke, `rotate_crew`, `scoped`) and `ssh-mint

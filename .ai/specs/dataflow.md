@@ -1594,7 +1594,37 @@ gingugu promote (promote_cli.py → promote.py — an MCP client, not the server
     persona) with a provenance stamp
      (metadata.promoted_from{instance,namespace,id,contributor,promoted_at}
       + `promoted` tag + source="promotion:<ns>"); a refused store fails the run
-  → idempotent: a memory already there is skipped; an edited one goes up again
+  → idempotent: a memory already there is skipped; an edited one goes up again,
+    and the receiving brain supersedes its old copy (see memory_promote below)
+```
+
+### `memory_promote` (picked ids, any machine on a crew)
+
+```
+memory_promote(ids, dry_run)            handlers/promote.py
+  → caller = author_for(transport, grant)  (persona on stdio, token name over HTTP)
+  → link = crew.active() + keychain token, stdio only; a fenced stdio grant + link → refused
+  → no link and no `crew` namespace here → error (never invents one)
+  → per id: store.get (grant-scoped) → missing | held(reason) | gold
+      held: already in crew, caller's persona namespace, hold_reason
+      (not verified, episodic/personal/secret tag or the caller's name,
+       secret-shaped title/content/about)
+  → dry_run: would_promote, nothing written
+  → link: memory_store into the crew brain's `crew` with metadata
+          {source metadata..., promoted_from{instance,namespace,id,contributor,promoted_at}}
+     else: promotion.receive in this brain's `crew`
+
+memory_store with metadata.promoted_from   (handlers/memory.py → promote.store_promoted)
+  → contributor := author_for(...)  (the stamp's own claim is overwritten)
+  → hold_reason re-run server-side; refused → error
+  → promotion.receive, inside atomic():
+      live copies in ns with same promoted_from.id AND contributor
+      → same title+content: unchanged
+      → none: create (verified, + `promoted` tag, source="promotion:<ns>") → promoted
+      → differs: create, relate new supersedes old, deprecate old → updated
+
+memory_context (multi-namespace)
+  → merge_namespace_context → drop_promoted_copies: a copy whose source id is in the load goes
 ```
 
 Stage 1 = insert + skip-already-promoted. Stage 2 (consolidate near-dupes into

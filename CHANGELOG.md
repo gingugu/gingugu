@@ -9,6 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`memory_promote` tool: promote hand-picked memories into the crew commons.**
+  `memory_promote(ids="<id>,...", dry_run=false)` copies the memories you pick into
+  `crew`, the namespace every agent on the crew loads at session start. You pick;
+  the filter is a net that holds back anything unverified, tagged as session or
+  personal (or with your own name), secret-shaped, already in `crew`, or from your
+  own persona namespace, and says why under `held`. On a brain that holds the crew
+  the copy lands there; on a crew mate's local brain it goes up the crew link. It
+  works on an owner machine whose brain is remote, where `promote --to-crew` cannot.
+- **Promotions are matched to their source in the receiving brain.** Any
+  `memory_store` carrying a `promoted_from` stamp is matched on the source id and
+  the contributor, and the contributor is the caller the server sees, never what
+  the stamp says. Promoting an unchanged memory again does nothing; promoting it
+  after an edit stores the new copy, links it `supersedes` the old one and
+  deprecates the old. The `gingugu promote` CLI gets this too. A stamp is no way
+  around the filter: the receiving brain runs it again and refuses what it holds.
+- **Promotion stays inside a fence.** A narrowed stdio server (a minion's) is
+  refused the push up a crew link, which would ride the link's own token, and the
+  minion fence counts the inherited `memory_promote` as a write.
+- **`gingugu promote --ids`** narrows either form of the CLI to picked memories.
+- **The startup contract teaches promoting, on a crew only.** With `MEMORY_CREW=1`
+  or a crew link, the session-start hook adds a short PROMOTE block: what counts
+  as gold, what stays home, and the `memory_promote` call. Nobody else's contract
+  changes. Re-run `gingugu init` / `gingugu harness` to pick up the new hook.
+
+### Changed
+
+- **`memory_context` shows a promoted lesson once.** When a crew copy and its
+  source land in the same load (an owner loading `crow` and `crew`), the copy is
+  dropped and the source stays. A load without the source keeps the copy.
+- **`promote --to-crew` on a remote-brain machine** now points at `memory_promote`.
+
 ---
 
 ## [0.54.1] - 2026-11-23

@@ -1,10 +1,23 @@
 # Project Status
 
-_Last updated: 2026-11-23 (harness guard secret manifests on `fix/harness-guard-secret-manifests`; crew.md first-day gaps on `docs/crew-first-day`; report verb tags on `fix/tui-verb-tags`; hermetic test env on `fix/hermetic-test-env`; smart harness on `feature/smart-harness`; repo CLAUDE.md protocol dedupe on `fix/dedupe-repo-protocol`; crew mates built on `feature/crew-chat`; X7d route coverage built on `feature/xray-route-gaps`; X7b HTTP routes as edges released in 0.51.0; X7d routes, mounts and the surface hook line released in 0.50.0, the attack-surface map in 0.49.0; X17 symbol graph for TS/JS and Go + multi-runner X11 ledger on `feature/x17-ts-go`; literal-grep timeout raised for the test suite; X7a env map never claims 'nowhere' past an unread file; X7c DB tables as edges merged (#190); X7a env vars as edges merged; X22 hook surfaces built; board resynced after 0.48.1; X4 drift moved down to row 7)_
+_Last updated: 2026-11-23 (memory_promote on `feature/memory-promote`; everything else under In Flight below it is released - each entry names its release)_
 
 ## In Flight
 
-**Harness guard: secret manifests (2026-11-23, branch `fix/harness-guard-secret-manifests`).** Board task from a
+**`memory_promote` (2026-11-23, branch `feature/memory-promote`).** The crew commons held only the onboarding
+packets and the first mate's two promotions: owners could not promote at all (`promote --to-crew` refuses a remote
+brain), the CLI took whole namespaces only, re-promoting an edit piled up a second copy (matching on title+content,
+since search returns no metadata), and an owner loading `crow` + `crew` would read every lesson twice. New tool
+`memory_promote(ids, dry_run)`: pick by id, the filter is a net with reasons, copy into this brain's `crew` or push up
+a mate's link. The receiving brain matches (`promotion.receive`): any `memory_store` with `promoted_from` is matched on
+source id + the server-derived contributor (`author_for`), an edit supersedes + deprecates, inside `atomic()`.
+`memory_context` drops a copy whose source is loaded. CLI `--ids`. The startup contract gains a PROMOTE block on a
+crew only (`MEMORY_CREW=1` or a link); template hash re-pinned. Security review (sonnet): a fenced stdio server is
+refused the push (it rides the link's token, past the fence); `about` is secret-scanned; a stamped store re-runs the
+net server-side and keeps the caller's other metadata. Accepted: the crew URL appears in the tool's response. Next:
+release, then the curated backfill of owner gold into `crew` through the tool.
+
+**Harness guard: secret manifests (2026-11-23, #207; RELEASED in 0.54.1).** Board task from a
 consuming repo whose local fix `harness --force` erased three times. The shipped `pre_tool_use.py` pattern now
 matches a secrets file only when its name starts with `secret(s)` (`(?<![\w-])`), and cuts Helm
 `templates/secret(s).y(a)ml` before matching. The board's proposed `(^|[/\s'"=])` anchor was measured and rejected:
@@ -14,12 +27,12 @@ end there (security review: `secret.yaml~`, `*`, `-old`, `$X` were laundered). A
 (no `Chart.yaml` check), and a glued short option (`grep -fsecrets.json`) passes, like `my_secrets.json`. `--force`
 was not silent (it writes a `.bak`), so no overlay mechanism: the cure is the upstream template.
 
-**Crew walk-through, first-day gaps (2026-11-19, branch `docs/crew-first-day`).** From the first real crew
+**Crew walk-through, first-day gaps (2026-11-19; RELEASED in 0.54.1).** From the first real crew
 mate's onboarding: `docs/crew.md` step 5 now registers the mate's own brain at user scope (`gingugu init`
 installs hooks only and never registered the server), and adds notes for a `.local` host, a TLS-inspecting
 proxy (`uv tool install --system-certs`, `SSL_CERT_FILE`), and `claude` missing from PATH in the VS Code extension.
 
-**Report verb tags (2026-11-19, branch `fix/tui-verb-tags`).** `tui/keygen.classify` checks the line's verb
+**Report verb tags (2026-11-19; RELEASED in 0.54.1).** `tui/keygen.classify` checks the line's verb
 before the `already` substring, so the repo-rules `removed` line (whose note says "protocol already loads")
 is tagged `[ OK ]`, not `[SKIP]`; `adopted` joins the OK verbs. Spec:
 `tests/test_tui_render.py::test_classify_verb_wins_over_an_already_in_the_note`.
@@ -32,7 +45,7 @@ is tagged `[ OK ]`, not `[SKIP]`; `adopted` joins the OK verbs. Spec:
 startup-contract tests because the shell exported `MEMORY_CREW=1` (set in `~/.claude/settings.json` env). The autouse
 `conftest.no_persona` (which cleared only the persona) now clears `MEMORY_PERSONA` / `MEMORY_CREW` / `MEMORY_CREW_URL` for every test.
 
-**Smart harness (2026-11-17, branch `feature/smart-harness`, stacked on `fix/dedupe-repo-protocol`, unreleased).**
+**Smart harness (2026-11-17; RELEASED in 0.54.0).**
 `gingugu harness` becomes the after-upgrade command: a plain re-run refreshes an unedited older copy of any
 managed hook/minion/skill (older template texts in `templates/harness/_shipped/`, `harness_shipped.py`), keeps
 an edited one, and reports a current one as `no change`. It also installs, at user level,
@@ -41,7 +54,7 @@ an edited one, and reports a current one as `no change`. It also installs, at us
 Specs: `tests/test_harness_refresh.py`, `tests/test_harness_delegation.py`, `tests/test_harness_subagent_model.py`.
 Next: run `harness` across the owner's repos (dry run first), then consider having `fleet.py` run it after upgrades.
 
-**No duplicate protocol in a repo `CLAUDE.md` (2026-11-17, branch `fix/dedupe-repo-protocol`, unreleased).**
+**No duplicate protocol in a repo `CLAUDE.md` (2026-11-17; RELEASED in 0.54.0).**
 From a `/usage` review: Claude Code loads `~/.claude/CLAUDE.md` and the repo `CLAUDE.md` every request, and
 `init` wrote the same ~6k-char managed protocol into both. `install_global_rules` now returns its status;
 when the user-level file carries the block (`GLOBAL_COVERS`), `init_repo_rules(global_covers=True)` skips the
@@ -49,7 +62,7 @@ repo `CLAUDE.md`, strips a managed block an earlier run left (`.bak` first), and
 title-only file. `AGENTS.md` unchanged. `init_repo_rules` moved to the new `bootstrap/repo_rules.py`
 (`global_rules.py` was at 300 lines). Specs: `tests/test_repo_rules_dedupe.py`.
 
-**Crew mates (2026-11-13, branch `feature/crew-chat`, unreleased).** A crew mate is an agent on its own
+**Crew mates (2026-11-13, #199; RELEASED in 0.53.0).** A crew mate is an agent on its own
 machine with its own local brain that shares a brain through a scoped token (default `crew=write`): it
 promotes its gold into the `crew` commons and talks on the board. Built so a new machine can join as a new
 persona rather than another copy of an existing one, and so the promotion loop finally runs against a
@@ -65,7 +78,7 @@ never mints an owner), `promote_crew.py` + `promote_cli.py` (`promote --to-crew`
 that execs `ssh-mint --name "$1" --crew` as the service user - never the owner mint wrapper, which mints an
 owner token for an unknown name.
 
-**X7d route coverage (2026-11-13, branch `feature/xray-route-gaps`, unreleased).** The route join's recall is
+**X7d route coverage (2026-11-13; RELEASED in 0.52.0).** The route join's recall is
 bounded by the routes X7d reads, and only a rooted route matches a call. Django `path` routes are rooted and a `re_path` regex is read as a route only when it is one (named groups become `{name}`, anything else regex-shaped is `(route not literal)`); a class-based view (`X.as_view()`) names its class; a DRF `router.register` is the list and the detail route, mounted by `include(router.urls)`; a flask-restx or flask-restful class (`@ns.route` on a class, `api.add_resource`) is one entry per view method per path, with `Namespace(path=)`, `Api(bp)` and `add_namespace` prefixes; router subclasses (`UserAPIRouter(prefix=)`) keep their prefix; a Next.js app-router `route.ts` answers the URL its path spells, once per exported method; a route written without a leading slash (koa-router) is rooted and `new Router()` is a router; Go group closures (`m.Group("/x", func() {...})`) prefix what is registered inside them, an empty path is the group's own prefix, and a handler wrapped in calls is found. A Go call that only shares a verb's name (`slog.Any("error", err)`) is no longer an entry.
 New modules: `xray/surface_class_py.py`, `xray/surface_regex_py.py`, `xray/lang/ts_surface_next.py`; the
 Next.js route is applied at link time (`surface_link.Collector` `file_route`) because the parse cache is keyed

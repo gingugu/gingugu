@@ -43,6 +43,7 @@ _WRITES: dict[str, set[str] | None] = {
     "memory_import": None,
     "memory_export": None,
     "memory_dream": None,
+    "memory_promote": None,
     "memory_tripwire": {"add", "remove"},
     "memory_namespaces": {"create", "update", "delete"},
 }

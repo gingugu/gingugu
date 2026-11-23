@@ -1244,6 +1244,46 @@ Update an existing memory's content, type, confidence, or metadata.
   content is still true, and treating it as one would suppress review hints on
   exactly the memories where staleness costs most
 
+### `memory_promote`
+Promote hand-picked memories, by id, into the crew commons: the `crew`
+namespace every agent on the crew loads at session start. The agent picks;
+the filter is a net, not the judge.
+
+**Parameters:**
+- `ids` (required) - comma-separated memory ids
+- `dry_run` (optional, default `false`) - report `would_promote`, write nothing
+
+**Where the copy lands** depends on what this brain is. On a brain that holds
+`crew` (the owner's brain, the Pi) it is a copy inside the one database. On a
+crew mate's local brain, linked by `gingugu crew join`, it goes up the crew
+link on the link's scoped token, as a `memory_store` that carries a
+`promoted_from` stamp. Anywhere else it is an error, and no `crew` namespace is
+invented.
+
+**The net** holds back, with a `reason` under `held`: anything not
+`verified`; episodic, personal or secret tags, or a tag naming the caller;
+secret-shaped text (title, content or `about`); anything already in `crew`; and
+the caller's own persona namespace. Ids that do not resolve come back under
+`missing`. A narrowed stdio server (`MEMORY_GRANT`, a minion's) is refused the
+push outright: it would ride the crew link's own token, past its fence. The
+minion fence also counts the inherited `memory_promote` as a write.
+
+**Matching lives in the receiving brain**, because only it can read the stamps
+(search never returns `metadata`). Any `memory_store` whose metadata carries
+`promoted_from.id` is matched against the live copies with the same source id
+*and* the same contributor, and the contributor is whoever the receiving server
+says is calling (the persona on stdio, the token's name over HTTP), never what
+the stamp claims. So a mate cannot supersede another's promotion by forging a
+stamp. An identical copy is `unchanged`; a changed one is `updated`: the new
+copy `supersedes` the old, which is deprecated. An edit replaces; it never
+piles up. The older `gingugu promote` CLI gets the same matching, since it
+also writes through `memory_store`.
+
+**Context de-duplication.** A copy has a new id, so `memory_context` also drops
+a crew copy whose source is in the same load: an owner loading `crow` and
+`crew` reads a lesson once, from its source. A mate, whose load never holds the
+source, keeps the copy.
+
 ### `memory_relate`
 Create a relationship between two memories, one at a time or as a batch.
 
@@ -2514,7 +2554,8 @@ src/gingugu/
 │   ├── lens.py             # /search (score breakdown) + /stats (prune=False)
 │   └── events.py           # /events: access_log + query_log feed, cursor + replay
 ├── promote.py              # gingugu promote: local "gold" -> a central brain
-├── promote_cli.py          # the promote CLI: URL to URL, or --to-crew
+├── promotion.py            # the net with reasons, the stamp, and receive: match on source id + contributor, supersede an edit
+├── promote_cli.py          # the promote CLI: URL to URL, or --to-crew; --ids picks
 ├── promote_crew.py         # promote --to-crew: this machine's brain file -> its crew
 ├── crew.py                 # the crew link (crew.json / MEMORY_CREW_URL), https or loopback only
 ├── crew_cli.py             # gingugu crew add|remove|list (brain) join|leave|status (mate)
@@ -2665,12 +2706,13 @@ src/gingugu/
 │   # ── MCP tool handlers (split to honor the 300-line limit) ─────
 └── handlers/
     ├── __init__.py         # Handler registry / dispatch table
-    ├── memory.py           # store / update
+    ├── memory.py           # store / update; a stamped store routes to promote.store_promoted
+    ├── promote.py          # memory_promote: pick, net, copy here or push up the crew link
     ├── forget.py           # memory_forget; a hard delete takes `confirm`
     ├── hints.py            # Write-time similar + relation hints
     ├── recall.py           # recall / context
     ├── capability_view.py  # Stamps capability {run, path, exists} onto reads + the lane entries
-    ├── context_merge.py    # Pure merge of per-namespace context loads: pins, then ranked tails
+    ├── context_merge.py    # Pure merge of per-namespace context loads: pins, then ranked tails; drops a crew copy whose source is loaded
     ├── search.py           # search
     ├── stats.py            # memory_stats (single or multi-namespace)
     ├── scope.py            # Read scope + widen-on-empty for recall / search
