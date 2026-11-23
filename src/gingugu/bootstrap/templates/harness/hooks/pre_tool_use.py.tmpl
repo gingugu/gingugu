@@ -52,6 +52,17 @@ def log_decision(input_data: dict, decision: str) -> None:
 # lone command. `ls; cat .env` is a read.
 _LONE_SAFE_COMMAND = re.compile(r"^(ls|find|git)\s[^;&|`$()<>\n]*$")
 
+# A Helm chart's templates/secret(s).yaml is a Go template, never values, so it is
+# cut from the text before matching. Only that exact name in a `templates` dir:
+# a chart-root secrets.yaml and templates/secret.yaml.bak still block, and so does
+# a real secrets file named in the same command. The name must END there (end of
+# text, whitespace, a quote or a shell separator): `secret.yaml~`, `-old`, `*`
+# (a glob reaching the .bak) and `{,~}` still block. Any directory named
+# `templates` counts; there is no Chart.yaml check.
+_HELM_TEMPLATE_SECRET = re.compile(
+    r"(?<![\w.-])templates[/\\]secrets?\.ya?ml(?=$|[\s'\"`;|&()<>,}])", re.IGNORECASE
+)
+
 
 def is_dangerous_rm_command(command):
     """Block only *catastrophic* recursive deletes, not every ``rm -rf``.
@@ -116,7 +127,11 @@ def is_sensitive_file_access(tool_name, tool_input):
         # `C:\x\.env` are still env files. Sample/example/template files pass.
         r"(?<![\w.])\.env\b(?!\.sample|\.example|\.template)",
         r"credentials\.(json|yaml|yml|xml|toml)",
-        r"secrets?\.(json|yaml|yml|xml|toml)",
+        # A secrets file is one whose NAME starts with secret(s): not glued to a
+        # letter, digit, _ or - before it. `external-secret.yaml` and
+        # `push-secrets.yaml` are Kubernetes manifests holding key names only;
+        # `.secrets.toml`, `C:\x\secrets.json` and `x;secrets.json` still block.
+        r"(?<![\w-])secrets?\.(json|yaml|yml|xml|toml)",
         # A key file named anywhere in the string (`cat a.key | base64`), not
         # only at its end. The \w before the dot keeps `jq '.key'` passing.
         r"\w\.pem\b",
@@ -126,6 +141,7 @@ def is_sensitive_file_access(tool_name, tool_input):
     def sensitive(text):
         if names_private_ssh_key(text):
             return True
+        text = _HELM_TEMPLATE_SECRET.sub(" ", text)
         return any(re.search(p, text, re.IGNORECASE) for p in sensitive_patterns)
 
     if tool_name in ["Read", "Edit", "MultiEdit", "Write"]:

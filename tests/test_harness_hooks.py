@@ -115,6 +115,66 @@ def test_guard_allows(repo, tool, tool_input):
     assert _hook(repo, "pre_tool_use.py", payload).returncode == 0
 
 
+# A secrets file is one whose NAME starts with secret(s). Kubernetes ExternalSecret
+# and PushSecret manifests, and Helm's templates/secret.yaml, hold key names or Go
+# templates, never values - blocking them pushed agents to route around the guard.
+S = "secret"  # the hook scans command text; keep the literal out of this file's commands
+
+
+def _bash(command):
+    return ("Bash", {"command": command})
+
+
+@pytest.mark.parametrize(
+    "tool, tool_input",
+    [
+        ("Read", {"file_path": f"/app/{S}s.json"}),
+        ("Read", {"file_path": f"/app/{S}.yaml"}),
+        ("Edit", {"file_path": f"k8s/{S}.json"}),
+        ("Read", {"file_path": f"/app/.{S}s.toml"}),
+        ("Read", {"file_path": f"C:\\app\\{S}s.json"}),
+        ("Read", {"file_path": f"charts/x/{S}s.yaml"}),  # chart root: real values
+        ("Read", {"file_path": f"charts/x/templates/{S}.yaml.bak"}),
+        _bash(f"cat {S}s.json"),
+        _bash(f"cat x;{S}s.json"),
+        _bash(f"cat x|{S}s.json"),
+        _bash(f"scp host:{S}s.json ."),
+        _bash(f"cat {{{S}s.json,}}"),
+        _bash(f"cat `echo {S}s.json`"),
+        # A Helm template beside a real secrets file does not launder the file.
+        _bash(f"cat charts/x/templates/{S}.yaml {S}s.json"),
+        # Only the exact template name is exempt: not a backup, a glob or a splice.
+        _bash(f"cat templates/{S}s.yaml~"),
+        _bash(f"cat templates/{S}.yaml-old"),
+        _bash(f"cat templates/{S}.yaml*"),
+        _bash(f"cat templates/{S}.yaml$X"),
+        _bash(f"cat templates/{S}.yaml{{,~}}"),
+    ],
+)
+def test_guard_blocks_secrets_files(repo, tool, tool_input):
+    payload = {"hook_event_name": "PreToolUse", "tool_name": tool, "tool_input": tool_input}
+    assert _hook(repo, "pre_tool_use.py", payload).returncode == 2
+
+
+@pytest.mark.parametrize(
+    "tool, tool_input",
+    [
+        ("Read", {"file_path": f"/repo/k8s/external-{S}.yaml"}),
+        ("Edit", {"file_path": f"/repo/k8s/push-{S}s.yaml"}),
+        ("Read", {"file_path": f"/repo/charts/x/templates/{S}.yaml"}),
+        ("Edit", {"file_path": f"/repo/charts/x/templates/{S}s.yml"}),
+        ("Read", {"file_path": f"C:\\repo\\charts\\x\\templates\\{S}.yaml"}),
+        _bash(f"cat k8s/external-{S}.yaml"),
+        _bash(f"cat templates/{S}.yaml"),
+        _bash(f'cat "charts/x/templates/{S}.yaml" | head'),
+        _bash(f"git add k8s/external-{S}.yaml && git commit -m 'add external-{S}.yaml'"),
+    ],
+)
+def test_guard_allows_secret_manifests(repo, tool, tool_input):
+    payload = {"hook_event_name": "PreToolUse", "tool_name": tool, "tool_input": tool_input}
+    assert _hook(repo, "pre_tool_use.py", payload).returncode == 0
+
+
 SECRET = "SUPERSECRET123"
 
 
