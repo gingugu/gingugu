@@ -137,7 +137,7 @@ def register(mcp, ctx: ServerContext) -> None:
             ctx.store.load_tags(results)
             seed_ids = [m.id for m in results]
             summarize = _summarizer(compact=compact, explain=explain)
-            summaries = [_attach_review_hints(summarize(m), m) for m in results]
+            summaries = [_attach_review_hints(summarize(m), m, ctx.conn) for m in results]
             if include_related:
                 summaries.extend(_collect_related(ctx, seed_ids, compact=compact))
             # Credit the returned seeds as a real access (bumps access_count,
@@ -279,7 +279,7 @@ def register(mcp, ctx: ServerContext) -> None:
             for mem in results:
                 summary = summarize(mem)
                 summary["namespace"] = ns_name_by_id.get(mem.namespace_id, mem.namespace_id)
-                summaries.append(_attach_review_hints(summary, mem))
+                summaries.append(_attach_review_hints(summary, mem, ctx.conn))
             stamp_capabilities(ctx, summaries)
 
             payload: dict = {"ok": True, "count": len(results), "memories": summaries}

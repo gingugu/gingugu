@@ -121,7 +121,7 @@ def register(mcp, ctx: ServerContext) -> None:
                 results, missing = search_mod.fetch_by_ids(ctx.conn, id_list)
                 ctx.store.load_tags(results)
                 summarize = _summarizer(compact=compact, explain=explain)
-                summaries = [_attach_review_hints(summarize(m), m) for m in results]
+                summaries = [_attach_review_hints(summarize(m), m, ctx.conn) for m in results]
                 ctx.store.record_accesses([m.id for m in results])
                 ctx.store.log_act("fetch", [m.id for m in results])
                 _stamp_namespace_names(ctx, summaries)
@@ -179,7 +179,7 @@ def register(mcp, ctx: ServerContext) -> None:
             )
             ctx.store.load_tags(results)
             summarize = _summarizer(compact=compact, explain=explain)
-            summaries = [_attach_review_hints(summarize(m), m) for m in results]
+            summaries = [_attach_review_hints(summarize(m), m, ctx.conn) for m in results]
             # Credit the returned seeds as a real access (bumps access_count,
             # refreshes last_accessed, writes access_log row). Spreading-
             # activation neighbours are intentionally not credited here —

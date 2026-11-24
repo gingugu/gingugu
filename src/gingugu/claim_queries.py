@@ -138,3 +138,38 @@ def claim_stats(
             for row in rows[:limit]
         ],
     }
+
+
+def settled_ref_numbers(
+    conn: sqlite3.Connection, memory_ids: list[str] | None = None
+) -> dict[str, frozenset[int]]:
+    """PR/MR numbers each memory's ledger records as settled, keyed by memory id.
+
+    Settled means the prose itself says resolved (``state = 'resolved'``) or the
+    claim was reconciled (``resolved_at`` set). A number counts only when EVERY
+    claim the memory holds for it is settled - two repos' #47 in one memory
+    must both be closed out. Feeds ``staleness.review_signals(settled_refs=)``.
+
+    ``memory_ids=None`` reads the whole ledger, for the stats sweep that scores
+    every memory anyway.
+    """
+    sql = (
+        "SELECT memory_id, ref, (state = 'resolved' OR resolved_at IS NOT NULL) AS done "
+        "FROM memory_claims"
+    )
+    if memory_ids is None:
+        rows = conn.execute(sql).fetchall()
+    else:
+        rows = []
+        for i in range(0, len(memory_ids), 500):
+            chunk = memory_ids[i : i + 500]
+            marks = ",".join("?" * len(chunk))
+            rows += conn.execute(f"{sql} WHERE memory_id IN ({marks})", chunk).fetchall()
+    done: dict[str, set[int]] = {}
+    open_: dict[str, set[int]] = {}
+    for memory_id, ref, is_done in rows:
+        number = ref.rsplit("#", 1)[-1]
+        if not number.isdigit():
+            continue
+        (done if is_done else open_).setdefault(memory_id, set()).add(int(number))
+    return {mid: frozenset(nums - open_.get(mid, set())) for mid, nums in done.items()}
