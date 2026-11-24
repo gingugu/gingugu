@@ -1,10 +1,10 @@
 # Project Status
 
-_Last updated: 2026-11-24 (review-hint sigil + wiki-links on `fix/review-hint-sigil-links`; everything else under In Flight below it is released - each entry names its release)_
+_Last updated: 2026-11-24 (board row 9 / item 20, the reviewed-as-history mark, on `docs/board-history-mark`; everything under In Flight is released - each entry names its release)_
 
 ## In Flight
 
-**Review hints: sigil + wiki-links (2026-11-24, branch `fix/review-hint-sigil-links`).** The second pass over the
+**Review hints: sigil + wiki-links (2026-11-24, #210; RELEASED in 0.55.2).** The second pass over the
 live backlog found two more `staleness.py` defects that `claims.py` had already fixed: a PR/MR reference without its
 sigil ("PR 2", "kind pr 140") counted as a ref, and text inside `[[wiki-links]]` counted as an assertion. `_PR_REF`,
 `_NAMED_AGENT` and `_REF_NUMBER` now require `#`/`!` with no line break before it (board item 6); `review_signals` blanks links with `claims._blank_wikilinks`
@@ -20,7 +20,8 @@ never consulted the claims ledger, so accurate history re-flagged every 14 days.
 end or blank line (honorifics and hard-wrap newlines excepted); `claim_queries.settled_ref_numbers()` feeds
 `review_signals(settled_refs=)` from `memory_stats` and every read surface. Measured: `waiting-on` 40 -> 14 on the
 flagged corpus; the ledger half can only be measured on the Pi after release. Tests:
-`tests/test_review_hint_precision.py`. Next: release, then retitle the ~15 memories whose titles still say "PR open".
+`tests/test_review_hint_precision.py`. Done after release: the ~15 memories whose titles still said "PR open" were retitled with their gh-verified
+outcome and their claims re-resolved (an edit re-derives claims and drops resolutions by design).
 
 **`memory_promote` (2026-11-23, #208; RELEASED in 0.55.0).** The crew commons held only the onboarding
 packets and the first mate's two promotions: owners could not promote at all (`promote --to-crew` refuses a remote
@@ -2159,7 +2160,7 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-## The Board (current: 2026-11-09)
+## The Board (current: 2026-11-24)
 
 **Resequenced 2026-09-29 into build order.** The table below is the order the
 work gets done in, top first; `#` is that position. Item numbers used to be
@@ -2245,6 +2246,7 @@ every row moved up one.
 | 6 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
 | 7 | **X4 drift** - architectural drift across commits (per-commit X-ray diffs) | 19 | Moved down from row 1, not dropped (2026-11-09): it needs the import graph of past trees, and extraction reads only the working tree |
 | 8 | Session flight recorder (low priority) | 18 | Check prior art first |
+| 9 | **A reviewed-as-history mark for review hints** | 20 | Small and decided in shape; a deliberate per-memory reconcile for narrated waits the ledger cannot settle |
 | - | **Template/sibling noise in retrieval - PARKED** | 1 | Ten dead fixes and no live hypothesis; see below |
 
 ### Previous board (2026-09-28), kept for its numbering
@@ -2883,6 +2885,34 @@ Record every tool call of every session through hooks, keyed by the session
 id `access_log` already carries, so a session can be replayed and audited
 after the fact. Low priority: look for existing prior art to reuse before
 designing anything.
+
+### 20. A reviewed-as-history mark for review hints
+
+Entered 2026-11-24 from the brain-hygiene sweep (0.55.1, 0.55.2). After both
+detector passes, two classes of gated hint still have no permanent
+reconciliation:
+
+- **A wait narrated with its outcome.** "awaiting Mr. Boomtastic's merge.
+  (It merged 2026-07-07.)" names a person, so `waiting-on` fires; the outcome
+  is in the next sentence, which no regex can safely read as a resolution.
+- **Refs the ledger cannot hold.** Persona namespaces (`beepboop`, 20 flags)
+  narrate PRs in other repos. `beepboop` carries `default_repo: ""` (not a
+  repo - checked on the live brain 2026-11-24), so its bare refs are dropped
+  at extraction by design; `resolve_claims` has nothing to resolve and the
+  settled-ref check cannot help.
+
+Today the only remedy is a re-confirm, which silences a gated signal for
+`REVIEW_HINT_AFTER_DAYS` (14) and then it returns. Rewording the prose is
+ruled out (the store's own rule: never write around the detector).
+
+**Shape (not designed):** a deliberate per-memory mark a reviewer sets after
+reading the memory - e.g. metadata `review: {"history": "<date>", "by": ...}`
+or a `memory_update` flag - that suppresses the GATED signals only (ungated
+dates still fire) and is visible on read surfaces so it can be audited and
+removed. This is the never-built option 4 from 2026-07-29; it is NOT the
+type/tag-based journal exemption, which was built, scored and rejected (cost
+17 true positives for 7 false ones). The mark is per memory and per human or
+agent decision, never inferred.
 
 ### 19. Codebase X-ray, as an MCP tool
 
