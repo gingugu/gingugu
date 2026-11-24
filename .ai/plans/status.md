@@ -20,7 +20,8 @@ never consulted the claims ledger, so accurate history re-flagged every 14 days.
 end or blank line (honorifics and hard-wrap newlines excepted); `claim_queries.settled_ref_numbers()` feeds
 `review_signals(settled_refs=)` from `memory_stats` and every read surface. Measured: `waiting-on` 40 -> 14 on the
 flagged corpus; the ledger half can only be measured on the Pi after release. Tests:
-`tests/test_review_hint_precision.py`. Next: release, then retitle the ~15 memories whose titles still say "PR open".
+`tests/test_review_hint_precision.py`. Done after release: the ~15 memories whose titles still said "PR open" were retitled with their gh-verified
+outcome and their claims re-resolved (an edit re-derives claims and drops resolutions by design).
 
 **`memory_promote` (2026-11-23, #208; RELEASED in 0.55.0).** The crew commons held only the onboarding
 packets and the first mate's two promotions: owners could not promote at all (`promote --to-crew` refuses a remote
@@ -2895,9 +2896,10 @@ reconciliation:
   (It merged 2026-07-07.)" names a person, so `waiting-on` fires; the outcome
   is in the next sentence, which no regex can safely read as a resolution.
 - **Refs the ledger cannot hold.** Persona namespaces (`beepboop`, 20 flags)
-  narrate PRs in other repos; their bare refs are not keyed to any repo, so
-  `resolve_claims` has nothing to resolve and the settled-ref check cannot
-  help.
+  narrate PRs in other repos. `beepboop` carries `default_repo: ""` (not a
+  repo - checked on the live brain 2026-11-24), so its bare refs are dropped
+  at extraction by design; `resolve_claims` has nothing to resolve and the
+  settled-ref check cannot help.
 
 Today the only remedy is a re-confirm, which silences a gated signal for
 `REVIEW_HINT_AFTER_DAYS` (14) and then it returns. Rewording the prose is
