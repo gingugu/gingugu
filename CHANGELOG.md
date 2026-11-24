@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.55.1] - 2026-11-24
+
 ### Fixed
 
 - **Review hints no longer flag settled PRs or the next sentence's first word.**
