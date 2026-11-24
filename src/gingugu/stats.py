@@ -238,6 +238,7 @@ def compute_review(
         (*ns_params, cutoff),
     ).fetchall()
 
+    settled = claim_queries.settled_ref_numbers(conn, [row["id"] for row in rows])
     flagged = []
     for row in rows:
         signals = review_signals(
@@ -246,6 +247,7 @@ def compute_review(
             last_confirmed=row["last_confirmed"],
             updated_at=row["updated_at"],
             created_at=row["created_at"],
+            settled_refs=settled.get(row["id"]),
         )
         if signals:
             flagged.append({"id": row["id"], "title": row["title"], "signals": signals})

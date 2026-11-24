@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Review hints no longer flag settled PRs or the next sentence's first word.**
+  `open-pr-reference` stays quiet once the claims ledger records every PR it
+  names as settled - before, "PR #47 open" in an accurate session log re-flagged
+  every 14 days forever, because any write only reset the clock. `waiting-on`
+  now looks for who is being waited on only within the same sentence, so
+  "waiting for a tool. Had I..." no longer reads "Had" as a person, while
+  "awaiting Mr. Boomtastic's go" still flags. Measured on a live 110-flag
+  backlog: `waiting-on` 40 -> 14.
+
 ---
 
 ## [0.55.0] - 2026-11-23

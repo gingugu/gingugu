@@ -869,7 +869,7 @@ Two signal classes (all regex-based, case-insensitive):
   type, but are suppressed when `last_confirmed` postdates the named date -
   a reconfirmation after the fact means the outcome is already in the body.
 
-Three filters keep the detector off ordinary prose. They exist because the
+Four filters keep the detector off ordinary prose and settled history. They exist because the
 signals are text patterns, and the same words occur in writing that describes
 a mechanism rather than asserting a status:
 
@@ -877,11 +877,22 @@ a mechanism rather than asserting a status:
   `"expire 2026-06-29"` is describing the phrase, not claiming the state.
   Only `"` and `` ` `` delimit - a bare `'` is far more often a possessive
   ("Boomtastic's") or a contraction ("PR'd") than a quote.
-- **`waiting-on` additionally requires a named agent** within 60 characters:
-  a person, a PR/MR reference, a ticket key, or a named artifact (key,
-  sign-off, approval). "waiting for EOF" and "waiting for the init container
-  image pull" name none of these. The other gated signals carry their own
-  subject - a PR number, a branch - so they need only the quoting filter.
+- **`waiting-on` additionally requires a named agent** in the same sentence
+  (at most 60 characters on): a person, a PR/MR reference, a ticket key, or a
+  named artifact (key, sign-off, approval). "waiting for EOF" and "waiting for
+  the init container image pull" name none of these. The window stops at a
+  sentence end or a blank line, so the next sentence's opening word ("...a
+  tool. Had I...") is never read as a name; honorifics (`Mr.`, `Dr.`) and a
+  single hard-wrap newline do not end it. The other gated signals carry their
+  own subject - a PR number, a branch - so they need only the quoting filter.
+- **A PR the claims ledger has settled does not flag.** `open-pr-reference`
+  stays quiet when every PR/MR in the match is settled in that memory's
+  `memory_claims` rows (the prose says resolved, or the claim was reconciled),
+  and a settled PR is not a named agent for `waiting-on`. Without this, "PR
+  #47 open" is accurate history that re-flagged every 14 days forever: a write
+  only advances the clock. A ref the ledger does not hold still flags.
+  `claim_queries.settled_ref_numbers()` feeds both `memory_stats` and every
+  read surface, so they agree.
 - **Deprecated memories are skipped on every surface.** A deprecation *is*
   the reconciliation, so re-flagging it asks for work already done.
 
@@ -2686,7 +2697,7 @@ src/gingugu/
 ├── claims.py               # Extracts repo-qualified PR/MR refs from prose
 ├── claim_qualify.py        # Decides which repo a bare ref names
 ├── claim_sync.py           # Write path: persistence, contradiction, resolution
-├── claim_queries.py        # Read path: backlog enumeration + the shared filter
+├── claim_queries.py        # Read path: backlog enumeration, shared filter, settled refs
 ├── claim_rederive.py       # Re-derivation that preserves resolution state
 │
 │   # ── Stats + misc ──────────────────────────────────────────────

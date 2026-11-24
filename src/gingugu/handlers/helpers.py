@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
+import sqlite3
 
 from .. import staleness
+from ..claim_queries import settled_ref_numbers
 from ..context import PINNED_HARD_CAP
 from ..models import Confidence, Memory, Namespace
 from ..relations import RelationManager
@@ -116,7 +118,7 @@ def _check_pin_budget(ctx: ServerContext, memory_id: str) -> dict | None:
     return None
 
 
-def _attach_review_hints(summary: dict, mem: Memory) -> dict:
+def _attach_review_hints(summary: dict, mem: Memory, conn: sqlite3.Connection) -> dict:
     """Stamp advisory ``review_hints`` onto a summary when the memory's content
     describes point-in-time state that hasn't been confirmed recently.
 
@@ -128,6 +130,9 @@ def _attach_review_hints(summary: dict, mem: Memory) -> dict:
     redo work that is already done. Without this the surfaces disagree:
     ``memory_stats`` would refuse to count a memory that ``memory_search``
     (with ``include_deprecated``/``ids``) still stamped a hint onto.
+
+    ``conn`` reads the memory's claims ledger, so a ref it has settled does
+    not hint here when ``memory_stats`` already stays quiet about it.
     """
     if mem.confidence is Confidence.DEPRECATED:
         return summary
@@ -137,6 +142,7 @@ def _attach_review_hints(summary: dict, mem: Memory) -> dict:
         last_confirmed=mem.last_confirmed,
         updated_at=mem.updated_at,
         created_at=mem.created_at,
+        settled_refs=settled_ref_numbers(conn, [mem.id]).get(mem.id),
     )
     if hints:
         summary["review_hints"] = hints

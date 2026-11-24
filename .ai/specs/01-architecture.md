@@ -204,7 +204,10 @@ AI client (Claude Code / Cursor / Windsurf / …)
   `memory_search(claims="open"|"contradicted"|"unverified")`. One definition, two consumers -
   a stats block and a search filter asking the same question with two
   hand-written correlated subqueries is how they drift apart. The split also
-  put `claim_sync.py` back under the 300-line limit.
+  put `claim_sync.py` back under the 300-line limit. It also owns
+  `settled_ref_numbers()`, the per-memory settled PR/MR numbers that
+  `staleness.review_signals(settled_refs=)` checks, so `memory_stats` and every
+  read surface agree on which `open-pr-reference` hints are history.
 
   `graph_stats.orphan_filter()` follows the same shape for the graph backlog:
   one predicate behind both the `memory_stats.graph.orphans` count and

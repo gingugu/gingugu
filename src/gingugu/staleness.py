@@ -79,6 +79,15 @@ _NAMED_AGENT = re.compile(
 )
 _AGENT_WINDOW = 60
 
+# Where the agent window stops: a sentence end, or a blank line. Without it the
+# next sentence's opening word ("...waiting for a tool. Had I...") reads as a
+# proper noun. Honorifics are not sentence ends ("awaiting Mr. Boomtastic's go"),
+# and a single newline is not either - memories are routinely hard-wrapped.
+_SENTENCE_END = re.compile(r"(?<!\bMr)(?<!\bMrs)(?<!\bMs)(?<!\bDr)[.!?](?=\s|\*)|\n[ \t]*\n")
+
+# The number inside a PR/MR reference, for checking it against settled claims.
+_REF_NUMBER = re.compile(r"\b(?:PR|MR|pull request|merge request)\s*[#!]?(\d+)", re.IGNORECASE)
+
 # How far to look around a match when deciding whether it sits inside a quote.
 _QUOTE_WINDOW = 90
 
@@ -105,19 +114,50 @@ def _is_quoted(content: str, match: re.Match[str]) -> bool:
     )
 
 
-def _asserts_live_state(content: str, pattern: re.Pattern[str]) -> bool:
+def _names_open_ref(text: str, settled: frozenset[int]) -> bool:
+    """True when ``text`` names a PR/MR the claims ledger has not settled.
+
+    Text with no ref at all counts as open: the caller only asks about spans
+    whose subject is a ref, or about agents that might be one.
+    """
+    numbers = {int(m.group(1)) for m in _REF_NUMBER.finditer(text)}
+    return not numbers or not numbers <= settled
+
+
+def _agent_window(content: str, start: int) -> str:
+    """The text after a wait phrase that may name who it waits on, cut at the
+    sentence end so the next sentence's opening word is never read as a name."""
+    window = content[start : start + _AGENT_WINDOW]
+    end = _SENTENCE_END.search(window)
+    return window[: end.start()] if end else window
+
+
+def _asserts_live_state(
+    content: str, pattern: re.Pattern[str], settled: frozenset[int] = frozenset()
+) -> bool:
     """True when at least one of ``pattern``'s matches reads as a live claim.
 
-    A match counts only if it is unquoted *and* names an agent the wait is on.
-    Both filters are needed: quoting alone misses "waiting for EOF", and the
-    agent check alone misses a quoted "awaiting merge".
+    A match counts only if it is unquoted *and* names an agent the wait is on,
+    within the same sentence. Both filters are needed: quoting alone misses
+    "waiting for EOF", and the agent check alone misses a quoted "awaiting
+    merge". A PR the ledger has settled is not an agent anything still waits on.
     """
     for match in pattern.finditer(content):
         if _is_quoted(content, match):
             continue
-        if _NAMED_AGENT.search(content[match.end() : match.end() + _AGENT_WINDOW]):
-            return True
+        window = _agent_window(content, match.end())
+        for agent in _NAMED_AGENT.finditer(window):
+            if _names_open_ref(agent.group(0), settled):
+                return True
     return False
+
+
+def _asserts_open_ref(content: str, pattern: re.Pattern[str], settled: frozenset[int]) -> bool:
+    """True when an unquoted match names at least one PR the ledger has not settled."""
+    return any(
+        not _is_quoted(content, m) and _names_open_ref(m.group(0), settled)
+        for m in pattern.finditer(content)
+    )
 
 
 def _parse_date(text: str) -> datetime | None:
@@ -178,13 +218,21 @@ def review_signals(
     updated_at: str | None = None,
     created_at: str | None = None,
     now: datetime | None = None,
+    settled_refs: frozenset[int] | None = None,
 ) -> list[str]:
     """Return the review-signal labels that fire for a memory, oldest-clock first.
 
     Empty list means "no nudge". Purely advisory — callers must never mutate
     a memory based on this.
+
+    ``settled_refs`` is the PR/MR numbers this memory's claims ledger records
+    as settled (see ``claim_queries.settled_ref_numbers``). A gated signal whose
+    only subject is a settled ref stays quiet: the prose "PR #47 open" is
+    accurate history once #47 is resolved, and re-confirming it only snoozed
+    the hint for ``REVIEW_HINT_AFTER_DAYS``.
     """
     now = now or datetime.now(UTC)
+    settled = settled_refs or frozenset()
     signals: list[str] = []
 
     # Ungated: the content names its own expiry/observation date. A bare
@@ -217,12 +265,14 @@ def review_signals(
             # "waiting-on" is the only signal whose phrasing also occurs in
             # ordinary technical prose ("waiting for EOF"), so it additionally
             # requires the wait to name an agent. The other two carry their own
-            # subject — a PR ref, a branch — and only need the quoting filter.
-            fires = (
-                _asserts_live_state(content, pattern)
-                if label == "waiting-on"
-                else _has_unquoted_match(content, pattern)
-            )
+            # subject — a PR ref, a branch — and only need the quoting filter,
+            # plus, for a PR ref, the ledger check.
+            if label == "waiting-on":
+                fires = _asserts_live_state(content, pattern, settled)
+            elif label == "open-pr-reference":
+                fires = _asserts_open_ref(content, pattern, settled)
+            else:
+                fires = _has_unquoted_match(content, pattern)
             if fires:
                 signals.append(label)
 
