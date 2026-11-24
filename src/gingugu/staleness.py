@@ -41,9 +41,10 @@ REVIEW_HINT_AFTER_DAYS = 14
 _TIMELESS_TYPES = frozenset({"pattern", "preference"})
 
 # Leading \b keeps the alternation from matching inside longer words ("GDPR").
-# The sigil is required, as in claims.py (#65): "PR 1" is a plan ordinal and
-# "kind pr 140" a column count, not references to anything that can be open.
-_PR_REF = r"\b(?:PR|MR|pull request|merge request)\s*[#!]\d+"
+# The sigil is required and the gap may not cross a line, as in claims.py (#65):
+# "PR 1" is a plan ordinal, "kind pr 140" a column count, and a "PR" ending one
+# line does not bind to a "#5" opening the next.
+_PR_REF = r"\b(?:PR|MR|pull request|merge request)[ \t]*[#!]\d+"
 
 # label → pattern. All matching is case-insensitive; the window between the
 # reference and the status word is capped so unrelated sentences don't pair up.
@@ -75,7 +76,7 @@ _AS_OF = re.compile(r"\bas of\s+(\d{4}-\d{2}-\d{2})\b", re.IGNORECASE)
 # mechanism, not a status. Deliberately case-sensitive: `[A-Z][a-z]{2,}` is
 # meant to catch a capitalised proper noun (Joe, Baskar), not any word.
 _NAMED_AGENT = re.compile(
-    r"(?:PR|MR|pull request|merge request)\s*[#!]\d+"
+    r"(?:PR|MR|pull request|merge request)[ \t]*[#!]\d+"
     r"|\b[A-Z][a-z]{2,}\b"
     r"|\b[A-Z]{2,}-\d+\b"
     r"|\b(?:key|sign-?off|approval|go-ahead|response|reply)\b"
@@ -89,7 +90,7 @@ _AGENT_WINDOW = 60
 _SENTENCE_END = re.compile(r"(?<!\bMr)(?<!\bMrs)(?<!\bMs)(?<!\bDr)[.!?](?=\s|\*)|\n[ \t]*\n")
 
 # The number inside a PR/MR reference, for checking it against settled claims.
-_REF_NUMBER = re.compile(r"\b(?:PR|MR|pull request|merge request)\s*[#!](\d+)", re.IGNORECASE)
+_REF_NUMBER = re.compile(r"\b(?:PR|MR|pull request|merge request)[ \t]*[#!](\d+)", re.IGNORECASE)
 
 # How far to look around a match when deciding whether it sits inside a quote.
 _QUOTE_WINDOW = 90

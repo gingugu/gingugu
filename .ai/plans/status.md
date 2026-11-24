@@ -7,7 +7,7 @@ _Last updated: 2026-11-24 (review-hint sigil + wiki-links on `fix/review-hint-si
 **Review hints: sigil + wiki-links (2026-11-24, branch `fix/review-hint-sigil-links`).** The second pass over the
 live backlog found two more `staleness.py` defects that `claims.py` had already fixed: a PR/MR reference without its
 sigil ("PR 2", "kind pr 140") counted as a ref, and text inside `[[wiki-links]]` counted as an assertion. `_PR_REF`,
-`_NAMED_AGENT` and `_REF_NUMBER` now require `#`/`!`; `review_signals` blanks links with `claims._blank_wikilinks`
+`_NAMED_AGENT` and `_REF_NUMBER` now require `#`/`!` with no line break before it (board item 6); `review_signals` blanks links with `claims._blank_wikilinks`
 first. Measured on the 25 still-flagged gingugu memories: exactly the 6 predicted clear, no other signal moves.
 Tests: `tests/test_review_hint_precision.py` sections 3-4.
 
@@ -2145,7 +2145,7 @@ repo.
 Repo qualification moved to a new `claim_qualify.py` to stay under the
 300-line limit. 703 tests green, `ruff` + `black` clean.
 
-**Known, not fixed:** `staleness.py:43` carries its own copy of the ref regex
+**Known, not fixed (FIXED 2026-11-24 on `fix/review-hint-sigil-links`):** `staleness.py:43` carried its own copy of the ref regex
 with the same optional-sigil defect. It drives review hints rather than
 claims, so it is left for a separate change. Now board item 2 below, where a
 closer read found it carries _two_ of the defects, not one.
@@ -3171,21 +3171,17 @@ for a line count rather than buying anything. It sits at 298 and the next edit
 crosses it again. This item is now blocking real work, not just tidiness. The product-spec "(unreleased)" drift that also
 sat here is **cleared** - cutting the release resolved all 19 markers.
 
-### 6. `staleness.py:43` ref-regex duplication
+### 6. `staleness.py` ref-regex duplication (defects FIXED 2026-11-24, duplication remains)
 
-`staleness.py:43` duplicates the ref regex that `claim_qualify.py:33` owns,
-and carries two of the five defects PR #65 fixed: the `[#!]` sigil is
-optional, so "PR 1" meaning "first PR of the plan" is a reference, and the
-separator is `\s*` rather than `[ \t]*`, so a kind at the end of one line
-binds to a number at the start of the next. Consequence is a false
-`open-pr-reference` review hint rather than a bad claim row, which is why PR
-#65 left it. The fix is one regex, but the real question is whether the two
-modules should share a single definition - `staleness.py` wants only the
-`kind`/`num` shape, not repo qualification, so a shared constant is
-plausible where a shared pattern is not.
-
-Re-verified 2026-08-30 on `main`: `_PR_REF` at line 43 still carries both
-defects.
+Both defects PR #65 fixed in claims and left here are fixed on
+`fix/review-hint-sigil-links`: `staleness.py`'s `_PR_REF`, `_NAMED_AGENT` and
+`_REF_NUMBER` now require the `[#!]` sigil and use `[ \t]*`, so neither a plan
+ordinal ("PR 1") nor a kind ending one line binds to a number on the next.
+What remains is the design question: `staleness.py` still keeps its own copy
+of the ref shape instead of sharing one with `claim_qualify.py:33`. It wants
+only the `kind`/`num` shape, not repo qualification, so a shared constant is
+plausible where a shared pattern is not. Low priority now that both copies
+agree.
 
 ### 7. A memory cannot tell a reader whether it is still true
 

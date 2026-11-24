@@ -191,6 +191,11 @@ def test_pr_without_sigil_is_not_a_reference(content: str) -> None:
     assert "open-pr-reference" not in _signals(content)
 
 
+def test_pr_reference_does_not_span_a_line_break() -> None:
+    content = "- the last item with NO PR\n#5 open questions remain"
+    assert "open-pr-reference" not in _signals(content)
+
+
 def test_pr_with_sigil_still_flags() -> None:
     assert "open-pr-reference" in _signals("PR #12 still open, needs review")
     assert "open-pr-reference" in _signals("MR !12 still open, needs review")

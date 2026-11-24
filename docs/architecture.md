@@ -880,8 +880,9 @@ a mechanism rather than asserting a status:
 - **Nothing counts inside a `[[wiki-link]]`.** A link cites another memory by
   its title; "see [[PR #155 OPEN: ...]]" asserts nothing about #155 here. The
   spans are blanked with `claims._blank_wikilinks`, the extractor's own rule.
-- **A PR/MR reference needs its sigil** (`#` or `!`), as in claim extraction
-  since #65: "PR 1" is a plan ordinal and "kind pr 140" a column count.
+- **A PR/MR reference needs its sigil** (`#` or `!`) on the same line, as in
+  claim extraction since #65: "PR 1" is a plan ordinal, "kind pr 140" a column
+  count, and a "PR" ending one line does not bind to a "#5" opening the next.
 - **`waiting-on` additionally requires a named agent** in the same sentence
   (at most 60 characters on): a person, a PR/MR reference, a ticket key, or a
   named artifact (key, sign-off, approval). "waiting for EOF" and "waiting for
