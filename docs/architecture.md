@@ -869,7 +869,7 @@ Two signal classes (all regex-based, case-insensitive):
   type, but are suppressed when `last_confirmed` postdates the named date -
   a reconfirmation after the fact means the outcome is already in the body.
 
-Four filters keep the detector off ordinary prose and settled history. They exist because the
+Six filters keep the detector off ordinary prose and settled history. They exist because the
 signals are text patterns, and the same words occur in writing that describes
 a mechanism rather than asserting a status:
 
@@ -877,6 +877,11 @@ a mechanism rather than asserting a status:
   `"expire 2026-06-29"` is describing the phrase, not claiming the state.
   Only `"` and `` ` `` delimit - a bare `'` is far more often a possessive
   ("Boomtastic's") or a contraction ("PR'd") than a quote.
+- **Nothing counts inside a `[[wiki-link]]`.** A link cites another memory by
+  its title; "see [[PR #155 OPEN: ...]]" asserts nothing about #155 here. The
+  spans are blanked with `claims._blank_wikilinks`, the extractor's own rule.
+- **A PR/MR reference needs its sigil** (`#` or `!`), as in claim extraction
+  since #65: "PR 1" is a plan ordinal and "kind pr 140" a column count.
 - **`waiting-on` additionally requires a named agent** in the same sentence
   (at most 60 characters on): a person, a PR/MR reference, a ticket key, or a
   named artifact (key, sign-off, approval). "waiting for EOF" and "waiting for

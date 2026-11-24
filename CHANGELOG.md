@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Review hints ignore `[[wiki-links]]` and PR numbers without a `#`.** A link
+  to another memory titled "PR #155 OPEN" no longer flags the memory that links
+  to it, and "PR 2" in a plan or "kind pr 140" in a measurement no longer reads
+  as an open pull request - the same two rules claim extraction already follows.
+
 ---
 
 ## [0.55.1] - 2026-11-24

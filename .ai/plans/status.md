@@ -1,10 +1,17 @@
 # Project Status
 
-_Last updated: 2026-11-24 (review-hint precision on `fix/review-hint-precision`; everything else under In Flight below it is released - each entry names its release)_
+_Last updated: 2026-11-24 (review-hint sigil + wiki-links on `fix/review-hint-sigil-links`; everything else under In Flight below it is released - each entry names its release)_
 
 ## In Flight
 
-**Review-hint precision (2026-11-24, branch `fix/review-hint-precision`).** A brain-hygiene sweep flagged 110
+**Review hints: sigil + wiki-links (2026-11-24, branch `fix/review-hint-sigil-links`).** The second pass over the
+live backlog found two more `staleness.py` defects that `claims.py` had already fixed: a PR/MR reference without its
+sigil ("PR 2", "kind pr 140") counted as a ref, and text inside `[[wiki-links]]` counted as an assertion. `_PR_REF`,
+`_NAMED_AGENT` and `_REF_NUMBER` now require `#`/`!`; `review_signals` blanks links with `claims._blank_wikilinks`
+first. Measured on the 25 still-flagged gingugu memories: exactly the 6 predicted clear, no other signal moves.
+Tests: `tests/test_review_hint_precision.py` sections 3-4.
+
+**Review-hint precision (2026-11-24, #209; RELEASED in 0.55.1).** A brain-hygiene sweep flagged 110
 memories; every PR they called open was merged. Two detector defects in `staleness.py`: `waiting-on`'s 60-char agent
 window ran into the next sentence (its opening "Had"/"Then"/"Use" matched as a proper noun), and `open-pr-reference`
 never consulted the claims ledger, so accurate history re-flagged every 14 days. The window now stops at a sentence

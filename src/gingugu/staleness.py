@@ -26,6 +26,7 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime, timedelta
 
+from .claims import _blank_wikilinks
 from .decay import days_between, reference_timestamp
 
 # A gated signal only fires when the memory hasn't been confirmed for this
@@ -40,7 +41,9 @@ REVIEW_HINT_AFTER_DAYS = 14
 _TIMELESS_TYPES = frozenset({"pattern", "preference"})
 
 # Leading \b keeps the alternation from matching inside longer words ("GDPR").
-_PR_REF = r"\b(?:PR|MR|pull request|merge request)\s*[#!]?\d+"
+# The sigil is required, as in claims.py (#65): "PR 1" is a plan ordinal and
+# "kind pr 140" a column count, not references to anything that can be open.
+_PR_REF = r"\b(?:PR|MR|pull request|merge request)\s*[#!]\d+"
 
 # label → pattern. All matching is case-insensitive; the window between the
 # reference and the status word is capped so unrelated sentences don't pair up.
@@ -72,7 +75,7 @@ _AS_OF = re.compile(r"\bas of\s+(\d{4}-\d{2}-\d{2})\b", re.IGNORECASE)
 # mechanism, not a status. Deliberately case-sensitive: `[A-Z][a-z]{2,}` is
 # meant to catch a capitalised proper noun (Joe, Baskar), not any word.
 _NAMED_AGENT = re.compile(
-    r"(?:PR|MR|pull request|merge request)\s*[#!]?\d+"
+    r"(?:PR|MR|pull request|merge request)\s*[#!]\d+"
     r"|\b[A-Z][a-z]{2,}\b"
     r"|\b[A-Z]{2,}-\d+\b"
     r"|\b(?:key|sign-?off|approval|go-ahead|response|reply)\b"
@@ -86,7 +89,7 @@ _AGENT_WINDOW = 60
 _SENTENCE_END = re.compile(r"(?<!\bMr)(?<!\bMrs)(?<!\bMs)(?<!\bDr)[.!?](?=\s|\*)|\n[ \t]*\n")
 
 # The number inside a PR/MR reference, for checking it against settled claims.
-_REF_NUMBER = re.compile(r"\b(?:PR|MR|pull request|merge request)\s*[#!]?(\d+)", re.IGNORECASE)
+_REF_NUMBER = re.compile(r"\b(?:PR|MR|pull request|merge request)\s*[#!](\d+)", re.IGNORECASE)
 
 # How far to look around a match when deciding whether it sits inside a quote.
 _QUOTE_WINDOW = 90
@@ -233,6 +236,9 @@ def review_signals(
     """
     now = now or datetime.now(UTC)
     settled = settled_refs or frozenset()
+    # A [[wiki-link]] cites another memory by its title; what that title says
+    # is not asserted here. Blanked (length kept) exactly as claims.py does.
+    content = _blank_wikilinks(content)
     signals: list[str] = []
 
     # Ungated: the content names its own expiry/observation date. A bare
