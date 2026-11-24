@@ -104,6 +104,10 @@ def _is_quoted(content: str, match: re.Match[str]) -> bool:
     said "awaiting merge" after the merge landed. The memory is describing
     the phrase, not claiming the state.
     """
+    # A match that crosses a quote mark is half citation: "open-pr-reference,
+    # from narration ("PR #154 open")" pairs a word outside with a ref inside.
+    if any(mark in match.group(0) for mark in '"`'):
+        return True
     window = content[max(0, match.start() - _QUOTE_WINDOW) : match.end() + _QUOTE_WINDOW]
     literal = re.escape(match.group(0))
     # Only " and ` count as delimiters. A bare ' is far more often a possessive
@@ -276,7 +280,8 @@ def review_signals(
             # plus, for a PR ref, the ledger check.
             if label == "waiting-on":
                 fires = _asserts_live_state(content, pattern, settled)
-            elif label == "open-pr-reference":
+            elif label in ("open-pr-reference", "unmerged-branch"):
+                # A branch named with its settled PR is history too.
                 fires = _asserts_open_ref(content, pattern, settled)
             else:
                 fires = _has_unquoted_match(content, pattern)

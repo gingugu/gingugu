@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to another memory titled "PR #155 OPEN" no longer flags the memory that links
   to it, and "PR 2" in a plan or "kind pr 140" in a measurement no longer reads
   as an open pull request - the same two rules claim extraction already follows.
+  An `unmerged-branch` hint naming a PR the claims ledger has settled stays
+  quiet, and a match that runs across a quote mark counts as a quotation.
 
 ---
 

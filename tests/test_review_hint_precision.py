@@ -231,3 +231,21 @@ def test_text_outside_a_wiki_link_still_signals() -> None:
     content = "See [[old handoff]]. PR #12 is still open, waiting on Joe to review."
     assert "open-pr-reference" in _signals(content)
     assert "waiting-on" in _signals(content)
+
+
+# --- 5. quote boundaries and settled branches ------------------------------
+
+
+def test_match_crossing_a_quote_boundary_is_citation() -> None:
+    content = 'Two journals -> open-pr-reference, from narration ("PR #154 open") in reflections'
+    assert "open-pr-reference" not in _signals(content)
+
+
+def test_unmerged_branch_quiet_when_its_pr_is_settled() -> None:
+    content = "Built on branch feature/promote-bridge (PR #11, open, NOT merged). Stage 1."
+    assert "unmerged-branch" in _signals(content)
+    assert "unmerged-branch" not in _signals(content, settled=frozenset({11}))
+
+
+def test_unmerged_branch_without_a_pr_still_flags() -> None:
+    assert "unmerged-branch" in _signals("The branch feature/x is still open, not yet merged.")

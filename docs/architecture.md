@@ -876,7 +876,9 @@ a mechanism rather than asserting a status:
 - **Nothing counts inside quotes or backticks.** A memory citing
   `"expire 2026-06-29"` is describing the phrase, not claiming the state.
   Only `"` and `` ` `` delimit - a bare `'` is far more often a possessive
-  ("Boomtastic's") or a contraction ("PR'd") than a quote.
+  ("Boomtastic's") or a contraction ("PR'd") than a quote. A match that
+  crosses a quote mark (`open ... ("PR #154`) is half citation and counts as
+  quoted too.
 - **Nothing counts inside a `[[wiki-link]]`.** A link cites another memory by
   its title; "see [[PR #155 OPEN: ...]]" asserts nothing about #155 here. The
   spans are blanked with `claims._blank_wikilinks`, the extractor's own rule.
@@ -892,7 +894,7 @@ a mechanism rather than asserting a status:
   single hard-wrap newline do not end it. The other gated signals carry their
   own subject - a PR number, a branch - so they need only the quoting filter.
 - **A PR the claims ledger has settled does not flag.** `open-pr-reference`
-  stays quiet when every PR/MR in the match is settled in that memory's
+  (and `unmerged-branch`, when the branch is named with its PR) stays quiet when every PR/MR in the match is settled in that memory's
   `memory_claims` rows (the prose says resolved, or the claim was reconciled),
   and a settled PR is not a named agent for `waiting-on`. Without this, "PR
   #47 open" is accurate history that re-flagged every 14 days forever: a write
