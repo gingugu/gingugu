@@ -172,3 +172,80 @@ async def test_unresolved_claim_still_flags(server) -> None:
     mid = stored["memory"]["id"]
     _age(server, mid)
     assert mid in await _flagged_ids(server)
+
+
+# --- 3. a PR reference needs its sigil -------------------------------------
+# Same rule claims.py adopted in #65: "PR 1" is a plan ordinal, "pr 140" a
+# column count. Examples from memories that flagged on 2026-11-24.
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "151 rows - state resolved 121, open 30; kind pr 140, mr 11. Matches",
+        "Possibly makes the claude/channel adapter (PR2, needs a dev flag) optional",
+        "Plan: PR 1 adds the table, PR 2 is still open for discussion",
+    ],
+)
+def test_pr_without_sigil_is_not_a_reference(content: str) -> None:
+    assert "open-pr-reference" not in _signals(content)
+
+
+def test_pr_reference_does_not_span_a_line_break() -> None:
+    content = "- the last item with NO PR\n#5 open questions remain"
+    assert "open-pr-reference" not in _signals(content)
+
+
+def test_pr_with_sigil_still_flags() -> None:
+    assert "open-pr-reference" in _signals("PR #12 still open, needs review")
+    assert "open-pr-reference" in _signals("MR !12 still open, needs review")
+
+
+def test_pr_without_sigil_is_not_a_named_agent() -> None:
+    assert "waiting-on" not in _signals("Release waiting on PR 2 from the plan list.")
+    assert "waiting-on" in _signals("Release waiting on PR #2 to land.")
+
+
+# --- 4. a wiki-link is a citation, not an assertion ------------------------
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "the state came from the linked title [[DESI-52 guardrails: PR #155 OPEN, merge HELD]].",
+        "Same shape as\n[[PRODUCT GAP (FIXED in PR #47): open claims were NOT enumerable]]: a gap",
+        "Follows [[RESUME (5th sail): PR #48 merged]] - the release decision pending it flagged",
+    ],
+)
+def test_wiki_link_text_does_not_signal(content: str) -> None:
+    assert _signals(content) == []
+
+
+def test_dates_inside_a_wiki_link_do_not_signal() -> None:
+    expired = (datetime.now(UTC) - timedelta(days=7)).date().isoformat()
+    assert _signals(f"token expires {expired}") == ["expired-date"]
+    assert _signals(f"See [[Rotation note: token expires {expired}]] for history.") == []
+
+
+def test_text_outside_a_wiki_link_still_signals() -> None:
+    content = "See [[old handoff]]. PR #12 is still open, waiting on Joe to review."
+    assert "open-pr-reference" in _signals(content)
+    assert "waiting-on" in _signals(content)
+
+
+# --- 5. quote boundaries and settled branches ------------------------------
+
+
+def test_match_crossing_a_quote_boundary_is_citation() -> None:
+    content = 'Two journals -> open-pr-reference, from narration ("PR #154 open") in reflections'
+    assert "open-pr-reference" not in _signals(content)
+
+
+def test_unmerged_branch_quiet_when_its_pr_is_settled() -> None:
+    content = "Built on branch feature/promote-bridge (PR #11, open, NOT merged). Stage 1."
+    assert "unmerged-branch" in _signals(content)
+    assert "unmerged-branch" not in _signals(content, settled=frozenset({11}))
+
+
+def test_unmerged_branch_without_a_pr_still_flags() -> None:
+    assert "unmerged-branch" in _signals("The branch feature/x is still open, not yet merged.")

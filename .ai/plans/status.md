@@ -1,10 +1,19 @@
 # Project Status
 
-_Last updated: 2026-11-24 (review-hint precision on `fix/review-hint-precision`; everything else under In Flight below it is released - each entry names its release)_
+_Last updated: 2026-11-24 (review-hint sigil + wiki-links on `fix/review-hint-sigil-links`; everything else under In Flight below it is released - each entry names its release)_
 
 ## In Flight
 
-**Review-hint precision (2026-11-24, branch `fix/review-hint-precision`).** A brain-hygiene sweep flagged 110
+**Review hints: sigil + wiki-links (2026-11-24, branch `fix/review-hint-sigil-links`).** The second pass over the
+live backlog found two more `staleness.py` defects that `claims.py` had already fixed: a PR/MR reference without its
+sigil ("PR 2", "kind pr 140") counted as a ref, and text inside `[[wiki-links]]` counted as an assertion. `_PR_REF`,
+`_NAMED_AGENT` and `_REF_NUMBER` now require `#`/`!` with no line break before it (board item 6); `review_signals` blanks links with `claims._blank_wikilinks`
+first. `unmerged-branch` now uses the same settled-ref check as `open-pr-reference`, and a match crossing a
+quote mark counts as quoted. Measured on the 25 still-flagged gingugu memories: the sigil and link fixes clear exactly
+the 6 predicted, no other signal moves.
+Tests: `tests/test_review_hint_precision.py` sections 3-4.
+
+**Review-hint precision (2026-11-24, #209; RELEASED in 0.55.1).** A brain-hygiene sweep flagged 110
 memories; every PR they called open was merged. Two detector defects in `staleness.py`: `waiting-on`'s 60-char agent
 window ran into the next sentence (its opening "Had"/"Then"/"Use" matched as a proper noun), and `open-pr-reference`
 never consulted the claims ledger, so accurate history re-flagged every 14 days. The window now stops at a sentence
@@ -2138,7 +2147,7 @@ repo.
 Repo qualification moved to a new `claim_qualify.py` to stay under the
 300-line limit. 703 tests green, `ruff` + `black` clean.
 
-**Known, not fixed:** `staleness.py:43` carries its own copy of the ref regex
+**Known, not fixed (FIXED 2026-11-24 on `fix/review-hint-sigil-links`):** `staleness.py:43` carried its own copy of the ref regex
 with the same optional-sigil defect. It drives review hints rather than
 claims, so it is left for a separate change. Now board item 2 below, where a
 closer read found it carries _two_ of the defects, not one.
@@ -3164,21 +3173,17 @@ for a line count rather than buying anything. It sits at 298 and the next edit
 crosses it again. This item is now blocking real work, not just tidiness. The product-spec "(unreleased)" drift that also
 sat here is **cleared** - cutting the release resolved all 19 markers.
 
-### 6. `staleness.py:43` ref-regex duplication
+### 6. `staleness.py` ref-regex duplication (defects FIXED 2026-11-24, duplication remains)
 
-`staleness.py:43` duplicates the ref regex that `claim_qualify.py:33` owns,
-and carries two of the five defects PR #65 fixed: the `[#!]` sigil is
-optional, so "PR 1" meaning "first PR of the plan" is a reference, and the
-separator is `\s*` rather than `[ \t]*`, so a kind at the end of one line
-binds to a number at the start of the next. Consequence is a false
-`open-pr-reference` review hint rather than a bad claim row, which is why PR
-#65 left it. The fix is one regex, but the real question is whether the two
-modules should share a single definition - `staleness.py` wants only the
-`kind`/`num` shape, not repo qualification, so a shared constant is
-plausible where a shared pattern is not.
-
-Re-verified 2026-08-30 on `main`: `_PR_REF` at line 43 still carries both
-defects.
+Both defects PR #65 fixed in claims and left here are fixed on
+`fix/review-hint-sigil-links`: `staleness.py`'s `_PR_REF`, `_NAMED_AGENT` and
+`_REF_NUMBER` now require the `[#!]` sigil and use `[ \t]*`, so neither a plan
+ordinal ("PR 1") nor a kind ending one line binds to a number on the next.
+What remains is the design question: `staleness.py` still keeps its own copy
+of the ref shape instead of sharing one with `claim_qualify.py:33`. It wants
+only the `kind`/`num` shape, not repo qualification, so a shared constant is
+plausible where a shared pattern is not. Low priority now that both copies
+agree.
 
 ### 7. A memory cannot tell a reader whether it is still true
 

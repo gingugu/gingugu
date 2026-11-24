@@ -869,14 +869,22 @@ Two signal classes (all regex-based, case-insensitive):
   type, but are suppressed when `last_confirmed` postdates the named date -
   a reconfirmation after the fact means the outcome is already in the body.
 
-Four filters keep the detector off ordinary prose and settled history. They exist because the
+Six filters keep the detector off ordinary prose and settled history. They exist because the
 signals are text patterns, and the same words occur in writing that describes
 a mechanism rather than asserting a status:
 
 - **Nothing counts inside quotes or backticks.** A memory citing
   `"expire 2026-06-29"` is describing the phrase, not claiming the state.
   Only `"` and `` ` `` delimit - a bare `'` is far more often a possessive
-  ("Boomtastic's") or a contraction ("PR'd") than a quote.
+  ("Boomtastic's") or a contraction ("PR'd") than a quote. A match that
+  crosses a quote mark (`open ... ("PR #154`) is half citation and counts as
+  quoted too.
+- **Nothing counts inside a `[[wiki-link]]`.** A link cites another memory by
+  its title; "see [[PR #155 OPEN: ...]]" asserts nothing about #155 here. The
+  spans are blanked with `claims._blank_wikilinks`, the extractor's own rule.
+- **A PR/MR reference needs its sigil** (`#` or `!`) on the same line, as in
+  claim extraction since #65: "PR 1" is a plan ordinal, "kind pr 140" a column
+  count, and a "PR" ending one line does not bind to a "#5" opening the next.
 - **`waiting-on` additionally requires a named agent** in the same sentence
   (at most 60 characters on): a person, a PR/MR reference, a ticket key, or a
   named artifact (key, sign-off, approval). "waiting for EOF" and "waiting for
@@ -886,7 +894,7 @@ a mechanism rather than asserting a status:
   single hard-wrap newline do not end it. The other gated signals carry their
   own subject - a PR number, a branch - so they need only the quoting filter.
 - **A PR the claims ledger has settled does not flag.** `open-pr-reference`
-  stays quiet when every PR/MR in the match is settled in that memory's
+  (and `unmerged-branch`, when the branch is named with its PR) stays quiet when every PR/MR in the match is settled in that memory's
   `memory_claims` rows (the prose says resolved, or the claim was reconciled),
   and a settled PR is not a named agent for `waiting-on`. Without this, "PR
   #47 open" is accurate history that re-flagged every 14 days forever: a write
