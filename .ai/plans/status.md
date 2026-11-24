@@ -8,7 +8,9 @@ _Last updated: 2026-11-24 (review-hint sigil + wiki-links on `fix/review-hint-si
 live backlog found two more `staleness.py` defects that `claims.py` had already fixed: a PR/MR reference without its
 sigil ("PR 2", "kind pr 140") counted as a ref, and text inside `[[wiki-links]]` counted as an assertion. `_PR_REF`,
 `_NAMED_AGENT` and `_REF_NUMBER` now require `#`/`!` with no line break before it (board item 6); `review_signals` blanks links with `claims._blank_wikilinks`
-first. Measured on the 25 still-flagged gingugu memories: exactly the 6 predicted clear, no other signal moves.
+first. `unmerged-branch` now uses the same settled-ref check as `open-pr-reference`, and a match crossing a
+quote mark counts as quoted. Measured on the 25 still-flagged gingugu memories: the sigil and link fixes clear exactly
+the 6 predicted, no other signal moves.
 Tests: `tests/test_review_hint_precision.py` sections 3-4.
 
 **Review-hint precision (2026-11-24, #209; RELEASED in 0.55.1).** A brain-hygiene sweep flagged 110
