@@ -1,10 +1,19 @@
 # Project Status
 
-_Last updated: 2026-11-23 (memory_promote on `feature/memory-promote`; everything else under In Flight below it is released - each entry names its release)_
+_Last updated: 2026-11-24 (review-hint precision on `fix/review-hint-precision`; everything else under In Flight below it is released - each entry names its release)_
 
 ## In Flight
 
-**`memory_promote` (2026-11-23, branch `feature/memory-promote`).** The crew commons held only the onboarding
+**Review-hint precision (2026-11-24, branch `fix/review-hint-precision`).** A brain-hygiene sweep flagged 110
+memories; every PR they called open was merged. Two detector defects in `staleness.py`: `waiting-on`'s 60-char agent
+window ran into the next sentence (its opening "Had"/"Then"/"Use" matched as a proper noun), and `open-pr-reference`
+never consulted the claims ledger, so accurate history re-flagged every 14 days. The window now stops at a sentence
+end or blank line (honorifics and hard-wrap newlines excepted); `claim_queries.settled_ref_numbers()` feeds
+`review_signals(settled_refs=)` from `memory_stats` and every read surface. Measured: `waiting-on` 40 -> 14 on the
+flagged corpus; the ledger half can only be measured on the Pi after release. Tests:
+`tests/test_review_hint_precision.py`. Next: release, then retitle the ~15 memories whose titles still say "PR open".
+
+**`memory_promote` (2026-11-23, #208; RELEASED in 0.55.0).** The crew commons held only the onboarding
 packets and the first mate's two promotions: owners could not promote at all (`promote --to-crew` refuses a remote
 brain), the CLI took whole namespaces only, re-promoting an edit piled up a second copy (matching on title+content,
 since search returns no metadata), and an owner loading `crow` + `crew` would read every lesson twice. New tool
