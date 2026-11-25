@@ -11,6 +11,10 @@ both files changed in at least ``MIN_REVS`` commits, together in at least
 ``history.MIN_SHARED``, and a degree - shared commits over the average of the
 two revision counts - of at least ``MIN_DEGREE``. A pair is ``hidden`` when
 neither file imports the other: the dependency the import graph cannot show.
+Given ``tracked`` (the files git lists), coupling also covers tracked files
+outside the graph - YAML, HCL - so a pair involving one is always hidden;
+``others`` ranks those files by churn x authors, apart from the import-ranked
+hotspots, since import rank means nothing for them.
 
 **Blind spots** are where a change reaches furthest with the least review:
 imported source no test reaches directly and no test is named for, ordered by
@@ -20,6 +24,8 @@ files untested; the naming rule (``hook_common.nearest_tests``'s) brings it to 8
 """
 
 from __future__ import annotations
+
+from collections.abc import Iterable
 
 from . import hook_common
 from .history import MIN_SHARED, History
@@ -62,18 +68,33 @@ def hotspots(g: Graph, h: History) -> list[dict]:
     ]
 
 
+def others(g: Graph, h: History, tracked: Iterable[str]) -> list[dict]:
+    """Tracked files outside the import graph that changed, by churn x authors."""
+    touched = [p for p in tracked if p not in g.files and h.churn.get(p, 0) > 0]
+    touched.sort(key=lambda p: (-(h.churn[p] * max(h.authors.get(p, 0), 1)), p))
+    return [{"path": p, "commits": h.churn[p], "authors": h.authors.get(p, 0)} for p in touched]
+
+
 def _linked(g: Graph) -> set[tuple[str, str]]:
     return {(ln.src, ln.dst) for ln in g.links if not ln.implicit}
 
 
-def coupling(g: Graph, h: History, files: list[str] | None = None) -> list[dict]:
-    """Pairs of graph files that change together, strongest first; with ``files``,
-    only pairs that include one of them."""
+def coupling(
+    g: Graph, h: History, files: list[str] | None = None, tracked: Iterable[str] | None = None
+) -> list[dict]:
+    """Pairs of files that change together, strongest first; with ``files``, only
+    pairs that include one of them. Graph files only, unless ``tracked`` adds the
+    tracked files outside the graph."""
     linked = _linked(g)
     focus = set(files) if files else None
+    extra = set(tracked) - set(g.files) if tracked is not None else set()
+
+    def eligible(p: str) -> bool:
+        return (p in g.files and p not in g.packages) or p in extra
+
     rows = []
     for (a, b), shared in h.pairs.items():
-        if a not in g.files or b not in g.files or a in g.packages or b in g.packages:
+        if not eligible(a) or not eligible(b):
             continue
         if focus is not None and a not in focus and b not in focus:
             continue
