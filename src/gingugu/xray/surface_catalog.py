@@ -3,7 +3,7 @@
 A *sink* is an external call that does something an attacker would want done:
 run a command, evaluate code, rebuild an object from bytes, change the disk,
 talk to the network, read a secret. An *entry* is where outside input arrives:
-an HTTP route, an MCP tool, a CLI command, a queued task.
+an HTTP route, an MCP tool, a CLI command, a queued task, an AWS Lambda handler.
 
 Both are named catalogues, per language, and nothing outside them is ever
 stored: a sink or an entry label reaches the agent's context, so the cache may
@@ -17,7 +17,7 @@ from __future__ import annotations
 
 # Most dangerous first: the order the map is read in.
 CATEGORIES = ("exec", "eval", "deserialize", "sql", "fs", "secret", "net", "db")
-KINDS = ("http", "mcp", "cli", "task", "main")
+KINDS = ("http", "mcp", "cli", "task", "main", "lambda")
 SQL_BUILT = "sql.built"  # a query string assembled at runtime (walkers flag it)
 MAX_LABEL = 80
 
@@ -100,6 +100,7 @@ _PY_LAST = {
     **dict.fromkeys(("tool", "resource", "prompt"), "mcp"),
     **dict.fromkeys(("command", "group", "callback"), "cli"),
     "task": "task",
+    "lambda": "lambda",  # the walk's own label "aws.lambda": a handler found by signature
 }
 # Called with a handler, not used as a decorator: the last name decides.
 _PY_REGISTRARS = {
