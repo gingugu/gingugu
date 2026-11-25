@@ -12,7 +12,8 @@ from __future__ import annotations
 import pytest
 
 from gingugu import hook_remote, remote, remote_tls, serve_tls
-from gingugu.proxy_session import DeriveTransient, ProxyLost, derive
+from gingugu.proxy_derive import derive
+from gingugu.proxy_session import DeriveTransient, ProxyLost
 from gingugu.remote import RemoteTarget
 from tests.proxy_fixtures import free_port, make_brain, payload, serving, through_proxy
 

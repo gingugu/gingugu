@@ -20,7 +20,7 @@ import anyio
 import httpx2
 
 from . import agent_session
-from .proxy_session import derive
+from .proxy_derive import derive
 from .remote_tls import verify_for
 
 
@@ -54,7 +54,15 @@ class SessionTokens:
         self._renewing = anyio.Lock()
 
     async def derive(self) -> tuple[str, int]:
-        token, expires_in = await derive(self.url, self.owner_token, **self.derive_args)
+        """A fresh token. One renewal at a time: two at once would both hand back
+        the same old token, and the brain would keep the loser live to its TTL."""
+        async with self._renewing:
+            return await self._derive()
+
+    async def _derive(self) -> tuple[str, int]:
+        token, expires_in = await derive(
+            self.url, self.owner_token, replaces=self.token, **self.derive_args
+        )
         now = anyio.current_time()
         self.token, self.expiry, self.ttl = token, now + expires_in, expires_in
         self.derived_at, self.accepted, self.reauth = now, False, False
@@ -71,14 +79,20 @@ class SessionTokens:
         """The brain refused ``stale``: derive once, however many requests saw it."""
         async with self._renewing:
             if self.token == stale and self.may_renew():
-                await self.derive()
+                await self._derive()
 
-    async def current(self) -> tuple[str, int]:
-        """The current token if it still has over half its life, else a fresh one."""
+    def _fresh(self) -> tuple[str, int] | None:
         left = self.expiry - anyio.current_time()
         if self.token and left > self.ttl / 2 and not (self.reauth and self.may_renew()):
             return self.token, int(left)
-        return await self.derive()
+        return None
+
+    async def current(self) -> tuple[str, int]:
+        """The current token if it still has over half its life, else a fresh one."""
+        if (fresh := self._fresh()) is not None:
+            return fresh
+        async with self._renewing:  # whoever waited here takes the winner's token
+            return self._fresh() or await self._derive()
 
 
 class SessionAuth(httpx2.Auth):

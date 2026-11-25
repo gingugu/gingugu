@@ -1,4 +1,4 @@
-"""Building blocks for `proxy.run`: token derivation, messages, one live link.
+"""Building blocks for `proxy.run`: messages, one live link (derivation: `proxy_derive`).
 
 Kept apart from `proxy` so each file stays small. Nothing here ever puts a token
 into a message or an exception.
@@ -23,7 +23,6 @@ from mcp.types import (
 )
 
 from .proxy_gate import screen as _gate
-from .remote_tls import explain, is_clock, tls_failure, verify_for
 
 CRED_PREFIX = "credential_"
 CLIENT_GONE = (anyio.BrokenResourceError, anyio.ClosedResourceError)
@@ -52,50 +51,6 @@ class DeriveTransient(Exception):
 
 class SessionTerminated(Exception):
     """The brain no longer knows this MCP session."""
-
-
-async def derive(
-    url: str, owner_token: str, *, grant: str | None, home: str | None, ttl: int, name: str | None
-) -> tuple[str, int]:
-    """Trade the owner token for a session token: ``(token, expires_in)``."""
-    fields = {"grant": grant, "home": home, "ttl": ttl, "name": name}
-    body = {key: value for key, value in fields.items() if value is not None}
-    try:
-        verify = verify_for(url)
-    except ValueError as exc:  # a corrupt pin: refuse, never fall back
-        raise ProxyLost(str(exc)) from None
-    try:
-        async with httpx2.AsyncClient(timeout=10, verify=verify) as client:
-            resp = await client.post(
-                f"{url}/token/derive",
-                json=body,
-                headers={"Authorization": f"Bearer {owner_token}"},
-            )
-    except httpx2.HTTPError as exc:
-        cert_err = tls_failure(exc)
-        if cert_err is not None and not is_clock(cert_err):
-            # Not transient: retrying would hide it as "reconnecting".
-            raise ProxyLost(explain(url, cert_err)) from None
-        raise DeriveTransient(type(exc).__name__) from None
-    status = resp.status_code
-    if status in (401, 403):
-        raise ProxyLost(
-            f"remote brain {url} refused the machine token (HTTP {status}). "
-            f"Run: gingugu remote login {url}"
-        )
-    if status >= 500 or status == 429:  # 429: the brain's live-token cap; it drains
-        raise DeriveTransient(f"HTTP {status}")
-    if status != 200:
-        try:
-            detail = str(resp.json().get("error", ""))
-        except (ValueError, AttributeError):
-            detail = ""
-        raise ProxyLost(f"remote brain rejected the session request (HTTP {status}): {detail}")
-    try:
-        data = resp.json()
-        return str(data["token"]), int(data["expires_in"])
-    except (ValueError, KeyError, TypeError):
-        raise DeriveTransient("malformed derive reply") from None
 
 
 def wrap(message: JSONRPCRequest | JSONRPCResponse | JSONRPCError | JSONRPCNotification):
