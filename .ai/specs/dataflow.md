@@ -578,7 +578,7 @@ PreToolUse event  →  .claude/hooks/pre_tool_tripwire.py (pure stdlib)
       → X-ray edit check (xray/edit_hook; its own switch, runs before the
         MEMORY_TRIPWIRES check and does not exit the hook)
           Edit/Write/MultiEdit of a file an X-ray adapter parses (lang.for_path:
-          Python, TS/JS, Go), else skip
+          Python, TS/JS, Go, Terraform), else skip
           MEMORY_XRAY_TRIPWIRE=off: skip
           git root + content fingerprint of the checkout
           graph cache hook-sessions/xray-graph-<sha16(root)>.json (shared with
@@ -714,7 +714,8 @@ post body → board_brief.ref_in: first `xray:` line, ref alone on it, <= 200 ch
   brief._check_range gate (else no brief)
   → attach(body, cwd): MEMORY_XRAY_BOARD off → nothing
     `xray: <repo> <range>` → repo_id.find: cwd checkout if it matches, else exactly
-      <root>/<name> under MEMORY_XRAY_REPOS / default folders, origin-verified;
+      <root>/<name>, else <root>/<group>/<name>, under MEMORY_XRAY_REPOS / default folders,
+      origin-verified;
       none → one line naming the repo; found → the brief from that checkout
     no cwd / not a repo → one line: not available here, run `gingugu xray brief --range <ref>`
       (the range enters that command only when shell-safe, else `<range>`)
@@ -762,9 +763,31 @@ code_xray history | blindspots (stdio handler, or the proxy; serve refuses)
     followed) → summarize (churn, author counts, pairs shared >= 5; changesets > 30
     files skipped for pairs) → cache; a failure writes xray-history-failed-<sha16>
   → history:    hotspots.hotspots (churn x rank x authors) + hotspots.coupling
-                (>= 5 revs, degree >= 30%, `hidden` = no direct import; `files` focus)
+                (>= 5 revs, degree >= 30%, `hidden` = no direct import; `files` focus;
+                over every tracked file) + hotspots.others (tracked files outside the
+                graph, churn x authors)
   → blindspots: hotspots.blindspots (imported, untested by import or name, rank/authors)
   → lists paged by limit (default 50, cap 100), totals whole; `text` <= 8800 chars
+```
+
+`variants` reads sibling checkouts that are flavours of this repo, locally:
+
+```
+code_xray variants (stdio handler, or the proxy; serve refuses) | the xray CLI
+  → variants_tool.answer(path, files, limit): local.root(path); `files` restricts the paths
+  → docs_map._candidates: per search root, its direct checkouts, then those one level inside
+    its group folders (non-dot, non-symlink, not a checkout), then the next root; each folder
+    read <= repo_id.MAX_SCAN (2000) entries deep; <= 64 siblings in all
+  → variants.flavours(repo name, sibling names): the same stem once the last -segment is
+    dropped, or one is the other's stem
+  → per flavour: git ls-files --cached on both sides; each shared path read through the safe
+    open (no link, no FIFO, regular file only; > 1 MB skipped and counted in `unread`) and
+    scored at once by variants.file_drift (common ends trimmed, difflib on the differing
+    middle up to ~2000 x 2000 lines, else the middle counts as changed); only one pair held;
+    past the 10 s deadline no more files are read (`partial`)
+  → variants.summary: drift = changed lines / lines; files, only_here, only_there with
+    *_total counts; lists capped by limit (cap 100)
+  → rows sorted by drift; names and counts only, no file content leaves the machine
 ```
 
 X22 reads docs against the same file list, locally:
@@ -776,7 +799,8 @@ code_xray docs (stdio handler, or the proxy; serve refuses)
     files with a doc extension (<= 5000, <= 256 KiB each, <= 1000 path tokens each)
   → xray-docs-<digest>.json (owner-only, untrusted: type-checked, a malformed entry dropped and re-read, the rest kept; ignored whole if over 16 MiB or for another identity) -
     a local doc re-read only when size or mtime changed
-  → siblings: git checkouts directly under the MEMORY_XRAY_REPOS roots (<= 64; a
+  → siblings: per MEMORY_XRAY_REPOS root, its direct git checkouts, then one level
+    inside each of its non-checkout group folders, then the next root (<= 64 in all; a
     checkout with this repo's own identity or an invalid one skipped; 3s budget, past it
     a cached entry is kept unchecked or the sibling skipped), tracked docs only, re-read only
     when its HEAD moved; kept: repo-qualified paths (`name/` or `owner/name/`), GitHub links to this origin, and prose

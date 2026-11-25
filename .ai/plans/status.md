@@ -1,8 +1,23 @@
 # Project Status
 
-_Last updated: 2026-11-24 (board row 9 / item 20, the reviewed-as-history mark, on `docs/board-history-mark`; everything under In Flight is released - each entry names its release)_
+_Last updated: 2026-11-25 (x-ray on IaC repos, five board tasks from field feedback, on `fix/xray-iac`; not yet released)_
 
 ## In Flight
+
+**X-ray on IaC repos (2026-11-25, `fix/xray-iac`; NOT released).** Field feedback from runs on
+Terraform/YAML/Lambda repos, five board tasks:
+(1) sibling discovery (`docs_map._candidates`, `repo_id.find`) descends one level into group folders,
+so `~/GIT/<group>/<repo>` is found by `links`, `docs` and board `xray:` lines; (2) `surface` gains a
+`lambda` entry kind, a module-level `def f(event, context)` (`surface_lambda_py.py`, label `aws.lambda`);
+(3) the env map reads `.tf` `environment` blocks (`env_hcl.py`, names only); (4) `history` couples every
+tracked file and ranks files outside the graph in `others` by churn x authors; (5) a Terraform adapter
+(`lang/terraform.py`, `terraform_parse.py`: same-directory reference edges, local module source -> package
+node `terraform:<dir>`, root modules are entries) and a `variants` action (`variants.py`,
+`variants_tool.py`: drift = changed lines over lines across the files flavour siblings both track).
+`EXTRACTOR_VERSION` 8. Tests: one spec file per item, written first. Deferred on purpose: name-derived
+cross-repo links (resource names rebuilt from a shared prefix) - to be designed from real runs of the
+HCL graph; Terraform/SAM `handler` strings resolving to Lambda functions; the read hook's `Changes with`
+line for files outside the graph. PR #212 (parked) will conflict here: rebase whichever merges second.
 
 **Review hints: sigil + wiki-links (2026-11-24, #210; RELEASED in 0.55.2).** The second pass over the
 live backlog found two more `staleness.py` defects that `claims.py` had already fixed: a PR/MR reference without its
