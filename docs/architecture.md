@@ -2448,7 +2448,9 @@ short-lived, memory-only tokens minted at `POST /token/derive` for the stdio
 proxy, carrying a grant and a home namespace: an owner token derives anything; a
 scoped token (a crew mate's, marked `crew` in the token file) only its own grant or
 narrower, and the server re-checks that parent on every request, so revoking,
-rotating or narrowing it ends what it derived. **Scoped tokens** give
+rotating or narrowing it ends what it derived. A renewing proxy names the token
+it is done with (`replaces`) and the server drops it, so each proxy holds one.
+**Scoped tokens** give
 one client a slice of the brain:
 
 ```bash
@@ -2564,7 +2566,8 @@ src/gingugu/
 ├── proxy.py                # Remote mode: stdio <-> streamable-HTTP relay, reconnect, refresh
 ├── proxy_auth.py           # Proxy's /mcp auth: per-request token, renew + retry once on 401
 ├── proxy_preflight.py      # Remote mode's startup gate: refuse before relaying a byte
-├── proxy_session.py        # Proxy building blocks: derivation, messages, one live link
+├── proxy_derive.py         # Proxy's POST /token/derive call (renewals send replaces: one live token per proxy)
+├── proxy_session.py        # Proxy building blocks: messages, one live link
 ├── proxy_vault.py          # Remote mode: the machine's credential vault, screened (reveal refused) and exposed as a server
 ├── proxy_vault_link.py     # Remote mode: runs that vault behind an in-memory MCP session so it can ask the user
 ├── proxy_xray.py           # Remote mode: code_xray reads the checkout here, asks the brain by fingerprint

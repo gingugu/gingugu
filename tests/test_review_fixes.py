@@ -18,7 +18,7 @@ import anyio
 import pytest
 from mcp.shared.exceptions import MCPError
 
-from gingugu import proxy, proxy_session, remote
+from gingugu import proxy, proxy_derive, proxy_session, remote
 from gingugu.derived_tokens import MAX_LIVE
 from gingugu.grants import FULL, Grant
 from tests.proxy_fixtures import SERVE_TOKEN, Served, free_port, make_brain, through_proxy
@@ -77,7 +77,7 @@ async def test_a_full_derived_store_is_transient_not_fatal(tmp_path, monkeypatch
     await served.start(brain.app())
     try:
         with pytest.raises(proxy_session.DeriveTransient):
-            await proxy_session.derive(
+            await proxy_derive.derive(
                 served.url, brain.machine, grant=None, home="gingugu", ttl=60, name=None
             )
     finally:

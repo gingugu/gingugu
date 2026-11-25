@@ -509,9 +509,13 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner or crew scoped token,
   derive anything, a scoped token only its own grant or narrower (403 when wider),
   named `derived:<its name>` with `parent`/`parent_key` set and no origin, at most
   `SCOPED_LIVE_MAX` 8 live; a derived token gets 403. `DerivedTokens`
-  (`derived_tokens.py`) keeps SHA-256 -> (grant, expiry) in memory: TTL up to 1h,
+  (`derived_tokens.py`) keeps SHA-256 -> (grant, expiry, deriver) in memory: TTL up to 1h,
   at most 256 live, of which tokens with a scoped parent take at most
-  `SCOPED_SHARE` 128 (429 past either), nothing on disk, so a server restart drops them all. The owner token
+  `SCOPED_SHARE` 128 (429 past either), nothing on disk, so a server restart drops them all. A renewal's
+  `replaces` drops its old token before the caps are checked, but only when the
+  deriver hash matches the presented token's (anything else is ignored), so a
+  proxy holds one live token (it used to hold two, and a crew mate's fifth
+  session hit the 8-token cap with a 429). The owner token
   never goes on `/mcp`. The derived grant's `origin` is stamped from the
   calling owner token's name (`grants.origin_name`); a caller cannot claim one.
 - **Grant additions** (`grants.py`): `Grant.home` is the namespace a call that
@@ -524,7 +528,7 @@ client ⇄ stdio ⇄ proxy ──POST /token/derive (owner or crew scoped token,
   basename; may be unset).
 - **Resilience** (`proxy.py`, `proxy_session.py`, `proxy_auth.py`): one reader of
   the client for the whole run, routed to the live `Link`. Refresh at half the
-  TTL; the token is reused across reconnects (deriving per attempt would fill the
+  TTL, handing back the old token (`replaces`); the token is reused across reconnects (deriving per attempt would fill the
   live cap); backoff 0.25s doubling to 5s; the client's `initialize` is replayed
   on the new session. A restarted brain has forgotten every derived token and
   MCP session, and refuses both before any tool runs, so those requests are
@@ -611,7 +615,7 @@ proxy / derive / hooks / status ──https, verify = the pin alone──▶ ser
   that, and a cert that misses the dialled host, with the fix in the message.
   An https login with no cert offered drops a stale pin (a brought cert); an
   http login to a pinned brain is refused.
-- **A TLS failure says so.** `proxy_session.derive` turns a certificate failure
+- **A TLS failure says so.** `proxy_derive.derive` turns a certificate failure
   into `ProxyLost` with `remote_tls.explain`'s fix rather than an endless
   "reconnecting" - except a clock failure (not yet valid, expired), which stays
   transient and retried; preflight's unreachable refusal and `remote status`'s `hint:` line carry
@@ -635,7 +639,7 @@ proxy / derive / hooks / status ──https, verify = the pin alone──▶ ser
   offers it, the login probe fails, nothing rotates, and the message says to
   delete `<db-dir>/tls`. Regenerating the generated cert means `remote login` again.
 - Five call sites verify through the pin: `proxy_auth.brain_client`,
-  `proxy_session.derive`, `hook_remote.post`, `remote._reachable`, and
+  `proxy_derive.derive`, `hook_remote.post`, `remote._reachable`, and
   `promote._session`.
 
 ## Warm minions (stdio grant, warm-up, minion fence)

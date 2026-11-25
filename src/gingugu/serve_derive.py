@@ -8,6 +8,11 @@ No ``grant`` means full access. ``home`` is the namespace the derived token's
 calls default to; a scoped grant must be able to read it. The reply is
 ``{"token": ..., "expires_in": ttl}``, sent no-store.
 
+A renewing caller adds ``"replaces": "<the token it is done with>"``. The brain
+drops that token as it mints the new one, before any cap is checked, so a proxy
+holds one live token rather than two. Only a token the same presented token
+derived is dropped; any other value is ignored, never an error.
+
 An owner token may derive anything. A scoped token - a crew mate's - may
 derive only a token no wider than itself: no ``grant`` means its own grant,
 a narrower one is allowed, a wider one is 403. Its derived token is named for
@@ -98,6 +103,13 @@ def _scoped_grant_from(body: dict, parent: Grant, parent_key: str) -> Grant:
     return child
 
 
+def _replaces_from(body: dict) -> str | None:
+    replaces = body.get("replaces")
+    if replaces is not None and not isinstance(replaces, str):
+        raise _BadRequest("replaces must be the token string being renewed")
+    return replaces
+
+
 def _ttl_from(body: dict) -> int:
     ttl = body.get("ttl", DEFAULT_TTL)
     if isinstance(ttl, bool) or not isinstance(ttl, int):
@@ -123,15 +135,18 @@ def derive_endpoint(derived: DerivedTokens):
             if not isinstance(body, dict):
                 raise _BadRequest("body must be a JSON object")
             ttl = _ttl_from(body)
+            replaces = _replaces_from(body)
+            presented = request.headers.get("authorization", "").partition(" ")[2]
+            by = _hash(presented)  # who derived it: only they may replace it later
             if kind == SCOPED:
-                presented = request.headers.get("authorization", "").partition(" ")[2]
-                grant = _scoped_grant_from(body, caller, _hash(presented))
-                token = derived.mint(grant, ttl, per_parent=SCOPED_LIVE_MAX)
+                grant = _scoped_grant_from(body, caller, by)
+                limit = SCOPED_LIVE_MAX
             else:
                 grant = _grant_from(body)
                 origin = origin_name(caller.name) if caller else None
                 grant = dataclasses.replace(grant, origin=origin)
-                token = derived.mint(grant, ttl)
+                limit = None
+            token = derived.mint(grant, ttl, per_parent=limit, by=by, replaces=replaces)
         except _Wider as exc:
             return JSONResponse({"error": str(exc)}, status_code=403)
         except ValueError as exc:  # _BadRequest, or mint's ttl bounds

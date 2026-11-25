@@ -174,7 +174,8 @@ def test_a_wrong_cert_names_both_fixes():
 
 
 async def test_a_corrupt_pin_ends_the_token_trade_cleanly(pem):
-    from gingugu.proxy_session import ProxyLost, derive
+    from gingugu.proxy_derive import derive
+    from gingugu.proxy_session import ProxyLost
 
     remote_tls.save_pin(HTTPS, pem)
     remote_tls.pin_path(HTTPS).write_text("", encoding="ascii")
