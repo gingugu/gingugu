@@ -96,7 +96,7 @@ def rig(tmp_path, monkeypatch):
     r = Rig()
     r.app, r.derived = app, derived
     r.mate = tokens.add("polly", {"crew": "write"})
-    r.other_mate = tokens.add("vesper", {"crew": "write"})
+    r.other_mate = tokens.add("mate-b", {"crew": "write"})
     r.machine = tokens.add_owner("macbookpro")
     return r
 

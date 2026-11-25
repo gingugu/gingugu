@@ -29,6 +29,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A crew mate's fifth session no longer gets locked out of the crew brain.**
+  The proxy renews its session token at half its TTL, and the old token used
+  to stay live until it expired, so every open session held two. A crew mate's
+  scoped token may hold 8, so its fifth session got `429 Too Many Requests` at
+  `/token/derive` and could not connect. A renewal now sends
+  `"replaces": "<old token>"` and the brain drops that token as it mints the
+  new one, before the cap is checked. Only a token the same caller derived is
+  dropped; anything else in `replaces` is ignored. Both sides need the
+  upgrade: the brain to honour `replaces`, each client to send it.
+
 - **Sibling checkouts inside a group folder are found.** `links`, `docs` and a
   board `xray: <repo>` line read only the direct children of each search root, so
   clones kept as `~/GIT/<group>/<repo>` were invisible. Discovery now also looks

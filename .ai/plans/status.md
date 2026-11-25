@@ -1,8 +1,21 @@
 # Project Status
 
-_Last updated: 2026-11-25 (x-ray on IaC repos, five board tasks from field feedback, on `fix/xray-iac`; not yet released)_
+_Last updated: 2026-11-25 (x-ray on IaC repos merged in #213 and derive `replaces` on `fix/derive-replaces`; both unreleased)_
 
 ## In Flight
+
+**Derive `replaces`: one live token per proxy (2026-11-25, `fix/derive-replaces`; UNRELEASED).** A crew
+mate could not connect to the crew brain: the Pi journal showed `429` on `POST /token/derive` from their scoped token. The
+proxy re-derives at half its TTL and the old token stayed live until it expired, so each session held 2 of their 8
+(`SCOPED_LIVE_MAX`); four sessions filled the cap and the fifth was refused. The derive body now takes
+`replaces`; `DerivedTokens` stores each entry's deriver hash and drops the named token before the caps are checked,
+only when the same presented token derived it (anything else ignored, non-string 400). `SessionTokens.derive` sends
+its current token. `derive()` moved to the new `proxy_derive.py` to keep `proxy_session.py` under 300 lines.
+Security review (sonnet): no leak, no cross-caller drop; its two LOW findings fixed - a renewal refused at a cap
+keeps its old token (caps checked as if dropped, drop after mint), and `SessionTokens` renewals share one lock so
+concurrent ones derive once. Tests: `tests/test_derive_replaces.py` (store, route at the cap, cross-caller refusal,
+a refreshing proxy holds 1, both review cases); the ownership-check mutant fails 4. Next: release, upgrade the Pi first (it must honour `replaces`), then each
+mate's machine (it must send it).
 
 **X-ray on IaC repos (2026-11-25, `fix/xray-iac`; NOT released).** Field feedback from runs on
 Terraform/YAML/Lambda repos, five board tasks:
@@ -17,7 +30,7 @@ node `terraform:<dir>`, root modules are entries) and a `variants` action (`vari
 `EXTRACTOR_VERSION` 8. Tests: one spec file per item, written first. Deferred on purpose: name-derived
 cross-repo links (resource names rebuilt from a shared prefix) - to be designed from real runs of the
 HCL graph; Terraform/SAM `handler` strings resolving to Lambda functions; the read hook's `Changes with`
-line for files outside the graph. PR #212 (parked) will conflict here: rebase whichever merges second.
+line for files outside the graph.
 
 **Review hints: sigil + wiki-links (2026-11-24, #210; RELEASED in 0.55.2).** The second pass over the
 live backlog found two more `staleness.py` defects that `claims.py` had already fixed: a PR/MR reference without its
