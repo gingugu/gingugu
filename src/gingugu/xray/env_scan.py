@@ -4,11 +4,14 @@ Pure text in, ``(reads, sets)`` out, each ``(NAME, 1-based line)`` in line order
 Only literal names in known forms count; a name built at run time is missed. A
 real dotenv file (``.env``, ``.env.local``, ``.envrc``, ...) is never inspected:
 it holds secrets, and only the example templates are read. No value is kept.
+Terraform ``.tf`` files are read for ``environment`` blocks (see ``env_hcl``).
 """
 
 from __future__ import annotations
 
 import re
+
+from gingugu.xray import env_hcl
 
 NAME = r"[A-Z][A-Z0-9_]{1,63}"
 _NAME = re.compile(NAME)
@@ -73,6 +76,8 @@ def kind(rel: str) -> str | None:
         return "sh"
     if ext in _YAML_EXTS:
         return "yaml"
+    if ext == ".tf":
+        return "hcl"
     return None
 
 
@@ -116,6 +121,8 @@ def scan_text(rel: str, text: str) -> tuple[Pairs, Pairs]:
         return reads, sets
     if which == "yaml":
         return reads, _yaml(text)
+    if which == "hcl":
+        return reads, env_hcl.sets(text)
     read_pats, set_pats = {
         "py": (_PY_READS, _PY_SETS),
         "js": (_JS_READS, ()),
