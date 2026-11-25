@@ -9,6 +9,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **X-ray reads Terraform.** `.tf` files get a graph of their own: inside a module
+  directory every `var.`, `local.`, `module.`, `data.` and resource reference leans
+  on the file that declares it, and a `module` block with a local `source` points at
+  that module's directory. Blast radius, overview rank, hotspots and the read and
+  edit hooks now work on a Terraform repo. Registry and git sources count as
+  external; no `terraform` binary is run.
+- **`code_xray` action `variants`** (and `gingugu xray variants`): for repos that
+  are flavours of one thing (`app-us`, `app-gov`,
+  `app-eu`), it compares the files each flavour tracks and reports
+  drift as changed lines over lines, with the files that differ most and the files
+  only one side has. Flavours are found by name among the sibling checkouts. Only
+  names and counts are reported; no file content leaves the machine.
+- **AWS Lambda handlers are entry points** in the `surface` map: a module-level
+  function taking `(event, context)` (`evt`, `ctx`, `_context`, `_ctx`, `_` also
+  match; found by signature, not a decorator) is a `lambda` entry, so the sinks it reaches are no longer reported as unreached.
+
+### Fixed
+
+- **Sibling checkouts inside a group folder are found.** `links`, `docs` and a
+  board `xray: <repo>` line read only the direct children of each search root, so
+  clones kept as `~/GIT/<group>/<repo>` were invisible. Discovery now also looks
+  one level inside any group folder (not a dot folder, not a symlink, not itself a
+  checkout), read at most 2000 entries deep. Per search root, its direct checkouts
+  come first, then those in its group folders, then the next root; both count
+  toward the same cap.
+- **The env map reads Terraform.** Names set in a Lambda
+  `environment { variables = { ... } }` block or an ECS container's
+  `environment = [{ name = ... }]` list count as set, instead of every one being
+  reported "set nowhere in this repo". Names only, never values.
+- **`history` covers files outside the import graph.** A YAML or HCL repo used to
+  report 0 hotspots and 0 coupling however busy its history. Tracked files the
+  graph does not hold are now ranked by churn x authors in their own `others` list,
+  and coupled like any other file. Deleted files never count.
+
 ---
 
 ## [0.55.2] - 2026-11-24

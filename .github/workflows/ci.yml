@@ -73,8 +73,13 @@ jobs:
           "TMP=D:\tmp" >> $env:GITHUB_ENV
           "TEMP=D:\tmp" >> $env:GITHUB_ENV
 
+      # -n logical, not auto: with psutil installed, auto counts PHYSICAL cores, so
+      # a 4-vCPU runner got 2 workers (measured on windows-latest and ubuntu-latest).
+      # The Windows cell is bound by process spawns and disk, not CPU, so idle vCPUs
+      # were its time. --durations names the slowest tests, even on a run killed at
+      # the cap: it is the data "fix the tests" above needs.
       - name: Pytest
-        run: uv run pytest -m "not bench_embeddings" -n auto
+        run: uv run pytest -m "not bench_embeddings" -n logical --durations=30
 
   ui:
     runs-on: ubuntu-latest

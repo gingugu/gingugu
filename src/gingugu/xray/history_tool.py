@@ -7,7 +7,7 @@ the proxy and ``gingugu xray``, like ``brief.answer``.
 
 from __future__ import annotations
 
-from . import history, hook_common, hotspots, local
+from . import docs_map, history, hook_common, hotspots, local, scan
 from .hook_common import _show
 
 ACTIONS = ("history", "blindspots")
@@ -17,7 +17,9 @@ CAVEAT = (
     "History is the last {window} non-merge commits. Coupling is code-maat's logical "
     "coupling (both files in >= 5 commits, together in >= 5, degree >= 30%); 'hidden' "
     "means neither imports the other. 'Tested' means a test imports the file or is "
-    "named for it, a lower bound of real coverage. Candidates to inspect, not verdicts."
+    "named for it, a lower bound of real coverage. Files outside the import graph are "
+    "ranked by churn x authors in their own list, and coupled like any other file. "
+    "Candidates to inspect, not verdicts."
 )
 
 
@@ -64,6 +66,12 @@ def render(data: dict, name: str) -> str:
             f"{_n(r['authors'], 'author')}, rank {r['rank']})"
             for r in data["hotspots"]
         ]
+    if data.get("others"):
+        lines.append("Other changed files (churn x authors, outside the import graph):")
+        lines += [
+            f"- {_show(r['path'])} ({_n(r['commits'], 'commit')}, {_n(r['authors'], 'author')})"
+            for r in data["others"]
+        ]
     if data["coupling"]:
         lines.append(f"Change together ({data['hidden_total']} with no import between them):")
         lines += [
@@ -72,6 +80,15 @@ def render(data: dict, name: str) -> str:
             for r in data["coupling"]
         ]
     return _fit(lines)
+
+
+def _tracked(repo) -> set[str] | None:
+    """Files the index lists, or None when it cannot be listed (never raises)."""
+    try:
+        proc = scan.git(repo, "ls-files", "-z", "--cached", timeout=history.GIT_TIMEOUT_S)
+    except (scan.XrayError, OSError):
+        return None
+    return set(docs_map._names(proc)) if proc.returncode == 0 else None
 
 
 def answer(
@@ -108,11 +125,15 @@ def answer(
         }
     else:
         hot = hotspots.hotspots(g, h)
-        pairs = hotspots.coupling(g, h, files=rel)
+        tracked = _tracked(repo)
+        pairs = hotspots.coupling(g, h, files=rel, tracked=tracked)
+        extra = hotspots.others(g, h, tracked) if tracked is not None else []
         data = {
             "window": _window(h),
             "hotspots": hot[:n],
             "hotspots_total": len(hot),
+            "others": extra[:n],
+            "others_total": len(extra),
             "coupling": [{**r, "degree": round(r["degree"], 3)} for r in pairs[:n]],
             "coupling_total": len(pairs),
             "hidden_total": sum(1 for r in pairs if r["hidden"]),

@@ -31,6 +31,7 @@ from ..xray import (
     store,
     surface_tool,
     table_tool,
+    variants_tool,
 )
 from ..xray.links import tool as links_tool
 from . import ServerContext
@@ -52,6 +53,7 @@ _ACTIONS = (
     *route_tool.ACTIONS,
     *surface_tool.ACTIONS,
     *links_tool.ACTIONS,
+    *variants_tool.ACTIONS,
 )
 _CAVEAT = brief.CAVEAT
 _NO_DISK = (
@@ -142,11 +144,14 @@ def register(mcp, ctx: ServerContext) -> None:
         and the calls it makes with what serves each; no files: every route by its callers,
         calls served nowhere here first; computed locally),
         "surface" (the attack-surface map: every entry point - route, MCP tool, CLI
-        command, task, Go main - with the sinks it reaches through the call graph,
-        command execution, eval, deserialisation, built SQL, file writes, secrets,
+        command, task, AWS Lambda handler, Go main - with the sinks it reaches through the
+        call graph, command execution, eval, deserialisation, built SQL, file writes, secrets,
         network, DB tables, most dangerous first with the shortest path, then the sinks
         no entry reaches; files: only entries in them or reaching into them; computed
-        locally).
+        locally), "variants" (the sibling checkouts that are flavours of this one - same
+        name minus the last -segment - and how far each has drifted: changed lines over
+        lines across the files both track, the files that differ most, and the files only
+        one side tracks; files: restrict the comparison; computed locally).
 
         ``path`` is any directory in the git checkout (default: the working directory).
         The snapshot is rebuilt automatically when the checkout's source content changed,
@@ -193,6 +198,10 @@ def register(mcp, ctx: ServerContext) -> None:
                 if ctx.transport != "stdio":
                     return _err(_NO_DISK)
                 return links_tool.answer(path, files, limit)
+            if action in variants_tool.ACTIONS:
+                if ctx.transport != "stdio":
+                    return _err(_NO_DISK)
+                return variants_tool.answer(path, files, limit)
             ns_id = ctx.namespaces.get_or_create(ctx.namespaces.resolve_name(namespace)).id
             if action == "ingest":
                 if payload is None:

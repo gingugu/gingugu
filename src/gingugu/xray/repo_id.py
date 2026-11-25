@@ -3,11 +3,13 @@
 The repo token in ``xray: <repo> <range>`` is another agent's text, so it is
 gated (`valid`) before it becomes part of a path, and a candidate checkout is
 used only when its identity (origin ``owner/name``, else folder name) matches.
-The search is exactly ``<root>/<name>`` per root: no glob, no walk.
+The search is ``<root>/<name>`` per root, then ``<root>/<group>/<name>`` for each
+group folder (``groups``): no glob, no walk past that one level.
 """
 
 from __future__ import annotations
 
+import itertools
 import os
 import re
 from pathlib import Path
@@ -89,6 +91,39 @@ def roots() -> list[Path]:
     return out
 
 
+MAX_SCAN = 2000  # entries read from one folder: a root full of downloads is no stall
+
+
+def entries(base: Path) -> list[Path]:
+    """Up to ``MAX_SCAN`` entries of ``base``, by name; [] when it cannot be read."""
+    try:
+        return sorted(itertools.islice(base.iterdir(), MAX_SCAN), key=lambda p: p.name)
+    except OSError:
+        return []
+
+
+def is_checkout(p: Path) -> bool:
+    try:
+        return p.is_dir() and (p / ".git").exists()
+    except OSError:
+        return False
+
+
+def groups(base: Path) -> list[Path]:
+    """The group folders of a search root: real (not symlinked), non-dot folders
+    that are not themselves checkouts, by name."""
+    out = []
+    for p in entries(base):
+        try:
+            if p.name.startswith(".") or p.is_symlink() or not p.is_dir():
+                continue
+        except OSError:
+            continue
+        if not is_checkout(p):
+            out.append(p)
+    return out
+
+
 def find(want: str, cwd: str | None) -> Path | None:
     """The local checkout of ``want``, or None. Never raises."""
     try:
@@ -105,6 +140,14 @@ def find(want: str, cwd: str | None) -> Path | None:
             cand = r / name
             if (cand / ".git").exists() and cand.is_dir() and matches(cand, want):
                 return cand
+        for r in roots():
+            for g in groups(r):
+                cand = g / name
+                try:
+                    if (cand / ".git").exists() and cand.is_dir() and matches(cand, want):
+                        return cand
+                except OSError:
+                    continue
     except Exception:  # noqa: BLE001 - a lookup must never cost the mail
         pass
     return None

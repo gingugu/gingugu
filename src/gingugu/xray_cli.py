@@ -1,7 +1,8 @@
-"""``gingugu xray``: brief, history, blind spots, docs, env, tables, routes, surface, links, score.
+"""``gingugu xray``: brief, history, blind spots, docs, env, tables, routes, surface,
+links, variants, score.
 
 ``brief``, ``history``, ``blindspots``, ``docs``, ``env``, ``tables``, ``routes``,
-``surface`` and ``links`` are the
+``surface``, ``links`` and ``variants`` are the
 same answers as the
 ``code_xray`` actions of those names, computed on this machine from the cached
 hook graph and git log; ``score`` reads the local prediction ledger.
@@ -14,7 +15,16 @@ import argparse
 import json
 import sys
 
-from .xray import brief, docs_tool, env_tool, history_tool, route_tool, surface_tool, table_tool
+from .xray import (
+    brief,
+    docs_tool,
+    env_tool,
+    history_tool,
+    route_tool,
+    surface_tool,
+    table_tool,
+    variants_tool,
+)
 from .xray.links import tool as links_tool
 from .xray.scan import XrayError
 
@@ -49,7 +59,9 @@ def _parser() -> argparse.ArgumentParser:
     k.add_argument(
         "--warm", action="store_true", help="read every checkout now, filling the caches"
     )
-    for p in (c, e, t, r, u, k):
+    v = sub.add_parser("variants", help="how far sibling flavours of this repo have drifted")
+    v.add_argument("--files", help="comma-separated files to restrict the comparison to")
+    for p in (c, e, t, r, u, k, v):
         p.add_argument("--path", help="any directory in the checkout (default: cwd)")
         p.add_argument("--limit", type=int, default=20, help="rows (default 20)")
         p.add_argument("--json", action="store_true", help="the full answer as JSON")
@@ -77,6 +89,7 @@ def _docs(args: argparse.Namespace) -> int:
             "tables": table_tool,
             "routes": route_tool,
             "surface": surface_tool,
+            "variants": variants_tool,
         }
         .get(args.cmd, links_tool)
         .answer
@@ -112,7 +125,7 @@ def main(argv: list[str]) -> int:
         return _score(args.json)
     if args.cmd in history_tool.ACTIONS:
         return _history(args)
-    if args.cmd in ("docs", "env", "tables", "routes", "surface", "links"):
+    if args.cmd in ("docs", "env", "tables", "routes", "surface", "links", "variants"):
         return _docs(args)
     if args.cmd != "brief":
         parser.print_usage(sys.stderr)

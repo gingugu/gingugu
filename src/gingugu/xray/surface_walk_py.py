@@ -22,6 +22,7 @@ import ast
 
 from . import surface_catalog as cat
 from . import surface_class_py as klass
+from . import surface_lambda_py as aws_lambda
 from . import surface_route_py as route
 from .surface_mount_py import Mounts
 
@@ -190,6 +191,8 @@ class Surface:
         under a route decorator is one entry per view method it defines."""
         self._m.definition(node, name)
         self._views.define(node, name)
+        if (hit := aws_lambda.record(node, scope, name)) is not None:
+            self._entries.append(hit)
         for deco in getattr(node, "decorator_list", []):
             if isinstance(deco, ast.Call):
                 self._decorators.add(id(deco))

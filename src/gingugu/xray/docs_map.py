@@ -13,6 +13,7 @@ it is read as untrusted input, and a malformed entry is dropped and re-read.
 
 from __future__ import annotations
 
+import itertools
 import os
 import stat
 import time
@@ -161,24 +162,26 @@ def _local(root: Path, docs: list[str], ident: str, old: dict) -> dict[str, dict
 
 
 def _candidates(root: Path) -> list[Path]:
-    """Checkouts next to this one: each search root's direct children, in order."""
+    """Checkouts next to this one. Per search root, in order: its direct checkouts,
+    then those one level inside each group folder (``repo_id.groups``: never deeper,
+    never into a checkout or a symlink). One cap across all of it; each folder is
+    read at most ``repo_id.MAX_SCAN`` entries deep."""
     me = os.path.realpath(root)
     found: list[Path] = []
     for base in repo_id.roots():
-        try:
-            children = sorted(base.iterdir(), key=lambda p: p.name)
-        except OSError:
-            continue
-        for child in children:
-            try:
-                if not child.is_dir() or not (child / ".git").exists():
-                    continue
-            except OSError:
-                continue
-            if os.path.realpath(child) != me:
-                found.append(child)
-            if len(found) >= MAX_SIBLINGS:
-                return found
+        direct = [k for k in repo_id.entries(base) if repo_id.is_checkout(k)]
+        for pool in itertools.chain(
+            [direct],
+            (
+                [c for c in repo_id.entries(g) if repo_id.is_checkout(c)]
+                for g in repo_id.groups(base)
+            ),
+        ):
+            for child in pool:
+                if os.path.realpath(child) != me:
+                    found.append(child)
+                if len(found) >= MAX_SIBLINGS:
+                    return found
     return found
 
 

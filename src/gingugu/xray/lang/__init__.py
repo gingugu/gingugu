@@ -51,9 +51,9 @@ class Adapter(Protocol):
 
 
 def _registry() -> tuple[Adapter, ...]:
-    from . import golang, python, typescript
+    from . import golang, python, terraform, typescript
 
-    return (python.ADAPTER, typescript.ADAPTER, golang.ADAPTER)
+    return (python.ADAPTER, typescript.ADAPTER, golang.ADAPTER, terraform.ADAPTER)
 
 
 ADAPTERS: tuple[Adapter, ...] = _registry()
@@ -73,6 +73,8 @@ def is_test(path: str) -> bool:
 
     if path.endswith(".go"):
         return path.endswith("_test.go")
+    if path.endswith(".tf"):
+        return False
     if path.endswith(typescript.ADAPTER.extensions):
         return typescript.is_test(path)
     return python.is_test(path)
