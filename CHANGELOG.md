@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The X-ray edit note no longer blames an edit for reach it did not make.** After
+  an edit, the surface note compared a fresh call graph against the cache as last
+  written, so everything that changed since then - a pull, a branch switch, another
+  session's edits - was reported as "this edit makes X reachable" on whatever file
+  was edited next, a test file included (often hundreds of sinks at once). The
+  "before" side is now the fresh graph with only the edited file's own definitions,
+  calls, sinks, entries and table uses taken from the cache, so drift elsewhere
+  cancels and only this edit's reach is named (`xray/surface_reach.py`).
+
 ---
 
 ## [0.56.0] - 2026-11-26

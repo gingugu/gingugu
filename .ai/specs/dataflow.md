@@ -1014,7 +1014,11 @@ edit note (Edit / MultiEdit / Write of a file in an X-ray language)
     before = surface_hook.before: hook_common.cached_symbols + table_map.cached_uses,
              taken before any other line refreshes a cache
     after  = hook_common.symbols (fingerprint-checked; parse cache re-parses the edited file)
-    diff   -> "this edit adds entry point ..."                (a new entry in the file)
+    prior  = surface_reach.as_before(before, after, rel) + uses_before: `after` with only the
+             edited file's defs, outgoing edges, sinks, entries and table uses from the cache,
+             so drift since the cache was written (pull, branch switch, another session) cancels
+    diff prior vs after
+           -> "this edit adds entry point ..."                (a new entry in the file)
               "this edit makes <sink> (path:line, `symbol`) reachable from <entry> (hops: via)"
               "`f` is on a path from <entry> to <sink>"        (a definition the edit landed in)
     claims xray-surface-edit (each fact once per session)
