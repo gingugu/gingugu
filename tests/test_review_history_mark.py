@@ -25,7 +25,10 @@ from gingugu.staleness import REVIEW_HINT_AFTER_DAYS, history_mark, review_signa
 
 _OLD = (datetime.now(UTC) - timedelta(days=REVIEW_HINT_AFTER_DAYS + 30)).isoformat()
 NARRATED = "Opened the fix. Awaiting Mr. Boomtastic's merge. (It merged 2026-07-07.)"
-EXPIRED = "Token rotation note. Awaiting Mr. Boomtastic's merge. Expires 2020-01-01."
+# Expired after the fixture's _OLD confirmation, so the date is not already
+# reconciled (an expiry the memory was confirmed after stays quiet by design).
+_EXPIRY = (datetime.now(UTC) - timedelta(days=5)).date().isoformat()
+EXPIRED = f"Token rotation note. Awaiting Mr. Boomtastic's merge. Expires {_EXPIRY}."
 
 
 # --- 1. the pure function -----------------------------------------------------
@@ -116,8 +119,8 @@ async def test_the_mark_silences_reads_and_stats(server) -> None:
 
     mem = await _read(server, mid)
     assert "review_hints" not in mem
-    assert mem["reviewed"] == {"as": "history", "on": datetime.now(UTC).date().isoformat(),
-                               "by": "beepboop"}
+    today = datetime.now(UTC).date().isoformat()
+    assert mem["reviewed"] == {"as": "history", "on": today, "by": "beepboop"}
     review = await _review(server)
     assert mid not in {r["id"] for r in review["sample"]}
     assert review["reviewed_as_history"] == 1
@@ -172,10 +175,16 @@ async def test_the_mark_keeps_other_metadata_and_does_not_confirm(server) -> Non
     await _update(server, mid, metadata={"source_pr": 7})
     _age(server, mid)
     out = await _update(server, mid, review="history")
-    meta = out["memory"]["metadata"]
-    meta = json.loads(meta) if isinstance(meta, str) else meta
+    assert out["ok"], out
+    conn = sqlite3.connect(server._test_db)
+    meta, confirmed = conn.execute(
+        "SELECT metadata, last_confirmed FROM memories WHERE id=?", (mid,)
+    ).fetchone()
+    conn.close()
+    meta = json.loads(meta)
     assert meta["source_pr"] == 7
-    assert out["memory"]["last_confirmed"] == _OLD  # a mark is not a re-check of the claim
+    assert meta["review"]["by"] == "beepboop"
+    assert confirmed == _OLD  # a mark is not a re-check of the claim
 
 
 @pytest.mark.asyncio
