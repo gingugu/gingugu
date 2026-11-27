@@ -11,6 +11,7 @@ from . import claim_queries, grants
 from .decay import DEPRECATE_SUGGEST_AFTER_DAYS, DORMANT_AFTER_DAYS
 from .graph_stats import compute_graph
 from .hygiene_stats import compute_hygiene
+from .review_mark import history_mark
 from .size_stats import compute_size
 from .staleness import REVIEW_HINT_AFTER_DAYS, review_signals
 
@@ -204,6 +205,17 @@ _REVIEW_SAMPLE_LIMIT = 5
 _REVIEW_SAMPLE_MAX = 100
 
 
+def _count_history_marks(conn: sqlite3.Connection, and_ns: str, ns_params: tuple) -> int:
+    """Non-deprecated memories carrying a VALID history mark, across all ages."""
+    rows = conn.execute(
+        "SELECT content, metadata FROM memories WHERE confidence != 'deprecated'"
+        + and_ns
+        + " AND metadata LIKE '%\"review\"%'",
+        ns_params,
+    ).fetchall()
+    return sum(1 for r in rows if history_mark(r["metadata"], r["content"]) is not None)
+
+
 def compute_review(
     conn: sqlite3.Connection,
     *,
@@ -229,7 +241,7 @@ def compute_review(
     ns_params: tuple = (namespace_id,) if namespace_id else ()
     cutoff = _cutoff_iso(REVIEW_HINT_AFTER_DAYS)
     rows = conn.execute(
-        "SELECT id, type, title, content, last_confirmed, updated_at, created_at "
+        "SELECT id, type, title, content, metadata, last_confirmed, updated_at, created_at "
         "FROM memories WHERE confidence != 'deprecated'" + and_ns + " "
         # Freshness anchor — the LATEST of the three, matching
         # decay.reference_timestamp (only last_confirmed is nullable).
@@ -248,6 +260,7 @@ def compute_review(
             updated_at=row["updated_at"],
             created_at=row["created_at"],
             settled_refs=settled.get(row["id"]),
+            reviewed_history=history_mark(row["metadata"], row["content"]) is not None,
         )
         if signals:
             flagged.append({"id": row["id"], "title": row["title"], "signals": signals})
@@ -255,6 +268,7 @@ def compute_review(
     return {
         "review_suggested": len(flagged),
         "sample": flagged[:limit],
+        "reviewed_as_history": _count_history_marks(conn, and_ns, ns_params),
     }
 
 

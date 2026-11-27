@@ -209,6 +209,19 @@ AI client (Claude Code / Cursor / Windsurf / …)
   `staleness.review_signals(settled_refs=)` checks, so `memory_stats` and every
   read surface agree on which `open-pr-reference` hints are history.
 
+  What the ledger cannot settle has a deliberate per-memory answer (board item
+  20, 2026-11-26): `memory_update(review="history")` writes `metadata.review =
+  {history, by, sha}` (`review_mark.py`, `handlers/review_update.py`). Metadata,
+  not a column: no migration, and the mark travels with export/import. The sha
+  binds it to the content, so it means "I read THIS text and it is history" and
+  an edit voids it; reads and stats validate it the same way before passing
+  `reviewed_history=` to `review_signals`, which then skips the gated block and
+  keeps the dated signals. Rejected again: exempting by type or tag (built,
+  scored and dropped 2026-07-29 - it cost 17 true positives for 7 false ones).
+  The PR/MR ref shape both `claim_qualify` and `staleness` read is defined once
+  in `ref_shape.py` (board item 6); hints read the kind case-insensitively and
+  the ledger does not, a difference pinned in `tests/test_ref_shape.py`.
+
   `graph_stats.orphan_filter()` follows the same shape for the graph backlog:
   one predicate behind both the `memory_stats.graph.orphans` count and
   `memory_search(orphans=True)`, so a count and its enumeration cannot come to
@@ -766,7 +779,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   Rejected: tree-sitter-language-pack (downloads native parsers on first use,
   no documented integrity check), SCIP (needs a working build, i.e. runs the
   repo's toolchain, and reindexes whole), stack-graphs (archived 2025-09).
-  *Terraform* (`lang/terraform`, `lang/terraform_parse`; `EXTRACTOR_VERSION` 8): one linear
+  *Terraform* (`lang/terraform`, `lang/terraform_parse`; `EXTRACTOR_VERSION` 8 when it arrived, 9 now): one linear
   pass over a `.tf` file's bytes, no dependency, `terraform` never run. A directory is one
   module and one package node `terraform:<dir>` reaching its files (`member`); a `var.`,
   `local.`, `module.`, `data.` or resource reference leans on the file in the same
@@ -1092,7 +1105,7 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   untrusted cache form moved to `xray/symbols_model.py` (`symbols.py` stays under the line
   limit); `from_json` refuses any sink name the catalogue never wrote, any non-identifier label
   and any path the brain's rule rejects, any line past 10,000,000 and any name past 512
-  characters. `EXTRACTOR_VERSION` was 5, became 6 with the routes slice and 7 with route coverage, and is 8 with the Terraform adapter and Lambda entries. An http registrar's handler is taken after its path,
+  characters. `EXTRACTOR_VERSION` was 5, became 6 with the routes slice and 7 with route coverage, 8 with the Terraform adapter and Lambda entries, and is 9 with Python source roots. An http registrar's handler is taken after its path,
   and a bare `path(x)` counts only with a literal route; a Python `__main__` block is an
   inline `main` entry. The TS and Go safe-part checks judge each local once per function. `xray/surface.py` is pure:
   breadth-first forward from each entry's start nodes, so the path to each sink is a shortest

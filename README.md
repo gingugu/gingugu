@@ -258,7 +258,7 @@ fall back to BM25-only.
 <details>
 <summary><strong>Is this ready to use?</strong></summary>
 
-Usable today for local personal workflows. 2,900+ tests passing covering
+Usable today for local personal workflows. 5,300+ tests passing covering
 storage, search, migrations, concurrency, credentials, hooks, the board, and
 the X-ray.
 Hardened against adversarial input and write contention. WAL mode for
@@ -387,7 +387,7 @@ uv run gingugu  # or pip install -e .
 
 </details>
 
-> **Usable today.** 24 MCP tools live. 2,900+ tests passing. Dogfooded daily in
+> **Usable today.** 24 MCP tools live. 5,300+ tests passing. Dogfooded daily in
 > Claude Code and Windsurf — this repo's own memories live in a Gingugu
 > database. Early and seeking broader real-world validation.
 
@@ -1491,7 +1491,7 @@ Once configured, the MCP server exposes these tools to your AI assistant:
 | `memory_store` | Save a new memory; `provenance` declares how you came to believe it (user-asserted / measured / file-derived / self-concluded), `about` what it is for in the user's words (searchable) |
 | `memory_recall` | Search + retrieve (ranked by relevance × freshness; one or many namespaces; optional compact mode; `explain` for a per-hit score breakdown) |
 | `memory_context` | Auto-surface relevant memories (one or many namespaces, deduped; optional compact mode; `explain` for a per-hit score breakdown) |
-| `memory_update` | Update content, type, confidence, metadata, `provenance` or `about`; `resolve_claims` reconciles a stale PR/MR claim without editing the prose |
+| `memory_update` | Update content, type, confidence, metadata, `provenance` or `about`; `resolve_claims` reconciles a stale PR/MR claim without editing the prose; `review="history"` marks a memory read and judged accurate history, silencing its gated review hints until the content changes |
 | `memory_promote` | Promote hand-picked memories, by id, into the crew commons every agent on the crew loads; the filter holds back what must stay home and says why, and re-promoting an edit supersedes the old copy |
 | `memory_relate` | Create relationships between memories; one at a time or a batch (`edges`), all-or-nothing, idempotent |
 | `memory_edges` | List edges with both endpoints' titles, namespaces, and degree; filter by namespace, type, or memory |

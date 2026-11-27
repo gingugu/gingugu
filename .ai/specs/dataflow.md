@@ -142,7 +142,15 @@ memory_stats(review_limit=100)     → claims { open, open_actionable, resolved,
 memory_search(claims="open")       → full bodies of the backlog (or ids="…")
 memory_search(claims="unverified") → refs named but never resolved in prose
 memory_update(resolve_claims="…")  → marks claims resolved; PROSE UNTOUCHED
+memory_update(review="history")    → reviewed-as-history mark; gated hints quiet
 ```
+
+A hint the ledger cannot settle (a wait narrated with its outcome, a ref in a
+persona namespace with no default repo) is reconciled with
+`review="history"`: `metadata.review` records the date, the author and a hash
+of the content, so a later content edit voids it. Every read surface and
+`memory_stats` check it through `review_mark.history_mark` before calling
+`staleness.review_signals(reviewed_history=)`; dated signals still fire.
 
 `resolve_claims` takes comma-separated refs or `"all"`. It writes
 `resolved_state`/`resolved_by`/`resolved_at` on the claim row and leaves the

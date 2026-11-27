@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Mark a memory as reviewed history.** `memory_update(review="history")`
+  records that you read a memory and judged it accurate history - a wait told
+  with its outcome ("awaiting the merge. (It merged 2026-07-07.)"), or a PR in a
+  repo the claims ledger cannot record. Its in-flight review hints stop coming
+  back every 14 days; an expired or as-of date still flags. The mark is tied to
+  the text: edit the content and it is gone. Reads show `reviewed: {as, on,
+  by}`, `memory_stats` counts `review.reviewed_as_history`, and `review=""`
+  clears it.
 - **X-ray reads Terraform.** `.tf` files get a graph of their own: inside a module
   directory every `var.`, `local.`, `module.`, `data.` and resource reference leans
   on the file that declares it, and a `module` block with a local `source` points at

@@ -222,7 +222,8 @@ src/gingugu/
                        recall.py, search.py, stats.py, scope.py, excerpt.py,
                        context_merge.py, relations.py, relation_ops.py,
                        consolidate.py, dream.py, admin.py, credentials.py,
-                       tripwires.py, board.py (the `board` tool + inbox resource;
+                       tripwires.py, review_update.py (`memory_update(review=)`),
+                       board.py (the `board` tool + inbox resource;
                        derives the author server-side), xray.py (`code_xray`),
                        helpers.py
                        (forget, consolidate, admin and credentials take `confirm` on
