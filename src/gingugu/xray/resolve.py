@@ -1,7 +1,8 @@
 """Import resolution: turn ``import`` statements into edges between repo files.
 
 Resolution is purely path-based. Module names are derived from where a file
-sits (``pkg/__init__.py`` is ``pkg``), never by importing anything, so the
+sits (``pkg/__init__.py`` is ``pkg``), from the repo root, ``src/`` or an
+inferred source root such as ``api/``, never by importing anything, so the
 analysed repo's code is only ever parsed. Directories without ``__init__.py``
 still form packages (PEP 420), which is why names come from paths and not from
 looking for initializers.
@@ -24,13 +25,43 @@ KIND_RANK = {"module": 0, "conditional": 1, "lazy": 2, "type_checking": 3}
 _SOURCE_ROOTS = ("src/", "")
 
 
-class ModuleIndex:
-    """Dotted module name -> repo-relative path, for the repo root and ``src/``."""
+def infer_roots(paths: list[str]) -> list[str]:
+    """Directories a service runs from: 1-2 levels deep, outside any package, and
+    directly holding a regular package. ``api/`` with ``api/core/__init__.py`` is
+    one; ``src/`` is already explicit. Pure path logic, deterministic."""
+    pkg_dirs = {p.rpartition("/")[0] + "/" for p in paths if p.rpartition("/")[2] == "__init__.py"}
+    found = set()
+    for d in pkg_dirs:
+        root = d.rpartition("/")[0].rpartition("/")[0]  # the dir holding the package
+        root = root + "/" if root else ""
+        depth = root.count("/")
+        if not 1 <= depth <= 2 or root == "src/":
+            continue
+        parts = root.split("/")[:-1]
+        if any("/".join(parts[:i]) + "/" in pkg_dirs for i in range(1, depth + 1)):
+            continue  # inside a package: its own imports are relative
+        found.add(root)
+    return sorted(found, key=lambda r: (r.count("/"), r))
 
-    def __init__(self, paths: list[str]) -> None:
+
+class ModuleIndex:
+    """Dotted module name -> repo-relative path, over the source roots.
+
+    Roots are ``src/``, the repo root, then inferred roots (see ``infer_roots``),
+    in that order, so the global index is unchanged when none is inferred. A file
+    under an inferred root imports against that root first: ``view`` returns the
+    index with its root ahead of the rest, which is how ``from core import x``
+    in ``api/`` means ``api/core`` and not a sibling service's ``core``.
+    """
+
+    def __init__(self, paths: list[str], roots: tuple[str, ...] | None = None) -> None:
+        self._paths = paths
+        self._inferred = tuple(infer_roots(paths)) if roots is None else ()
+        self.roots = (*_SOURCE_ROOTS, *self._inferred) if roots is None else roots
+        self._views: dict[str, ModuleIndex] = {}
         self.names: dict[str, str] = {}
         self._primary: dict[str, str] = {}
-        for root in _SOURCE_ROOTS:  # src/ first: it wins a name collision
+        for root in self.roots:  # src/ first: it wins a name collision
             for path in paths:
                 name = self._name(path, root)
                 if name is None:
@@ -43,6 +74,17 @@ class ModuleIndex:
             ".".join(n.split(".")[:i]) for n in self.names for i in range(1, n.count(".") + 1)
         }
         self.tops = {n.split(".")[0] for n in self.names}
+
+    def view(self, src_path: str) -> ModuleIndex:
+        """The index as seen from ``src_path``: its deepest inferred root first."""
+        under = [r for r in self._inferred if src_path.startswith(r)]
+        if not under:
+            return self
+        root = max(under, key=lambda r: r.count("/"))
+        if root not in self._views:
+            order = (root, *[r for r in self.roots if r != root])
+            self._views[root] = ModuleIndex(self._paths, order)
+        return self._views[root]
 
     @staticmethod
     def _name(path: str, root: str) -> str | None:
@@ -140,6 +182,7 @@ def _resolve_from(rec: list, src: str, idx: ModuleIndex, res: FileResult) -> Non
 
 def resolve_records(recs: list[list], dynamic: int, src: str, idx: ModuleIndex) -> FileResult:
     """Apply a file's import records (``resolve_walk.walk``) to the module index."""
+    idx = idx.view(src)
     res = FileResult()
     res.dynamic = dynamic
     for rec in recs:

@@ -54,6 +54,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   report 0 hotspots and 0 coupling however busy its history. Tracked files the
   graph does not hold are now ranked by churn x authors in their own `others` list,
   and coupled like any other file. Deleted files never count.
+- **X-ray resolves Python packages that live under a service folder.** A repo
+  whose code sits in `api/` or `backend/` (run with that folder on `sys.path`)
+  had every absolute import there counted as external, so its import graph,
+  call graph and cross-file route mounts were mostly missing. A folder one or
+  two levels deep, outside every package, that directly holds a package is now
+  a source root, and a file resolves against its own root first, so two
+  services each with a `core` package stay apart. On dify: 1,019 import edges
+  -> 46,011. A repo with no such folder gets exactly the graph it got before.
+  Graphs are rebuilt once on upgrade (the extractor version moved to 9).
 
 ---
 

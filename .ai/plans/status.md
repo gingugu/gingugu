@@ -1,8 +1,17 @@
 # Project Status
 
-_Last updated: 2026-11-26 (0.56.0 in progress: Windows CI shards on `fix/ci-suite-speed`; #212 and #213 merged, unreleased)_
+_Last updated: 2026-11-26 (0.56.0 in progress: Windows CI shards on `fix/ci-suite-speed`, Python source roots (board row 1b) on `feature/xray-source-roots`; #212 and #213 merged, unreleased)_
 
 ## In Flight
+
+**X-ray: Python source roots (2026-11-26, board row 1b, `feature/xray-source-roots`).** `ModuleIndex`
+named modules from the repo root and `src/` only, so a package under `api/` or `backend/` had every
+absolute import counted as external. `resolve.infer_roots` adds a directory 1-2 levels deep, outside
+every package, that directly holds a regular package; `ModuleIndex.view(file)` resolves a file against
+its own root first (sibling services with the same top-level name stay apart). No inferred root = the
+same index as before. `EXTRACTOR_VERSION` 9. Measured on dify (5197 files): import edges 1,019 -> 46,011,
+external 50,822 -> 24,162, time unchanged. Built tests-first: spec on the main thread, code by a Sonnet
+minion, reviewed. Tests: `tests/test_xray_source_roots.py`.
 
 **Windows CI in two shards (2026-11-26, `fix/ci-suite-speed`).** `main` went red on the Windows cell
 (run 45685547806: cancelled at the 10-minute cap with every test passing, pytest 581s). The same code
@@ -2199,7 +2208,7 @@ the board was clear; with the board down to two non-urgent items and the fix
 tranche soaked locally for a full week, the release was cut ahead of them.
 692 tests green, `ruff` + `black` clean.
 
-## The Board (current: 2026-11-24)
+## The Board (current: 2026-11-26)
 
 **Resequenced 2026-09-29 into build order.** The table below is the order the
 work gets done in, top first; `#` is that position. Item numbers used to be
@@ -2273,11 +2282,12 @@ every row moved up one.
 
 **2026-11-13:** X7b released in 0.51.0. The X7d route coverage slice is built on `feature/xray-route-gaps` (unreleased). Its measurement found that Python packages rooted outside the repo root and `src/` have their absolute imports counted as external; entered as row 1b, ahead of X8.
 
+**2026-11-26:** resynced. The X7d route coverage slice was released in 0.52.0 (#197); row 1a said unreleased. Row 1b (Python source roots) is built on `feature/xray-source-roots` and comes off; X8 is next under row 1a.
+
 | # | Item | Old # | Why this position |
 |---|---|---|---|
 | 1 | **Codebase X-ray, as an MCP tool** - X1 blast radius and X2 tripwire on edit shipped in 0.29.0; X14 map on arrival shipped in 0.32.0; X19 X-ray brief shipped in 0.34.0; X20 brief on the board shipped in 0.35.0 (repo on the line in 0.36.0); X15 writes from any tool shipped in 0.37.0; X16 incremental refresh shipped in 0.38.0; X17 symbol graph (Python) shipped in 0.39.0; X-ray tuned for the agent, with the lean X11 test ledger, shipped in 0.40.0; X3 scar tissue shipped in 0.41.0; X4 history + X6 blind spots shipped in 0.42.0 (X4 drift: board row 7); X22 docs map shipped in 0.45.0 (hook surfaces released in 0.49.0); X23 cross-repo links shipped in 0.46.0, in the hooks in 0.47.0; removed-key readers in the edit note shipped in 0.48.0; X21 symbols on the brain owed | 19 | Every sail since 2026-10-26 has gone here. A 21-part roadmap (X1-X21) in its section below |
-| 1a | **X7 edges beyond imports** - X7a env vars as edges released in 0.49.0 (#189): the file reading an env var and where it is set (`code_xray env`, the read hook and the edit note). X7c DB tables as edges released in 0.49.0 (#190): the file querying a table and the migration or schema that defines or drops it (`code_xray tables`, the read hook and the edit note). X7d attack-surface map released in 0.49.0: every entry point and the sinks it reaches through the call graph (`code_xray surface`); its routes, cross-file mounts and hook line released in 0.50.0 (#195). X7b HTTP routes as edges released in 0.51.0 (#196): served routes joined to the calls that reach them (`code_xray routes`, the read hook and the edit note). X22 hook surfaces released in 0.49.0 (#188). X7d route coverage built (`feature/xray-route-gaps`, unreleased): DRF routers, class views, flask-restx, Next.js app-router files, Koa, Go group closures. Next: X8 | 19 | X7 is split into slices, one PR each; env vars first: cheapest, and a rename on either side breaks silently |
-| 1b | **Python source roots beyond the repo root and `src/`** - `resolve.ModuleIndex` names modules from those two roots only, so a repo whose package lives under `api/` or `backend/` has every absolute import counted as external (relative imports still resolve), so those import edges, call edges and cross-file mounts are missing (measured 2026-11-13: dify's flask-restx routes keep their file-local tail because the namespace's import does not resolve) | 19 | Found by the route-coverage measurement; it bounds X1, X17 and X7 at once on monorepos, so it goes ahead of X8 |
+| 1a | **X7 edges beyond imports** - X7a env vars as edges released in 0.49.0 (#189): the file reading an env var and where it is set (`code_xray env`, the read hook and the edit note). X7c DB tables as edges released in 0.49.0 (#190): the file querying a table and the migration or schema that defines or drops it (`code_xray tables`, the read hook and the edit note). X7d attack-surface map released in 0.49.0: every entry point and the sinks it reaches through the call graph (`code_xray surface`); its routes, cross-file mounts and hook line released in 0.50.0 (#195). X7b HTTP routes as edges released in 0.51.0 (#196): served routes joined to the calls that reach them (`code_xray routes`, the read hook and the edit note). X22 hook surfaces released in 0.49.0 (#188). X7d route coverage released in 0.52.0 (#197): DRF routers, class views, flask-restx, Next.js app-router files, Koa, Go group closures. Next: X8 | 19 | X7 is split into slices, one PR each; env vars first: cheapest, and a rename on either side breaks silently |
 | 2 | **A calibration ledger** | 14 | New tables, so a migration. Follows X3: the lean X11 ledger (0.40.0) already records predictions, so it scores real data from day one |
 | 3 | Governance bands | 6 | Standalone; 48 decided proposals to calibrate against |
 | 4 | **Paraphrase question set + lexical/semantic arbitration** - labels now recorded at write time (`query_acts`, migration 022, released in 0.43.0); collect, then measure | 9, 5 | Built from the queries `query_log` has been recording since #89; arbitration needs this set to be measured on |
