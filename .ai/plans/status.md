@@ -1,11 +1,10 @@
 # Project Status
 
-_Last updated: 2026-11-26 (0.56.0 in progress: Windows CI shards on `fix/ci-suite-speed`, Python source roots (board row 1b) on `feature/xray-source-roots`, the reviewed-as-history mark (item 20) and the shared ref shape (item 6) on `feature/review-history-mark`; #212 and #213 merged, unreleased)_
+_Last updated: 2026-11-26 (0.56.0 released: #214 Windows CI shards, #215 Python source roots, #216 reviewed-as-history mark + shared ref shape, plus #212 and #213; whole fleet but this Mac on 0.56.0)_
 
 ## In Flight
 
-**Reviewed-as-history mark + shared ref shape (2026-11-26, board row 9 / items 20 and 6,
-`feature/review-history-mark`).** `memory_update(review="history")` writes `metadata.review = {history,
+**Reviewed-as-history mark + shared ref shape (2026-11-26, board row 9 / items 20 and 6, #216; RELEASED in 0.56.0).** `memory_update(review="history")` writes `metadata.review = {history,
 by, sha}` (`review_mark.py`, `handlers/review_update.py`); the sha binds it to the content, so an edit
 voids it and a hand-written block is not a mark. Gated signals go quiet, dated ones still fire; reads
 show `reviewed`, `memory_stats` counts `review.reviewed_as_history`; `review=""` clears. No migration.
@@ -16,9 +15,9 @@ case-insensitively and the ledger does not, so a lowercase "pr #5" can hint but 
 (`tests/test_ref_shape.py`). The implementing minion stopped on two wrong spec tests (an expiry the
 memory was confirmed after is reconciled by design; the update response carries no metadata); the
 tests were corrected, not the design. Tests: `tests/test_review_history_mark.py`,
-`tests/test_ref_shape.py`. Next: mark the 21 item-20-class flags on the live brain after release.
+`tests/test_ref_shape.py`. Next: mark the 21 item-20-class flags on the live brain once this Mac's proxy is on 0.56.0 (its tool schema carries `review`).
 
-**X-ray: Python source roots (2026-11-26, board row 1b, `feature/xray-source-roots`).** `ModuleIndex`
+**X-ray: Python source roots (2026-11-26, board row 1b, #215; RELEASED in 0.56.0).** `ModuleIndex`
 named modules from the repo root and `src/` only, so a package under `api/` or `backend/` had every
 absolute import counted as external. `resolve.infer_roots` adds a directory 1-2 levels deep, outside
 every package, that directly holds a regular package; `ModuleIndex.view(file)` resolves a file against
@@ -27,7 +26,7 @@ same index as before. `EXTRACTOR_VERSION` 9. Measured on dify (5197 files): impo
 external 50,822 -> 24,162, time unchanged. Built tests-first: spec on the main thread, code by a Sonnet
 minion, reviewed. Tests: `tests/test_xray_source_roots.py`.
 
-**Windows CI in two shards (2026-11-26, `fix/ci-suite-speed`).** `main` went red on the Windows cell
+**Windows CI in two shards (2026-11-26, #214; in 0.56.0).** `main` went red on the Windows cell
 (run 45685547806: cancelled at the 10-minute cap with every test passing, pytest 581s). The same code
 measured 311s, 326s and 581s there, so the cause is runner variance of about 2x, not one slow test.
 Trimming fixed waits buys 10-20%, which that swing eats. `tests/sharding.py` splits the suite by a CRC
