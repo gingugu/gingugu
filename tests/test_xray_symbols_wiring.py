@@ -55,7 +55,7 @@ def state(tmp_path):
 
 
 def test_the_extractor_version_moves_so_every_cache_rebuilds():
-    assert extract.EXTRACTOR_VERSION == 8  # 8: Lambda handler entries, the Terraform adapter
+    assert extract.EXTRACTOR_VERSION == 9  # 9: Python source roots beyond the repo root and src/
 
 
 def test_an_extraction_carries_the_symbol_graph(repo):
@@ -79,7 +79,7 @@ def test_the_brain_payload_never_carries_symbols(repo):
         "parse_errors",
         "skipped",
     }
-    assert sent["extractor_version"] == 8
+    assert sent["extractor_version"] == 9
 
 
 def test_a_cached_parse_gives_the_same_symbols(repo, tmp_path):

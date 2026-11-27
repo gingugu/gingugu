@@ -38,7 +38,8 @@ __all__ = ["EXTRACTOR_VERSION", "Edge", "Extraction", "FileInfo", "XrayError", "
 # 5: X7d entry and built-SQL walk records; 6: entry routes.
 # 7: routes from DRF routers, class views, flask-restx, Next.js route files, Go group closures.
 # 8: Lambda handler entries (X7d); the Terraform adapter.
-EXTRACTOR_VERSION: int = 8
+# 9: Python source roots inferred beyond the repo root and src/ (api/, backend/).
+EXTRACTOR_VERSION: int = 9
 MAX_FILE_BYTES: int = 2_000_000  # real source is far smaller; read at call time
 MAX_TOTAL_BYTES: int = 256_000_000  # vite's sources are ~10MB; read at call time
 
