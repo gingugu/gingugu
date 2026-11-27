@@ -903,6 +903,17 @@ a mechanism rather than asserting a status:
   read surface, so they agree.
 - **Deprecated memories are skipped on every surface.** A deprecation *is*
   the reconciliation, so re-flagging it asks for work already done.
+- **A reviewed-as-history mark silences gated signals (0.56.0).** Two classes
+  have no ledger answer: a wait narrated with its outcome ("awaiting the
+  captain's merge. (It merged 2026-07-07.)"), and refs a persona namespace with
+  no default repo cannot record. `memory_update(review="history")` writes
+  `metadata.review = {history: <date>, by: <author>, sha: <content hash>}`
+  (`review_mark.py`; the author is the board's `author_for`). The hash binds it
+  to the content it was set on: a content edit voids it, and a hand-written
+  block without a matching hash is not a mark. Gated signals only - an expired
+  or as-of date still fires. Reads show `reviewed: {as, on, by}`, the `review`
+  block counts `reviewed_as_history`, and `review=""` clears it. A deliberate
+  per-memory decision, never inferred from type or tags.
 
 The cost of these filters is real and bounded: a wait on an unnamed lowercase
 noun ("waiting on the vendor") no longer fires. Measured against a live
@@ -910,7 +921,8 @@ noun ("waiting on the vendor") no longer fires. Measured against a live
 
 Surfaced in two places: each `memory_context` result may carry
 `review_hints: [...]`, and `memory_stats` returns a `review` block
-(`review_suggested` count + a sample of entries, 5 by default) for a
+(`review_suggested` count + a sample of entries, 5 by default, plus
+`reviewed_as_history`, the memories a reviewer marked) for a
 namespace-wide audit. For a full reconciliation sweep, raise the sample cap
 with `memory_stats(review_limit=…)` and pull the flagged bodies with
 `memory_search(ids=…)`. The expected reaction is `memory_update` (reconfirm

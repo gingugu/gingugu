@@ -209,6 +209,19 @@ AI client (Claude Code / Cursor / Windsurf / …)
   `staleness.review_signals(settled_refs=)` checks, so `memory_stats` and every
   read surface agree on which `open-pr-reference` hints are history.
 
+  What the ledger cannot settle has a deliberate per-memory answer (board item
+  20, 2026-11-26): `memory_update(review="history")` writes `metadata.review =
+  {history, by, sha}` (`review_mark.py`, `handlers/review_update.py`). Metadata,
+  not a column: no migration, and the mark travels with export/import. The sha
+  binds it to the content, so it means "I read THIS text and it is history" and
+  an edit voids it; reads and stats validate it the same way before passing
+  `reviewed_history=` to `review_signals`, which then skips the gated block and
+  keeps the dated signals. Rejected again: exempting by type or tag (built,
+  scored and dropped 2026-07-29 - it cost 17 true positives for 7 false ones).
+  The PR/MR ref shape both `claim_qualify` and `staleness` read is defined once
+  in `ref_shape.py` (board item 6); hints read the kind case-insensitively and
+  the ledger does not, a difference pinned in `tests/test_ref_shape.py`.
+
   `graph_stats.orphan_filter()` follows the same shape for the graph backlog:
   one predicate behind both the `memory_stats.graph.orphans` count and
   `memory_search(orphans=True)`, so a count and its enumeration cannot come to
