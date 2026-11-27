@@ -59,7 +59,7 @@ class _Linker:
 
     def _bound(self, rel: str, bind: list) -> tuple | str | None:
         """("mod", path) or ("sym", path, qual) for an import binding; _EXT or None."""
-        idx = self.idx
+        idx = self.idx.view(rel)  # the file's own source root wins
         if bind[0] == "i":
             dotted = bind[2]
             if dotted.split(".")[0] not in idx.tops:
@@ -177,7 +177,7 @@ class _Linker:
                 t = self._call(rel, r, types, binds)
                 return t[1:] if isinstance(t, tuple) and t[0] == "sym" else None
 
-            value = symbols_value.make(rel, raw, binds, self._bound, self.idx)
+            value = symbols_value.make(rel, raw, binds, self._bound, self.idx.view(rel))
             col.close(rel, resolve, value)
         col.finish()
         out.sinks, out.entries = col.sinks, col.entries
