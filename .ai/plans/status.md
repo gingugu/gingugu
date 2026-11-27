@@ -4,6 +4,17 @@ _Last updated: 2026-11-26 (0.56.0 released: #214 Windows CI shards, #215 Python 
 
 ## In Flight
 
+**X-ray edit note: no blame for drift (2026-11-27, `fix/surface-stale-blame`; UNRELEASED).** Editing a
+test file reported "+343 more newly reachable sinks". `surface_hook.before` reads the symbol cache with
+its fingerprint unchecked, and `_new_reach` diffed every entry-to-sink pair of it against the rebuild, so
+any change since the cache was written (pull, branch switch, another session) was named as this edit's.
+The before side is now `surface_reach.as_before`: the fresh graph with only the edited file's defs,
+outgoing edges, sinks, entries and table uses from the cache (`uses_before` for X7c); drift cancels.
+A first attempt (keep only reach whose path crosses the edited file) was dropped: drift that lands on a
+sink inside the edited file still crossed it. `_reach_of` moved to `surface_reach.py` (surface_hook.py
+was at 300). Tests: `tests/test_xray_surface_stale_blame.py` (test-file edit, unrelated source edit,
+callee-file reach still named, drift plus a real edit names only the real one).
+
 **Reviewed-as-history mark + shared ref shape (2026-11-26, board row 9 / items 20 and 6, #216; RELEASED in 0.56.0).** `memory_update(review="history")` writes `metadata.review = {history,
 by, sha}` (`review_mark.py`, `handlers/review_update.py`); the sha binds it to the content, so an edit
 voids it and a hand-written block is not a mark. Gated signals go quiet, dated ones still fire; reads

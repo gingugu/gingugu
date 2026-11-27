@@ -1135,7 +1135,10 @@ A subagent gets its own fenced brain and arrives already knowing the task.
   `edit_note.py`, `MEMORY_XRAY_SURFACE=off`): the read hook lists a file's entry points and the sinks
   in it that entries reach; the edit note snapshots the caches before the edit
   (`hook_common.cached_symbols`, `table_map.cached_uses`), rebuilds after (fingerprint-checked, parse
-  cache re-parses only the edited file) and diffs.
+  cache re-parses only the edited file) and diffs. The "before" side is the fresh graph with only the
+  edited file's rows taken from the cache (`xray/surface_reach.as_before`, `uses_before`): the cache
+  can predate a pull, a branch switch or another session's edits, and that drift then sits on both
+  sides and cancels instead of being blamed on the edit.
 - **Codebase X-ray: HTTP routes as edges (X7b, released in 0.51.0).** Nothing imports a route, so a
   frontend's `fetch('/api/users')` and the handler that answers it never meet in the graph.
   `xray/route_join.py` joins the routes this repo serves (X7d's http entries, mounted to full
