@@ -1,8 +1,22 @@
 # Project Status
 
-_Last updated: 2026-11-26 (0.56.0 in progress: Windows CI shards on `fix/ci-suite-speed`, Python source roots (board row 1b) on `feature/xray-source-roots`; #212 and #213 merged, unreleased)_
+_Last updated: 2026-11-26 (0.56.0 in progress: Windows CI shards on `fix/ci-suite-speed`, Python source roots (board row 1b) on `feature/xray-source-roots`, the reviewed-as-history mark (item 20) and the shared ref shape (item 6) on `feature/review-history-mark`; #212 and #213 merged, unreleased)_
 
 ## In Flight
+
+**Reviewed-as-history mark + shared ref shape (2026-11-26, board row 9 / items 20 and 6,
+`feature/review-history-mark`).** `memory_update(review="history")` writes `metadata.review = {history,
+by, sha}` (`review_mark.py`, `handlers/review_update.py`); the sha binds it to the content, so an edit
+voids it and a hand-written block is not a mark. Gated signals go quiet, dated ones still fire; reads
+show `reviewed`, `memory_stats` counts `review.reviewed_as_history`; `review=""` clears. No migration.
+`memory_update`'s text-edit follow-ups moved to `hints.add_update_hints` (memory.py was at 300). Item 6:
+`ref_shape.py` holds the PR/MR kinds, sigil and number both `claim_qualify` and `staleness` build from;
+the compiled patterns are unchanged. Found and pinned, not changed: hints read the kind
+case-insensitively and the ledger does not, so a lowercase "pr #5" can hint but never settle
+(`tests/test_ref_shape.py`). The implementing minion stopped on two wrong spec tests (an expiry the
+memory was confirmed after is reconciled by design; the update response carries no metadata); the
+tests were corrected, not the design. Tests: `tests/test_review_history_mark.py`,
+`tests/test_ref_shape.py`. Next: mark the 21 item-20-class flags on the live brain after release.
 
 **X-ray: Python source roots (2026-11-26, board row 1b, `feature/xray-source-roots`).** `ModuleIndex`
 named modules from the repo root and `src/` only, so a package under `api/` or `backend/` had every
@@ -2282,7 +2296,7 @@ every row moved up one.
 
 **2026-11-13:** X7b released in 0.51.0. The X7d route coverage slice is built on `feature/xray-route-gaps` (unreleased). Its measurement found that Python packages rooted outside the repo root and `src/` have their absolute imports counted as external; entered as row 1b, ahead of X8.
 
-**2026-11-26:** resynced. The X7d route coverage slice was released in 0.52.0 (#197); row 1a said unreleased. Row 1b (Python source roots) is built on `feature/xray-source-roots` and comes off; X8 is next under row 1a.
+**2026-11-26:** resynced. The X7d route coverage slice was released in 0.52.0 (#197); row 1a said unreleased. Row 1b (Python source roots) is built on `feature/xray-source-roots` and comes off; X8 is next under row 1a. Row 9 (the reviewed-as-history mark, item 20) is built on `feature/review-history-mark` and comes off.
 
 | # | Item | Old # | Why this position |
 |---|---|---|---|
@@ -2295,7 +2309,6 @@ every row moved up one.
 | 6 | **Secrets broker** | 16 | Scoped tokens are in; still needs a security review before any build |
 | 7 | **X4 drift** - architectural drift across commits (per-commit X-ray diffs) | 19 | Moved down from row 1, not dropped (2026-11-09): it needs the import graph of past trees, and extraction reads only the working tree |
 | 8 | Session flight recorder (low priority) | 18 | Check prior art first |
-| 9 | **A reviewed-as-history mark for review hints** | 20 | Small and decided in shape; a deliberate per-memory reconcile for narrated waits the ledger cannot settle |
 | - | **Template/sibling noise in retrieval - PARKED** | 1 | Ten dead fixes and no live hypothesis; see below |
 
 ### Previous board (2026-09-28), kept for its numbering
@@ -2937,6 +2950,9 @@ designing anything.
 
 ### 20. A reviewed-as-history mark for review hints
 
+**BUILT 2026-11-26 on `feature/review-history-mark`** as `memory_update(review="history")`: a
+content-bound `metadata.review` mark (see In Flight). The entry below is the case for it.
+
 Entered 2026-11-24 from the brain-hygiene sweep (0.55.1, 0.55.2). After both
 detector passes, two classes of gated hint still have no permanent
 reconciliation:
@@ -3252,7 +3268,11 @@ for a line count rather than buying anything. It sits at 298 and the next edit
 crosses it again. This item is now blocking real work, not just tidiness. The product-spec "(unreleased)" drift that also
 sat here is **cleared** - cutting the release resolved all 19 markers.
 
-### 6. `staleness.py` ref-regex duplication (defects FIXED 2026-11-24, duplication remains)
+### 6. `staleness.py` ref-regex duplication (defects FIXED 2026-11-24, duplication REMOVED 2026-11-26)
+
+**Done on `feature/review-history-mark`:** `ref_shape.py` (`KINDS`, `SIGIL`, `REF`) is the one
+definition; one known difference remains and is pinned: hints match the kind case-insensitively, the
+ledger does not.
 
 Both defects PR #65 fixed in claims and left here are fixed on
 `fix/review-hint-sigil-links`: `staleness.py`'s `_PR_REF`, `_NAMED_AGENT` and
