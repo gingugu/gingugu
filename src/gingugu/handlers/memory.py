@@ -12,8 +12,9 @@ from . import ServerContext
 from .capability_view import summary_with_capability, write_error
 from .choices import parse_choice, parse_clearable
 from .helpers import _check_pin_budget, _coerce_metadata, _err, _split_csv
-from .hints import find_similar, suggest_relations
+from .hints import add_update_hints, find_similar, suggest_relations
 from .promote import store_promoted
+from .review_update import review_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +186,7 @@ def register(mcp, ctx: ServerContext) -> None:
         pinned: bool | None = None,
         provenance: str | None = None,
         about: str | None = None,
+        review: str | None = None,
     ) -> dict:
         """Update one or more fields of an existing memory. Use to correct outdated
         information, promote confidence after confirming an inference, retype a
@@ -243,16 +245,22 @@ def register(mcp, ctx: ServerContext) -> None:
         20): pinning is a budget, so spending it on a merely-handy memory
         crowds out a rule that governs behaviour. Pass ``pinned=False`` to
         unpin. Pinning does not touch ``last_confirmed`` — it is a retrieval
-        decision, not a claim that the content is still true."""
+        decision, not a claim that the content is still true.
+
+        ``review="history"`` records that you read this memory and judged it
+        accurate history (a narrated wait, or a ref the claims ledger cannot
+        settle). It silences gated review hints only, shows as ``reviewed`` on
+        reads, is voided by a content edit, never inferred; ``""`` clears it."""
         try:
+            coerced = _coerce_metadata(metadata)
+            existing = ctx.store.get(memory_id, record_access=False)
             try:
                 conf = parse_choice(Confidence, confidence, "confidence")
                 mem_type = parse_choice(MemoryType, type, "type")
                 prov = parse_clearable(Provenance, provenance, "provenance")
+                coerced = review_metadata(ctx, existing, review, content, coerced)
             except ValueError as e:
                 return _err(str(e))
-            coerced = _coerce_metadata(metadata)
-            existing = ctx.store.get(memory_id, record_access=False)
             if existing and (cap_error := write_error(existing, mem_type, metadata, coerced)):
                 return _err(cap_error)
             if pinned:
@@ -281,19 +289,9 @@ def register(mcp, ctx: ServerContext) -> None:
                 response["resolved_claims"] = ctx.store.resolve_claims(
                     memory_id, _split_csv(resolve_claims)
                 )
-            if relation_check and (title is not None or content is not None):
-                response["suggested_relations"] = suggest_relations(
-                    ctx,
-                    memory_id=mem.id,
-                    namespace_id=mem.namespace_id,
-                    title=mem.title,
-                    content=mem.content,
-                )
-            # A correction to "merged" is when memories still saying "open" matter.
-            if title is not None or content is not None:
-                contradicted = ctx.store.contradicted_memories(mem)
-                if contradicted:
-                    response["contradicted_memories"] = contradicted
+            add_update_hints(
+                ctx, response, mem, title=title, content=content, relation_check=relation_check
+            )
             return response
         except Exception as exc:
             logger.exception("memory_update failed")

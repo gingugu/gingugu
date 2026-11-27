@@ -28,6 +28,7 @@ from datetime import UTC, datetime, timedelta
 
 from .claims import _blank_wikilinks
 from .decay import days_between, reference_timestamp
+from .review_mark import history_mark  # noqa: F401  (re-export)
 
 # A gated signal only fires when the memory hasn't been confirmed for this
 # many days — in-flight state is expected to be in flight for a sprint or so.
@@ -227,6 +228,7 @@ def review_signals(
     created_at: str | None = None,
     now: datetime | None = None,
     settled_refs: frozenset[int] | None = None,
+    reviewed_history: bool = False,
 ) -> list[str]:
     """Return the review-signal labels that fire for a memory, oldest-clock first.
 
@@ -238,6 +240,10 @@ def review_signals(
     only subject is a settled ref stays quiet: the prose "PR #47 open" is
     accurate history once #47 is resolved, and re-confirming it only snoozed
     the hint for ``REVIEW_HINT_AFTER_DAYS``.
+
+    ``reviewed_history`` (a valid ``review_mark.history_mark``) skips the whole
+    gated block: a reviewer judged the prose accurate history. The ungated date
+    signals still fire - an expired or as-of date is a date, not a narrated state.
     """
     now = now or datetime.now(UTC)
     settled = settled_refs or frozenset()
@@ -268,7 +274,7 @@ def review_signals(
 
     # Gated: in-flight-state phrasing, only once the confirmation clock is old
     # — and never on timeless types, where the phrasing is reference material.
-    if memory_type in _TIMELESS_TYPES:
+    if reviewed_history or memory_type in _TIMELESS_TYPES:
         return signals
     anchor = reference_timestamp(last_confirmed, updated_at, created_at)
     if days_between(anchor, now) >= REVIEW_HINT_AFTER_DAYS:

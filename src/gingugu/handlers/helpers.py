@@ -11,6 +11,7 @@ from ..claim_queries import settled_ref_numbers
 from ..context import PINNED_HARD_CAP
 from ..models import Confidence, Memory, Namespace
 from ..relations import RelationManager
+from ..review_mark import history_mark
 from . import ServerContext
 from .summaries import _compact_summary, _memory_summary
 
@@ -136,6 +137,7 @@ def _attach_review_hints(summary: dict, mem: Memory, conn: sqlite3.Connection) -
     """
     if mem.confidence is Confidence.DEPRECATED:
         return summary
+    mark = history_mark(mem.metadata, mem.content)
     hints = staleness.review_signals(
         mem.content,
         memory_type=mem.type.value,
@@ -143,7 +145,10 @@ def _attach_review_hints(summary: dict, mem: Memory, conn: sqlite3.Connection) -
         updated_at=mem.updated_at,
         created_at=mem.created_at,
         settled_refs=settled_ref_numbers(conn, [mem.id]).get(mem.id),
+        reviewed_history=mark is not None,
     )
+    if mark is not None:
+        summary["reviewed"] = mark
     if hints:
         summary["review_hints"] = hints
     return summary

@@ -218,3 +218,29 @@ def suggest_relations(
         cutoffs=RELATION_MIN_SIMILARITY,
         limit=_RELATION_LIMIT,
     )
+
+
+def add_update_hints(
+    ctx: ServerContext,
+    response: dict,
+    mem: Memory,
+    *,
+    title: str | None,
+    content: str | None,
+    relation_check: bool,
+) -> None:
+    """Stamp ``memory_update``'s text-edit follow-ups onto ``response``:
+    suggested relations, and memories a correction may now contradict."""
+    if relation_check and (title is not None or content is not None):
+        response["suggested_relations"] = suggest_relations(
+            ctx,
+            memory_id=mem.id,
+            namespace_id=mem.namespace_id,
+            title=mem.title,
+            content=mem.content,
+        )
+    # A correction to "merged" is when memories still saying "open" matter.
+    if title is not None or content is not None:
+        contradicted = ctx.store.contradicted_memories(mem)
+        if contradicted:
+            response["contradicted_memories"] = contradicted
