@@ -20,16 +20,17 @@ Like every hook it must never break a session: any failure returns nothing.
 from __future__ import annotations
 
 import os
-from collections import deque
 from collections.abc import Callable
 from pathlib import Path
 from typing import NamedTuple
 
 from . import hook_common, surface, table_map
+from . import surface_reach as sreach
 from . import surface_route as sr
 from .hook_common import _claim, _show
 from .lang import is_test
 from .scan import XrayError
+from .surface_reach import reach_of as _reach_of
 from .symbols import Symbols, label
 
 SHOWN = 3  # entries or sinks named per line
@@ -132,16 +133,6 @@ def _pairs(rows: list) -> dict[tuple, tuple]:
     return {(_ekey(e), (r.sink, r.path, r.symbol)): (e, r) for e, found in rows for r in found}
 
 
-def _reach_of(adj: dict, starts) -> set:
-    seen, queue = set(starts), deque(starts)
-    while queue:
-        for nxt in adj.get(queue.popleft(), ()):
-            if nxt not in seen:
-                seen.add(nxt)
-                queue.append(nxt)
-    return seen
-
-
 def on_path(adj: dict, reached: list, rows: list, node: tuple) -> tuple[list, list] | None:
     """(entries that reach ``node``, sinks ``node`` reaches) when both exist: the
     definition lies on a path from outside input to a sink. None otherwise.
@@ -188,7 +179,9 @@ def edit_lines(
             claim = hook_common.claim_path(state_dir, "xray-surface-skip", session_id, root, rel)
             return [SKIPPED] if _claim(claim) else []
         uses = table_map.read(root, state_dir, budget_s=1.0).uses if table_map.enabled() else {}
-        old_rows, new_rows = _map(snap.sym, snap.uses)["entries"], _map(after, uses)["entries"]
+        prior = sreach.as_before(snap.sym, after, rel)  # drift since the cache cancels
+        old_rows = _map(prior, sreach.uses_before(snap.uses, uses, rel))["entries"]
+        new_rows = _map(after, uses)["entries"]
         out = _new_entries(old_rows, new_rows, rel, state_dir, session_id, root)
         out += _new_reach(old_rows, new_rows, state_dir, session_id, root)
         out += _paths(after, new_rows, rel, quals(after), state_dir, session_id, root)
