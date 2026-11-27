@@ -258,7 +258,7 @@ fall back to BM25-only.
 <details>
 <summary><strong>Is this ready to use?</strong></summary>
 
-Usable today for local personal workflows. 2,900+ tests passing covering
+Usable today for local personal workflows. 5,300+ tests passing covering
 storage, search, migrations, concurrency, credentials, hooks, the board, and
 the X-ray.
 Hardened against adversarial input and write contention. WAL mode for
@@ -387,7 +387,7 @@ uv run gingugu  # or pip install -e .
 
 </details>
 
-> **Usable today.** 24 MCP tools live. 2,900+ tests passing. Dogfooded daily in
+> **Usable today.** 24 MCP tools live. 5,300+ tests passing. Dogfooded daily in
 > Claude Code and Windsurf — this repo's own memories live in a Gingugu
 > database. Early and seeking broader real-world validation.
 

@@ -1274,6 +1274,12 @@ Update an existing memory's content, type, confidence, or metadata.
   `last_confirmed` — it is a retrieval-priority decision, not a claim that the
   content is still true, and treating it as one would suppress review hints on
   exactly the memories where staleness costs most
+- `review` (optional) — `"history"` records a reviewed-as-history mark in
+  `metadata.review` (date, author, content hash): the memory's gated review
+  hints stop until its content changes, while dated signals still fire (see
+  *Review hints*). Bound to the final content of this call. `""` clears it; any
+  other value is refused before anything is written. Does not advance
+  `last_confirmed`
 
 ### `memory_promote`
 Promote hand-picked memories, by id, into the crew commons: the `crew`
@@ -2032,7 +2038,7 @@ into them. `code_xray` `surface` (`xray/surface_tool.py`) answers locally like `
 untyped value or an interface is not followed, an entry registered in a form the catalogue
 does not know is not listed), and a listed path says the code can reach the sink, not that
 outside input flows along it. The symbol cache (`xray-symbols-<digest>.json`) now carries
-sinks and entries too, and `EXTRACTOR_VERSION` 5 (6 since the routes slice, 7 since the route-coverage slice, 8 since the Terraform adapter) retires every older parse. Python, TS/JS
+sinks and entries too, and `EXTRACTOR_VERSION` 5 (6 since the routes slice, 7 since the route-coverage slice, 8 since the Terraform adapter, 9 since Python source roots) retires every older parse. Python, TS/JS
 and Go. No migration, no brain change.
 
 *Routes, mounts and the hook line.* Each entry carries `method`, `route` and `name`
@@ -2739,6 +2745,7 @@ src/gingugu/
 │   # ── Claims (checkable state assertions) ───────────────────────
 ├── claims.py               # Extracts repo-qualified PR/MR refs from prose
 ├── claim_qualify.py        # Decides which repo a bare ref names
+├── ref_shape.py            # The PR/MR ref shape claims and review hints both build from
 ├── claim_sync.py           # Write path: persistence, contradiction, resolution
 ├── claim_queries.py        # Read path: backlog enumeration, shared filter, settled refs
 ├── claim_rederive.py       # Re-derivation that preserves resolution state
@@ -2750,6 +2757,7 @@ src/gingugu/
 ├── graph_stats.py          # Relation-graph health: edges, degree, orphans, spread cap
 ├── size_stats.py           # The character cost the counts do not show
 ├── staleness.py            # Advisory review hints for point-in-time memories
+├── review_mark.py          # Reviewed-as-history mark: content-bound metadata.review
 ├── namespaces.py           # Namespace CRUD; a default_repo change re-derives claims
 ├── credentials.py          # OS-keychain credential vault
 ├── secret_file.py          # 0600 file write for credential_get(into=…)
@@ -2763,7 +2771,8 @@ src/gingugu/
     ├── memory.py           # store / update; a stamped store routes to promote.store_promoted
     ├── promote.py          # memory_promote: pick, net, copy here or push up the crew link
     ├── forget.py           # memory_forget; a hard delete takes `confirm`
-    ├── hints.py            # Write-time similar + relation hints
+    ├── hints.py            # Write-time similar + relation hints; memory_update's follow-ups
+    ├── review_update.py    # memory_update(review=) -> the metadata the mark implies
     ├── recall.py           # recall / context
     ├── capability_view.py  # Stamps capability {run, path, exists} onto reads + the lane entries
     ├── context_merge.py    # Pure merge of per-namespace context loads: pins, then ranked tails; drops a crew copy whose source is loaded
