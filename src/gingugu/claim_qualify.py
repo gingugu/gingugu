@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import re
 
+from .ref_shape import KINDS, SIGIL
+
 # Explicit URL wins over everything - it names the repo unambiguously.
 _URL = re.compile(
     r"https?://(?:www\.)?(?:github|gitlab)\.com/([\w.-]+(?:/[\w.-]+)*?)/"
@@ -32,7 +34,7 @@ _URL = re.compile(
 # claim asserting the exact opposite of the prose. A ref never crosses a line.
 _REF = re.compile(
     r"(?:(?<![\w./-])(?P<repo>[A-Za-z][\w.-]{2,30})[ \t]+)?"
-    r"\b(?P<kind>PR|MR|pull request|merge request)[ \t]*[#!](?P<num>\d+)"
+    rf"\b(?P<kind>{KINDS}){SIGIL}(?P<num>\d+)"
     r"(?:[ \t]*\((?P<repo_after>[A-Za-z][\w.-]{2,30})\)"
     r"|[ \t]+(?P<repo_word>[A-Za-z][\w.-]{2,30})\b)?"
 )
