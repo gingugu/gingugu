@@ -1,8 +1,19 @@
 # Project Status
 
-_Last updated: 2026-11-25 (x-ray on IaC repos merged in #213 and derive `replaces` on `fix/derive-replaces`; both unreleased)_
+_Last updated: 2026-11-26 (0.56.0 in progress: Windows CI shards on `fix/ci-suite-speed`; #212 and #213 merged, unreleased)_
 
 ## In Flight
+
+**Windows CI in two shards (2026-11-26, `fix/ci-suite-speed`).** `main` went red on the Windows cell
+(run 45685547806: cancelled at the 10-minute cap with every test passing, pytest 581s). The same code
+measured 311s, 326s and 581s there, so the cause is runner variance of about 2x, not one slow test.
+Trimming fixed waits buys 10-20%, which that swing eats. `tests/sharding.py` splits the suite by a CRC
+of each test file's path (`GINGUGU_TEST_SHARD=i/n`; a file stays whole, every xdist worker agrees, a
+malformed spec raises), and the Windows matrix entry is two cells. The cap is unchanged. Ruled out by a
+probe on every runner: on-disk `migrate` as the cost of the `board_watch` / `crew_mail` fixture setup
+(0.07-0.13s on Windows). That setup still measures 4-12s per test on Windows and negligible locally;
+open. Tests: `tests/test_sharding.py`.
+
 
 **Derive `replaces`: one live token per proxy (2026-11-25, `fix/derive-replaces`; UNRELEASED).** A crew
 mate could not connect to the crew brain: the Pi journal showed `429` on `POST /token/derive` from their scoped token. The

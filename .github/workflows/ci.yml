@@ -32,8 +32,9 @@ jobs:
         run: uv run black --check .
 
   test:
+    name: test (${{ matrix.os }}, ${{ matrix.python-version }}${{ matrix.shard && format(', shard {0}', matrix.shard) || '' }})
     runs-on: ${{ matrix.os }}
-    # The suite runs in parallel (-n auto); the slowest cell, Windows, should
+    # The suite runs in parallel (-n logical); the slowest cell, Windows, should
     # finish in a few minutes. A cell near this cap means the suite has grown
     # slow - fix the tests, don't raise the number.
     timeout-minutes: 10
@@ -48,7 +49,11 @@ jobs:
           - { os: ubuntu-latest, python-version: "3.12" }
           - { os: ubuntu-latest, python-version: "3.13" }
           - { os: macos-latest, python-version: "3.13" }
-          - { os: windows-latest, python-version: "3.11" }
+          # Windows in two shards (tests/sharding.py): the same commit's pytest
+          # step measured 311s, 326s and 581s there, so the whole suite in one
+          # cell cannot keep a margin under the cap.
+          - { os: windows-latest, python-version: "3.11", shard: "1/2" }
+          - { os: windows-latest, python-version: "3.11", shard: "2/2" }
     steps:
       - uses: actions/checkout@v6
 
@@ -79,6 +84,8 @@ jobs:
       # were its time. --durations names the slowest tests, even on a run killed at
       # the cap: it is the data "fix the tests" above needs.
       - name: Pytest
+        env:
+          GINGUGU_TEST_SHARD: ${{ matrix.shard }}
         run: uv run pytest -m "not bench_embeddings" -n logical --durations=30
 
   ui:
